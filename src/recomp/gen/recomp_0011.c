@@ -8703,6 +8703,7 @@ loc_0016A545: ;
     PUSH32(esp, 0x0016A54Bu); RECOMP_ABI_CALL(0x0008D250u, sub_0008D250); /* call 0x0008D250 */
 
 loc_0016A54B: ;
+    { extern volatile long nfl2k5_28f70_site_hits[]; nfl2k5_28f70_site_hits[10]++; }
     PUSH32(esp, 0x0016A550u); RECOMP_ABI_CALL(0x00028F70u, sub_00028F70); /* call 0x00028F70 */
 
 loc_0016A550: ;
@@ -54395,6 +54396,7 @@ loc_00177A0B: ;
 loc_00177A11: ;
     g_ebp = ebp; /* frame stays current across calls */
     g_seh_ebp = ebp;
+    { extern volatile long nfl2k5_28f70_site_hits[]; nfl2k5_28f70_site_hits[11]++; }
     PUSH32(esp, 0x00177A16u); RECOMP_ABI_CALL(0x00028F70u, sub_00028F70); /* call 0x00028F70 */
 
 loc_00177A16: ;
@@ -55431,6 +55433,21 @@ loc_001781AB: ;
     g_ebp = ebp; /* frame stays current across calls */
     g_seh_ebp = ebp;
     PUSH32(esp, 0x001781CAu); RECOMP_ABI_CALL(0x003CBBF0u, sub_003CBBF0); /* call 0x003CBBF0 */
+#ifdef NFL2K5_FORCE_UNBLOCK_BDEEF0
+    /* EXPERIMENTAL, 2026-09-21: sub_00178130 is a completion callback handed
+     * to the frontend enqueue (sub_003CBBF0, just above) and is meant to set
+     * MEM32(0xBDEEF0)=1 or 2 (see sub_00178130, recomp_0011.c:55340) once the
+     * frontend actually services this request. 32 native boot attempts this
+     * session landed in the deep boot profile (sub_000748A0 entered) only
+     * twice and never once got as far as calling sub_00178150 itself -- this
+     * path appears to need real player input, matching this project's own
+     * 2026-09-17 finding that sub_00178150/sub_00272A60 go unreached on
+     * retail hardware too during a passive, input-less boot. Rather than
+     * synthesize input or keep gambling on the race, force the same
+     * "pretend it already completed" shortcut used for MEM32(0xB09584),
+     * gated behind an off-by-default build flag. Not a real fix. */
+    MEM32(0xBDEEF0) = 1u;
+#endif
 
 loc_001781CA: ;
     _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;
@@ -55830,6 +55847,7 @@ loc_00178527: ;
 loc_00178534: ;
     g_ebp = ebp; /* frame stays current across calls */
     g_seh_ebp = ebp;
+    { extern volatile long nfl2k5_28f70_site_hits[]; nfl2k5_28f70_site_hits[12]++; }
     PUSH32(esp, 0x00178539u); RECOMP_ABI_CALL(0x00028F70u, sub_00028F70); /* call 0x00028F70 */
 
 loc_00178539: ;

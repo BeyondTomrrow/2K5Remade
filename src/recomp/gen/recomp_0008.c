@@ -34179,6 +34179,7 @@ loc_0011B272: ;
 loc_0011B276: ;
     g_ebp = ebp; /* frame stays current across calls */
     g_seh_ebp = ebp;
+    { extern volatile long nfl2k5_28f70_site_hits[]; nfl2k5_28f70_site_hits[7]++; }
     PUSH32(esp, 0x0011B27Bu); RECOMP_ABI_CALL(0x00028F70u, sub_00028F70); /* call 0x00028F70 */
 
 loc_0011B27B: ;
@@ -81602,6 +81603,7 @@ loc_0012DF53: ;
 loc_0012DF58: ;
     g_ebp = ebp; /* frame stays current across calls */
     g_seh_ebp = ebp;
+    { extern volatile long nfl2k5_28f70_site_hits[]; nfl2k5_28f70_site_hits[8]++; }
     PUSH32(esp, 0x0012DF5Du); RECOMP_ABI_CALL(0x00028F70u, sub_00028F70); /* call 0x00028F70 */
 
 loc_0012DF5D: ;

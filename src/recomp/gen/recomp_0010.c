@@ -449328,6 +449328,7 @@ loc_0014E2B2: ;
 loc_0014E2B6: ;
     g_ebp = ebp; /* frame stays current across calls */
     g_seh_ebp = ebp;
+    { extern volatile long nfl2k5_28f70_site_hits[]; nfl2k5_28f70_site_hits[9]++; }
     PUSH32(esp, 0x0014E2BBu); RECOMP_ABI_CALL(0x00028F70u, sub_00028F70); /* call 0x00028F70 */
 
 loc_0014E2BB: ;

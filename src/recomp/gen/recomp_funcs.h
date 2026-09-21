@@ -33494,4 +33494,30 @@ void sub_E91FE9D8(void);
 void sub_E969E9E0(void);
 void sub_ED17416A(void);
 
+/* 2026-09-21: every generated recomp_*.c file's `rep movsd`/`rep movsb`
+ * emulation takes a memcpy() fast path when source/dest ranges don't
+ * overlap (see e.g. recomp_0029.c). Guest memory can be backed by an
+ * MMIO-trapped aperture (confirmed: the MCPX/APU range 0xFE800000-
+ * 0xFE880000) at either end, with no way to know that in advance at any
+ * individual call site. The CRT's memcpy() dispatches to an AVX VMOVDQU
+ * (32-byte vector load/store) on this host CPU, which the hand-rolled MMIO
+ * VEH decoders (external/xboxrecomp/src/apu/apu_mmio_hook.c,
+ * nv2a_mmio_hook.c) only decode scalar mov/test/cmp forms for -- an
+ * unhandled access violation results (confirmed live: exception=0xC0000005
+ * reading 0xFE840200 from inside memcpy(), PROJECT_STATUS.md 2026-09-21).
+ * Redefined here, after <string.h> (via recomp_types.h) has already
+ * declared the real memcpy, so every generated file's own `memcpy(...)`
+ * calls go through a plain byte loop instead -- guaranteed decodable by the
+ * existing MMIO handlers, at a negligible cost for these already-rare
+ * bulk-copy calls in an /Od build. NOTE: regenerating this file from the
+ * XBE will drop this -- reapply if so. */
+static inline void *nfl2k5_scalar_memcpy(void *dst, const void *src, size_t n)
+{
+    unsigned char *d = (unsigned char *)dst;
+    const unsigned char *s = (const unsigned char *)src;
+    for (size_t i = 0; i < n; i++) d[i] = s[i];
+    return dst;
+}
+#define memcpy nfl2k5_scalar_memcpy
+
 #endif /* RECOMP_FUNCS_H */

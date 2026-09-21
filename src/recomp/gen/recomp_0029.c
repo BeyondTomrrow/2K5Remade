@@ -64856,9 +64856,19 @@ loc_0044BC8D: ;
     edi = MEM32(edi + 0x20);
     eax = ecx;
     ecx = ecx >> 2;
-    if (!g_df) { uint8_t *_d = (uint8_t*)XBOX_PTR(edi), *_s = (uint8_t*)XBOX_PTR(esi); uint32_t _n = ecx * 4;
-      if (_d + _n <= _s || _s + _n <= _d) memcpy(_d, _s, _n);
-      else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM32(edi + _i*4) = MEM32(esi + _i*4); }
+    /* 2026-09-21: this rep movsd's source (esi) resolves into the MCPX/APU
+     * MMIO aperture (0xFE800000-0xFE880000, a DirectSound-buffer-style lock
+     * per PROJECT_STATUS.md) -- the CRT's memcpy() dispatches to an
+     * AVX VMOVDQU (32-byte vector load) on this host CPU, which
+     * external/xboxrecomp/src/apu/apu_mmio_hook.c's hand-rolled MMIO
+     * decoder cannot decode (only scalar mov/test/cmp forms), causing an
+     * unhandled access violation (confirmed live: exception=0xC0000005,
+     * address=0xFE840200, decode-fail bytes C5 FE 6F ... = VMOVDQU).
+     * Forced to the scalar copy loop here so every MMIO byte goes through
+     * MEM32/MEM8 and the existing decoder, instead of fixing the decoder
+     * to understand every possible vector-instruction encoding memcpy()
+     * might choose to emit. */
+    if (!g_df) { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM32(edi + _i*4) = MEM32(esi + _i*4);
       esi += ecx * 4; edi += ecx * 4; }
     else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM32(edi - _i*4) = MEM32(esi - _i*4); esi -= ecx * 4; edi -= ecx * 4; }
     ecx = 0; /* rep movsd */
@@ -64867,13 +64877,28 @@ loc_0044BC8D: ;
     POP32(esp, eax);
     ecx = ecx & eax;
     ebx = ebx + 0x810;
-    if (!g_df) { uint8_t *_d = (uint8_t*)XBOX_PTR(edi), *_s = (uint8_t*)XBOX_PTR(esi); uint32_t _n = ecx;
-      if (_d + _n <= _s || _s + _n <= _d) memcpy(_d, _s, _n);
-      else { uint32_t _i; for (_i = 0; _i < _n; _i++) _d[_i] = _s[_i]; }
+    if (!g_df) { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM8(edi + _i) = MEM8(esi + _i);
       esi += ecx; edi += ecx; }
     else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM8(edi - _i) = MEM8(esi - _i); esi -= ecx; edi -= ecx; }
     ecx = 0; /* rep movsb */
     MEM32(ebx) = eax;
+#ifdef NFL2K5_FORCE_UNBLOCK_AUDIO_LOCK
+    /* EXPERIMENTAL, 2026-09-21: this busy-wait (loc_0044BCAB below) spins on
+     * a completion counter written a few instructions earlier ("DSob"
+     * DirectSound-buffer-style object tag pushed at recomp_0029.c:64725, and
+     * an address computed a few lines above landing squarely in the
+     * MCPX/APU MMIO aperture 0xFE800000-0xFE880000, recomp_0029.c:64832) --
+     * i.e. this looks like a software DirectSound buffer lock/mix waiting
+     * for the (deliberately stubbed, "[APU] ... STUBBED - passthrough
+     * mode") APU to acknowledge a submitted audio buffer, which it never
+     * does. Live-debugged via non-invasive cdb attach to a genuinely frozen
+     * native process (identical RIP and stack depth across two samples 5s
+     * apart) -- see PROJECT_STATUS.md, 2026-09-21. Not a real fix (the real
+     * fix belongs in the APU stub's completion path); this just clears the
+     * counter immediately so this thread doesn't hang forever on the first
+     * audio buffer it ever locks. Off by default. */
+    MEM32(ebx) = 0;
+#endif
 
 loc_0044BCAB: ;
     _fa = (uint32_t)(MEM32(ebx)) & 0xFFFFFFFFu; _fb = (uint32_t)(0) & 0xFFFFFFFFu;

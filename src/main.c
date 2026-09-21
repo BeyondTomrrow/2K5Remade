@@ -1,5 +1,6 @@
 /* ESPN NFL 2K5 host for the user's retail XBE (title 53450030). */
 #include <windows.h>
+#include <tlhelp32.h>
 #include <dbghelp.h>
 #include <bcrypt.h>
 #include <stdio.h>
@@ -182,13 +183,19 @@ static LONG CALLBACK pb_write_watch(EXCEPTION_POINTERS *ep)
  * single-step exactly one real instruction, then re-patch on the trap --
  * the same single-step re-arm shape as pb_write_watch above, applied to
  * code instead of a data page. */
-#define EXEC_WATCH_MAX 32
+#define EXEC_WATCH_MAX 128
 static struct {
     uint32_t guest_va;
     unsigned char *host_addr;
     unsigned char orig_byte;
     volatile LONG hits;
     const char *name;
+    volatile uint32_t last_return_addr; /* MEM32(g_esp) at the most recent
+        hit -- the guest return address is always there at function entry
+        regardless of frame type (standard_frame vs fpo_leaf only affects
+        what the callee does with ITS OWN ebp afterward, not the caller's
+        already-pushed return address). Lets a hit answer "entered from
+        where" without a separate per-site trace. */
 } g_exec_watch[EXEC_WATCH_MAX];
 static int g_exec_watch_count;
 static CRITICAL_SECTION g_exec_watch_lock;
@@ -222,6 +229,8 @@ static LONG CALLBACK exec_count_watch(EXCEPTION_POINTERS *ep)
         if (g_exec_watch[i].host_addr != rip)
             continue;
         InterlockedIncrement(&g_exec_watch[i].hits);
+        g_exec_watch[i].last_return_addr =
+            *(uint32_t *)((uintptr_t)xbox_GetMemoryOffset() + g_esp);
         EnterCriticalSection(&g_exec_watch_lock);
         DWORD old_protect;
         VirtualProtect(g_exec_watch[i].host_addr, 1, PAGE_EXECUTE_READWRITE, &old_protect);
@@ -240,7 +249,12 @@ static void exec_watch_add(uint32_t guest_va, const char *name)
 {
     typedef void (*exec_watch_fn)(void);
     extern exec_watch_fn recomp_lookup(uint32_t address);
-    if (g_exec_watch_count >= EXEC_WATCH_MAX) return;
+    if (g_exec_watch_count >= EXEC_WATCH_MAX) {
+        fprintf(stderr, "  [EXECWATCH] table full (%d), dropping guest 0x%08X (%s)\n",
+                EXEC_WATCH_MAX, guest_va, name);
+        fflush(stderr);
+        return;
+    }
     void *fn = (void *)recomp_lookup(guest_va);
     if (!fn) {
         fprintf(stderr, "  [EXECWATCH] guest 0x%08X (%s) has no native mapping, skipping\n", guest_va, name);
@@ -259,16 +273,75 @@ static void exec_watch_add(uint32_t guest_va, const char *name)
     fprintf(stderr, "  [EXECWATCH] armed guest 0x%08X (%s) at host %p\n", guest_va, name, fn);
 }
 
+/* 2026-09-21 diagnostic: confirmed native does NOT use the one call site
+ * (0x0007481B) the live hybrid-xemu reference showed as 100% hot -- so
+ * sub_00028F70 (17 total static call sites) is reached through one of the
+ * other 16 in native. Plain increments (no I/O), same reasoning as above:
+ * fprintf-based tracing inside the hot scheduler files perturbed this
+ * exact timing-sensitive race badly enough to make the working profile
+ * essentially unreachable (0/20 vs the usual ~1-in-2). Always on,
+ * negligible cost. Index order matches the call-site list in
+ * PROJECT_STATUS.md / the grep for RECOMP_ABI_CALL(0x00028F70u. */
+volatile long nfl2k5_28f70_site_hits[17];
+static const uint32_t nfl2k5_28f70_site_retaddrs[17] = {
+    0x000745A0u, 0x0007481Bu, 0x000F504Bu, 0x000F5D7Cu, 0x000F5D9Du,
+    0x000F5DBCu, 0x000F5F7Bu, 0x0011B27Bu, 0x0012DF5Du, 0x0014E2BBu,
+    0x0016A550u, 0x00177A16u, 0x00178539u, 0x0024A023u, 0x0024A1A4u,
+    0x0024A302u, 0x0024A450u,
+};
+
+/* Bisecting sub_000748A0's own 208-instruction straight-line body
+ * (recomp_0003.c:31162-31853) to find how far it actually gets before
+ * whatever blocks it -- exec_watch_add can't target these, they're
+ * internal labels, not registered function entries. */
+volatile long nfl2k5_748a0_markers[8];
+
 /* Called from kernel_bridge.c's existing periodic [PIPE]/[DPC] stats block
  * so the counts are visible on every tick without a separate sample pass. */
 void nfl2k5_execwatch_print(void)
 {
+    for (int i = 0; i < 17; i++)
+        if (nfl2k5_28f70_site_hits[i])
+            fprintf(stderr, "  [SITECOUNT] ret=0x%08X hits=%ld\n",
+                    nfl2k5_28f70_site_retaddrs[i], nfl2k5_28f70_site_hits[i]);
+    {
+        int any = 0;
+        for (int i = 0; i < 8; i++) if (nfl2k5_748a0_markers[i]) any = 1;
+        if (any) {
+            fprintf(stderr, "  [748A0BISECT]");
+            for (int i = 0; i < 8; i++)
+                fprintf(stderr, " m%d=%ld", i, nfl2k5_748a0_markers[i]);
+            fprintf(stderr, "\n");
+        }
+    }
+    /* 2026-09-21: sub_00178150's new blocking wait -- see NFL2K5.exe main.c
+     * comment near exec_watch_add(0x00178150...) for the full mechanism. */
+    fprintf(stderr, "  [PEEK] BDEEF0=0x%08X\n",
+            *(uint32_t *)((uintptr_t)xbox_GetMemoryOffset() + 0xBDEEF0u));
     if (g_exec_watch_count == 0)
         return;
     fprintf(stderr, "  [EXECWATCH]");
     for (int i = 0; i < g_exec_watch_count; i++)
         fprintf(stderr, " %s=%ld", g_exec_watch[i].name, g_exec_watch[i].hits);
     fprintf(stderr, "\n");
+    for (int i = 0; i < g_exec_watch_count; i++)
+        if (g_exec_watch[i].hits)
+            fprintf(stderr, "  [EXECWATCH-RET] %s last_ret=0x%08X\n",
+                    g_exec_watch[i].name, g_exec_watch[i].last_return_addr);
+}
+
+/* Fixed-interval flush of the above, independent of kernel_bridge.c's own
+ * dispatch-count-gated summary (see call site in main() for why). */
+static DWORD WINAPI nfl2k5_execwatch_timer_thread(LPVOID unused)
+{
+    (void)unused;
+    for (;;) {
+        Sleep(3000);
+        fprintf(stderr, "  [TIMERFLUSH]\n");
+        nfl2k5_execwatch_print();
+        fflush(stderr);
+    }
+    return 0;
 }
 
 /* Multi-address READ-or-write catch, opt-in via RECOMP_DATA_WATCH=1.
@@ -382,6 +455,145 @@ static void data_watch_add(uint32_t guest_va, const char *name)
     }
     fprintf(stderr, "  [DATAWATCH] armed guest 0x%08X (%s) page host 0x%llX\n",
             guest_va, name, (unsigned long long)g_data_watch[i].host_page_base);
+}
+
+/* Hardware debug-register (DR0-DR3) watch, opt-in via RECOMP_HW_WATCH=1.
+ *
+ * Built 2026-09-21 specifically because RECOMP_DATA_WATCH's page-guard
+ * approach (PAGE_NOACCESS + single-step re-arm) was confirmed to perturb
+ * the exact timing-sensitive main-loop stall this is meant to diagnose:
+ * guarding the page containing guest 0xB04EC0 alone was enough to make the
+ * loop never start at all, in every attempt (see PROJECT_STATUS.md,
+ * 2026-09-20/21). A CPU hardware breakpoint has no per-access cost when it
+ * doesn't fire -- the processor itself compares the address on every
+ * memory access, no exception until the exact watched bytes are touched --
+ * so it should not have the same problem.
+ *
+ * Limitation, accepted deliberately rather than solved: DR0-DR3 are
+ * per-thread state (loaded into the CPU on every context switch from each
+ * thread's own CONTEXT), not global, so every host thread that might
+ * execute the write needs it armed individually. Installed on every thread
+ * that exists at install time, plus re-armed on every newly-seen thread ID
+ * from a periodic rescan hooked into the existing [PIPE]/[DPC] stats tick
+ * (kernel_bridge.c) -- cheap (one CreateToolhelp32Snapshot + a skip-if-
+ * already-armed check) and catches worker/guest threads spawned after
+ * install without needing a dedicated CreateThread hook. */
+#define HW_WATCH_MAX_THREADS 64
+static uint32_t g_hw_watch_guest_va;
+static uintptr_t g_hw_watch_host_addr;
+static volatile LONG g_hw_watch_active;
+static volatile LONG g_hw_watch_hits;
+static DWORD g_hw_watch_armed_tids[HW_WATCH_MAX_THREADS];
+static int g_hw_watch_armed_count;
+
+static BOOL hw_watch_arm_thread(DWORD tid)
+{
+    BOOL is_self = (tid == GetCurrentThreadId());
+    HANDLE h = OpenThread(THREAD_GET_CONTEXT | THREAD_SET_CONTEXT | THREAD_SUSPEND_RESUME,
+                          FALSE, tid);
+    if (!h) return FALSE;
+
+    if (!is_self) SuspendThread(h);
+
+    CONTEXT ctx = {0};
+    ctx.ContextFlags = CONTEXT_DEBUG_REGISTERS;
+    BOOL ok = GetThreadContext(h, &ctx);
+    if (ok) {
+        ctx.Dr0 = (DWORD64)g_hw_watch_host_addr;
+        /* DR7: L0=1 (bit0, local enable), R/W0=01 (bits16-17, write-only),
+         * LEN0=11 (bits18-19, 4-byte range). Leave DR1-DR3 (and their L/RW/
+         * LEN fields) untouched -- some other legitimate debugger/runtime
+         * facility could be using them; only ever set/clear bit 0 and its
+         * own condition/length fields here. */
+        ctx.Dr7 = (ctx.Dr7 & ~(DWORD64)0xF0003ull) | 0x1ull | (0x1ull << 16) | (0x3ull << 18);
+        ok = SetThreadContext(h, &ctx);
+    }
+
+    if (!is_self) ResumeThread(h);
+    CloseHandle(h);
+    return ok;
+}
+
+static void hw_watch_rescan(void)
+{
+    if (!g_hw_watch_active) return;
+    HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+    if (snap == INVALID_HANDLE_VALUE) return;
+    THREADENTRY32 te = {0};
+    te.dwSize = sizeof te;
+    DWORD self_pid = GetCurrentProcessId();
+    if (Thread32First(snap, &te)) {
+        do {
+            if (te.th32OwnerProcessID != self_pid) continue;
+            BOOL already = FALSE;
+            for (int i = 0; i < g_hw_watch_armed_count; i++)
+                if (g_hw_watch_armed_tids[i] == te.th32ThreadID) { already = TRUE; break; }
+            if (already) continue;
+            if (hw_watch_arm_thread(te.th32ThreadID)) {
+                if (g_hw_watch_armed_count < HW_WATCH_MAX_THREADS)
+                    g_hw_watch_armed_tids[g_hw_watch_armed_count++] = te.th32ThreadID;
+                fprintf(stderr, "  [HWWATCH] armed thread %lu\n", (unsigned long)te.th32ThreadID);
+            }
+        } while (Thread32Next(snap, &te));
+    }
+    CloseHandle(snap);
+}
+
+static LONG CALLBACK hw_watch_handler(EXCEPTION_POINTERS *ep)
+{
+    if (!g_hw_watch_active)
+        return EXCEPTION_CONTINUE_SEARCH;
+    if (ep->ExceptionRecord->ExceptionCode != EXCEPTION_SINGLE_STEP)
+        return EXCEPTION_CONTINUE_SEARCH;
+    /* Dr6 bit 0 (B0) means DR0's condition matched. A hardware breakpoint
+     * needs no re-arming and no permission changes -- just report and
+     * clear the sticky status bits so the next real hit is visible. */
+    if (!(ep->ContextRecord->Dr6 & 0x1))
+        return EXCEPTION_CONTINUE_SEARCH;
+
+    LONG n = InterlockedIncrement(&g_hw_watch_hits);
+    fprintf(stderr, "  [HWWATCH] hit #%ld guest_va=0x%08X rip=0x%llX\n",
+            n, g_hw_watch_guest_va, (unsigned long long)ep->ContextRecord->Rip);
+    char storage[sizeof(SYMBOL_INFO) + 256] = {0};
+    SYMBOL_INFO *symbol = (SYMBOL_INFO *)storage;
+    DWORD64 displacement = 0;
+    symbol->SizeOfStruct = sizeof(SYMBOL_INFO);
+    symbol->MaxNameLen = 255;
+    if (SymFromAddr(GetCurrentProcess(), ep->ContextRecord->Rip, &displacement, symbol))
+        fprintf(stderr, "  [HWWATCH] function=%s+0x%llX\n", symbol->Name,
+                (unsigned long long)displacement);
+    {
+        IMAGEHLP_LINE64 line = {0};
+        DWORD line_displacement = 0;
+        line.SizeOfStruct = sizeof line;
+        if (SymGetLineFromAddr64(GetCurrentProcess(), ep->ContextRecord->Rip,
+                                 &line_displacement, &line))
+            fprintf(stderr, "  [HWWATCH] source=%s:%lu+0x%lX\n", line.FileName,
+                    line.LineNumber, line_displacement);
+    }
+    fflush(stderr);
+
+    ep->ContextRecord->Dr6 = 0;
+    return EXCEPTION_CONTINUE_EXECUTION;
+}
+
+static void hw_watch_install(uint32_t guest_va, const char *name)
+{
+    g_hw_watch_guest_va = guest_va;
+    g_hw_watch_host_addr = (uintptr_t)xbox_GetMemoryOffset() + guest_va;
+    if (!AddVectoredExceptionHandler(1, hw_watch_handler)) {
+        fprintf(stderr, "  [HWWATCH] failed to install exception handler\n");
+        return;
+    }
+    g_hw_watch_active = 1;
+    hw_watch_rescan();
+    fprintf(stderr, "  [HWWATCH] armed guest 0x%08X (%s) host 0x%llX on %d thread(s)\n",
+            guest_va, name, (unsigned long long)g_hw_watch_host_addr, g_hw_watch_armed_count);
+}
+
+void nfl2k5_hw_watch_rescan(void)
+{
+    hw_watch_rescan();
 }
 
 extern RECOMP_TLS uint32_t g_eax, g_ecx, g_edx, g_esp, g_ebx, g_esi, g_edi;
@@ -1195,7 +1407,163 @@ int main(int argc, char **argv)
              * vtable slot," not anything already traced. */
             exec_watch_add(0x00363350u, "363350");
             exec_watch_add(0x00278310u, "278310");
+
+            /* 2026-09-20: found live, on a correctly-rendering reference
+             * hybrid-xemu session, by watching the real NV2A DMA_PUT MMIO
+             * register (0xFD800040) during actual gameplay -- this is the
+             * real, continuously-firing render/pushbuffer-submission path,
+             * not a guess. sub_00426110 (Category: game_render) contains
+             * the real GPU-kick write; sub_00426230 is its immediate,
+             * repeatedly-observed caller. Both already exist as translated
+             * functions in this project's own generated code (recomp_0028.c
+             * area) -- the open question is whether native's own execution
+             * ever reaches them at all, which the 0x00443040/sub_004308C0
+             * thread (now confirmed unrelated -- that path never runs even
+             * during correct reference rendering) cannot answer. */
+            exec_watch_add(0x00426110u, "426110_render_kick");
+            exec_watch_add(0x00426230u, "426230_render_caller");
+
+            /* All 14 static callers of sub_00426230 (recomp_0028.c/0029.c),
+             * each apparently a distinct per-draw-type render/flush routine.
+             * Watching all of them at once identifies exactly which draw
+             * types native ever attempts versus which it never reaches,
+             * rather than guessing at a single "the" caller. */
+            exec_watch_add(0x004207A0u, "4207A0");
+            exec_watch_add(0x00423D90u, "423D90");
+            exec_watch_add(0x00424750u, "424750");
+            exec_watch_add(0x00424790u, "424790");
+            exec_watch_add(0x00425180u, "425180");
+            exec_watch_add(0x004251A0u, "4251A0_vertex_copy");
+            exec_watch_add(0x00425310u, "425310");
+            exec_watch_add(0x004254F0u, "4254F0");
+            exec_watch_add(0x00425A00u, "425A00");
+            exec_watch_add(0x004262F0u, "4262F0");
+            exec_watch_add(0x00426460u, "426460");
+            /* 0x00427890 is already watched above ("427890") -- known
+             * one-shot init caller, not re-added here. */
+            exec_watch_add(0x004324B0u, "4324B0");
+            exec_watch_add(0x0043266Cu, "43266C");
+
+            /* One hop further: callers of sub_004262F0 (the ring-buffer
+             * flush/present check, hit 3x above) not already in this list. */
+            exec_watch_add(0x00420780u, "420780");
+            exec_watch_add(0x00426600u, "426600");
+            exec_watch_add(0x00426620u, "426620");
+            exec_watch_add(0x004266A0u, "4266A0");
+
+            /* 2026-09-20, continued: found live on the hybrid reference,
+             * by return-address capture, that the ENTIRE render-kick chain
+             * (426110/426230/4262F0) is driven, 100% of the time (60/60
+             * hits), through sub_00424790 (a Present()-shaped function --
+             * double-buffer index at device+0x2478, back-buffer array at
+             * device+0x1974) via a single call site inside sub_00034110,
+             * an 8-byte "push 0; call Present(); ret" trampoline. Its own
+             * caller connects straight back to the already-known
+             * sub_00028DE0 (the GPU resource-notify wait loop, fixed
+             * 2026-09-17) / sub_00028F70 (the worker-gate wrapper ChatGPT
+             * reviewed tonight) -- not previously watched together with the
+             * render chain. Watching this specific pairing directly tests
+             * whether "the wait loop completes once, correctly, but its own
+             * caller stops re-entering it for a next frame" (the same shape
+             * as the 2026-09-17 fix) is what's actually stalling rendering. */
+            exec_watch_add(0x00034110u, "34110_present_trampoline");
+            /* 0x00424790 is already watched above as "424790" -- not
+             * re-added (a duplicate registration here would silently never
+             * get credited, since the INT3 lookup matches the first
+             * matching table entry; caught and fixed this session). */
+            exec_watch_add(0x00028DE0u, "28DE0_gpu_wait");
+            exec_watch_add(0x00028F70u, "28F70_worker_wrap");
+            /* 2026-09-21: confirmed via per-call-site counters that
+             * native's entire 28F70_worker_wrap count comes from three
+             * one-shot sites in recomp_0007.c, NOT from the live-reference-
+             * confirmed hot site inside sub_00074790 -- so does native ever
+             * even enter sub_00074BF0 (the real main loop) or sub_00074790
+             * at all? Checking directly instead of continuing to infer it
+             * from downstream effects. */
+            exec_watch_add(0x00074BF0u, "74BF0_main_loop_outer");
+            exec_watch_add(0x00074790u, "74790_main_loop_body");
+            /* sub_00074BF0's own straight-line prologue, called in this
+             * exact order before it ever reaches its do-while loop (see
+             * recomp_0003.c:31857). Confirmed the loop body is NEVER
+             * entered (74790=0 above) -- since these 9 run strictly
+             * sequentially with no branches, whichever is the last nonzero
+             * entry here is exactly where execution never returns from. */
+            exec_watch_add(0x0003A6A0u, "s1_3A6A0");
+            exec_watch_add(0x00073EC0u, "s2_73EC0");
+            exec_watch_add(0x00038FB0u, "s3_38FB0");
+            exec_watch_add(0x00040630u, "s4_40630");
+            exec_watch_add(0x003CD400u, "s5_3CD400");
+            exec_watch_add(0x00052090u, "s6_52090");
+            /* s7 is sub_00038FC0, already watched above as "38FC0". */
+            exec_watch_add(0x0003C3F0u, "s8_3C3F0");
+            exec_watch_add(0x000748A0u, "s9_748A0");
+            /* 2026-09-21: unifies tonight's whole thread with the project's
+             * oldest finding (2026-09-17: sub_00178150/sub_00272A60 need
+             * real player input, confirmed unreached on retail too during
+             * passive boot). sub_000748A0 (s9 above) is entered but
+             * exec_watch only counts entry, not return -- if it calls
+             * sub_00178150 unconditionally near its own end and that
+             * blocks waiting for input, s9 would show "entered" forever
+             * without ever completing, which is exactly consistent with
+             * 74790_main_loop_body staying at 0 even though every
+             * prerequisite up to and including s9 shows nonzero. */
+            exec_watch_add(0x00178150u, "s9_inner_178150");
+            exec_watch_add(0x00272A60u, "s9_inner_272A60");
+            /* 2026-09-21: sub_00178150 registers sub_00178130 as a
+             * completion callback via the frontend enqueue (sub_003CBBF0),
+             * resets MEM32(0xBDEEF0)=0, then spins (pumping messages via
+             * sub_00038CD0) until MEM32(0xBDEEF0) becomes nonzero -- which
+             * only sub_00178130 itself ever sets. If sub_00178130 never
+             * fires, this is the new blocking gate (analogous to
+             * 0xB09584/sub_000432C0 found earlier tonight). */
+            exec_watch_add(0x00178130u, "cb_178130_completion");
+            /* sub_003CBBF0 (frontend enqueue) already watched as "3CBBF0" above. */
+            /* sub_000748A0 has ~150 straight-line calls before it finally
+             * reaches the loop that calls sub_00178150 (confirmed at 0
+             * hits above) -- bisecting which of them it actually gets
+             * through, using real function addresses recomp_lookup can
+             * resolve (not the internal labels between them). */
+            exec_watch_add(0x000441B0u, "bis_25pct_441B0");
+            exec_watch_add(0x000432F0u, "bis_50pct_432F0");
+            exec_watch_add(0x00160710u, "bis_75pct_160710");
+            exec_watch_add(0x00074160u, "bis_90pct_74160");
+            /* 2026-09-21 isolation test (since reverted): re-ran with only
+             * 3 simultaneous watches (down from ~20) to check whether
+             * exec_watch itself behaves differently under a much smaller
+             * simultaneous-watch count. Result: identical -- 4/5 runs with
+             * narrow_1786D0=1 and narrow_74180=1 still showed
+             * bis_50pct_432F0=0. Rules out "too many simultaneous INT3s"
+             * as the explanation; restored the full set above. */
+            /* Narrowed further: reached 0x000441B0 (both its call sites)
+             * but never 0x000432F0. sub_00043F50 dropped from this list --
+             * confirmed 67 static call sites elsewhere, useless as a
+             * bisection point (any hit could come from anywhere). Kept
+             * only the two clean candidates: sub_001786D0 (exactly 1
+             * static call site, recomp_0003.c:31508, unambiguous) and
+             * sub_00074180 (4 call sites, all confirmed internal to this
+             * same sub_000748A0, so still clean for this purpose). */
+            exec_watch_add(0x001786D0u, "narrow_1786D0");
+            exec_watch_add(0x00074180u, "narrow_74180");
+
+            /* sub_00038F90: the only static writer of MEM32(0xB04EC0), the
+             * real main-loop quit flag (see sub_00074BF0's do/while at
+             * loc_00074C30, and sub_00038F50's check of this address).
+             * RECOMP_DATA_WATCH's page-guard on this address measurably
+             * perturbs this exact timing-sensitive stall (confirmed: with
+             * it enabled, 8/8 runs landed in the profile where the main
+             * loop never starts at all; disabling it restored the usual
+             * ~good-profile rate). This lightweight INT3-based watch on
+             * the setter itself does not have that problem. */
+            exec_watch_add(0x00038F90u, "38F90_quit_setter");
         }
+        /* 2026-09-21: the periodic [EXECWATCH]/[PEEK] printout is normally
+         * driven by kernel_bridge.c's own dispatcher (gated on
+         * g_kernel_call_count > 200 and a 2s tick), which never fires at all
+         * in the shallow/stalled boot profile -- leaving short captures of
+         * that profile with zero diagnostic output. This thread flushes the
+         * same counters on a fixed 3s timer independent of kernel dispatch,
+         * so every run (whichever profile it lands in) yields a readout. */
+        CreateThread(NULL, 0, nfl2k5_execwatch_timer_thread, NULL, 0, NULL);
     }
     if (getenv("RECOMP_DATA_WATCH")) {
         if (!AddVectoredExceptionHandler(1, data_read_watch)) {
@@ -1211,6 +1579,37 @@ int main(int argc, char **argv)
             /* Same for sub_00363350. */
             data_watch_add(0x0053D120u, "cb-363350-a");
             data_watch_add(0x0085EFE4u, "cb-363350-b");
+
+            /* 2026-09-20: found the real main-loop exit condition, traced
+             * from sub_00074BF0 (the actual per-frame loop -- previously
+             * mislabeled "one-shot title init" based only on a native
+             * counter that never distinguished "entered once" from "loops
+             * internally"; the hybrid-xemu reference confirms it really
+             * does loop continuously on correct hardware). The loop exits
+             * when sub_00038F50()'s check of MEM32(0xB04EC0) is nonzero.
+             * Verified on the live reference: this address legitimately
+             * stays 0 throughout normal play, and its only known writer
+             * (sub_00038F90, a 2-instruction "request quit" setter with
+             * zero static callers -- reachable only indirectly, and
+             * confirmed to never fire during 45s of live reference
+             * gameplay either) never runs. So whatever sets it nonzero in
+             * native is not a legitimate quit request -- watching for the
+             * actual write should identify it directly. */
+            data_watch_add(0xB04EC0u, "quitflag-B04EC0");
+        }
+    }
+    if (getenv("RECOMP_HW_WATCH")) {
+        /* Lower-overhead alternative to RECOMP_DATA_WATCH for exactly this
+         * address -- see hw_watch_install's own comment above for why. */
+        if (getenv("RECOMP_HW_WATCH_SELFTEST")) {
+            /* Positive control: 0xB0284C is written repeatedly from
+             * sub_00035CE0, itself reached from sub_00028F70 (already
+             * confirmed to run in this exact profile -- worker entry=3).
+             * If this doesn't produce hits either, the mechanism itself is
+             * broken, not "0xB04EC0 is genuinely never written." */
+            hw_watch_install(0xB0284Cu, "selftest-B0284C");
+        } else {
+            hw_watch_install(0xB04EC0u, "quitflag-B04EC0-hw");
         }
     }
     guest_function entry = recomp_lookup(0x00016BD1);

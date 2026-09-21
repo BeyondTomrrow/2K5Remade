@@ -30564,6 +30564,7 @@ loc_00074596: ;
 loc_0007459B: ;
     g_ebp = ebp; /* frame stays current across calls */
     g_seh_ebp = ebp;
+    { extern volatile long nfl2k5_28f70_site_hits[]; nfl2k5_28f70_site_hits[0]++; }
     PUSH32(esp, 0x000745A0u); RECOMP_ABI_CALL(0x00028F70u, sub_00028F70); /* call 0x00028F70 */
 
 loc_000745A0: ;
@@ -30912,6 +30913,7 @@ loc_0007479B: ;
     edi = _cf ? 0xFFFFFFFF : 0; /* sbb self (CF extend) */
     _cf = (int)((edi) != 0);
     edi = (uint32_t)(-(int32_t)edi);
+    { extern void nfl2k5_trace_frame_loop_flag_set(uint32_t); nfl2k5_trace_frame_loop_flag_set(edi); }
     g_ebp = ebp; /* frame stays current across calls */
     g_seh_ebp = ebp;
     PUSH32(esp, 0x000747A8u); RECOMP_ABI_CALL(0x00074680u, sub_00074680); /* call 0x00074680 */
@@ -31022,6 +31024,7 @@ loc_00074810: ;
 loc_00074816: ;
     g_ebp = ebp; /* frame stays current across calls */
     g_seh_ebp = ebp;
+    { extern volatile long nfl2k5_28f70_site_hits[]; nfl2k5_28f70_site_hits[1]++; }
     PUSH32(esp, 0x0007481Bu); RECOMP_ABI_CALL(0x00028F70u, sub_00028F70); /* call 0x00028F70 */
 
 loc_0007481B: ;
@@ -31130,6 +31133,7 @@ loc_0007488D: ;
     PUSH32(esp, 0x00074892u); RECOMP_ABI_CALL(0x00027CA0u, sub_00027CA0); /* call 0x00027CA0 */
 
 loc_00074892: ;
+    { extern void nfl2k5_trace_frame_loop_flag_check(uint32_t); nfl2k5_trace_frame_loop_flag_check(edi); }
     _cf = 0; /* xor clears CF */
     eax = 0; /* xor self */
     _fa = (uint32_t)(edi) & 0xFFFFFFFFu; _fb = (uint32_t)(edi) & 0xFFFFFFFFu;

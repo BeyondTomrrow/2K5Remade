@@ -52631,6 +52631,18 @@ loc_000432C0: ;
     _fa = (uint32_t)(ecx) & 0xFFFFFFFFu; _fb = (uint32_t)(ecx) & 0xFFFFFFFFu;
     _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test ecx, ecx (32-bit) */
     SET_LO8(eax, (TEST_Z(_fa, _fb)) ? 1 : 0); /* sete */
+#ifdef NFL2K5_FORCE_UNBLOCK_B09584
+    /* EXPERIMENTAL, 2026-09-21: MEM32(0xB09584) is confirmed to get stuck
+     * at 1 forever in native (see PROJECT_STATUS.md), permanently blocking
+     * sub_00074180's poll loop and therefore the entire main game loop.
+     * The real setter/resetter pair was not found in time; this forces
+     * the wait to always succeed, at the explicit direction of the user
+     * ("do anything you need to get the game running") rather than
+     * leaving it correctly blocked while the real cause is still open.
+     * Gated behind a build flag, off by default -- this is a deliberate,
+     * flagged bypass, not a silent behavior change. */
+    eax = 1;
+#endif
     esp += 4; return; /* ret */
 
 }

@@ -991,6 +991,47 @@ void nfl2k5_trace_stream_bind_param(uint32_t ebx_val)
                               : "BINDS stream (sub_00428010)");
 }
 
+/* 2026-09-21: sub_00074790 (recomp_0003.c) computes its "keep looping" flag
+ * from sub_00038F50()'s result into `edi` near its own top, then reads it
+ * back ~30 calls later right before returning -- and `edi` is thread-local
+ * storage (g_edi). This codebase uses real OS threads for cooperative guest
+ * scheduling (see the worker-entry/bridge counters), so if anything in
+ * between causes a switch to a different host thread before the function
+ * returns, the final read would see that OTHER thread's own (likely zero/
+ * stale) g_edi, not the value this call chain actually computed -- with no
+ * memory write involved anywhere, which is why RECOMP_DATA_WATCH/HW_WATCH
+ * on the quit flag found nothing: the bug isn't in memory, it's in which
+ * thread's register state gets read. Confirmed/refuted by comparing the
+ * thread ID at both points, opt-in via RECOMP_FRAME_LOOP_TRACE=1. */
+/* 2026-09-21: sub_00028F70 has 17 static call sites total across the
+ * generated code (recomp_0003/0007/0008/0010/0011/0016.c). The live
+ * hybrid-xemu reference showed one specific site (0x0007481B, inside
+ * sub_00074790) as the 100%-hot caller during continuous gameplay, but
+ * that was never independently verified on native -- if native reaches
+ * sub_00028F70 through a DIFFERENT one of those 17 sites, everything
+ * downstream traced from "it's called via sub_00074790" would be moot. */
+void nfl2k5_trace_28f70_caller(uint32_t return_addr)
+{
+    fprintf(stderr, "  [28F70CALLER] return_addr=0x%08X\n", return_addr);
+    fflush(stderr);
+}
+
+void nfl2k5_trace_frame_loop_flag_set(uint32_t edi_value)
+{
+    /* Env-var gate temporarily removed for a reachability diagnostic --
+     * 2026-09-21, see PROJECT_STATUS.md. */
+    fprintf(stderr, "  [FRAMELOOP] flag set: tid=%lu edi=0x%08X\n",
+            (unsigned long)GetCurrentThreadId(), edi_value);
+    fflush(stderr);
+}
+
+void nfl2k5_trace_frame_loop_flag_check(uint32_t edi_value)
+{
+    fprintf(stderr, "  [FRAMELOOP] flag check: tid=%lu edi=0x%08X\n",
+            (unsigned long)GetCurrentThreadId(), edi_value);
+    fflush(stderr);
+}
+
 void nfl2k5_trace_stream_descriptor(uint32_t descriptor_addr, uint32_t data_ptr)
 {
     static volatile LONG trace_count;

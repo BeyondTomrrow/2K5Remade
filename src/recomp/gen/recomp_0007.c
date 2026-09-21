@@ -70068,6 +70068,7 @@ loc_000F5042: ;
 loc_000F5046: ;
     g_ebp = ebp; /* frame stays current across calls */
     g_seh_ebp = ebp;
+    { extern volatile long nfl2k5_28f70_site_hits[]; nfl2k5_28f70_site_hits[2]++; }
     PUSH32(esp, 0x000F504Bu); RECOMP_ABI_CALL(0x00028F70u, sub_00028F70); /* call 0x00028F70 */
 
 loc_000F504B: ;
@@ -72100,6 +72101,7 @@ loc_000F5D74: ;
 
 loc_000F5D76: ;
     PUSH32(esp, edi);
+    { extern volatile long nfl2k5_28f70_site_hits[]; nfl2k5_28f70_site_hits[3]++; }
     PUSH32(esp, 0x000F5D7Cu); RECOMP_ABI_CALL(0x00028F70u, sub_00028F70); /* call 0x00028F70 */
 
 loc_000F5D7C: ;
@@ -72117,6 +72119,7 @@ loc_000F5D93: ;
     PUSH32(esp, 0x000F5D98u); RECOMP_ABI_CALL(0x00027CA0u, sub_00027CA0); /* call 0x00027CA0 */
 
 loc_000F5D98: ;
+    { extern volatile long nfl2k5_28f70_site_hits[]; nfl2k5_28f70_site_hits[4]++; }
     PUSH32(esp, 0x000F5D9Du); RECOMP_ABI_CALL(0x00028F70u, sub_00028F70); /* call 0x00028F70 */
 
 loc_000F5D9D: ;
@@ -72133,6 +72136,7 @@ loc_000F5DB2: ;
     PUSH32(esp, 0x000F5DB7u); RECOMP_ABI_CALL(0x00027CA0u, sub_00027CA0); /* call 0x00027CA0 */
 
 loc_000F5DB7: ;
+    { extern volatile long nfl2k5_28f70_site_hits[]; nfl2k5_28f70_site_hits[5]++; }
     PUSH32(esp, 0x000F5DBCu); RECOMP_ABI_CALL(0x00028F70u, sub_00028F70); /* call 0x00028F70 */
 
 loc_000F5DBC: ;
@@ -72427,6 +72431,7 @@ loc_000F5F72: ;
 loc_000F5F76: ;
     g_ebp = ebp; /* frame stays current across calls */
     g_seh_ebp = ebp;
+    { extern volatile long nfl2k5_28f70_site_hits[]; nfl2k5_28f70_site_hits[6]++; }
     PUSH32(esp, 0x000F5F7Bu); RECOMP_ABI_CALL(0x00028F70u, sub_00028F70); /* call 0x00028F70 */
 
 loc_000F5F7B: ;
