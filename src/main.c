@@ -776,6 +776,39 @@ static LONG CALLBACK crash_report(EXCEPTION_POINTERS *ep)
                 fprintf(stderr, "[CRASH] source=%s:%lu+0x%lX\n", line.FileName,
                         line.LineNumber, line_displacement);
         }
+        /* 2026-09-21: a single frame isn't enough to tell which caller fed
+         * this function a bad pointer/index -- walk the real host call
+         * stack (every sub_XXXXXXXX is a real x86-64 function, called via
+         * real `call` instructions) using the exception's own context,
+         * the same info a live cdb `k` would use, but captured in-process
+         * so every crash gets this for free without needing to catch the
+         * process live under a debugger. */
+        {
+            STACKFRAME64 frame = {0};
+            CONTEXT ctx = *ep->ContextRecord;
+            frame.AddrPC.Offset = ctx.Rip; frame.AddrPC.Mode = AddrModeFlat;
+            frame.AddrFrame.Offset = ctx.Rbp; frame.AddrFrame.Mode = AddrModeFlat;
+            frame.AddrStack.Offset = ctx.Rsp; frame.AddrStack.Mode = AddrModeFlat;
+            fprintf(stderr, "[CRASH] backtrace:\n");
+            for (int depth = 0; depth < 32; depth++) {
+                if (!StackWalk64(IMAGE_FILE_MACHINE_AMD64, GetCurrentProcess(),
+                                  GetCurrentThread(), &frame, &ctx, NULL,
+                                  SymFunctionTableAccess64, SymGetModuleBase64, NULL))
+                    break;
+                if (!frame.AddrPC.Offset) break;
+                char fstorage[sizeof(SYMBOL_INFO) + 256] = {0};
+                SYMBOL_INFO *fsym = (SYMBOL_INFO *)fstorage;
+                DWORD64 fdisp = 0;
+                fsym->SizeOfStruct = sizeof(SYMBOL_INFO);
+                fsym->MaxNameLen = 255;
+                if (SymFromAddr(GetCurrentProcess(), frame.AddrPC.Offset, &fdisp, fsym))
+                    fprintf(stderr, "  [%d] %s+0x%llX\n", depth, fsym->Name,
+                            (unsigned long long)fdisp);
+                else
+                    fprintf(stderr, "  [%d] 0x%llX\n", depth,
+                            (unsigned long long)frame.AddrPC.Offset);
+            }
+        }
     }
     fflush(stderr);
     /* A title that dies mid-boot is exactly the run whose indirect-call

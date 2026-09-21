@@ -17,7 +17,7 @@ target_compile_definitions(NFL2K5 PRIVATE
   $<$<BOOL:${NFL2K5_FORCE_UNBLOCK_BDEEF0}>:NFL2K5_FORCE_UNBLOCK_BDEEF0>
   $<$<BOOL:${NFL2K5_FORCE_UNBLOCK_AUDIO_LOCK}>:NFL2K5_FORCE_UNBLOCK_AUDIO_LOCK>)
 target_link_libraries(NFL2K5 PRIVATE xboxrecomp d3d11 dxgi dxguid xinput winmm dbghelp bcrypt)
-target_compile_options(NFL2K5 PRIVATE /bigobj /Zi)
+target_compile_options(NFL2K5 PRIVATE /bigobj /Zi /FS)
 option(NFL2K5_OPTIMIZE "Optimize generated code after startup is working" OFF)
 if(NOT NFL2K5_OPTIMIZE)
   target_compile_options(NFL2K5 PRIVATE /Od)
