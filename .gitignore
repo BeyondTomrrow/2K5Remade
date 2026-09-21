@@ -1,0 +1,16 @@
+/original/*
+!/original/README.md
+/analysis/
+/build/
+/logs/
+/saves/
+/downloads/
+/dependencies/
+/external/
+*.xbe
+*.iso
+*.xiso
+*.obj
+*.exe
+*.pdb
+__pycache__/

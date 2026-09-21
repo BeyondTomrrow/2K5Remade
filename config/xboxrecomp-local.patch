@@ -1,0 +1,264 @@
+diff --git a/src/apu/apu_mmio_hook.c b/src/apu/apu_mmio_hook.c
+index 2742fa2..b3c9305 100644
+--- a/src/apu/apu_mmio_hook.c
++++ b/src/apu/apu_mmio_hook.c
+@@ -7,6 +7,7 @@
+ 
+ #include "apu.h"
+ #include <stdio.h>
++#include <stdlib.h>
+ #include <stdbool.h>
+ #include <stdint.h>
+ 
+diff --git a/src/kernel/kernel_bridge.c b/src/kernel/kernel_bridge.c
+index cb13e05..77e9057 100644
+--- a/src/kernel/kernel_bridge.c
++++ b/src/kernel/kernel_bridge.c
+@@ -723,7 +723,7 @@ static void bridge_MmAllocateContiguousMemoryEx(void)
+ static void bridge_MmFreeContiguousMemory(void)
+ {
+     uint32_t addr = STACK_ARG(0);
+-    xbox_HeapFree(addr);
++    if (!xbox_ContiguousFree(addr)) xbox_HeapFree(addr);
+     g_eax = 0;
+ }
+ 
+@@ -3083,7 +3083,8 @@ static void bridge_MmLockUnlockBufferPages(void)
+  */
+ static void bridge_MmQueryAllocationSize(void)
+ {
+-    g_eax = xbox_HeapBlockSize(STACK_ARG(0));
++    g_eax = xbox_ContiguousBlockSize(STACK_ARG(0));
++    if (!g_eax) g_eax = xbox_HeapBlockSize(STACK_ARG(0));
+ }
+ 
+ /* ── NtCreateMutant (ordinal 192, 3 args) */
+diff --git a/src/kernel/xbox_memory_layout.c b/src/kernel/xbox_memory_layout.c
+index feca92a..88fb17f 100644
+--- a/src/kernel/xbox_memory_layout.c
++++ b/src/kernel/xbox_memory_layout.c
+@@ -15,6 +15,10 @@
+ #include "xbox_memory_layout.h"
+ #include "kernel.h"
+ #include <stdio.h>
++#include <stdlib.h>
++#ifdef _WIN32
++#include <process.h>
++#endif
+ #include <string.h>
+ #include <setjmp.h>
+ 
+@@ -674,6 +678,7 @@ ptrdiff_t g_xbox_mem_offset = 0;
+  * nothing breaks before the title is loaded. */
+ uint32_t g_xbox_image_lo = 0;
+ uint32_t g_xbox_image_hi = 0;
++uint32_t g_xbox_kernel_data_base = 0;
+ uint32_t g_xbox_code_lo = 0;
+ uint32_t g_xbox_code_hi = 0;
+ 
+@@ -841,6 +846,7 @@ extern volatile uint32_t g_icall_trace_idx;
+ extern volatile uint64_t g_icall_count;
+ 
+ static uint32_t *s_watchdog_esp;
++static uint32_t s_watchdog_stack_lo, s_watchdog_stack_hi;
+ /* The other guest registers are thread-local too, so the watchdog has to be
+  * handed the guest thread's copies rather than reading its own -- which are
+  * always zero, and read as "every register is null" at exactly the moment the
+@@ -912,7 +918,7 @@ static DWORD WINAPI xbox_watchdog_thread(LPVOID unused)
+ 
+     for (i = 0; i < 400 && esp; i++) {
+         uint32_t a = esp + i * 4;
+-        if (a < XBOX_STACK_BASE || a >= XBOX_STACK_TOP) break;
++        if (a < s_watchdog_stack_lo || a >= s_watchdog_stack_hi) break;
+         fprintf(stderr, "    GS %08X %08X\n", a,
+                 *(const uint32_t *)(mem + a));
+     }
+@@ -936,6 +942,8 @@ void xbox_WatchdogStart(void)
+      * be handed the address of the one that matters rather than reading its
+      * own, which is always zero. */
+     s_watchdog_esp = &g_esp;
++    s_watchdog_stack_lo = *(uint32_t *)((uintptr_t)g_memory_offset + g_fs_base + 8);
++    s_watchdog_stack_hi = g_esp + 16;
+     s_watchdog_regs[0] = &g_eax; s_watchdog_regs[1] = &g_ecx;
+     s_watchdog_regs[2] = &g_edx; s_watchdog_regs[3] = &g_ebx;
+     s_watchdog_regs[4] = &g_esi; s_watchdog_regs[5] = &g_edi;
+@@ -1277,6 +1285,8 @@ BOOL xbox_MemoryLayoutInit(const void *xbe_data, size_t xbe_size)
+ 
+     /* Set the global offset for recompiled code MEM macros */
+     g_xbox_mem_offset = g_memory_offset;
++    g_xbox_kernel_data_base = xbox_HeapAlloc(XBOX_KERNEL_DATA_SIZE, 4096);
++    if (!g_xbox_kernel_data_base) return FALSE;
+ 
+     /*
+      * Initialize the Xbox stack for recompiled code.
+@@ -1326,7 +1336,12 @@ BOOL xbox_MemoryLayoutInit(const void *xbe_data, size_t xbe_size)
+          * only worked while page zero was mapped. Pointing at real zeroed
+          * memory says the same thing to the title and survives that page being
+          * unmapped, which is what makes a genuine null dereference visible. */
+-        #define FAKE_PRCB_VA 0x00761000  /* zeroed KPCR Prcb stand-in */
++        /* Retail NFL 2K5 maps .rdata over the legacy 0x007xxxxx
++         * scratch addresses. Reserve this storage through the guest heap
++         * so initializing runtime TLS cannot corrupt loaded game data. */
++        uint32_t runtime_scratch = xbox_HeapAlloc(0x80000, 4096);
++        if (!runtime_scratch) return FALSE;
++        #define FAKE_PRCB_VA (runtime_scratch + 0x61000)
+         memset(XBOX_VA(FAKE_PRCB_VA), 0, 0x400);
+         MEM32_INIT(XBOX_FS_BASE + 0x20, FAKE_PRCB_VA);
+         #undef FAKE_PRCB_VA
+@@ -1337,8 +1352,8 @@ BOOL xbox_MemoryLayoutInit(const void *xbe_data, size_t xbe_size)
+          * to its data area. We allocate a fake structure at 0x00760000
+          * (in the BSS area) and a data buffer at 0x00700000.
+          */
+-        #define FAKE_TLS_VA     0x00760000  /* Fake TLS structure (in BSS) */
+-        #define FAKE_RWDATA_VA  0x00700000  /* RW engine data area (in BSS) */
++        #define FAKE_TLS_VA     (runtime_scratch + 0x60000)
++        #define FAKE_RWDATA_VA  runtime_scratch
+ 
+         MEM32_INIT(XBOX_FS_BASE + 0x28, FAKE_TLS_VA);
+         /* TLS[0x28] = pointer to RW data area */
+@@ -1372,8 +1387,8 @@ BOOL xbox_MemoryLayoutInit(const void *xbe_data, size_t xbe_size)
+          * Every guest thread therefore shares LastError. Give this a per-thread
+          * allocation when a title is observed to care.
+          */
+-        #define FAKE_TLS_BLOCK_VA  0x00770000  /* image TLS data          */
+-        #define FAKE_TLS_THREAD_VA 0x00770200  /* what slot 0 points at   */
++        #define FAKE_TLS_BLOCK_VA  (runtime_scratch + 0x70000)
++        #define FAKE_TLS_THREAD_VA (runtime_scratch + 0x70200)
+         {
+             DWORD tls_dir_va = *(const DWORD *)(xbe + XBE_TLS_ADDR_OFFSET);
+ 
+@@ -2057,25 +2072,68 @@ void xbox_FreeThreadStack(uint32_t stack_top)
+  * Never freed: contiguous blocks are framebuffers and pushbuffers, which a
+  * title allocates once. */
+ static uint32_t g_contig_next = XBOX_CONTIG_BASE;
++static struct {
++    uint32_t address, size, previous;
++    int freed;
++} g_contig_blocks[4096];
++static unsigned g_contig_block_count;
++
++int xbox_ContiguousFree(uint32_t address)
++{
++    for (unsigned i = 0; i < g_contig_block_count; ++i) {
++        if (g_contig_blocks[i].address != address || g_contig_blocks[i].freed) continue;
++        g_contig_blocks[i].freed = 1;
++        while (g_contig_block_count && g_contig_blocks[g_contig_block_count - 1].freed)
++            g_contig_next = g_contig_blocks[--g_contig_block_count].previous;
++        return 1;
++    }
++    return 0;
++}
++
++uint32_t xbox_ContiguousBlockSize(uint32_t address)
++{
++    for (unsigned i = 0; i < g_contig_block_count; ++i)
++        if (!g_contig_blocks[i].freed && address >= g_contig_blocks[i].address &&
++            address - g_contig_blocks[i].address < g_contig_blocks[i].size)
++            return g_contig_blocks[i].size - (address - g_contig_blocks[i].address);
++    return 0;
++}
+ 
+ uint32_t xbox_ContiguousAlloc(uint32_t size, uint32_t alignment)
+ {
+     uint32_t result;
+ 
+     if (alignment < 4096) alignment = 4096;
++    if (!size || (alignment & (alignment - 1))) return 0;
++    for (unsigned i = 0; i < g_contig_block_count; ++i) {
++        if (g_contig_blocks[i].freed && g_contig_blocks[i].size >= size &&
++            !(g_contig_blocks[i].address & (alignment - 1))) {
++            g_contig_blocks[i].freed = 0;
++            memset((void *)((uintptr_t)g_contig_blocks[i].address + g_memory_offset), 0, size);
++            return g_contig_blocks[i].address;
++        }
++    }
++    if (g_contig_block_count == 4096) return 0;
+     result = (g_contig_next + alignment - 1) & ~(alignment - 1);
+ 
+     /* Leave the top of the window for GPU instance memory. */
+     if ((uint64_t)result + size >
+             (uint64_t)XBOX_CONTIG_BASE + XBOX_CONTIG_SIZE
+                 - XBOX_GPU_INSTANCE_DEFAULT) {
+-        fprintf(stderr, "  [CONTIG] arena exhausted (%u requested, %u of %u used)\n",
+-                size, g_contig_next - XBOX_CONTIG_BASE,
+-                (unsigned)XBOX_CONTIG_SIZE);
+-        fflush(stderr);
++        static unsigned exhausted_count;
++        if (++exhausted_count <= 8 || exhausted_count % 1024 == 0) {
++            fprintf(stderr, "  [CONTIG] arena exhausted (%u requested, %u of %u used; retry %u)\n",
++                    size, g_contig_next - XBOX_CONTIG_BASE,
++                    (unsigned)XBOX_CONTIG_SIZE, exhausted_count);
++            fflush(stderr);
++        }
+         return 0;
+     }
+ 
++    g_contig_blocks[g_contig_block_count].address = result;
++    g_contig_blocks[g_contig_block_count].size = size;
++    g_contig_blocks[g_contig_block_count].previous = g_contig_next;
++    g_contig_blocks[g_contig_block_count++].freed = 0;
+     g_contig_next = result + size;
+     memset((void *)((uintptr_t)result + g_memory_offset), 0, size);
+     return result;
+diff --git a/src/kernel/xbox_memory_layout.h b/src/kernel/xbox_memory_layout.h
+index d943592..b2f589c 100644
+--- a/src/kernel/xbox_memory_layout.h
++++ b/src/kernel/xbox_memory_layout.h
+@@ -183,6 +183,8 @@ uint32_t xbox_GetDisplayFramebuffer(uint32_t *pitch);
+ /* Allocate from the contiguous (physical-mirror) arena. Returns a guest VA
+  * below 256 MB, or 0 when the arena is exhausted. */
+ uint32_t xbox_ContiguousAlloc(uint32_t size, uint32_t alignment);
++int xbox_ContiguousFree(uint32_t address);
++uint32_t xbox_ContiguousBlockSize(uint32_t address);
+ uint32_t xbox_ContiguousAllocatedBytes(void);
+ 
+ int xbox_Nv2aMirrorFence(uint32_t device_ptr_va,
+@@ -225,7 +227,8 @@ void xbox_WatchdogStart(void);
+ /** Base VA for kernel data exports (XboxHardwareInfo, XboxKrnlVersion, etc.)
+  *  These are kernel exports that are DATA, not functions. The game reads
+  *  their thunk entries and dereferences them to access the data. */
+-#define XBOX_KERNEL_DATA_BASE   0x00740000
++extern uint32_t g_xbox_kernel_data_base;
++#define XBOX_KERNEL_DATA_BASE   g_xbox_kernel_data_base
+ #define XBOX_KERNEL_DATA_SIZE   4096   /* 4 KB - plenty for all data exports */
+ 
+ /* Offsets within the kernel data area */
+diff --git a/tools/disasm/config.py b/tools/disasm/config.py
+index 07f74bb..6ef3b7e 100644
+--- a/tools/disasm/config.py
++++ b/tools/disasm/config.py
+@@ -59,7 +59,7 @@ ALL_SECTIONS = {
+ # Conventional PE data-section names; matched by name regardless of the XBE's
+ # executable flag (matches tools/disasm/loader.py's DATA_SECTION_NAMES).
+ _DATA_SECTION_NAMES = frozenset({
+-    ".data", ".data1", ".rdata", ".idata", ".edata", ".reloc", ".tls",
++    ".data", ".data1", ".rdata", ".idata", ".edata", ".reloc", ".tls", ".string_",
+ })
+ 
+ _configured_from = None
+diff --git a/tools/disasm/loader.py b/tools/disasm/loader.py
+index 6c09e10..7326bd8 100644
+--- a/tools/disasm/loader.py
++++ b/tools/disasm/loader.py
+@@ -19,7 +19,7 @@ from typing import Dict, List, Optional, Tuple
+ # the linker maps class those as CODE, and they are exactly the sections we
+ # want disassembled.
+ DATA_SECTION_NAMES = frozenset({
+-    ".data", ".data1", ".rdata", ".idata", ".edata", ".reloc", ".tls",
++    ".data", ".data1", ".rdata", ".idata", ".edata", ".reloc", ".tls", ".string_",
+ })
+ 
+ 
+diff --git a/tools/recomp/config.py b/tools/recomp/config.py
+index 159f56c..f11e961 100644
+--- a/tools/recomp/config.py
++++ b/tools/recomp/config.py
+@@ -24,7 +24,7 @@ FORCE_CODE_SECTIONS = {"XIPS"}
+ 
+ # Sections that are resources/data even if flagged executable.
+ FORCE_DATA_SECTIONS = {
+-    ".data", ".data1", ".rdata",
++    ".data", ".data1", ".rdata", ".string_",
+     "EnglishXlate", "JapaneseXlate", "GermanXlate",
+     "FrenchXlate", "SpanishXlate", "ItalianXlate",
+ }

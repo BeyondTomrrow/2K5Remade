@@ -1,0 +1,739 @@
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <windows.h>
+#include "xbox_memory_layout.h"
+#include "recomp_funcs.h"
+/* Boot-only AC97 channel reset acknowledgement. This does not synthesize audio. */
+void nfl2k5_ack_ac97_reset(uint32_t address)
+{
+    if (address >= 0xFEC00100u && address < 0xFEC00200u) {
+        volatile uint8_t *control=(volatile uint8_t *)((uintptr_t)xbox_GetMemoryOffset()+address);
+        *control &= (uint8_t)~2u;
+        static unsigned count;
+        if(count++<8) fprintf(stderr,"[BOOT-BYPASS] AC97 reset acknowledged at %08X\n",address);
+    }
+}
+
+/* Boot trace only: B04EC8 is a reference count, so record both directions
+ * with the guest return address instead of treating a later zero as a reset. */
+void nfl2k5_trace_phase_gate(uint32_t value, uint32_t caller)
+{
+    static unsigned count;
+    if (count++ < 64)
+        fprintf(stderr, "[PHASE] B04EC8=%u caller=%08X\n", value, caller);
+}
+
+/* The frontend scheduler runs on a worker thread.  Keep its trace entirely
+ * in memory: writing stderr here changes scheduling enough to hide races. */
+volatile LONG nfl2k5_frontend_samples;
+volatile uint32_t nfl2k5_frontend_queue;
+volatile uint32_t nfl2k5_frontend_pending;
+volatile uint32_t nfl2k5_frontend_head;
+volatile uint32_t nfl2k5_frontend_tail;
+volatile uint32_t nfl2k5_frontend_state;
+volatile uint32_t nfl2k5_frontend_request;
+volatile uint32_t nfl2k5_frontend_active;
+volatile LONG nfl2k5_frontend_prepare_calls;
+volatile LONG nfl2k5_frontend_prepare_ok;
+volatile uint32_t nfl2k5_frontend_prepare_result;
+volatile LONG nfl2k5_frontend_submit_calls;
+volatile LONG nfl2k5_frontend_submit_ok;
+volatile uint32_t nfl2k5_frontend_submit_result;
+volatile uint32_t nfl2k5_frontend_submit_status;
+volatile uint32_t nfl2k5_frontend_range_source;
+volatile uint32_t nfl2k5_frontend_range_size;
+volatile uint32_t nfl2k5_frontend_range_low;
+volatile uint32_t nfl2k5_frontend_range_high;
+volatile uint32_t nfl2k5_frontend_range_end_low;
+volatile uint32_t nfl2k5_frontend_range_end_high;
+volatile uint32_t nfl2k5_frontend_range_request;
+volatile uint32_t nfl2k5_frontend_range_provider;
+volatile LONG nfl2k5_frontend_state_counts[9];
+volatile LONG nfl2k5_title_init_74bf0_calls;
+volatile LONG nfl2k5_title_init_38fc0_calls;
+volatile LONG nfl2k5_title_init_network_calls;
+volatile LONG nfl2k5_title_init_checkpoint;
+volatile LONG nfl2k5_async_items;
+volatile uint32_t nfl2k5_async_item;
+volatile uint32_t nfl2k5_async_item_type;
+volatile uint32_t nfl2k5_async_provider;
+volatile LONG nfl2k5_async_dispatches;
+volatile uint32_t nfl2k5_async_dispatch_type;
+volatile uint32_t nfl2k5_async_dispatch_target;
+volatile LONG nfl2k5_frontend_state_dispatch_calls;
+volatile uint32_t nfl2k5_frontend_state_dispatch_value;
+static CRITICAL_SECTION nfl2k5_scheduler_table_cs;
+static INIT_ONCE nfl2k5_scheduler_table_once = INIT_ONCE_STATIC_INIT;
+
+static BOOL CALLBACK nfl2k5_init_scheduler_table_cs(PINIT_ONCE once,
+                                                     PVOID parameter,
+                                                     PVOID *context)
+{
+    (void)once; (void)parameter; (void)context;
+    InitializeCriticalSection(&nfl2k5_scheduler_table_cs);
+    return TRUE;
+}
+
+void nfl2k5_scheduler_table_lock(void)
+{
+    InitOnceExecuteOnce(&nfl2k5_scheduler_table_once,
+                        nfl2k5_init_scheduler_table_cs, NULL, NULL);
+    EnterCriticalSection(&nfl2k5_scheduler_table_cs);
+}
+
+void nfl2k5_scheduler_table_unlock(void)
+{
+    LeaveCriticalSection(&nfl2k5_scheduler_table_cs);
+}
+volatile LONG nfl2k5_scheduler_samples;
+volatile uint32_t nfl2k5_scheduler_callback;
+volatile LONG nfl2k5_input_init_stage;
+volatile LONG nfl2k5_network_init_stage;
+volatile uint32_t nfl2k5_network_init_status;
+volatile uint32_t nfl2k5_network_init_version;
+volatile LONG nfl2k5_invalid_queue_objects;
+volatile uint32_t nfl2k5_invalid_queue_object;
+volatile uint32_t nfl2k5_invalid_queue_record;
+
+void nfl2k5_trace_frontend(uint32_t queue, uint32_t pending,
+                           uint32_t head, uint32_t tail)
+{
+    nfl2k5_frontend_queue = queue;
+    nfl2k5_frontend_pending = pending;
+    nfl2k5_frontend_head = head;
+    nfl2k5_frontend_tail = tail;
+    if (queue >= 0x00010000u && queue < 0x04000000u &&
+        queue != 0x00AF57C8u) {
+        nfl2k5_frontend_request = MEM32(queue + 0x78u);
+        nfl2k5_frontend_active = MEM32(queue + 0x7Cu);
+        nfl2k5_frontend_state = MEM32(queue + 0x8Cu);
+    }
+    InterlockedIncrement(&nfl2k5_frontend_samples);
+}
+
+void nfl2k5_trace_frontend_prepare(uint32_t result)
+{
+    nfl2k5_frontend_prepare_result = result;
+    InterlockedIncrement(&nfl2k5_frontend_prepare_calls);
+    if (result)
+        InterlockedIncrement(&nfl2k5_frontend_prepare_ok);
+}
+
+void nfl2k5_trace_frontend_submit(uint32_t result, uint32_t status)
+{
+    nfl2k5_frontend_submit_result = result;
+    nfl2k5_frontend_submit_status = status;
+    InterlockedIncrement(&nfl2k5_frontend_submit_calls);
+    if (result)
+        InterlockedIncrement(&nfl2k5_frontend_submit_ok);
+}
+
+void nfl2k5_trace_frontend_range(uint32_t source, uint32_t size,
+                                 uint32_t low, uint32_t high,
+                                 uint32_t end_low, uint32_t end_high,
+                                 uint32_t request, uint32_t provider)
+{
+    nfl2k5_frontend_range_source = source;
+    nfl2k5_frontend_range_size = size;
+    nfl2k5_frontend_range_low = low;
+    nfl2k5_frontend_range_high = high;
+    nfl2k5_frontend_range_end_low = end_low;
+    nfl2k5_frontend_range_end_high = end_high;
+    nfl2k5_frontend_range_request = request;
+    nfl2k5_frontend_range_provider = provider;
+}
+
+void nfl2k5_trace_frontend_state(uint32_t state)
+{
+    if (state < 9u)
+        InterlockedIncrement(&nfl2k5_frontend_state_counts[state]);
+}
+
+void nfl2k5_trace_title_init(uint32_t stage)
+{
+    InterlockedExchange(&nfl2k5_title_init_checkpoint, (LONG)stage);
+    if (stage == 1u) InterlockedIncrement(&nfl2k5_title_init_74bf0_calls);
+    if (stage == 2u) InterlockedIncrement(&nfl2k5_title_init_38fc0_calls);
+    if (stage == 3u) InterlockedIncrement(&nfl2k5_title_init_network_calls);
+}
+
+void nfl2k5_trace_async_item(uint32_t item, uint32_t type, uint32_t provider)
+{
+    nfl2k5_async_item = item;
+    nfl2k5_async_item_type = type;
+    nfl2k5_async_provider = provider;
+    InterlockedIncrement(&nfl2k5_async_items);
+}
+
+void nfl2k5_trace_async_dispatch(uint32_t type, uint32_t target)
+{
+    nfl2k5_async_dispatch_type = type;
+    nfl2k5_async_dispatch_target = target;
+    InterlockedIncrement(&nfl2k5_async_dispatches);
+}
+
+/* The frontend's first asynchronous request is an offset-based descriptor,
+ * not a host pointer range.  On Xbox the provider accepts this zero-aperture
+ * form; the bridge's partially initialized provider advertises range checks
+ * and rejects it with status 0x13 before the title worker sees it. */
+int nfl2k5_allow_zero_frontend_range(uint32_t request, uint32_t provider)
+{
+    if (request < 0x01000000u || request >= 0x04000000u)
+        return 0;
+    if (provider != 0x00A77788u)
+        return 0;
+    if (MEM32(request + 8) != 0 || MEM32(request + 0xC) != 0)
+        return 0;
+    if (MEM32(request + 0x18) > 0x10000u)
+        return 0;
+    return 1;
+}
+
+void nfl2k5_trace_scheduler(void)
+{
+    InterlockedIncrement(&nfl2k5_scheduler_samples);
+}
+
+void nfl2k5_trace_scheduler_callback(uint32_t callback)
+{
+    nfl2k5_scheduler_callback = callback;
+}
+
+void nfl2k5_trace_input_init(uint32_t stage)
+{
+    InterlockedExchange(&nfl2k5_input_init_stage, (LONG)stage);
+}
+
+void nfl2k5_trace_network_init(uint32_t stage, uint32_t status,
+                               uint32_t version)
+{
+    nfl2k5_network_init_status = status;
+    nfl2k5_network_init_version = version;
+    InterlockedExchange(&nfl2k5_network_init_stage, (LONG)stage);
+}
+
+void nfl2k5_trace_invalid_queue_object(uint32_t object, uint32_t record)
+{
+    nfl2k5_invalid_queue_object = object;
+    nfl2k5_invalid_queue_record = record;
+    InterlockedIncrement(&nfl2k5_invalid_queue_objects);
+}
+typedef void (*recomp_func_t)(void);
+extern RECOMP_TLS uint32_t g_eax, g_esp, g_ecx, g_edx, g_ebx, g_esi, g_edi;
+extern void xbox_bridge_signal_worker_completion(void);
+extern void xbox_bridge_wait_worker_completion(unsigned long timeout_ms);
+extern void xbox_bridge_service_scheduler_now(void);
+extern void xbox_bridge_note_scheduler_ready(void);
+extern void xbox_bridge_drive_scheduler_until(uint32_t target_count,
+                                               unsigned long timeout_ms);
+
+void nfl2k5_signal_worker_completion(void)
+{
+    xbox_bridge_signal_worker_completion();
+}
+
+void nfl2k5_wait_worker_completion(void)
+{
+    xbox_bridge_wait_worker_completion(4);
+}
+
+void nfl2k5_service_post_queue(void)
+{
+    /* Called after sub_00035D50 returns, after sub_00035C70 released the
+     * queue lock, and before the title unregisters its frontend callback. */
+    xbox_bridge_drain_guest_dpcs();
+    xbox_bridge_service_scheduler_now();
+}
+
+void nfl2k5_scheduler_registered(uint32_t count)
+{
+    if (count == 5)
+        xbox_bridge_note_scheduler_ready();
+}
+
+/* XBE 145B0 is cdecl memmove(dst, src, length). The generated range
+ * truncates its reverse-copy jump table, dropping overlapping copies. */
+void nfl2k5_guest_memmove(void)
+{
+    uint32_t dst = MEM32(g_esp + 4), src = MEM32(g_esp + 8);
+    uint32_t length = MEM32(g_esp + 12);
+    if (length) memmove((void *)XBOX_PTR(dst), (const void *)XBOX_PTR(src), length);
+    g_eax = dst;
+    g_esp += 4;
+}
+
+int nfl2k5_test_memmove(uint32_t buffer)
+{
+    const unsigned lengths[] = {0, 1, 3, 7, 31, 64};
+    unsigned char expected[128];
+    uint32_t initial_esp = g_esp;
+    for (unsigned direction = 0; direction < 2; ++direction)
+        for (unsigned n = 0; n < sizeof lengths / sizeof lengths[0]; ++n) {
+            unsigned src = direction ? 8 : 0, dst = direction ? 0 : 8;
+            for (unsigned i = 0; i < 128; ++i) expected[i] = (unsigned char)i;
+            memcpy((void *)XBOX_PTR(buffer), expected, sizeof expected);
+            memmove(expected + dst, expected + src, lengths[n]);
+            PUSH32(g_esp, lengths[n]); PUSH32(g_esp, buffer + src);
+            PUSH32(g_esp, buffer + dst); PUSH32(g_esp, 0);
+            sub_000145B0();
+            if (g_esp != initial_esp - 12 || g_eax != buffer + dst ||
+                memcmp((const void *)XBOX_PTR(buffer), expected, sizeof expected)) return 0;
+            g_esp += 12;
+        }
+    return 1;
+}
+
+/* These are executable gap/tail targets present in the XBE but omitted from
+ * the generated dispatch table. The boot path uses their simple return forms. */
+static void nfl2k5_gap_return_zero(void)
+{
+    g_eax = 0;
+    g_esp += 4;
+}
+
+/* 004C3207 is the virtual state dispatcher installed by 004C32AA.  It sits
+ * immediately after a generated function, so the function finder treated it
+ * as that function's end address and omitted it from recomp_dispatch.c.
+ * Leaving the vtable entry unresolved makes every state-machine completion
+ * silently disappear.  This is a direct translation of 004C3207..004C325B:
+ * ECX is the state object, +0x0C selects one of its nine handlers, and the
+ * original returns with one stack argument consumed. */
+static void nfl2k5_network_state_dispatch_4c3207(void)
+{
+    uint32_t object = MEM32(g_esp + 4);
+    uint32_t state;
+
+    g_ecx = object;
+    state = MEM32(object + 0x0Cu);
+    g_edx = state;
+    g_eax = 0;
+    switch (state) {
+    case 0: PUSH32(g_esp, 0x004C3221u); sub_004C2EC5(); break;
+    case 1: PUSH32(g_esp, 0x004C3228u); sub_004C2F62(); break;
+    case 2: PUSH32(g_esp, 0x004C322Fu); sub_004C1B39(); break;
+    case 3: PUSH32(g_esp, 0x004C3236u); sub_004C2A44(); break;
+    case 4: PUSH32(g_esp, 0x004C323Du); sub_004C1B87(); break;
+    case 5: PUSH32(g_esp, 0x004C3244u); sub_004C1C63(); break;
+    case 6: PUSH32(g_esp, 0x004C324Bu); sub_004C30FA(); break;
+    case 7: PUSH32(g_esp, 0x004C3252u); sub_004C1D0D(); break;
+    case 8: PUSH32(g_esp, 0x004C3259u); sub_004C1CBD(); break;
+    default: break;
+    }
+    g_esp += 8; /* ret 4 */
+}
+
+/* 00041FF0 is a tiny completion adapter used by the audio/resource worker.
+ * Its address is pushed as a callback by 00042010, but its eight instruction
+ * body was also skipped by function discovery. */
+static void nfl2k5_resource_completion_41ff0(void)
+{
+    uint32_t completion = g_ecx;
+    g_eax = g_edx;
+    g_ecx = MEM32(g_eax + 0x14u);
+    g_edx = completion ? 0u : 8u;
+    sub_0003A4F0(); /* original tail jump consumes our caller return */
+}
+
+/* The asynchronous bootstrap probes this compact helper at 001C1FA0.  The
+ * scanner skipped it because it is a short chain of tail calls between two
+ * aligned functions.  Returning zero for its unresolved target caused the
+ * bootstrap to take the wrong ready path and eventually feed an uninitialized
+ * renderer work item to 0003F580. */
+static void nfl2k5_bootstrap_probe_1c1fa0(void)
+{
+    PUSH32(g_esp, 0x001C1FA5u); sub_00122EE0();
+    if (g_eax) {
+        g_eax = MEM32(0x00A9C1FCu); /* tail target 00122FC0 */
+        g_esp += 4;
+        return;
+    }
+    PUSH32(g_esp, 0x001C1FB3u); sub_00064BF0();
+    if (g_eax) {
+        g_ecx = 0;
+        sub_0005E7E0(); /* tail jump */
+        return;
+    }
+    PUSH32(g_esp, 0x001C1FBCu); sub_00270BA0();
+    if (g_eax) {
+        sub_00275F20(); /* tail jump */
+        return;
+    }
+    g_eax = 0x8000u;
+    g_esp += 4;
+}
+
+/* 003CC280 is the frontend queue pump.  It appears as a callback target in
+ * the XBE but was not emitted by the function scanner.  It moves completed
+ * resource chunks into the queue that feeds the command writer; without it
+ * the writer emits its zero-filled bootstrap primitive forever. */
+static void nfl2k5_frontend_queue_pump_3cc280(void)
+{
+    PUSH32(g_esp, g_ecx);
+    MEM32(0x00AF5890u) = 1;
+    if (MEM32(0x00AF588Cu))
+        goto out_ecx;
+
+    g_ebx = MEM32(0x00AF5884u);
+    PUSH32(g_esp, g_ebx);
+    if (g_ebx == 0x00AF57C8u)
+        goto out_ebx;
+    PUSH32(g_esp, g_esi);
+    PUSH32(g_esp, g_edi);
+
+    while (!MEM32(0x00AF588Cu)) {
+        g_esi = MEM32(g_ebx + 0xA4u);
+        if (g_esi && !MEM32(g_esi + 0xF4u)) {
+            uint32_t result_slot = g_esp + 12u;
+            PUSH32(g_esp, result_slot);
+            PUSH32(g_esp, 0x003CC2DFu); sub_003CB220();
+            if (g_eax) {
+                g_ecx = MEM32(result_slot);
+                MEM32(g_esi + 0xF8u) = g_ecx;
+                MEM32(g_esi + 0xF4u) = 1;
+            }
+        }
+        if (g_esi) {
+            g_edi = MEM32(g_esi + 0xCCu);
+            if (!MEM32(g_edi)) {
+                int32_t delta = (int32_t)(g_edi - g_esi - 0x64u);
+                g_ecx = (uint32_t)(delta / 100);
+                PUSH32(g_esp, 0x003CC320u); sub_003CB260();
+                if (g_eax) {
+                    uint32_t ready = MEM32(g_esi + 0x5Cu);
+                    uint32_t pending = MEM32(g_esi + 0xF8u);
+                    if (!ready || (int32_t)ready < (int32_t)pending) {
+                        uint32_t next = MEM32(g_edi + 0x10u);
+                        MEM32(g_esi + 0xCCu) = next;
+                        MEM32(g_esi + 0x5Cu) = pending;
+                        MEM32(g_edi + 4u) = pending;
+                        MEM32(g_edi) = 1;
+                    }
+                    MEM32(g_esi + 0xF4u) = 0;
+                }
+            }
+        }
+        g_ebx = MEM32(g_ebx + 0xBCu);
+        if (g_ebx == 0x00AF57C8u)
+            break;
+    }
+    POP32(g_esp, g_edi);
+    POP32(g_esp, g_esi);
+out_ebx:
+    POP32(g_esp, g_ebx);
+out_ecx:
+    MEM32(0x00AF5890u) = 0;
+    POP32(g_esp, g_ecx);
+    g_esp += 4;
+}
+
+/* The first active 004945A3 state observed in the retail title is state 6.
+ * Its original branch at 0049464F submits action 7 when flag 0x10 is set and
+ * action 9 otherwise.  Keep the explicit ret 4 because this is a vtable
+ * method, not a cdecl callback. */
+static void nfl2k5_frontend_state_probe_4945a3(void)
+{
+    uint32_t state = MEM8(g_ecx + 0x8C8u);
+    nfl2k5_frontend_state_dispatch_value = state;
+    InterlockedIncrement(&nfl2k5_frontend_state_dispatch_calls);
+    if (state == 6u) {
+        uint32_t action = (MEM8(g_ecx + 0x8CCu) & 0x10u) ? 7u : 9u;
+        PUSH32(g_esp, 0);
+        PUSH32(g_esp, action);
+        PUSH32(g_esp, 0x00494661u); sub_00492E9B();
+        g_esp += 8; /* original ret 4 after the helper's ret 8 */
+        return;
+    }
+    g_eax = 0;
+    g_esp += 8; /* ret 4 */
+}
+
+static void nfl2k5_recover_scheduler(void)
+{
+    static const uint32_t callbacks[] = {
+        0x0003E910u, 0x003CD120u, 0x0003A1C0u, 0x0003A310u,
+        0x00051F00u, 0x00039380u, 0x00042BD0u, 0x00045F20u
+    };
+    if (!getenv("RECOMP_SCHEDULER_RECOVER") || MEM32(0x00B04D1Cu) >= 9u)
+        return;
+    for (unsigned i = 0; i < sizeof(callbacks) / sizeof(callbacks[0]); ++i) {
+        g_ecx = callbacks[i];
+        g_edx = 1u;
+        PUSH32(g_esp, 0x003CB1E4u);
+        sub_00038D20();
+    }
+}
+
+/* 003CB1C0 is a real unprologued function in the XBE, not a no-op callback.
+ * It was missed by the function detector. This reproduces its 10 instructions
+ * and preserves the original call/return stack layout. */
+static void nfl2k5_boot_registration(void)
+{
+    PUSH32(g_esp, 0x00AF5888u);
+    PUSH32(g_esp, 0x003CB1CAu);
+    sub_003784D0();
+    if (g_eax == 1) {
+        PUSH32(g_esp, 0xFFFFFFFEu);
+        PUSH32(g_esp, 0x003CB1D6u);
+        sub_00016CFF();
+        MEM32(0x00CC7934u) = g_eax;
+        PUSH32(g_esp, 0x0000000Fu);
+        PUSH32(g_esp, 0xFFFFFFFEu);
+        PUSH32(g_esp, 0x003CB1E4u);
+        sub_00016CAD();
+        g_esp += 4; /* ret */
+    } else {
+        sub_00016EAC(); /* original tail jump; this consumes caller return */
+    }
+}
+
+/* 00041810 is the title's per-frame callback. It is referenced as data by
+ * the scheduler, which is why the function scanner did not emit it. This is
+ * a direct translation of 00041810..00041870; keeping it real matters because
+ * it advances the renderer's update queues after AvSetDisplayMode. */
+static void nfl2k5_frame_callback(void)
+{
+    static unsigned callback_count;
+    ++callback_count;
+    PUSH32(g_esp, g_esi);
+    g_esi = MEM32(0x00B068F4u);
+    while (g_esi != 0x00B057D8u) {
+        g_eax = MEM32(g_esi + 0x1130u);
+        if (g_eax || MEM32(g_esi + 0x112Cu)) {
+            g_ecx = MEM32(g_esi + 0x1C24u);
+            PUSH32(g_esp, 0xBF800000u);
+            PUSH32(g_esp, 0x00041844u);
+            sub_0003D0D0();
+        }
+        g_esi = MEM32(g_esi + 0x111Cu);
+    }
+    PUSH32(g_esp, 0x00041857u); sub_0003EF30();
+    PUSH32(g_esp, 0x0004185Cu); sub_0003F140();
+    PUSH32(g_esp, 0x00041861u); sub_00041790();
+    PUSH32(g_esp, 0x00041866u); sub_00040870();
+    PUSH32(g_esp, 0x0004186Bu); sub_00040A10();
+    nfl2k5_recover_scheduler();
+    /* The retail boot loop treats this as an edge-triggered "work pending"
+     * notification.  On the native bridge it is raised by the XPP path but
+     * no interrupt completion clears it, leaving startup polling forever.
+     * Keep this strictly opt-in until the completion source is modeled. */
+    if (getenv("RECOMP_BOOT_UNSTICK"))
+        MEM32(0x00B04EC0u) = 0;
+    POP32(g_esp, g_esi);
+    sub_00040D20(); /* original tail jump consumes the caller return */
+}
+
+/* D3D command emitters immediately preceding the first display mode. Like the
+ * frame callback, these routine starts fall just after a scanner range end. */
+static void nfl2k5_d3d_set_state_42a260(void)
+{
+    uint32_t arg;
+    g_edx = MEM32(0x00440508u) | 0x200u;
+    PUSH32(g_esp, g_esi);
+    g_esi = MEM32(0x004409A8u);
+    MEM32(0x00440508u) = g_edx;
+    g_eax = MEM32(g_esi);
+    if (g_eax >= MEM32(g_esi + 4u)) { PUSH32(g_esp, 0x0042A285u); sub_004265A0(); }
+    arg = MEM32(g_esp + 8u);
+    MEM32(g_eax) = 0x00040328u;
+    MEM32(g_eax + 4u) = arg;
+    MEM32(g_esi) = g_eax + 8u;
+    MEM32(0x00440934u) = arg;
+    POP32(g_esp, g_esi);
+    g_esp += 8; /* ret 4 */
+}
+
+static void nfl2k5_d3d_set_state_42b220(void)
+{
+    uint32_t arg = MEM32(g_esp + 4u), command_buffer;
+    PUSH32(g_esp, g_esi);
+    PUSH32(g_esp, g_edi);
+    g_esi = MEM32(0x00440974u) << 16;
+    command_buffer = MEM32(0x004409A8u);
+    g_esi |= arg;
+    MEM32(0x00440988u) = arg;
+    g_eax = MEM32(command_buffer + 8u);
+    if (((g_eax >> 8) & 0x80u) && MEM32(0x00440970u)) g_esi |= 1u;
+    g_eax = MEM32(command_buffer);
+    if (g_eax >= MEM32(command_buffer + 4u)) { PUSH32(g_esp, 0x0042B25Bu); sub_004265A0(); }
+    MEM32(g_eax) = 0x00041D7Cu;
+    MEM32(g_eax + 4u) = g_esi;
+    MEM32(command_buffer) = g_eax + 8u;
+    POP32(g_esp, g_edi);
+    POP32(g_esp, g_esi);
+    g_esp += 8; /* ret 4 */
+}
+
+static void nfl2k5_d3d_set_state_42ade0(void)
+{
+    uint32_t arg;
+    PUSH32(g_esp, g_esi);
+    g_esi = MEM32(0x004409A8u);
+    g_eax = MEM32(g_esi);
+    if (g_eax >= MEM32(g_esi + 4u)) { PUSH32(g_esp, 0x0042ADF3u); sub_004265A0(); }
+    arg = MEM32(g_esp + 8u);
+    g_edx = arg;
+    g_ecx = (arg && MEM32(g_esi + 0x1A08u)) ? 1u : 0u;
+    MEM32(g_eax) = 0x0004030Cu;
+    MEM32(g_eax + 4u) = g_ecx;
+    MEM32(g_eax + 8u) = 0x00041D78u;
+    MEM32(g_eax + 12u) = MEM32(0x00440858u);
+    MEM32(g_esi) = g_eax + 16u;
+    if (MEM32(0x0044094Cu) == 2u || g_edx == 2u) {
+        MEM32(0x0044094Cu) = g_edx;
+        PUSH32(g_esp, 0x0042AE46u); sub_004299B0();
+        g_ecx = g_esi;
+        PUSH32(g_esp, 0x0042AE4Du); sub_00428FD0();
+        g_eax = MEM32(g_esi);
+        if (g_eax >= MEM32(g_esi + 4u)) { PUSH32(g_esp, 0x0042AE59u); sub_004265A0(); }
+        g_edx = g_eax;
+        g_ecx = g_esi;
+        PUSH32(g_esp, 0x0042AE62u); sub_0042A810();
+        g_edx = g_eax;
+        PUSH32(g_esp, 0x0042AE69u); sub_0042A620();
+        MEM32(g_esi) = g_eax;
+    } else {
+        MEM32(0x0044094Cu) = g_edx;
+    }
+    POP32(g_esp, g_esi);
+    g_esp += 8; /* ret 4 */
+}
+/* Worker omitted by function discovery. Dispatch the XBE's actual jump-table
+ * destinations, preserving its state transitions and guest stack. */
+static void nfl2k5_io_worker(void)
+{
+    PUSH32(g_esp, g_esi);
+    if (MEM32(0x00A7D300u) != 13u) {
+        g_esi = 1;
+        do {
+            g_eax = MEM32(0x00A7D300u);
+            if (g_eax > 13u) {
+                fprintf(stderr, "[WORKER] State outside jump table: %08X\n", g_eax);
+                abort();
+            }
+            uint32_t target = MEM32(0x0004D8C0u + g_eax * 4u);
+            int complete = 1;
+            switch (target) {
+            case 0x0004D82Fu: MEM32(0x00A7D300u) = g_esi; complete = 0; break;
+            case 0x0004D837u: PUSH32(g_esp, 0x0004D83Cu); sub_0004B910(); complete = 0; break;
+            case 0x0004D83Eu: PUSH32(g_esp, 0x0004D843u); sub_0004D630(); break;
+            case 0x0004D845u: PUSH32(g_esp, 0x0004D84Au); sub_0004D720(); break;
+            case 0x0004D84Cu: PUSH32(g_esp, 0x0004D851u); sub_0004CF30(); break;
+            case 0x0004D853u: PUSH32(g_esp, 0x0004D858u); sub_0004D210(); break;
+            case 0x0004D85Au: PUSH32(g_esp, 0x0004D85Fu); sub_0004CFE0(); break;
+            case 0x0004D861u: PUSH32(g_esp, 0x0004D866u); sub_0004D2E0(); break;
+            case 0x0004D868u: PUSH32(g_esp, 0x0004D86Du); sub_0004D350(); break;
+            case 0x0004D86Fu: PUSH32(g_esp, 0x0004D874u); sub_0004D3C0(); break;
+            case 0x0004D876u: PUSH32(g_esp, 0x0004D87Bu); sub_0004D430(); break;
+            case 0x0004D87Du: PUSH32(g_esp, 0x0004D882u); sub_0004D480(); break;
+            case 0x0004D884u: PUSH32(g_esp, 0x0004D889u); sub_0004D4C0(); break;
+            default:
+                fprintf(stderr, "[WORKER] Invalid state %08X target %08X\n", g_eax, target);
+                abort();
+            }
+            if (complete) {
+                g_edx = MEM32(0x00A7D368u);
+                g_ecx = 0x00A7D370u;
+                MEM32(0x00A7D300u) = g_esi;
+                PUSH32(g_esp, 0x0004D89Fu); sub_0003A4F0();
+            }
+        } while (MEM32(0x00A7D300u) != 13u);
+    }
+    MEM32(0x00A7D300u) = 0;
+    PUSH32(g_esp, 0x0004D8BBu); sub_0004B920();
+    POP32(g_esp, g_esi);
+    g_esp += 8;
+}
+static void nfl2k5_io_completion(void)
+{
+    PUSH32(g_esp, g_esi);
+    g_esi = g_edx;
+    PUSH32(g_esp, 0x0004C3C8u); sub_0003A750();
+    g_ecx = g_esi;
+    g_edx = g_eax;
+    POP32(g_esp, g_esi);
+    sub_0003A4F0();
+}
+
+/* XPP timer setup at 004DB047 fell in the byte range immediately following
+ * the generated 004DAFCA function.  It initializes the game-input timer and
+ * its backing queue; without it the XPP startup path enters an unresolved
+ * indirect call before it can register controller devices. */
+static void nfl2k5_xpp_timer_init(void)
+{
+    uint32_t bytes;
+    /* RECOMP_ICALL_SAFE follows generated-code convention and assigns its
+     * local eax alias on a lookup failure.  Successful callees update g_eax. */
+    uint32_t eax = 0;
+    PUSH32(g_esp, g_edi);
+    g_eax = MEM8(0x004DA590u) ? 1u : 0u;
+    MEM16(0x00CC72A2u) = 0;
+    PUSH32(g_esp, 0x48425355u);
+    g_eax = g_eax * 8u + 6u;
+    MEM16(0x00CC72A0u) = (uint16_t)g_eax;
+    bytes = g_eax << 6;
+    PUSH32(g_esp, bytes);
+    PUSH32(g_esp, 0x004DB079u); sub_004DD0D8();
+    bytes = (uint32_t)MEM16(0x00CC72A0u) << 6;
+    g_edi = g_eax;
+    MEM32(0x00CC72A4u) = g_edi;
+    memset((void *)XBOX_PTR(g_edi), 0, bytes);
+    PUSH32(g_esp, 0);
+    PUSH32(g_esp, 0x00CC7250u);
+    {
+        uint32_t saved_esp = g_esp;
+        uint32_t target = MEM32(0x004E3C44u);
+        PUSH32(g_esp, 0x004DB0A8u);
+        RECOMP_ICALL_SAFE(target, saved_esp);
+        if (g_esp == saved_esp) g_eax = eax;
+    }
+    MEM32(0x00CC7298u) = 0;
+    POP32(g_esp, g_edi);
+    g_esp += 8; /* ret 4 */
+}
+recomp_func_t recomp_lookup_manual(uint32_t address)
+{
+    switch(address) {
+    case 0x0004C3C0u:
+        return nfl2k5_io_completion;
+    case 0x0004D810u:
+        return nfl2k5_io_worker;
+    case 0x004DB047u:
+        return nfl2k5_xpp_timer_init;
+    case 0x004C3207u:
+        return nfl2k5_network_state_dispatch_4c3207;
+    case 0x00041FF0u:
+        return nfl2k5_resource_completion_41ff0;
+    case 0x001C1FA0u:
+        return nfl2k5_bootstrap_probe_1c1fa0;
+    case 0x003CC280u:
+        return nfl2k5_frontend_queue_pump_3cc280;
+    case 0x004945A3u:
+        return nfl2k5_frontend_state_probe_4945a3;
+    case 0x0003448Eu: /* xor eax,eax; ret */
+        return nfl2k5_gap_return_zero;
+    case 0x003CB1C0u:
+        return nfl2k5_boot_registration;
+    case 0x00041810u:
+        return nfl2k5_frame_callback;
+    case 0x0042A260u:
+        return nfl2k5_d3d_set_state_42a260;
+    case 0x0042B220u:
+        return nfl2k5_d3d_set_state_42b220;
+    case 0x0042ADE0u:
+        return nfl2k5_d3d_set_state_42ade0;
+    default: break;
+    }
+    return NULL;
+}
+void recomp_icall_fail_log(uint32_t address)
+{
+    static unsigned count;
+    if (count++ < 32) fprintf(stderr, "[ICALL] Unresolved guest target %08X\n", address);
+}
+void recomp_icall_not_code_log(uint32_t address)
+{
+    static unsigned count;
+    if (count++ < 32) fprintf(stderr, "[ICALL] Target outside guest code %08X\n", address);
+}
