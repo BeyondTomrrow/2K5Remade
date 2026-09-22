@@ -148,6 +148,7 @@ volatile LONG nfl2k5_archive_completion_44df0_calls;
 volatile uint32_t nfl2k5_archive_completion_44df0_context;
 volatile uint32_t nfl2k5_async_dispatch_branch;
 volatile LONG nfl2k5_frontend_state_dispatch_calls;
+volatile uint32_t nfl2k5_frontend_state_dispatch_this;
 volatile uint32_t nfl2k5_frontend_state_dispatch_value;
 volatile uint32_t nfl2k5_frontend_state_dispatch_tick;
 volatile uint32_t nfl2k5_frontend_state_dispatch_limit;
@@ -1628,6 +1629,7 @@ out_ecx:
 static void nfl2k5_frontend_state_probe_4945a3(void)
 {
     uint32_t state = MEM8(g_ecx + 0x8C8u);
+    nfl2k5_frontend_state_dispatch_this = g_ecx;
     nfl2k5_frontend_state_dispatch_value = state;
     nfl2k5_frontend_state_dispatch_tick = MEM8(g_ecx + 0x8C9u);
     nfl2k5_frontend_state_dispatch_limit = MEM8(g_ecx + 0x19u);

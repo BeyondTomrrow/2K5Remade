@@ -319,6 +319,11 @@ extern volatile LONG nfl2k5_scheduler_registration_history_index;
 extern volatile uint32_t nfl2k5_scheduler_registration_history_count[16];
 extern volatile uint32_t nfl2k5_scheduler_registration_history_callback[16];
 extern volatile uint32_t nfl2k5_scheduler_registration_history_caller[16];
+extern volatile LONG nfl2k5_input_init_stage;
+extern volatile LONG nfl2k5_network_init_stage;
+extern volatile uint32_t nfl2k5_network_init_status;
+extern volatile uint32_t nfl2k5_network_init_version;
+extern volatile uint32_t nfl2k5_frontend_state_dispatch_this;
 extern volatile LONG nfl2k5_gpu_notify_register_calls;
 extern volatile uint32_t nfl2k5_gpu_notify_register_callback;
 
@@ -362,6 +367,10 @@ void nfl2k5_execwatch_print(void)
             nfl2k5_scheduler_callback_returned, nfl2k5_scheduler_callback_returns,
             nfl2k5_scheduler_registration_attempts, nfl2k5_scheduler_registration_callback,
             nfl2k5_scheduler_registration_caller, nfl2k5_scheduler_dispatch_count);
+    fprintf(stderr, "  [NETINIT] input_stage=%ld network_stage=%ld network_status=0x%08X network_version=0x%08X\n",
+            nfl2k5_input_init_stage, nfl2k5_network_init_stage,
+            nfl2k5_network_init_status, nfl2k5_network_init_version);
+    fprintf(stderr, "  [STATEOBJ] this=0x%08X\n", nfl2k5_frontend_state_dispatch_this);
     {
         LONG hn = nfl2k5_scheduler_registration_history_index;
         int hcount = hn > 16 ? 16 : (int)hn;
