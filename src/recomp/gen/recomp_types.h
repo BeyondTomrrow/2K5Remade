@@ -60,6 +60,9 @@
  * CMakeLists) -- MSVC's C4013 was emitted and discarded. Same failure as the
  * missing stdlib.h in kernel_bridge.c, in a hotter path. */
 #include <math.h>
+#if defined(_M_IX86) || defined(_M_X64) || defined(__i386__) || defined(__x86_64__)
+#include <xmmintrin.h>
+#endif
 
 /* MSVC's __forceinline -> gcc/clang equivalent on POSIX. */
 #if !defined(_MSC_VER) && !defined(__forceinline)
@@ -76,8 +79,12 @@
 void recomp_debug_service(uint32_t service, uint32_t arg_va);
 
 /* MSVC's __debugbreak() intrinsic -> gcc/clang equivalent.
- * The auto-generated code emits __debugbreak for x86 INT 3 instructions. */
-#if !defined(_MSC_VER) && !defined(__debugbreak)
+ * The auto-generated code emits __debugbreak for x86 INT 3 instructions.
+ * !defined(__debugbreak) is not enough on its own: MinGW declares __debugbreak
+ * as a function, not a macro, so that test passes and the macro is defined
+ * anyway. Any windows.h reaching this TU afterwards then fails to declare it.
+ * Excluding _WIN32 outright leaves the SDK's own int3 intrinsic in place. */
+#if !defined(_MSC_VER) && !defined(_WIN32) && !defined(__debugbreak)
 #define __debugbreak() __builtin_trap()
 #endif
 
@@ -244,6 +251,16 @@ extern RECOMP_TLS int g_df;
    word has to survive a call. (g_fp_stack/g_fp_top are declared above.) */
 extern RECOMP_TLS uint16_t g_fp_control_word;
 extern RECOMP_TLS int g_fp_cmp;
+extern RECOMP_TLS uint16_t g_fp_cc;
+#define RECOMP_FCMP_CC(c) ((uint16_t)((c)==2 ? 0x4500u : (c)<0 ? 0x0100u : (c)>0 ? 0u : 0x4000u))
+/* Values in the existing double-backed stack are all representable as normal
+ * x87 extended values, including binary64 subnormals. Empty stack tags and
+ * unsupported extended encodings are not represented by this stack model. */
+static inline uint16_t recomp_fxam(double value) {
+    return (uint16_t)((signbit(value) ? 0x0200u : 0u) |
+        (isnan(value) ? 0x0100u : isinf(value) ? 0x0500u :
+         value == 0.0 ? 0x4000u : 0x0400u));
+}
 
 /* Result of an x87 compare, in the shape the status word wants:
  *   -1 less, 0 equal, 1 greater, 2 unordered (either operand is NaN).
@@ -251,6 +268,26 @@ extern RECOMP_TLS int g_fp_cmp;
  * followed by `test ah, 0x44; jp` is how this era's CRT asks "is this a NaN",
  * and collapsing it to "equal" answers no every time. */
 #define RECOMP_FCMP(a, b)     (((a) != (a) || (b) != (b)) ? 2 : (a) < (b) ? -1 : (a) > (b) ? 1 : 0)
+/* x87 integer stores use the guest RC bits, independently of host rounding.
+ * Masked invalid conversions store the signed integer-indefinite value. */
+static inline int64_t recomp_fist(double value, uint16_t control, unsigned bits) {
+    double rounded;
+    switch((control>>10)&3) {
+    case 1: rounded=floor(value); break;
+    case 2: rounded=ceil(value); break;
+    case 3: rounded=trunc(value); break;
+    default: {
+        double lo=floor(value), fraction=value-lo;
+        rounded=lo;
+        if(fraction>0.5 || (fraction==0.5 && fmod(lo,2.0)!=0.0)) rounded=lo+1.0;
+        break;
+    }
+    }
+    double limit=ldexp(1.0,(int)bits-1);
+    if(!isfinite(rounded) || rounded < -limit || rounded >= limit)
+        return bits==64?INT64_MIN:-(INT64_C(1)<<(bits-1));
+    return (int64_t)rounded;
+}
 
 /* ================================================================
  * ICALL trace ring buffer (for debugging indirect calls)
@@ -574,14 +611,45 @@ static inline uint32_t SUB32_CF(uint32_t a, uint32_t b, int *cf) {
  * Rotation / shift helpers
  * ================================================================ */
 
+/* x86 masks the rotate count to 5 bits, and THEN the rotate is modulo the
+ * operand's own width -- so `rol al, 16` is a rotate by zero and `rol ax, 31`
+ * is a rotate by 15. A narrow rotate performed at 32 bits is not a rotate at
+ * all: the bits that should wrap around at bit 7 or 15 land above the operand
+ * and are discarded by the store, which turns `ror al, 2` on 0x01 into 0x00
+ * where x86 gives 0x40.
+ *
+ * The zero case is separated out because `val >> (32 - 0)` is a shift of a
+ * uint32_t by 32, which is undefined behaviour -- it happened to survive
+ * because x86 masks shift counts to 5 bits and gives back `val`, but the
+ * compiler is under no obligation to agree, least of all at -O2. */
 static inline uint32_t ROL32(uint32_t val, int n) {
     n &= 31;
-    return (val << n) | (val >> (32 - n));
+    return n ? ((val << n) | (val >> (32 - n))) : val;
 }
 
 static inline uint32_t ROR32(uint32_t val, int n) {
     n &= 31;
-    return (val >> n) | (val << (32 - n));
+    return n ? ((val >> n) | (val << (32 - n))) : val;
+}
+
+static inline uint8_t ROL8(uint8_t val, int n) {
+    n = (n & 31) % 8;
+    return n ? (uint8_t)((val << n) | (val >> (8 - n))) : val;
+}
+
+static inline uint8_t ROR8(uint8_t val, int n) {
+    n = (n & 31) % 8;
+    return n ? (uint8_t)((val >> n) | (val << (8 - n))) : val;
+}
+
+static inline uint16_t ROL16(uint16_t val, int n) {
+    n = (n & 31) % 16;
+    return n ? (uint16_t)((val << n) | (val >> (16 - n))) : val;
+}
+
+static inline uint16_t ROR16(uint16_t val, int n) {
+    n = (n & 31) % 16;
+    return n ? (uint16_t)((val >> n) | (val << (16 - n))) : val;
 }
 
 /* ================================================================
@@ -909,21 +977,20 @@ extern RECOMP_TLS RecompMmx g_mm4, g_mm5, g_mm6, g_mm7;
 
 static inline RecompMmx MMX_ZERO(void) { RecompMmx r; r.q = 0; return r; }
 
-/* cvtps2pi / cvttps2pi: the low two packed singles of an SSE register or of a
- * 64-bit memory operand become two signed dwords in an MMX register. The
- * rounding form follows the current rounding mode, round-to-nearest everywhere
- * these titles use it; the truncating form is what a C cast already does.
- *
- * An input that is NaN or outside int32 gives the "integer indefinite" value
- * on hardware, where the C cast is undefined -- and a video decoder pushing
- * coefficients through this reaches that edge often enough to matter. */
+/* CVTPS2PI follows MXCSR; CVTTPS2PI truncates regardless of its rounding mode.
+ * Use SSE scalar conversions to avoid touching the host x87/MMX register file.
+ * Non-x86 hosts use their floating-point environment for rounding instead. */
 static inline int32_t MMX_CVT_F2I(float v, int truncate)
 {
-    if (!(v >= -2147483648.0f && v <= 2147483647.0f))
+#if defined(_M_IX86) || defined(_M_X64) || defined(__i386__) || defined(__x86_64__)
+    return truncate ? _mm_cvttss_si32(_mm_set_ss(v))
+                    : _mm_cvtss_si32(_mm_set_ss(v));
+#else
+    double rounded = truncate ? trunc((double)v) : nearbyint((double)v);
+    if (!(rounded >= -2147483648.0 && rounded <= 2147483647.0))
         return (int32_t)0x80000000u;       /* integer indefinite */
-    if (truncate)
-        return (int32_t)v;
-    return (int32_t)(v < 0.0f ? v - 0.5f : v + 0.5f);
+    return (int32_t)rounded;
+#endif
 }
 
 static inline RecompMmx MMX_FROM_PS(float lo, float hi, int truncate)
@@ -932,6 +999,17 @@ static inline RecompMmx MMX_FROM_PS(float lo, float hi, int truncate)
     r.d[0] = MMX_CVT_F2I(lo, truncate);
     r.d[1] = MMX_CVT_F2I(hi, truncate);
     return r;
+}
+
+/** cvtpi2ps: two signed dwords in, two singles out, into the LOW half of the
+ * destination -- lanes 2 and 3 keep whatever they held. That detail is the
+ * whole instruction: code that builds a float4 from two of these relies on
+ * the first one surviving the second. */
+static inline RecompXmm XMM_FROM_PI(RecompXmm dst, RecompMmx src)
+{
+    dst.f[0] = (float)src.d[0];
+    dst.f[1] = (float)src.d[1];
+    return dst;
 }
 
 static inline RecompMmx MMX_MEM(uint32_t addr) {
@@ -959,6 +1037,10 @@ static inline uint8_t recomp_sat_u8(int32_t v) {
     return (uint8_t)(v > 255 ? 255 : (v < 0 ? 0 : v));
 }
 
+static inline uint16_t recomp_sat_u16(int32_t v) {
+    return (uint16_t)(v > 65535 ? 65535 : (v < 0 ? 0 : v));
+}
+
 /* -- integer arithmetic, lane-wise, wrapping -------------------- */
 #define RECOMP_MMX_BINOP(NAME, LANES, FIELD, EXPR)                      \
     static inline RecompMmx NAME(RecompMmx a, RecompMmx b) {            \
@@ -981,6 +1063,10 @@ RECOMP_MMX_BINOP(MMX_PADDUSB, 8, ub,
                  recomp_sat_u8((int32_t)a.ub[i] + b.ub[i]))
 RECOMP_MMX_BINOP(MMX_PSUBUSB, 8, ub,
                  recomp_sat_u8((int32_t)a.ub[i] - b.ub[i]))
+RECOMP_MMX_BINOP(MMX_PADDUSW, 4, uw,
+                 recomp_sat_u16((int32_t)a.uw[i] + b.uw[i]))
+RECOMP_MMX_BINOP(MMX_PSUBUSW, 4, uw,
+                 recomp_sat_u16((int32_t)a.uw[i] - b.uw[i]))
 RECOMP_MMX_BINOP(MMX_PMULLW, 4, w, (int16_t)((int32_t)a.w[i] * b.w[i]))
 RECOMP_MMX_BINOP(MMX_PMULHW, 4, w, (int16_t)(((int32_t)a.w[i] * b.w[i]) >> 16))
 RECOMP_MMX_BINOP(MMX_PAVGB, 8, ub, (uint8_t)(((int32_t)a.ub[i] + b.ub[i] + 1) >> 1))
