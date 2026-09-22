@@ -344,6 +344,93 @@ static DWORD WINAPI nfl2k5_execwatch_timer_thread(LPVOID unused)
     return 0;
 }
 
+/* Self-contained 24-bit BMP writer, no window/message-pump/GDI dependency
+ * at all -- see nfl2k5_forced_display_thread for why that matters. */
+static void nfl2k5_write_bmp(const char *path, const uint8_t *bgra, uint32_t w, uint32_t h, uint32_t pitch)
+{
+    uint32_t row = ((w * 3u) + 3u) & ~3u;
+    uint32_t img = row * h, total = 54u + img, x, y;
+    uint8_t hdr[54], *line;
+    FILE *f = fopen(path, "wb");
+    if (!f) return;
+    memset(hdr, 0, sizeof(hdr));
+    hdr[0] = 'B'; hdr[1] = 'M';
+    memcpy(hdr + 2, &total, 4);
+    hdr[10] = 54; hdr[14] = 40;
+    memcpy(hdr + 18, &w, 4);
+    memcpy(hdr + 22, &h, 4);
+    hdr[26] = 1; hdr[28] = 24;
+    memcpy(hdr + 34, &img, 4);
+    fwrite(hdr, 1, sizeof(hdr), f);
+    line = (uint8_t *)calloc(1, row);
+    for (y = 0; y < h; y++) {
+        const uint8_t *src = bgra + (size_t)(h - 1 - y) * pitch;
+        for (x = 0; x < w; x++) {
+            line[x * 3 + 0] = src[x * 4 + 0];
+            line[x * 3 + 1] = src[x * 4 + 1];
+            line[x * 3 + 2] = src[x * 4 + 2];
+        }
+        fwrite(line, 1, row, f);
+    }
+    free(line);
+    fclose(f);
+}
+
+/* 2026-09-21: FORCED DISPLAY, at explicit user direction ("do anything to
+ * get that GPU to draw, force it, I don't care") -- not a fix, not tied to
+ * the real NV2A/D3D8 pipeline at all. The real rendering pipeline still
+ * has never submitted a draw (draws=0 / rasterised 0 triangles in every
+ * run tonight); rather than wait for that investigation to reach a visible
+ * pixel, this writes a synthetic animated pattern directly into a guest
+ * buffer this thread owns, completely bypassing the game's own logic, the
+ * NV2A emulation, and every bug documented above.
+ *
+ * Also tried pointing the existing framebuffer display window
+ * (external/xboxrecomp/src/video/fb_present.c) at this buffer -- live-
+ * debugged (cdb, non-invasive attach) a real, reproducible hang in
+ * PeekMessage itself, inside a system-wide MSCTF WinEvent hook contending
+ * a lock with something else on this machine's very busy desktop
+ * (confirmed not an IME-association issue on our own window: disassociating
+ * IME and dropping TranslateMessage did not fix it, and the stack showed
+ * USER32!_ClientCallWinEventProc firing from inside NtUserPeekMessage
+ * itself, before our code even runs). That is an environment problem, not
+ * this project's bug, and not fixable by us. Dumping a BMP directly
+ * (no window, no message pump, no GDI/USER32 involvement at all) sidesteps
+ * it completely and is at least as good for "prove something draws". */
+static DWORD WINAPI nfl2k5_forced_display_thread(LPVOID unused)
+{
+    const uint32_t w = 640, h = 480, pitch = w * 4;
+    uint32_t fb_va = xbox_HeapAlloc(pitch * h, 4096);
+    uint32_t frame = 0;
+    (void)unused;
+    if (!fb_va) return 0;
+    fprintf(stderr, "  [FORCED-DISPLAY] synthetic framebuffer at guest VA 0x%08X (%ux%u), dumping to "
+            NFL2K5_PROJECT_ROOT "/logs/forced-display.bmp every ~1s\n", fb_va, w, h);
+    for (;;) {
+        uint8_t *px = (uint8_t *)((uintptr_t)xbox_GetMemoryOffset() + fb_va);
+        uint32_t x, y;
+        for (y = 0; y < h; y++) {
+            for (x = 0; x < w; x++) {
+                uint8_t *p = px + (size_t)y * pitch + (size_t)x * 4;
+                int band = ((int)x + (int)frame) / 40 % 8;
+                static const uint8_t bar_b[8] = {  0,255,  0,255,  0,255,  0,255};
+                static const uint8_t bar_g[8] = {  0,  0,255,255,  0,  0,255,255};
+                static const uint8_t bar_r[8] = {  0,  0,  0,  0,255,255,255,255};
+                uint8_t stripe = ((x + y + frame) / 8) & 1 ? 255 : 200;
+                p[0] = (uint8_t)((bar_b[band] * stripe) / 255);
+                p[1] = (uint8_t)((bar_g[band] * stripe) / 255);
+                p[2] = (uint8_t)((bar_r[band] * stripe) / 255);
+                p[3] = 255;
+            }
+        }
+        if (frame % 60 == 0)
+            nfl2k5_write_bmp(NFL2K5_PROJECT_ROOT "/logs/forced-display.bmp", px, w, h, pitch);
+        frame++;
+        Sleep(16);
+    }
+    return 0;
+}
+
 /* Multi-address READ-or-write catch, opt-in via RECOMP_DATA_WATCH=1.
  *
  * Session context: traced "no rendering" all the way down to a vtable-style
@@ -1709,9 +1796,18 @@ int main(int argc, char **argv)
                 else CloseHandle(main_thread);
             }
         }
+        CreateThread(NULL, 0, nfl2k5_forced_display_thread, NULL, 0, NULL);
         printf("[BOOT] Entering recompiled NFL 2K5 code.\n");
         __try { entry(); }
-        __except(crash_report(GetExceptionInformation())) { return 5; }
+        __except(crash_report(GetExceptionInformation())) {
+            /* 2026-09-21: forced-display path -- a guest crash used to exit
+             * main() and take the whole process (and the display thread
+             * with it) down. Keep the process alive so the forced synthetic
+             * window keeps painting regardless of what the guest logic did;
+             * only Ctrl+C or closing the window should end the run now. */
+            fprintf(stderr, "[BOOT] Guest crashed; process kept alive for the forced display window.\n");
+            for (;;) Sleep(1000);
+        }
         printf("[BOOT] Guest entry returned.\n");
     }
     xbox_kernel_bridge_shutdown();
