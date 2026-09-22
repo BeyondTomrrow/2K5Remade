@@ -1628,7 +1628,19 @@ static void nfl2k5_frontend_state_probe_4945a3(void)
             MEM8(g_ecx + 0xA7Bu) |= 0xC0u;
             g_eax = 0;
             g_esp += 8;
+            {
+                static volatile long logged = 0;
+                if (++logged <= 5)
+                    fprintf(stderr, "  [STATE9] tick>=limit, took give-up branch (bit5=%u) -- MEM8(ecx+0xA7B)|=0xC0\n",
+                            MEM8(g_ecx + 5u) & 4u);
+            }
             return;
+        }
+        {
+            static volatile long logged2 = 0;
+            if (++logged2 <= 10)
+                fprintf(stderr, "  [STATE9] action=%u arg=%u (tick=%u limit=%u flags=0x%02X)\n",
+                        action, arg, MEM8(g_ecx + 0x8C9u), MEM8(g_ecx + 0x19u), MEM8(g_ecx + 0x8CCu));
         }
         PUSH32(g_esp, arg);
         PUSH32(g_esp, action);
