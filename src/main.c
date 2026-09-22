@@ -405,6 +405,38 @@ void nfl2k5_execwatch_print(void)
                     nfl2k5_scheduler_registration_history_callback[i],
                     nfl2k5_scheduler_registration_history_caller[i]);
     }
+    {
+        /* 2026-09-22: direct live read of the archive-object candidate at
+         * 0xA77E38, every tick -- cross-checking the hw_watch "never
+         * written" result (0xA77E38+0x14 == 1 was read live in an earlier
+         * session, but the field's as-compiled static value in the XBE's
+         * .data section is 0, not 1) against what this exact build/run
+         * actually shows right now, over time, not a single snapshot. */
+        uintptr_t base = (uintptr_t)xbox_GetMemoryOffset() + 0xA77E38u;
+        fprintf(stderr, "  [OBJWATCH] A77E38: +00=0x%08X +04=0x%08X +10=0x%08X +14=0x%08X +18=0x%08X +5C=0x%08X\n",
+                *(uint32_t *)(base + 0x00), *(uint32_t *)(base + 0x04),
+                *(uint32_t *)(base + 0x10), *(uint32_t *)(base + 0x14),
+                *(uint32_t *)(base + 0x18), *(uint32_t *)(base + 0x5C));
+        /* 2026-09-22: sub_00042F50 (the real live gate on sub_00043980, via
+         * sub_00043BE0 -- sub_00043AC0 is dead code, 0 calls every run) is a
+         * linked-list search whose head is MEM32(0xB09578). It returned 0 on
+         * the one time this ran; watch the head directly to see whether the
+         * list is simply empty or has entries that just never match. */
+        {
+            uintptr_t off = (uintptr_t)xbox_GetMemoryOffset();
+            uint32_t head = *(uint32_t *)(off + 0xB09578u);
+            fprintf(stderr, "  [LISTWATCH] B09578 head=0x%08X", head);
+            uint32_t node = head;
+            for (int i = 0; i < 8 && node; i++) {
+                uint32_t key = *(uint32_t *)(off + node + 8);
+                uint32_t next = *(uint32_t *)(off + node);
+                fprintf(stderr, " -> [0x%08X key@+8=0x%08X]", node, key);
+                if (next == node) { fprintf(stderr, "(self-loop)"); break; }
+                node = next;
+            }
+            fprintf(stderr, "\n");
+        }
+    }
     if (g_exec_watch_count == 0)
         return;
     fprintf(stderr, "  [EXECWATCH]");
@@ -1618,6 +1650,16 @@ int main(int argc, char **argv)
             exec_watch_add(0x0008D340u, "s_8D340");
             exec_watch_add(0x0008D490u, "s_8D490");
             exec_watch_add(0x0009F940u, "s_9F940");
+            /* 2026-09-22 continued: sub_00064710 is the sole static caller of
+             * s_8D490; sub_000B81A0/B81C0/B88C0/B8B30 are the four static
+             * callers of s_9F940. None of these outer gate functions has ever
+             * been exec_watch-instrumented -- if they never run, that's the
+             * real answer to "why is the whole subsystem dormant." */
+            exec_watch_add(0x00064710u, "gate_64710_caller_of_8D490");
+            exec_watch_add(0x000B81A0u, "gate_B81A0_caller_of_9F940");
+            exec_watch_add(0x000B81C0u, "gate_B81C0_caller_of_9F940");
+            exec_watch_add(0x000B88C0u, "gate_B88C0_caller_of_9F940");
+            exec_watch_add(0x000B8B30u, "gate_B8B30_caller_of_9F940");
             /* 2026-09-22: state 27's real handler (sub_0049215D) walks a
              * list at ebx+0x268 (relayed from ebx+0x8F0) and submits each
              * item via sub_00488B65 -- see PROJECT_STATUS.md for whether
@@ -1806,6 +1848,27 @@ int main(int argc, char **argv)
             exec_watch_add(0x000441B0u, "bis_25pct_441B0");
             exec_watch_add(0x000432F0u, "bis_50pct_432F0");
             exec_watch_add(0x00160710u, "bis_75pct_160710");
+            /* 2026-09-22: triaging sub_000432F0's 100+ call sites (see
+             * PROJECT_STATUS.md) instead of guessing -- sub_00061950 alone
+             * accounts for 35 of them; watch it and its 3 known static
+             * callers directly to see if any of this neighborhood ever
+             * runs at all. */
+            exec_watch_add(0x00061950u, "n432f0_61950_35x_caller");
+            exec_watch_add(0x000645D0u, "n432f0_645D0_caller_of_61950");
+            exec_watch_add(0x0028FD90u, "n432f0_28FD90_caller_of_61950");
+            exec_watch_add(0x0028FE70u, "n432f0_28FE70_caller_of_61950");
+            /* Next tier of sub_000432F0 callers by call-site count, per the
+             * same PROJECT_STATUS.md triage (sub_000748A0's own direct call
+             * is confirmed already-explained dead code via sub_00074180's
+             * hang -- not re-watched here). */
+            exec_watch_add(0x0028FC70u, "n432f0_28FC70_6x");
+            exec_watch_add(0x00125C50u, "n432f0_125C50_5x");
+            exec_watch_add(0x00074250u, "n432f0_74250_4x");
+            exec_watch_add(0x00276810u, "n432f0_276810_3x");
+            exec_watch_add(0x00142DD0u, "n432f0_142DD0_3x");
+            exec_watch_add(0x00142DA0u, "n432f0_142DA0_3x");
+            exec_watch_add(0x00142B40u, "n432f0_142B40_3x");
+            exec_watch_add(0x00125CD0u, "n432f0_125CD0_3x");
             exec_watch_add(0x00074160u, "bis_90pct_74160");
             /* 2026-09-21 isolation test (since reverted): re-ran with only
              * 3 simultaneous watches (down from ~20) to check whether
@@ -1889,7 +1952,17 @@ int main(int argc, char **argv)
              * broken, not "0xB04EC0 is genuinely never written." */
             hw_watch_install(0xB0284Cu, "selftest-B0284C");
         } else {
-            hw_watch_install(0xB04EC0u, "quitflag-B04EC0-hw");
+            /* 2026-09-22: repointed at the current investigation's real
+             * target. The "final synthesis" root-cause entry in
+             * PROJECT_STATUS.md pinned the whole dormant archive/font-load
+             * chain on one live read: MEM32(0xA77E38+0x14) == 1 (a small
+             * integer, not a valid object pointer), which is why
+             * sub_00043980 is never safely force-callable. That was a single
+             * point-in-time debugger snapshot, not a watch across a real
+             * run -- this arms a hardware write-watch on that exact field
+             * (0xA77E38+0x14 = 0xA77E4C) to find out whether anything ever
+             * writes it during a normal run, and if so, from where. */
+            hw_watch_install(0xA77E4Cu, "archive-obj-A77E38-plus14");
         }
     }
     guest_function entry = recomp_lookup(0x00016BD1);

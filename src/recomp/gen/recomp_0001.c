@@ -6,6 +6,7 @@
 #define RECOMP_GENERATED_CODE
 #include "recomp_funcs.h"
 #include <math.h>
+#include <stdio.h> /* TEMPORARY 2026-09-22: for the REQDBG diagnostic print below */
 
 /**
  * sub_00030201
@@ -59342,6 +59343,29 @@ loc_00043C1F: ;
     edi = esp + 8;
     MEM32(0xB11228) = eax;
     MEM32(0xB11224) = edx;
+    /* TEMPORARY 2026-09-22 diagnostic: dump the request record's raw first
+     * 0x1C bytes and its first field decoded as a UTF-16LE string (the
+     * B09578 registry's own key field decodes as UTF-16LE, e.g.
+     * "TITLEPAGE" -- see PROJECT_STATUS.md). Not a durable patch; will be
+     * lost on the next full pipeline regeneration. */
+    {
+        static int _dbg_n = 0;
+        if (_dbg_n < 25) {
+            _dbg_n++;
+            char narrow[41]; int _k;
+            for (_k = 0; _k < 40; _k++) {
+                uint16_t wc = *(volatile uint16_t *)XBOX_PTR(edi + _k * 2u);
+                if (!wc) break;
+                narrow[_k] = (wc >= 0x20 && wc < 0x7F) ? (char)wc : '?';
+            }
+            narrow[_k] = 0;
+            fprintf(stderr, "  [REQDBG] #%d edi=0x%08X str=\"%s\" raw: %08X %08X %08X %08X %08X %08X %08X\n",
+                    _dbg_n, edi, narrow,
+                    MEM32(edi + 0), MEM32(edi + 4), MEM32(edi + 8), MEM32(edi + 0xC),
+                    MEM32(edi + 0x10), MEM32(edi + 0x14), MEM32(edi + 0x18));
+            fflush(stderr);
+        }
+    }
     PUSH32(esp, 0x00043C3Au); RECOMP_ABI_CALL(0x00042F50u, sub_00042F50); /* call 0x00042F50 */
 
 loc_00043C3A: ;
