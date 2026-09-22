@@ -324,6 +324,9 @@ extern volatile LONG nfl2k5_network_init_stage;
 extern volatile uint32_t nfl2k5_network_init_status;
 extern volatile uint32_t nfl2k5_network_init_version;
 extern volatile uint32_t nfl2k5_frontend_state_dispatch_this;
+extern volatile LONG nfl2k5_state27_resource_list_calls;
+extern volatile uint32_t nfl2k5_state27_resource_list_context;
+extern volatile uint32_t nfl2k5_state27_resource_list_head;
 extern volatile LONG nfl2k5_gpu_notify_register_calls;
 extern volatile uint32_t nfl2k5_gpu_notify_register_callback;
 
@@ -371,6 +374,9 @@ void nfl2k5_execwatch_print(void)
             nfl2k5_input_init_stage, nfl2k5_network_init_stage,
             nfl2k5_network_init_status, nfl2k5_network_init_version);
     fprintf(stderr, "  [STATEOBJ] this=0x%08X\n", nfl2k5_frontend_state_dispatch_this);
+    fprintf(stderr, "  [STATE27LIST] calls=%ld context=0x%08X head=0x%08X\n",
+            nfl2k5_state27_resource_list_calls, nfl2k5_state27_resource_list_context,
+            nfl2k5_state27_resource_list_head);
     {
         LONG hn = nfl2k5_scheduler_registration_history_index;
         int hcount = hn > 16 ? 16 : (int)hn;
@@ -1576,6 +1582,11 @@ int main(int argc, char **argv)
              * and submits the read via sub_0003B1B0) ever called at all?
              * See PROJECT_STATUS.md. */
             exec_watch_add(0x000439B8u, "s_439B8_archive_read_submit");
+            /* 2026-09-22: state 27's real handler (sub_0049215D) walks a
+             * list at ebx+0x268 (relayed from ebx+0x8F0) and submits each
+             * item via sub_00488B65 -- see PROJECT_STATUS.md for whether
+             * this list is actually populated with real work. */
+            exec_watch_add(0x00488B65u, "s_488B65_state27_submit");
             exec_watch_add(0x00043CC0u, "s_43CC0");
             exec_watch_add(0x00044D00u, "s_44D00");
             exec_watch_add(0x0012D150u, "12D150");

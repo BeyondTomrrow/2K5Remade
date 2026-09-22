@@ -389,6 +389,17 @@ volatile LONG nfl2k5_drain33660_retry_calls;
 volatile uint32_t nfl2k5_drain33660_retry_value;
 volatile uint32_t nfl2k5_drain33660_first_value;
 
+volatile LONG nfl2k5_state27_resource_list_calls;
+volatile uint32_t nfl2k5_state27_resource_list_context;
+volatile uint32_t nfl2k5_state27_resource_list_head;
+
+void nfl2k5_trace_state27_resource_list(uint32_t context, uint32_t head)
+{
+    nfl2k5_state27_resource_list_context = context;
+    nfl2k5_state27_resource_list_head = head;
+    InterlockedIncrement(&nfl2k5_state27_resource_list_calls);
+}
+
 void nfl2k5_trace_drain33660(uint32_t context, uint32_t value, int is_retry)
 {
     if (!is_retry) {

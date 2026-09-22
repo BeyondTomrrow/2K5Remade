@@ -106214,6 +106214,7 @@ loc_00492181: ;
 loc_004921B9: ;
     edx = ebx + 0x268;
     esi = MEM32(edx);
+    { extern void nfl2k5_trace_state27_resource_list(uint32_t, uint32_t); nfl2k5_trace_state27_resource_list(ebx, esi); }
     _fa = (uint32_t)(esi) & 0xFFFFFFFFu; _fb = (uint32_t)(esi) & 0xFFFFFFFFu;
     _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test esi, esi (32-bit) */
     if (TEST_Z(_fa, _fb)) goto loc_0049222C; /* je: equal / zero */
