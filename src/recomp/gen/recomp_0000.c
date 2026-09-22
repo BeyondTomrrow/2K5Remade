@@ -17735,9 +17735,11 @@ loc_00016CAD: ;
 loc_00016CC3: ;
     if (g_esp != _dbg_cad1_esp) {
         static volatile long warned_16cad_1 = 0;
-        if (++warned_16cad_1 <= 5)
-            fprintf(stderr, "  [STACKCHECK] 16CAD/icall1 target=0x%08X g_esp=0x%08X expected=0x%08X (delta=%d)\n",
-                    _dbg_cad1_target, g_esp, _dbg_cad1_esp, (int32_t)(g_esp - _dbg_cad1_esp));
+        if (++warned_16cad_1 <= 5) {
+            extern int nfl2k5_kernel_ordinal_for_va(uint32_t); extern int nfl2k5_kernel_arg_bytes_for_va(uint32_t);
+            fprintf(stderr, "  [STACKCHECK] 16CAD/icall1 target=0x%08X ordinal=%d arg_bytes=%d g_esp=0x%08X expected=0x%08X (delta=%d)\n",
+                    _dbg_cad1_target, nfl2k5_kernel_ordinal_for_va(_dbg_cad1_target), nfl2k5_kernel_arg_bytes_for_va(_dbg_cad1_target), g_esp, _dbg_cad1_esp, (int32_t)(g_esp - _dbg_cad1_esp));
+        }
     }
     _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;
     _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test eax, eax (32-bit) */
@@ -17775,9 +17777,11 @@ loc_00016CDB: ;
 loc_00016CE5: ;
     if (g_esp != _dbg_cad2_esp) {
         static volatile long warned_16cad_2 = 0;
-        if (++warned_16cad_2 <= 5)
-            fprintf(stderr, "  [STACKCHECK] 16CAD/icall2 target=0x%08X g_esp=0x%08X expected=0x%08X (delta=%d)\n",
-                    _dbg_cad2_target, g_esp, _dbg_cad2_esp, (int32_t)(g_esp - _dbg_cad2_esp));
+        if (++warned_16cad_2 <= 5) {
+            extern int nfl2k5_kernel_ordinal_for_va(uint32_t); extern int nfl2k5_kernel_arg_bytes_for_va(uint32_t);
+            fprintf(stderr, "  [STACKCHECK] 16CAD/icall2 target=0x%08X ordinal=%d arg_bytes=%d g_esp=0x%08X expected=0x%08X (delta=%d)\n",
+                    _dbg_cad2_target, nfl2k5_kernel_ordinal_for_va(_dbg_cad2_target), nfl2k5_kernel_arg_bytes_for_va(_dbg_cad2_target), g_esp, _dbg_cad2_esp, (int32_t)(g_esp - _dbg_cad2_esp));
+        }
     }
     ecx = MEM32(ebp + 8);
     uint32_t _dbg_cad3_esp, _dbg_cad3_target;
@@ -17788,9 +17792,11 @@ loc_00016CE5: ;
 loc_00016CEE: ;
     if (g_esp != _dbg_cad3_esp) {
         static volatile long warned_16cad_3 = 0;
-        if (++warned_16cad_3 <= 5)
-            fprintf(stderr, "  [STACKCHECK] 16CAD/icall3 target=0x%08X g_esp=0x%08X expected=0x%08X (delta=%d)\n",
-                    _dbg_cad3_target, g_esp, _dbg_cad3_esp, (int32_t)(g_esp - _dbg_cad3_esp));
+        if (++warned_16cad_3 <= 5) {
+            extern int nfl2k5_kernel_ordinal_for_va(uint32_t); extern int nfl2k5_kernel_arg_bytes_for_va(uint32_t);
+            fprintf(stderr, "  [STACKCHECK] 16CAD/icall3 target=0x%08X ordinal=%d arg_bytes=%d g_esp=0x%08X expected=0x%08X (delta=%d)\n",
+                    _dbg_cad3_target, nfl2k5_kernel_ordinal_for_va(_dbg_cad3_target), nfl2k5_kernel_arg_bytes_for_va(_dbg_cad3_target), g_esp, _dbg_cad3_esp, (int32_t)(g_esp - _dbg_cad3_esp));
+        }
     }
     eax = 0; /* xor self */
     eax++;
@@ -17845,9 +17851,11 @@ loc_00016CFF: ;
 loc_00016D15: ;
     if (g_esp != _dbg_icall1_esp) {
         static volatile long warned_16cff_1 = 0;
-        if (++warned_16cff_1 <= 5)
-            fprintf(stderr, "  [STACKCHECK] 16CFF/icall1 target=0x%08X g_esp=0x%08X expected=0x%08X (delta=%d)\n",
-                    _dbg_icall1_target, g_esp, _dbg_icall1_esp, (int32_t)(g_esp - _dbg_icall1_esp));
+        if (++warned_16cff_1 <= 5) {
+            extern int nfl2k5_kernel_ordinal_for_va(uint32_t); extern int nfl2k5_kernel_arg_bytes_for_va(uint32_t);
+            fprintf(stderr, "  [STACKCHECK] 16CFF/icall1 target=0x%08X ordinal=%d arg_bytes=%d g_esp=0x%08X expected=0x%08X (delta=%d)\n",
+                    _dbg_icall1_target, nfl2k5_kernel_ordinal_for_va(_dbg_icall1_target), nfl2k5_kernel_arg_bytes_for_va(_dbg_icall1_target), g_esp, _dbg_icall1_esp, (int32_t)(g_esp - _dbg_icall1_esp));
+        }
     }
     _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;
     _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test eax, eax (32-bit) */
@@ -17864,9 +17872,11 @@ loc_00016D19: ;
 loc_00016D23: ;
     if (g_esp != _dbg_icall2_esp) {
         static volatile long warned_16cff_2 = 0;
-        if (++warned_16cff_2 <= 5)
-            fprintf(stderr, "  [STACKCHECK] 16CFF/icall2 target=0x%08X g_esp=0x%08X expected=0x%08X (delta=%d)\n",
-                    _dbg_icall2_target, g_esp, _dbg_icall2_esp, (int32_t)(g_esp - _dbg_icall2_esp));
+        if (++warned_16cff_2 <= 5) {
+            extern int nfl2k5_kernel_ordinal_for_va(uint32_t); extern int nfl2k5_kernel_arg_bytes_for_va(uint32_t);
+            fprintf(stderr, "  [STACKCHECK] 16CFF/icall2 target=0x%08X ordinal=%d arg_bytes=%d g_esp=0x%08X expected=0x%08X (delta=%d)\n",
+                    _dbg_icall2_target, nfl2k5_kernel_ordinal_for_va(_dbg_icall2_target), nfl2k5_kernel_arg_bytes_for_va(_dbg_icall2_target), g_esp, _dbg_icall2_esp, (int32_t)(g_esp - _dbg_icall2_esp));
+        }
     }
     esi = eax;
     _fa = (uint32_t)(esi) & 0xFFFFFFFFu; _fb = (uint32_t)(0x10) & 0xFFFFFFFFu;
