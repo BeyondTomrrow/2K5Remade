@@ -334,6 +334,19 @@ extern volatile uint32_t nfl2k5_gpu_notify_register_callback;
  * so the counts are visible on every tick without a separate sample pass. */
 void nfl2k5_execwatch_print(void)
 {
+    /* 2026-09-22: the game runs forever, so atexit() never fires and the
+     * previously-existing dump only happened under RECOMP_NATIVE_SAMPLE,
+     * which perturbs boot timing enough to change which path is taken.
+     * RECOMP_ICALL_FEEDBACK_DUMP() is documented safe to call repeatedly
+     * (one subtract/compare/OR on the hot path already paid for; the dump
+     * itself is just a file write), so do it here instead -- non-invasive,
+     * on the existing 3-second native timer thread. See
+     * docs indirect-calls.md / ms-fusion-recompiler.md (upstream
+     * xboxrecomp) and PROJECT_STATUS.md for why this matters now: it is
+     * the only way to see whether anything ever attempts an indirect call
+     * to a guest VA the function-level dispatch cannot resolve, such as a
+     * mid-function label like 0x000439B8. */
+    RECOMP_ICALL_FEEDBACK_DUMP();
     for (int i = 0; i < 17; i++)
         if (nfl2k5_28f70_site_hits[i])
             fprintf(stderr, "  [SITECOUNT] ret=0x%08X hits=%ld\n",
