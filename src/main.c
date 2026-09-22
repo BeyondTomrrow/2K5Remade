@@ -1582,6 +1582,23 @@ int main(int argc, char **argv)
              * and submits the read via sub_0003B1B0) ever called at all?
              * See PROJECT_STATUS.md. */
             exec_watch_add(0x000439B8u, "s_439B8_archive_read_submit");
+            /* 2026-09-22: 0x439B8 turned out to be a mis-split mid-body
+             * label inside sub_00043980, not a real function -- the
+             * disassembler flagged it "tail_jump_alias" (confidence 0.88)
+             * and our own exec_watch on it was watching an address nothing
+             * ever jumps or calls to directly. sub_00043980 is the real,
+             * complete, correctly-recompiled function containing the exact
+             * same disc-read submission logic, with two real static callers
+             * (sub_00043AC0, sub_00043BE0). See PROJECT_STATUS.md. */
+            exec_watch_add(0x00043980u, "s_43980_REAL_archive_read_submit");
+            exec_watch_add(0x00043AC0u, "s_43AC0_caller1");
+            exec_watch_add(0x00043BE0u, "s_43BE0_caller2");
+            exec_watch_add(0x00043850u, "s_43850");
+            exec_watch_add(0x00043E90u, "s_43E90");
+            exec_watch_add(0x0008D2B0u, "s_8D2B0");
+            exec_watch_add(0x0008D340u, "s_8D340");
+            exec_watch_add(0x0008D490u, "s_8D490");
+            exec_watch_add(0x0009F940u, "s_9F940");
             /* 2026-09-22: state 27's real handler (sub_0049215D) walks a
              * list at ebx+0x268 (relayed from ebx+0x8F0) and submits each
              * item via sub_00488B65 -- see PROJECT_STATUS.md for whether
