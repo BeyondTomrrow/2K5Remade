@@ -372,6 +372,35 @@ void nfl2k5_trace_gpu_wait_exit(void)
     InterlockedIncrement(&nfl2k5_gpu_wait_exit_calls);
 }
 
+/* 2026-09-22: sub_00033660 (called from inside sub_00028DE0's GPU wait,
+ * loc_00028DFF) spins "while (MEM32(esi+8) != 0) sub_000341A0();" where
+ * esi = MEM32(MEM32(0xA6AA70)+4). Live cdb attaches during a hang
+ * consistently showed the main thread parked deep inside this exact loop
+ * (sub_000341A0 -> sub_0001B79F -> sub_0001B601 -> a real
+ * KeDelayExecutionThread call), distinct from the already-handled
+ * MEM32(0xA6A9B0) wait in the same function. Tracks the context pointer and
+ * the field's value at loop entry and at each retry to show whether it ever
+ * drains or is permanently stuck. */
+volatile LONG nfl2k5_drain33660_entry_calls;
+volatile uint32_t nfl2k5_drain33660_entry_context;
+volatile uint32_t nfl2k5_drain33660_entry_value;
+volatile LONG nfl2k5_drain33660_retry_calls;
+volatile uint32_t nfl2k5_drain33660_retry_value;
+volatile uint32_t nfl2k5_drain33660_first_value;
+
+void nfl2k5_trace_drain33660(uint32_t context, uint32_t value, int is_retry)
+{
+    if (!is_retry) {
+        nfl2k5_drain33660_entry_context = context;
+        nfl2k5_drain33660_entry_value = value;
+        if (InterlockedIncrement(&nfl2k5_drain33660_entry_calls) == 1)
+            nfl2k5_drain33660_first_value = value;
+    } else {
+        nfl2k5_drain33660_retry_value = value;
+        InterlockedIncrement(&nfl2k5_drain33660_retry_calls);
+    }
+}
+
 void nfl2k5_gpu_notify_service(void)
 {
     uint32_t device, callback, saved_esp;
@@ -1614,6 +1643,22 @@ static void nfl2k5_frontend_state_probe_4945a3(void)
     }
     if (state == 9u) {
         uint32_t action, arg;
+#ifdef NFL2K5_FORCE_UNBLOCK_STATE9_READY
+        /* EXPERIMENTAL, 2026-09-21: after tracing this exact readiness bit
+         * all the way down through archive registration (works),
+         * indirect-callback registration (works), disc-read submission
+         * (sub_000439B8, confirmed via exec_watch: NEVER CALLED --
+         * unreachable via any static call site, only via an .rdata vtable
+         * slot at guest VA 0x00903728 whose actual trigger was not found
+         * this session), and a fully-active but unrelated worker dispatch
+         * loop -- force this readiness bit as if the resource had loaded,
+         * once the tick-based wait has run its course. Not a real fix:
+         * the archive/font data itself still never arrives, so whatever
+         * consumes it downstream may find it missing/blank. Gated
+         * off-by-default; see PROJECT_STATUS.md. */
+        if (MEM8(g_ecx + 0x8C9u) >= MEM8(g_ecx + 0x19u))
+            MEM8(g_ecx + 5u) |= 4u;
+#endif
         if (MEM8(g_ecx + 0x8C9u) < MEM8(g_ecx + 0x19u)) {
             action = state;
             arg = 1u;
@@ -1645,6 +1690,45 @@ static void nfl2k5_frontend_state_probe_4945a3(void)
         PUSH32(g_esp, arg);
         PUSH32(g_esp, action);
         PUSH32(g_esp, 0x004946FEu); sub_00492E9B();
+        g_esp += 8; /* ret 4 */
+        return;
+    }
+    /* 2026-09-22: states 23/24/25 reconstructed directly from the real
+     * jump table at guest VA 0x00494855 (26 entries, states 1..26) after
+     * NFL2K5_FORCE_UNBLOCK_STATE9_READY let the machine reach state 23 for
+     * the first time. Unlike state 9, none of these three depend on an
+     * external readiness bit -- 23 is an unconditional reset+advance, and
+     * 24/25 are plain tick-vs-limit waits (limit byte at ecx+0x2e for both),
+     * so no force-unblock is needed here; they should resolve on their own
+     * once enough ticks elapse. State 25's "ready" branch submits action 27,
+     * which is outside this table's range (max 26) -- falls through to the
+     * generic default below, presumably handled by a different subsystem. */
+    if (state == 23u) {
+        MEM32(g_ecx + 0x908u) = 0;
+        MEM32(g_ecx + 0x930u) = 0;
+        MEM8(g_ecx + 0x8CAu) = 0;
+        MEM32(g_ecx + 0x8F4u) = 0xFFFFu;
+        PUSH32(g_esp, 0);
+        PUSH32(g_esp, 24u);
+        PUSH32(g_esp, 0x00494852u); sub_00492E9B();
+        g_esp += 8; /* ret 4 */
+        return;
+    }
+    if (state == 24u) {
+        uint32_t action = (MEM8(g_ecx + 0x8C9u) < MEM8(g_ecx + 0x2Eu)) ? 24u : 25u;
+        uint32_t arg = (action == 24u) ? 1u : 0u;
+        PUSH32(g_esp, arg);
+        PUSH32(g_esp, action);
+        PUSH32(g_esp, 0x00494852u); sub_00492E9B();
+        g_esp += 8; /* ret 4 */
+        return;
+    }
+    if (state == 25u) {
+        uint32_t action = (MEM8(g_ecx + 0x8C9u) < MEM8(g_ecx + 0x2Eu)) ? 25u : 27u;
+        uint32_t arg = (action == 25u) ? 1u : 0u;
+        PUSH32(g_esp, arg);
+        PUSH32(g_esp, action);
+        PUSH32(g_esp, 0x00494852u); sub_00492E9B();
         g_esp += 8; /* ret 4 */
         return;
     }

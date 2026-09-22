@@ -8378,6 +8378,7 @@ loc_00033660: ;
 
 loc_00033668: ;
     eax = MEM32(esi + 8);
+    { extern void nfl2k5_trace_drain33660(uint32_t, uint32_t, int); nfl2k5_trace_drain33660(esi, eax, 0); }
     _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;
     _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test eax, eax (32-bit) */
     if (TEST_Z(_fa, _fb)) goto loc_00033681; /* je: equal / zero */
@@ -8391,6 +8392,24 @@ loc_00033670: ;
 
 loc_0003367A: ;
     eax = MEM32(esi + 8);
+    { extern void nfl2k5_trace_drain33660(uint32_t, uint32_t, int); nfl2k5_trace_drain33660(esi, eax, 1); }
+#ifdef NFL2K5_FORCE_UNBLOCK_33660_DRAIN
+    /* EXPERIMENTAL, 2026-09-22: live cdb attaches during a hang consistently
+     * parked the main thread in this exact retry (sub_000341A0 ->
+     * sub_0001B79F -> sub_0001B601 -> a real KeDelayExecutionThread call),
+     * with MEM32(esi+8) frozen at 1 across tens of thousands of retries
+     * (confirmed via nfl2k5_trace_drain33660 -- see PROJECT_STATUS.md,
+     * 2026-09-22). Whatever real completion is supposed to clear this field
+     * was not found this session; force it after a bounded number of retries
+     * so a genuinely short, real wait still gets to resolve on its own. */
+    if (eax) {
+        static volatile LONG retries;
+        if (InterlockedIncrement(&retries) > 200) {
+            MEM32(esi + 8) = 0;
+            eax = 0;
+        }
+    }
+#endif
     _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;
     _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test eax, eax (32-bit) */
     if (TEST_NZ(_fa, _fb)) goto loc_00033670; /* jne: not equal / not zero */
@@ -22119,6 +22138,20 @@ loc_0003A04A: ;
     eax = MEM32(esi + 0xC);
     { extern void nfl2k5_trace_async_dispatch(uint32_t, uint32_t);
       nfl2k5_trace_async_dispatch(eax, MEM32(esi + 0x10)); }
+    /* 2026-09-21: does OUR specific queue item (known distinguishing
+     * context value 0xB09550, set in sub_000439B8 right before submitting
+     * the archive/font disc-read) ever reach this dispatch point at all,
+     * and if so, which jump-table case does its type (esi+0xC) actually
+     * resolve to? See PROJECT_STATUS.md -- the direct-callback case
+     * (loc_0003A055) was checked and never fires, so this checks whether
+     * the item is reaching here under a different case instead, or not at
+     * all. */
+    if (MEM32(esi + 0x18u) == 0xB09550u || MEM32(esi + 0x14u) == 0xB09550u) {
+        static volatile long logged_ours = 0;
+        if (++logged_ours <= 10)
+            fprintf(stderr, "  [OURITEM] esi=0x%08X type(esi+0xC)=%u cb(esi+0x10)=0x%08X arg(esi+0x18)=0x%08X ctx(esi+0x14)=0x%08X\n",
+                    esi, eax, MEM32(esi + 0x10u), MEM32(esi + 0x18u), MEM32(esi + 0x14u));
+    }
     POP32(esp, edi);
     { uint32_t _jt = MEM32(eax * 4 + 0x3A0BC); /* switch: 11 entries, 8 targets */
     { extern void nfl2k5_trace_async_dispatch_branch(uint32_t);
@@ -22495,6 +22528,18 @@ loc_0003A206: ;
     edx = MEM32(eax + 8);
     { extern void nfl2k5_trace_async_item(uint32_t, uint32_t, uint32_t);
       nfl2k5_trace_async_item(eax, edx, edi); }
+    /* 2026-09-21: does the OUTER walk (per-file-object queue, before it
+     * even gets to sub_0003A020's own switch) ever visit our item (known
+     * distinguishing context value 0xB09550, set in sub_000439B8)? And if
+     * so, which of the 4 outer cases does it take? See PROJECT_STATUS.md. */
+    if (MEM32(eax + 0x18u) == 0xB09550u || MEM32(eax + 0x14u) == 0xB09550u) {
+        static volatile long logged_outer = 0;
+        if (++logged_outer <= 10) {
+            uint32_t _peek_jt = MEM32(edx * 4 + 0x3A2F4);
+            fprintf(stderr, "  [OUTERITEM] eax=0x%08X type(eax+8)=%u jt=0x%08X cb(eax+0x10)=0x%08X\n",
+                    eax, edx, _peek_jt, MEM32(eax + 0x10u));
+        }
+    }
     { uint32_t _jt = MEM32(edx * 4 + 0x3A2F4); /* switch: 4 entries, 4 targets */
     if (_jt == 0x0003A210u) goto loc_0003A210;
     if (_jt == 0x0003A246u) goto loc_0003A246;
@@ -25528,6 +25573,16 @@ loc_0003B28C: ;
     if (TEST_NZ(_fa, _fb)) goto loc_0003B2B3; /* jne: not equal / not zero */
 
 loc_0003B299: ;
+    /* 2026-09-21: reached when MEM32(MEM32(edi+0x188)+4)==0 -- checking
+     * whether THIS is the actual failure path our archive/font submission
+     * takes (a device/volume sub-object not being set up), rather than
+     * the later empty-queue check. See PROJECT_STATUS.md. */
+    {
+        static volatile long logged_devcase = 0;
+        if (++logged_devcase <= 10)
+            fprintf(stderr, "  [DEVCHECK-FAIL] edi=0x%08X esi=0x%08X edi+0x188=0x%08X -- item NOT inserted, returning failure (err=1)\n",
+                    edi, esi, MEM32(edi + 0x188u));
+    }
     ebx = 1;
     edx = ebx;
     ecx = edi;
@@ -25552,6 +25607,17 @@ loc_0003B2B3: ;
     if (CMP_NE(_fa, _fb)) goto loc_0003B2DB; /* jne: not equal / not zero */
 
 loc_0003B2C3: ;
+    /* 2026-09-21: this is the "MEM32(edi+0xF4)==edi+0xF0" branch -- taken
+     * whenever this specific check reads as "equal" right before the real
+     * queue insertion. Confirming live whether THIS is the path our
+     * archive/font submission actually takes instead of ever reaching
+     * loc_0003B2DB (the real insert). See PROJECT_STATUS.md. */
+    {
+        static volatile long logged_emptycase = 0;
+        if (++logged_emptycase <= 10)
+            fprintf(stderr, "  [EMPTYQ-PATH] edi=0x%08X esi=0x%08X taken -- item NOT inserted, returning failure\n",
+                    edi, esi);
+    }
     edx = 2;
     ecx = edi;
     MEM32(esi + 0x20) = edx;
@@ -25567,6 +25633,25 @@ loc_0003B2D2: ;
     esp += 28; return; /* ret 24 */
 
 loc_0003B2DB: ;
+    /* 2026-09-21: is `edi` (the file object our queue item is about to be
+     * inserted under) actually a member of the global list sub_0003A1C0
+     * walks (head MEM32(0xB0565C), next-link at +0x44, sentinel
+     * 0xB05618)? If not, this item is structurally invisible to the
+     * worker no matter how active it is. See PROJECT_STATUS.md. */
+    {
+        static volatile long logged_membership = 0;
+        if (++logged_membership <= 10) {
+            uint32_t _walk = MEM32(0xB0565Cu);
+            int _found = 0, _count = 0;
+            while (_walk != 0xB05618u && _count < 1000) {
+                if (_walk == edi) { _found = 1; break; }
+                _walk = MEM32(_walk + 0x44u);
+                _count++;
+            }
+            fprintf(stderr, "  [FILEOBJ-CHECK] edi=0x%08X found_in_list=%d list_len_walked=%d\n",
+                    edi, _found, _count);
+        }
+    }
     edx = MEM32(esp + 0x24);
     ecx = MEM32(esp + 0x28);
     MEM32(esi + 0x20) = 0x1C;

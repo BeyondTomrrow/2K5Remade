@@ -10,6 +10,8 @@ option(NFL2K5_FORCE_UNBLOCK_BDEEF0 "EXPERIMENTAL: force the MEM32(0xBDEEF0) comp
 option(NFL2K5_FORCE_UNBLOCK_AUDIO_LOCK "EXPERIMENTAL: clear the DirectSound-buffer-style completion counter in sub_0044BB44 immediately instead of waiting for the (stubbed) APU to acknowledge it (see PROJECT_STATUS.md, 2026-09-21) -- bypasses a real deadlock in the audio path instead of fixing the APU stub" OFF)
 option(NFL2K5_FORCE_UNBLOCK_TASK42440 "EXPERIMENTAL: force the async boot task (type 0x42440) that gates archive/font registration in sub_00042820 to always report complete immediately (see PROJECT_STATUS.md, 2026-09-21) -- likely the same missing-vblank-signal root cause documented 2026-09-17, bypassed here instead of fixed" OFF)
 option(NFL2K5_FORCE_UNBLOCK_TASK42200 "EXPERIMENTAL: force the async task submitted in sub_00042210 (nested one level inside the TASK42440 chain) to always report complete immediately (see PROJECT_STATUS.md, 2026-09-21) -- same missing-vblank-signal root cause, a second nested instance" OFF)
+option(NFL2K5_FORCE_UNBLOCK_STATE9_READY "EXPERIMENTAL: force the frontend state-9 archive/font readiness bit to appear set once its tick-based wait times out (see PROJECT_STATUS.md, 2026-09-21) -- the actual disc-read submission (sub_000439B8) is never reached by anything, root cause not found this session; this only lets the state machine proceed, the underlying data still never loads" OFF)
+option(NFL2K5_FORCE_UNBLOCK_33660_DRAIN "EXPERIMENTAL: force sub_00033660's MEM32(esi+8) drain-wait (called from inside the GPU wait, sub_00028DE0) to succeed after 200 retries (see PROJECT_STATUS.md, 2026-09-22) -- live cdb attaches show this field frozen at 1 across tens of thousands of retries; the real clearing site was not found this session" OFF)
 target_compile_definitions(NFL2K5 PRIVATE
   WIN32_LEAN_AND_MEAN NOMINMAX _CRT_SECURE_NO_WARNINGS
   NFL2K5_PROJECT_ROOT="${PROJECT_SOURCE_DIR}"
@@ -19,7 +21,9 @@ target_compile_definitions(NFL2K5 PRIVATE
   $<$<BOOL:${NFL2K5_FORCE_UNBLOCK_BDEEF0}>:NFL2K5_FORCE_UNBLOCK_BDEEF0>
   $<$<BOOL:${NFL2K5_FORCE_UNBLOCK_AUDIO_LOCK}>:NFL2K5_FORCE_UNBLOCK_AUDIO_LOCK>
   $<$<BOOL:${NFL2K5_FORCE_UNBLOCK_TASK42440}>:NFL2K5_FORCE_UNBLOCK_TASK42440>
-  $<$<BOOL:${NFL2K5_FORCE_UNBLOCK_TASK42200}>:NFL2K5_FORCE_UNBLOCK_TASK42200>)
+  $<$<BOOL:${NFL2K5_FORCE_UNBLOCK_TASK42200}>:NFL2K5_FORCE_UNBLOCK_TASK42200>
+  $<$<BOOL:${NFL2K5_FORCE_UNBLOCK_STATE9_READY}>:NFL2K5_FORCE_UNBLOCK_STATE9_READY>
+  $<$<BOOL:${NFL2K5_FORCE_UNBLOCK_33660_DRAIN}>:NFL2K5_FORCE_UNBLOCK_33660_DRAIN>)
 target_link_libraries(NFL2K5 PRIVATE xboxrecomp d3d11 dxgi dxguid xinput winmm dbghelp bcrypt)
 target_compile_options(NFL2K5 PRIVATE /bigobj /Zi /FS)
 option(NFL2K5_OPTIMIZE "Optimize generated code after startup is working" OFF)

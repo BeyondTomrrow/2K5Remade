@@ -296,6 +296,32 @@ static const uint32_t nfl2k5_28f70_site_retaddrs[17] = {
  * internal labels, not registered function entries. */
 volatile long nfl2k5_748a0_markers[8];
 
+extern volatile LONG nfl2k5_gpu_wait_seed_calls;
+extern volatile uint32_t nfl2k5_gpu_wait_seed_value;
+extern volatile LONG nfl2k5_gpu_wait_entry_calls;
+extern volatile uint32_t nfl2k5_gpu_wait_entry_value;
+extern volatile LONG nfl2k5_gpu_wait_exit_calls;
+extern volatile LONG nfl2k5_gpu_notify_service_calls;
+extern volatile LONG nfl2k5_drain33660_entry_calls;
+extern volatile uint32_t nfl2k5_drain33660_entry_context;
+extern volatile uint32_t nfl2k5_drain33660_entry_value;
+extern volatile LONG nfl2k5_drain33660_retry_calls;
+extern volatile uint32_t nfl2k5_drain33660_retry_value;
+extern volatile uint32_t nfl2k5_drain33660_first_value;
+extern volatile LONG nfl2k5_scheduler_samples;
+extern volatile uint32_t nfl2k5_scheduler_callback;
+extern volatile uint32_t nfl2k5_scheduler_callback_entered, nfl2k5_scheduler_callback_returned;
+extern volatile LONG nfl2k5_scheduler_callback_entries, nfl2k5_scheduler_callback_returns;
+extern volatile LONG nfl2k5_scheduler_registration_attempts;
+extern volatile uint32_t nfl2k5_scheduler_registration_callback, nfl2k5_scheduler_registration_caller;
+extern volatile LONG nfl2k5_scheduler_dispatch_count;
+extern volatile LONG nfl2k5_scheduler_registration_history_index;
+extern volatile uint32_t nfl2k5_scheduler_registration_history_count[16];
+extern volatile uint32_t nfl2k5_scheduler_registration_history_callback[16];
+extern volatile uint32_t nfl2k5_scheduler_registration_history_caller[16];
+extern volatile LONG nfl2k5_gpu_notify_register_calls;
+extern volatile uint32_t nfl2k5_gpu_notify_register_callback;
+
 /* Called from kernel_bridge.c's existing periodic [PIPE]/[DPC] stats block
  * so the counts are visible on every tick without a separate sample pass. */
 void nfl2k5_execwatch_print(void)
@@ -318,6 +344,33 @@ void nfl2k5_execwatch_print(void)
      * comment near exec_watch_add(0x00178150...) for the full mechanism. */
     fprintf(stderr, "  [PEEK] BDEEF0=0x%08X\n",
             *(uint32_t *)((uintptr_t)xbox_GetMemoryOffset() + 0xBDEEF0u));
+    fprintf(stderr, "  [GPUWAIT] seed_calls=%ld seed_value=0x%08X entry_calls=%ld entry_value=0x%08X "
+            "exit_calls=%ld notify_service_calls=%ld notify_register_calls=%ld notify_callback=0x%08X\n",
+            nfl2k5_gpu_wait_seed_calls, nfl2k5_gpu_wait_seed_value,
+            nfl2k5_gpu_wait_entry_calls, nfl2k5_gpu_wait_entry_value,
+            nfl2k5_gpu_wait_exit_calls, nfl2k5_gpu_notify_service_calls,
+            nfl2k5_gpu_notify_register_calls, nfl2k5_gpu_notify_register_callback);
+    fprintf(stderr, "  [DRAIN33660] entry_calls=%ld context=0x%08X first_value=0x%08X entry_value=0x%08X "
+            "retry_calls=%ld retry_value=0x%08X\n",
+            nfl2k5_drain33660_entry_calls, nfl2k5_drain33660_entry_context,
+            nfl2k5_drain33660_first_value, nfl2k5_drain33660_entry_value,
+            nfl2k5_drain33660_retry_calls, nfl2k5_drain33660_retry_value);
+    fprintf(stderr, "  [SCHED] samples=%ld callback=0x%08X entered=0x%08X entries=%ld returned=0x%08X returns=%ld "
+            "reg_attempts=%ld reg_callback=0x%08X reg_caller=0x%08X dispatch_count=%ld\n",
+            nfl2k5_scheduler_samples, nfl2k5_scheduler_callback,
+            nfl2k5_scheduler_callback_entered, nfl2k5_scheduler_callback_entries,
+            nfl2k5_scheduler_callback_returned, nfl2k5_scheduler_callback_returns,
+            nfl2k5_scheduler_registration_attempts, nfl2k5_scheduler_registration_callback,
+            nfl2k5_scheduler_registration_caller, nfl2k5_scheduler_dispatch_count);
+    {
+        LONG hn = nfl2k5_scheduler_registration_history_index;
+        int hcount = hn > 16 ? 16 : (int)hn;
+        for (int i = 0; i < hcount; i++)
+            fprintf(stderr, "  [SCHEDREG] slot=%d count=%u callback=0x%08X caller=0x%08X\n",
+                    i, nfl2k5_scheduler_registration_history_count[i],
+                    nfl2k5_scheduler_registration_history_callback[i],
+                    nfl2k5_scheduler_registration_history_caller[i]);
+    }
     if (g_exec_watch_count == 0)
         return;
     fprintf(stderr, "  [EXECWATCH]");
@@ -1509,6 +1562,11 @@ int main(int argc, char **argv)
              * embedded in it (nfl2k5_trace_async_item, now surfaced in
              * [PIPE]) ever see anything. See PROJECT_STATUS.md. */
             exec_watch_add(0x0003A1C0u, "s_3A1C0_worker_dispatch");
+            /* 2026-09-21: is sub_000439B8 (the specific function that
+             * registers sub_000438D0 as a disc-read completion callback
+             * and submits the read via sub_0003B1B0) ever called at all?
+             * See PROJECT_STATUS.md. */
+            exec_watch_add(0x000439B8u, "s_439B8_archive_read_submit");
             exec_watch_add(0x00043CC0u, "s_43CC0");
             exec_watch_add(0x00044D00u, "s_44D00");
             exec_watch_add(0x0012D150u, "12D150");
