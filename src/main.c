@@ -1587,6 +1587,8 @@ int main(int argc, char **argv)
              * item via sub_00488B65 -- see PROJECT_STATUS.md for whether
              * this list is actually populated with real work. */
             exec_watch_add(0x00488B65u, "s_488B65_state27_submit");
+            exec_watch_add(0x0004D920u, "s_4D920_input_init");
+            exec_watch_add(0x0004B950u, "s_4B950_input_init_step2");
             exec_watch_add(0x00043CC0u, "s_43CC0");
             exec_watch_add(0x00044D00u, "s_44D00");
             exec_watch_add(0x0012D150u, "12D150");
