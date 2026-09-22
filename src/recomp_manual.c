@@ -1510,6 +1510,16 @@ static void nfl2k5_bootstrap_probe_1c1fa0(void)
  * the writer emits its zero-filled bootstrap primitive forever. */
 static void nfl2k5_frontend_queue_pump_3cc280(void)
 {
+    /* 2026-09-21: empirically checking this function's own stack balance --
+     * suspected (not yet confirmed) source of an intermittent esi/edi
+     * corruption reaching sub_00038CD0's scheduler dispatch loop, several
+     * frames up. See PROJECT_STATUS.md. entry_esp is the guest ESP value
+     * right after the `call` pushed the return address (i.e. what this
+     * function sees as its own "esp+0" on entry); every exit path below
+     * must leave g_esp == entry_esp + 4 (the final `ret`'s own pop) before
+     * returning, or something this function calls left the stack
+     * unbalanced. */
+    uint32_t entry_esp = g_esp;
     InterlockedIncrement(&nfl2k5_frontend_queue_pump_calls);
     PUSH32(g_esp, g_ecx);
     MEM32(0x00AF5890u) = 1;
@@ -1573,6 +1583,12 @@ out_ebx:
 out_ecx:
     MEM32(0x00AF5890u) = 0;
     POP32(g_esp, g_ecx);
+    if (g_esp != entry_esp) {
+        static volatile LONG warned;
+        if (InterlockedIncrement(&warned) <= 5)
+            fprintf(stderr, "  [STACKCHECK] 3CC280: g_esp=0x%08X entry_esp=0x%08X (delta=%d)\n",
+                    g_esp, entry_esp, (int32_t)(g_esp - entry_esp));
+    }
     g_esp += 4;
 }
 
@@ -1667,6 +1683,11 @@ static void nfl2k5_checksum_tail_498ef6(void)
  * and preserves the original call/return stack layout. */
 static void nfl2k5_boot_registration(void)
 {
+    /* 2026-09-21: same empirical stack-balance check as 3CC280 above --
+     * this function trusts sub_003784D0/sub_00016CFF/sub_00016CAD to each
+     * clean up their own stdcall arguments via their own generated `ret N`.
+     * If any of those three has a mismatched N, it surfaces here first. */
+    uint32_t entry_esp = g_esp;
     if (getenv("RECOMP_WAIT_TRACE")) {
         static volatile LONG trace_count;
         LONG n = InterlockedIncrement(&trace_count);
@@ -1677,15 +1698,33 @@ static void nfl2k5_boot_registration(void)
     PUSH32(g_esp, 0x00AF5888u);
     PUSH32(g_esp, 0x003CB1CAu);
     sub_003784D0();
+    if (g_esp != entry_esp) {
+        static volatile LONG warned0;
+        if (InterlockedIncrement(&warned0) <= 5)
+            fprintf(stderr, "  [STACKCHECK] 3CB1C0/after-3784D0: g_esp=0x%08X entry_esp=0x%08X (delta=%d)\n",
+                    g_esp, entry_esp, (int32_t)(g_esp - entry_esp));
+    }
     if (g_eax == 1) {
         PUSH32(g_esp, 0xFFFFFFFEu);
         PUSH32(g_esp, 0x003CB1D6u);
         sub_00016CFF();
+        if (g_esp != entry_esp) {
+            static volatile LONG warned1;
+            if (InterlockedIncrement(&warned1) <= 5)
+                fprintf(stderr, "  [STACKCHECK] 3CB1C0/after-16CFF: g_esp=0x%08X entry_esp=0x%08X (delta=%d)\n",
+                        g_esp, entry_esp, (int32_t)(g_esp - entry_esp));
+        }
         MEM32(0x00CC7934u) = g_eax;
         PUSH32(g_esp, 0x0000000Fu);
         PUSH32(g_esp, 0xFFFFFFFEu);
         PUSH32(g_esp, 0x003CB1E4u);
         sub_00016CAD();
+        if (g_esp != entry_esp) {
+            static volatile LONG warned2;
+            if (InterlockedIncrement(&warned2) <= 5)
+                fprintf(stderr, "  [STACKCHECK] 3CB1C0/after-16CAD: g_esp=0x%08X entry_esp=0x%08X (delta=%d)\n",
+                        g_esp, entry_esp, (int32_t)(g_esp - entry_esp));
+        }
         g_esp += 4; /* ret */
     } else {
         sub_00016EAC(); /* original tail jump; this consumes caller return */

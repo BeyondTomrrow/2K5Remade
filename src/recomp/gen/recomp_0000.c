@@ -6,6 +6,7 @@
 #define RECOMP_GENERATED_CODE
 #include "recomp_funcs.h"
 #include <math.h>
+#include <stdio.h> /* 2026-09-21: temporary [STACKCHECK] diagnostic in sub_00016CFF */
 
 /**
  * sub_00011000
@@ -17723,14 +17724,21 @@ loc_00016CAD: ;
     g_ebp = ebp; /* publish frame for frameless callees */
     g_seh_ebp = ebp;
     eax = ebp + 8;
+    uint32_t _dbg_cad1_esp, _dbg_cad1_target;
     { uint32_t _icall_esp = g_esp;
     PUSH32(esp, eax);
     PUSH32(esp, MEM32(0x4E3B00));
     PUSH32(esp, MEM32(ebp + 8));
-    { uint32_t _icall_target = MEM32(0x4E3AFC); PUSH32(esp, 0x00016CC3u); RECOMP_ICALL_SAFE(_icall_target, _icall_esp); } /* indirect call */
+    { uint32_t _icall_target = MEM32(0x4E3AFC); _dbg_cad1_esp = _icall_esp; _dbg_cad1_target = _icall_target; PUSH32(esp, 0x00016CC3u); RECOMP_ICALL_SAFE(_icall_target, _icall_esp); } /* indirect call */
     }
 
 loc_00016CC3: ;
+    if (g_esp != _dbg_cad1_esp) {
+        static volatile long warned_16cad_1 = 0;
+        if (++warned_16cad_1 <= 5)
+            fprintf(stderr, "  [STACKCHECK] 16CAD/icall1 target=0x%08X g_esp=0x%08X expected=0x%08X (delta=%d)\n",
+                    _dbg_cad1_target, g_esp, _dbg_cad1_esp, (int32_t)(g_esp - _dbg_cad1_esp));
+    }
     _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;
     _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test eax, eax (32-bit) */
     if (TEST_S(_fas, _fbs)) goto loc_00016CF3; /* jl: less (signed <) */
@@ -17757,19 +17765,33 @@ loc_00016CDA: ;
     POP32(esp, eax);
 
 loc_00016CDB: ;
+    uint32_t _dbg_cad2_esp, _dbg_cad2_target;
     { uint32_t _icall_esp = g_esp;
     PUSH32(esp, eax);
     PUSH32(esp, MEM32(ebp + 8));
-    { uint32_t _icall_target = MEM32(0x4E3AF8); PUSH32(esp, 0x00016CE5u); RECOMP_ICALL_SAFE(_icall_target, _icall_esp); } /* indirect call */
+    { uint32_t _icall_target = MEM32(0x4E3AF8); _dbg_cad2_esp = _icall_esp; _dbg_cad2_target = _icall_target; PUSH32(esp, 0x00016CE5u); RECOMP_ICALL_SAFE(_icall_target, _icall_esp); } /* indirect call */
     }
 
 loc_00016CE5: ;
+    if (g_esp != _dbg_cad2_esp) {
+        static volatile long warned_16cad_2 = 0;
+        if (++warned_16cad_2 <= 5)
+            fprintf(stderr, "  [STACKCHECK] 16CAD/icall2 target=0x%08X g_esp=0x%08X expected=0x%08X (delta=%d)\n",
+                    _dbg_cad2_target, g_esp, _dbg_cad2_esp, (int32_t)(g_esp - _dbg_cad2_esp));
+    }
     ecx = MEM32(ebp + 8);
+    uint32_t _dbg_cad3_esp, _dbg_cad3_target;
     { uint32_t _icall_esp = g_esp;
-    { uint32_t _icall_target = MEM32(0x4E3AF4); PUSH32(esp, 0x00016CEEu); RECOMP_ICALL_SAFE(_icall_target, _icall_esp); } /* indirect call */
+    { uint32_t _icall_target = MEM32(0x4E3AF4); _dbg_cad3_esp = _icall_esp; _dbg_cad3_target = _icall_target; PUSH32(esp, 0x00016CEEu); RECOMP_ICALL_SAFE(_icall_target, _icall_esp); } /* indirect call */
     }
 
 loc_00016CEE: ;
+    if (g_esp != _dbg_cad3_esp) {
+        static volatile long warned_16cad_3 = 0;
+        if (++warned_16cad_3 <= 5)
+            fprintf(stderr, "  [STACKCHECK] 16CAD/icall3 target=0x%08X g_esp=0x%08X expected=0x%08X (delta=%d)\n",
+                    _dbg_cad3_target, g_esp, _dbg_cad3_esp, (int32_t)(g_esp - _dbg_cad3_esp));
+    }
     eax = 0; /* xor self */
     eax++;
     goto loc_00016CFB;
@@ -17812,26 +17834,40 @@ loc_00016CFF: ;
     g_ebp = ebp; /* publish frame for frameless callees */
     g_seh_ebp = ebp;
     eax = ebp + 8;
+    uint32_t _dbg_icall1_esp, _dbg_icall1_target;
     { uint32_t _icall_esp = g_esp;
     PUSH32(esp, eax);
     PUSH32(esp, MEM32(0x4E3B00));
     PUSH32(esp, MEM32(ebp + 8));
-    { uint32_t _icall_target = MEM32(0x4E3AFC); PUSH32(esp, 0x00016D15u); RECOMP_ICALL_SAFE(_icall_target, _icall_esp); } /* indirect call */
+    { uint32_t _icall_target = MEM32(0x4E3AFC); _dbg_icall1_esp = _icall_esp; _dbg_icall1_target = _icall_target; PUSH32(esp, 0x00016D15u); RECOMP_ICALL_SAFE(_icall_target, _icall_esp); } /* indirect call */
     }
 
 loc_00016D15: ;
+    if (g_esp != _dbg_icall1_esp) {
+        static volatile long warned_16cff_1 = 0;
+        if (++warned_16cff_1 <= 5)
+            fprintf(stderr, "  [STACKCHECK] 16CFF/icall1 target=0x%08X g_esp=0x%08X expected=0x%08X (delta=%d)\n",
+                    _dbg_icall1_target, g_esp, _dbg_icall1_esp, (int32_t)(g_esp - _dbg_icall1_esp));
+    }
     _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;
     _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test eax, eax (32-bit) */
     if (TEST_S(_fas, _fbs)) goto loc_00016D44; /* jl: less (signed <) */
 
 loc_00016D19: ;
     PUSH32(esp, esi);
+    uint32_t _dbg_icall2_esp, _dbg_icall2_target;
     { uint32_t _icall_esp = g_esp;
     PUSH32(esp, MEM32(ebp + 8));
-    { uint32_t _icall_target = MEM32(0x4E3B04); PUSH32(esp, 0x00016D23u); RECOMP_ICALL_SAFE(_icall_target, _icall_esp); } /* indirect call */
+    { uint32_t _icall_target = MEM32(0x4E3B04); _dbg_icall2_esp = _icall_esp; _dbg_icall2_target = _icall_target; PUSH32(esp, 0x00016D23u); RECOMP_ICALL_SAFE(_icall_target, _icall_esp); } /* indirect call */
     }
 
 loc_00016D23: ;
+    if (g_esp != _dbg_icall2_esp) {
+        static volatile long warned_16cff_2 = 0;
+        if (++warned_16cff_2 <= 5)
+            fprintf(stderr, "  [STACKCHECK] 16CFF/icall2 target=0x%08X g_esp=0x%08X expected=0x%08X (delta=%d)\n",
+                    _dbg_icall2_target, g_esp, _dbg_icall2_esp, (int32_t)(g_esp - _dbg_icall2_esp));
+    }
     esi = eax;
     _fa = (uint32_t)(esi) & 0xFFFFFFFFu; _fb = (uint32_t)(0x10) & 0xFFFFFFFFu;
     _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp esi, 0x10 (32-bit) */

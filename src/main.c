@@ -810,6 +810,24 @@ static LONG CALLBACK crash_report(EXCEPTION_POINTERS *ep)
             }
         }
     }
+    /* 2026-09-21: the fourth-crash family (sub_00038CD0's scheduler-slot
+     * dispatch reading a corrupted esi right after invoking whichever
+     * callback occupies the current slot; see PROJECT_STATUS.md) is only
+     * explicable by an indirect call somewhere nearby leaving esp/esi/edi
+     * misaligned. The last few real indirect-call targets executed, in
+     * order, are exactly what's needed to identify which specific guest
+     * callback did it -- print them here so any future crash carries this
+     * for free. */
+    {
+        extern volatile uint32_t g_icall_trace[16];
+        extern volatile uint32_t g_icall_trace_idx;
+        uint32_t idx = g_icall_trace_idx;
+        fprintf(stderr, "[CRASH] last 16 icall targets (oldest first):\n");
+        for (int i = 0; i < 16; i++) {
+            uint32_t slot = (idx + i) & 15;
+            fprintf(stderr, "  0x%08X\n", g_icall_trace[slot]);
+        }
+    }
     fflush(stderr);
     /* A title that dies mid-boot is exactly the run whose indirect-call
      * targets are worth having; atexit (registered by the INIT call in
