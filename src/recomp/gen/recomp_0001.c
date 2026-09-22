@@ -49706,6 +49706,7 @@ loc_00042210: ;
     PUSH32(esp, ecx);
     edx = MEM32(esp + 0x14);
     eax = esp;
+    { uint32_t _dbg_completion_ptr = eax; /* see NFL2K5_FORCE_UNBLOCK_TASK42200 below */
     PUSH32(esp, eax);
     eax = MEM32(esp + 0x14);
     PUSH32(esp, 0x42200);
@@ -49720,9 +49721,23 @@ loc_00042210: ;
     PUSH32(esp, 0x0004223Eu); RECOMP_ABI_CALL(0x0003B1B0u, sub_0003B1B0); /* call 0x0003B1B0 */
 
 loc_0004223E: ;
+#ifdef NFL2K5_FORCE_UNBLOCK_TASK42200
+    /* EXPERIMENTAL, 2026-09-21: same shape and same root cause as
+     * NFL2K5_FORCE_UNBLOCK_TASK42440 (sub_00042820, just up the call
+     * chain) -- an async task submitted via sub_0003B1B0 here, completion
+     * flag at the address captured just above, whose poll loop
+     * (loc_00042246-loc_00042255, pumping sub_00038CD0/the scheduler
+     * dispatch) never sees it change. Confirmed live via non-invasive cdb:
+     * two snapshots of the same thread a few seconds apart showed an
+     * identical call-stack depth through sub_00042210, with only which
+     * ticking scheduler callback was current at the tip changing --
+     * genuinely spinning, not just slow. See PROJECT_STATUS.md. */
+    if (eax) MEM32(_dbg_completion_ptr) = 0;
+#endif
     _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;
     _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test eax, eax (32-bit) */
     if (TEST_NZ(_fa, _fb)) goto loc_00042246; /* jne: not equal / not zero */
+    }
 
 loc_00042242: ;
     POP32(esp, ecx);
@@ -50639,6 +50654,23 @@ loc_00042849: ;
     PUSH32(esp, 0x00042861u); RECOMP_ABI_CALL(0x0003BE40u, sub_0003BE40); /* call 0x0003BE40 */
 
 loc_00042861: ;
+#ifdef NFL2K5_FORCE_UNBLOCK_TASK42440
+    /* EXPERIMENTAL, 2026-09-21: this async boot task (type 0x42440, submitted
+     * via sub_0003BE40 just above, completion flag at MEM32(esp+4)) never
+     * completes -- confirmed live: [PIPE]'s boot_task_42440 counter stays 0
+     * in every run, while the enclosing one-time init sequence
+     * (sub_00038FC0, a title-init chain matching this project's own
+     * nfl2k5_trace_title_init markers) never reaches its final steps
+     * (archive-init registration for "FONT" and a second resource tag via
+     * sub_00044D00/sub_00044C10 -- see PROJECT_STATUS.md). This matches the
+     * 2026-09-17 root-cause finding (documented, never acted on): there is
+     * no real vblank/present-completion signal in this recompiler at all,
+     * so anything that structurally depends on one either hangs or spins
+     * checking a flag that can never be set. Forcing the flag to "already
+     * complete" immediately after submission, the same bypass shape used
+     * for 0xB09584/AUDIO_LOCK/BDEEF0 earlier tonight, off by default. */
+    if (eax) MEM32(esp + 4) = 0;
+#endif
     _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;
     _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test eax, eax (32-bit) */
     if (TEST_Z(_fa, _fb)) goto loc_0004287D; /* je: equal / zero */

@@ -1476,6 +1476,14 @@ int main(int argc, char **argv)
             exec_watch_add(0x00028C40u, "28C40");
             exec_watch_add(0x00028BC0u, "28BC0");
             exec_watch_add(0x000292E0u, "292E0");
+            /* 2026-09-21: sub_00027CA0 is the sole setter of MEM32(0xA6A9A0),
+             * the "work pending" flag sub_00028DE0 checks before doing any
+             * real per-frame update+Present work at all -- confirmed live
+             * (28DE0_gpu_wait=35, 34110_present_trampoline=1: the flag was
+             * true on only 1 of 35 checks). It has 18 static call sites;
+             * return-address tracking (already built into exec_watch) names
+             * which one actually fires live, instead of guessing. */
+            exec_watch_add(0x00027CA0u, "27CA0_frame_ready_setter");
             exec_watch_add(0x000294C0u, "294C0");
             exec_watch_add(0x000366D0u, "366D0");
             exec_watch_add(0x00038EA0u, "38EA0");
@@ -1485,6 +1493,16 @@ int main(int argc, char **argv)
             exec_watch_add(0x0002FC30u, "2FC30");
             exec_watch_add(0x00036530u, "36530");
             exec_watch_add(0x00038FC0u, "38FC0");
+            /* 2026-09-21: bisecting sub_00038FC0's own one-time title-init
+             * sequence (37810,38CA0,3A390,35360,292E0,39AC0,3C3F0,352B0,
+             * 2FC30,2C9D0,42820,43CC0,44D00 in order) past the 42820 gate
+             * just bypassed (NFL2K5_FORCE_UNBLOCK_TASK42440), to find
+             * whether anything else stops it short of 44D00 (archive/font
+             * registration). See PROJECT_STATUS.md. */
+            exec_watch_add(0x0002C9D0u, "s_2C9D0");
+            exec_watch_add(0x00042820u, "s_42820");
+            exec_watch_add(0x00043CC0u, "s_43CC0");
+            exec_watch_add(0x00044D00u, "s_44D00");
             exec_watch_add(0x0012D150u, "12D150");
             exec_watch_add(0x0012CB50u, "12CB50");
             exec_watch_add(0x0029B6D0u, "29B6D0");
