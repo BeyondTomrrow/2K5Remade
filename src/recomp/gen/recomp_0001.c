@@ -22150,6 +22150,17 @@ loc_0003A05C: ;
                 esi, MEM32(esi + 0xCu), eax, MEM32(esi + 0x18u),
                 MEM32(esi + 0x14u), MEM32(esi + 0x1Cu), edi);
     }
+    /* 2026-09-21: does the archive/font disc-read completion (callback
+     * 0x438D0, registered in sub_000439B8) ever actually reach this real
+     * "invoke the stored callback" dispatch path? See PROJECT_STATUS.md --
+     * dispatch438d0 stays 0 despite this whole queue processing thousands
+     * of other items, so this checks whether ours is even one of them. */
+    if (eax == 0x000438D0u) {
+        static volatile long logged_438d0_cb = 0;
+        if (++logged_438d0_cb <= 10)
+            fprintf(stderr, "  [CB438D0] dispatched! record=0x%08X arg=0x%08X context=0x%08X\n",
+                    esi, MEM32(esi + 0x18u), MEM32(esi + 0x14u));
+    }
     { uint32_t _icall_esp = g_esp;
     PUSH32(esp, edx);
     edx = MEM32(esi + 0x18);
@@ -22168,6 +22179,12 @@ loc_0003A066: ;
 
 loc_0003A06D: ;
     edx = MEM32(esi + 0x14);
+    if (eax == 0x000438D0u) {
+        static volatile long logged_438d0_tail = 0;
+        if (++logged_438d0_tail <= 10)
+            fprintf(stderr, "  [CB438D0] dispatched (tail-jmp path)! record=0x%08X context=0x%08X\n",
+                    esi, MEM32(esi + 0x14u));
+    }
     g_seh_ebp = ebp; RECOMP_ITAIL(eax); return; /* indirect tail jmp */
 
 loc_0003A072: ;

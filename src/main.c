@@ -1501,6 +1501,14 @@ int main(int argc, char **argv)
              * registration). See PROJECT_STATUS.md. */
             exec_watch_add(0x0002C9D0u, "s_2C9D0");
             exec_watch_add(0x00042820u, "s_42820");
+            /* 2026-09-21: sub_0003A1C0 is the real worker dispatch loop --
+             * walks the global file-object list, and for each object,
+             * processes its per-object I/O completion queue (populated by
+             * sub_0003B1B0's disc-read submission). Checking whether it's
+             * even entered, and whether the async-item trace hooks already
+             * embedded in it (nfl2k5_trace_async_item, now surfaced in
+             * [PIPE]) ever see anything. See PROJECT_STATUS.md. */
+            exec_watch_add(0x0003A1C0u, "s_3A1C0_worker_dispatch");
             exec_watch_add(0x00043CC0u, "s_43CC0");
             exec_watch_add(0x00044D00u, "s_44D00");
             exec_watch_add(0x0012D150u, "12D150");
