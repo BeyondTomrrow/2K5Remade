@@ -24,8 +24,12 @@ $env:TMP = $env:TEMP
 New-Item -ItemType Directory -Force $env:TEMP | Out-Null
 # Fail explicitly if regeneration drops the title's reset completion hook.
 if ($Game) {
-  $audioSource = Get-Content -Raw -LiteralPath "$root/src/recomp/gen/recomp_0030.c"
-  if (-not $audioSource.Contains('nfl2k5_ack_ac97_reset(eax + 0xFEC0010Bu)')) {
+  # Regeneration wipes every hand patch in src/recomp/gen; re-apply the
+  # AC97 reset ack and NFL2K5_FORCE_UNBLOCK_* ones (idempotent, fails on a moved anchor).
+  & python "$root/tools/apply-gen-patches.py"
+  if ($LASTEXITCODE) { throw 'Re-applying generated-code patches failed; see tools/apply-gen-patches.py.' }
+  $audioSource = (Get-Content -Raw -Path "$root/src/recomp/gen/recomp_*.c")
+  if (-not ($audioSource -join "").Contains('nfl2k5_ack_ac97_reset(eax + 0xFEC0010Bu)')) {
     throw 'AC97 reset hook missing after regeneration. Restore the verified reset-write patch described in docs/PROGRESS.md.'
   }
 }

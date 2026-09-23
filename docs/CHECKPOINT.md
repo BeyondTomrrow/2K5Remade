@@ -22,4 +22,4 @@ Latest tested startup exits via watchdog (code 3), sampled at sub_004542EA+0x6AF
 
 Latest diagnostic log: logs/startup-20260907-215249.stderr.log. Generated recomp_0029.c currently has temporary [AUDIO] diagnostics for construction, initialization, creation, and the failing sound-object path. These are observations only, not behavior changes; full regeneration will remove them.
 
-Upstream local changes are exported to config/xboxrecomp-local.patch. Apply only to a clean matching upstream checkout (5a05181fbe7a454fba468c9f56336ecf6a958ffd); the current checkout already contains them. Preserve src/main.c, src/recomp_manual.c, config/game.cmake, tools/, analysis/, and generated source when continuing.
+Upstream local changes are exported to config/xboxrecomp-local.patch. Apply only to a clean matching upstream checkout (766ecefcd7fb2a9b344de8ec891f6fe9ea14261b); the current checkout already contains them. Preserve src/main.c, src/recomp_manual.c, config/game.cmake, tools/, analysis/, and generated source when continuing.

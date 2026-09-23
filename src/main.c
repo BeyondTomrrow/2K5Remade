@@ -294,7 +294,7 @@ void nfl2k5_coverage_print(void)
  * single-step exactly one real instruction, then re-patch on the trap --
  * the same single-step re-arm shape as pb_write_watch above, applied to
  * code instead of a data page. */
-#define EXEC_WATCH_MAX 128
+#define EXEC_WATCH_MAX 256
 static struct {
     uint32_t guest_va;
     unsigned char *host_addr;
@@ -485,6 +485,36 @@ void nfl2k5_execwatch_print(void)
      * comment near exec_watch_add(0x00178150...) for the full mechanism. */
     fprintf(stderr, "  [PEEK] BDEEF0=0x%08X\n",
             *(uint32_t *)((uintptr_t)xbox_GetMemoryOffset() + 0xBDEEF0u));
+    /* 2026-09-23: sub_0003A1C0 (task scheduler) returns immediately while
+     * its reentrancy guard 0xB057D0 is set; task 0x42440 is queued on object
+     * 0xA75D50 (+0x58 queue, +0x44 list link, list head 0xB0565C). */
+    {
+        const uint8_t *m = (const uint8_t *)xbox_GetMemoryOffset();
+        #define NFL2K5_PEEK32(va) (*(const uint32_t *)(m + (va)))
+        uint32_t q = NFL2K5_PEEK32(0xA75D50u + 0x5Cu);
+        fprintf(stderr, "  [SCHEDPEEK] guard_B057D0=%u head=0x%08X obj_A75D50: link=0x%08X q_first=0x%08X q_state=%u q_type=%u q_fn=0x%08X\n",
+                NFL2K5_PEEK32(0xB057D0u), NFL2K5_PEEK32(0xB0565Cu), NFL2K5_PEEK32(0xA75D50u + 0x44u), q,
+                q && q != 0xA75D50u + 0x58u ? NFL2K5_PEEK32(q + 8u) : 0xFFFFFFFFu,
+                q && q != 0xA75D50u + 0x58u ? NFL2K5_PEEK32(q + 0xCu) : 0xFFFFFFFFu,
+                q && q != 0xA75D50u + 0x58u ? NFL2K5_PEEK32(q + 0x10u) : 0u);
+        /* Every scheduler object and every message still queued on it
+         * (state 1 new, 2 in flight at the driver, 3 done). */
+        fprintf(stderr, "  [DEVPEEK] state_A7D300=0x%X arg_A7D304=0x%08X event_A7A238=0x%08X\n",
+                NFL2K5_PEEK32(0xA7D300u), NFL2K5_PEEK32(0xA7D304u), NFL2K5_PEEK32(0xA7A238u));
+        uint32_t obj = NFL2K5_PEEK32(0xB0565Cu);
+        for (int n = 0; obj && obj != 0xB05618u && n < 64; n++, obj = NFL2K5_PEEK32(obj + 0x44u)) {
+            uint32_t drv = NFL2K5_PEEK32(obj + 0x188u);
+            fprintf(stderr, "  [SCHEDOBJ] obj=0x%08X drv=0x%08X", obj, drv);
+            uint32_t msg = NFL2K5_PEEK32(obj + 0x5Cu);
+            for (int k = 0; msg && msg != obj + 0x58u && k < 8; k++, msg = NFL2K5_PEEK32(msg + 4u))
+                fprintf(stderr, " | msg=0x%08X st=%u type=%u op=0x%08X cb=0x%08X",
+                        msg, NFL2K5_PEEK32(msg + 8u), NFL2K5_PEEK32(msg + 0xCu),
+                        drv ? NFL2K5_PEEK32(drv + 4u * NFL2K5_PEEK32(msg + 0xCu)) : 0u,
+                        NFL2K5_PEEK32(msg + 0x10u));
+            fprintf(stderr, "\n");
+        }
+        #undef NFL2K5_PEEK32
+    }
     fprintf(stderr, "  [GPUWAIT] seed_calls=%ld seed_value=0x%08X entry_calls=%ld entry_value=0x%08X "
             "exit_calls=%ld notify_service_calls=%ld notify_register_calls=%ld notify_callback=0x%08X\n",
             nfl2k5_gpu_wait_seed_calls, nfl2k5_gpu_wait_seed_value,
@@ -1758,6 +1788,57 @@ int main(int argc, char **argv)
             exec_watch_add(0x00043980u, "s_43980_REAL_archive_read_submit");
             exec_watch_add(0x00043AC0u, "s_43AC0_caller1");
             exec_watch_add(0x000650A0u, "NEWFN_650A0_seeded_2026_09_22");
+            exec_watch_add(0x0006E4E0u, "DISPATCHER_6E4E0_real_caller_of_650A0");
+            exec_watch_add(0x0006E2E0u, "d6e4e0_caller_6E2E0");
+            exec_watch_add(0x000F2840u, "d6e4e0_caller_F2840");
+            exec_watch_add(0x0016D6F0u, "d6e4e0_caller_16D6F0");
+            exec_watch_add(0x00325000u, "d6e4e0_caller_325000");
+            exec_watch_add(0x0014E070u, "d6e4e0_caller_14E070");
+            exec_watch_add(0x0024A090u, "d6e4e0_caller_24A090");
+            exec_watch_add(0x00349740u, "d6e4e0_caller_349740");
+            exec_watch_add(0x000AA660u, "d6e4e0_caller_AA660");
+            /* 2026-09-23: div-by-zero in sub_000414F0 on object 0xB38F30
+             * (+0x1138 == 0). xemu: sub_00072C30 -> sub_000D1F20 ->
+             * sub_000D1450 runs ctor sub_0003FC80 then setter sub_0003FF20
+             * (+0x1138 = 1) before the first divide. Which link is missing? */
+            exec_watch_add(0x00072C30u, "div_init_72C30");
+            exec_watch_add(0x000D1F20u, "div_init_D1F20");
+            exec_watch_add(0x000D1450u, "div_init_D1450");
+            exec_watch_add(0x0003FC80u, "div_ctor_3FC80");
+            exec_watch_add(0x0003FF20u, "div_setter_3FF20");
+            exec_watch_add(0x000414F0u, "div_crash_414F0");
+            /* xemu: lines.bin header is filled by worker sub_0003A1C0 ->
+             * sub_0003A020 -> icall sub_000438D0 -> icall sub_00044F10 ->
+             * sub_00044E60 -> sub_00048700 -> sub_000483D0 -> kernel read. */
+            exec_watch_add(0x0003A020u, "arc_3A020_worker_item");
+            exec_watch_add(0x000438D0u, "arc_438D0");
+            exec_watch_add(0x00044F10u, "arc_44F10");
+            exec_watch_add(0x00044E60u, "arc_44E60");
+            exec_watch_add(0x00048700u, "arc_48700");
+            exec_watch_add(0x000483D0u, "arc_483D0_read");
+            exec_watch_add(0x00042440u, "task_42440_body");
+            /* 2026-09-23: file object 0xA7D370's driver op sub_0004BEC0 sets
+             * device state MEM32(0xA7D300)=0xB and signals event
+             * MEM32(0xA7A238); sub_0004D810 is the state-machine step. */
+            exec_watch_add(0x0004D810u, "dev_step_4D810");
+            exec_watch_add(0x0004D920u, "dev_4D920");
+            exec_watch_add(0x0004B930u, "dev_signal_4B930");
+            /* sub_0004D900 = CreateThread(start 0x4D810, CREATE_SUSPENDED),
+             * handle -> 0xA7A238; sub_0004B930 resumes it, sub_0004B920
+             * (end of the step) suspends it again. */
+            exec_watch_add(0x0004D900u, "dev_create_4D900");
+            exec_watch_add(0x0004B920u, "dev_suspend_4B920");
+            exec_watch_add(0x0001714Cu, "xapi_CreateThread_1714C");
+            exec_watch_add(0x00016E00u, "xapi_ResumeThread_16E00");
+            /* Archive object 0xA77788's driver op sub_00042010 -> read submit
+             * sub_00041ED0 (callback 0x41FF0 into slot 0xA764EC) -> issue
+             * sub_00041E20 -> sub_00041CB0; sub_00041BD0 also calls the slot. */
+            exec_watch_add(0x00042010u, "rd_op_42010");
+            exec_watch_add(0x00041ED0u, "rd_submit_41ED0");
+            exec_watch_add(0x00041E20u, "rd_issue_41E20");
+            exec_watch_add(0x00041CB0u, "rd_io_41CB0");
+            exec_watch_add(0x00041BD0u, "rd_cont_41BD0");
+            exec_watch_add(0x00041FF0u, "rd_done_cb_41FF0");
             exec_watch_add(0x00043BE0u, "s_43BE0_caller2");
             exec_watch_add(0x00043850u, "s_43850");
             exec_watch_add(0x00043E90u, "s_43E90");
