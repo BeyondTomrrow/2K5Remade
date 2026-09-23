@@ -6,7 +6,6 @@
 #define RECOMP_GENERATED_CODE
 #include "recomp_funcs.h"
 #include <math.h>
-#include <stdio.h> /* TEMPORARY 2026-09-22: for the REQDBG diagnostic print below */
 
 /**
  * sub_00030201
@@ -8647,25 +8646,6 @@ loc_00033670: ;
 
 loc_0003367A: ;
     eax = MEM32(esi + 8);
-#ifdef NFL2K5_FORCE_UNBLOCK_33660_DRAIN
-    /* EXPERIMENTAL, 2026-09-21 (reapplied 2026-09-22 after regenerating
-     * against the updated xboxrecomp toolchain): live cdb attaches during a
-     * hang consistently parked the main thread in this exact retry
-     * (sub_000341A0 -> sub_0001B79F -> sub_0001B601 -> a real
-     * KeDelayExecutionThread call), with MEM32(esi+8) frozen at 1 across
-     * tens of thousands of retries. The new toolchain's real vblank ISR
-     * (RECOMP_VBLANK) was tried first and genuinely helps (a few more
-     * DMA submissions happen) but does not clear this specific wait on its
-     * own. Force it after a bounded number of retries so a genuinely
-     * short, real wait still gets to resolve on its own. */
-    if (eax) {
-        static volatile long retries;
-        if (++retries > 200) {
-            MEM32(esi + 8) = 0;
-            eax = 0;
-        }
-    }
-#endif
     _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;
     _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test eax, eax (32-bit) */
     if (TEST_NZ(_fa, _fb)) goto loc_00033670; /* jne: not equal / not zero */
@@ -59343,29 +59323,6 @@ loc_00043C1F: ;
     edi = esp + 8;
     MEM32(0xB11228) = eax;
     MEM32(0xB11224) = edx;
-    /* TEMPORARY 2026-09-22 diagnostic: dump the request record's raw first
-     * 0x1C bytes and its first field decoded as a UTF-16LE string (the
-     * B09578 registry's own key field decodes as UTF-16LE, e.g.
-     * "TITLEPAGE" -- see PROJECT_STATUS.md). Not a durable patch; will be
-     * lost on the next full pipeline regeneration. */
-    {
-        static int _dbg_n = 0;
-        if (_dbg_n < 25) {
-            _dbg_n++;
-            char narrow[41]; int _k;
-            for (_k = 0; _k < 40; _k++) {
-                uint16_t wc = *(volatile uint16_t *)XBOX_PTR(edi + _k * 2u);
-                if (!wc) break;
-                narrow[_k] = (wc >= 0x20 && wc < 0x7F) ? (char)wc : '?';
-            }
-            narrow[_k] = 0;
-            fprintf(stderr, "  [REQDBG] #%d edi=0x%08X str=\"%s\" raw: %08X %08X %08X %08X %08X %08X %08X\n",
-                    _dbg_n, edi, narrow,
-                    MEM32(edi + 0), MEM32(edi + 4), MEM32(edi + 8), MEM32(edi + 0xC),
-                    MEM32(edi + 0x10), MEM32(edi + 0x14), MEM32(edi + 0x18));
-            fflush(stderr);
-        }
-    }
     PUSH32(esp, 0x00043C3Au); RECOMP_ABI_CALL(0x00042F50u, sub_00042F50); /* call 0x00042F50 */
 
 loc_00043C3A: ;
@@ -65067,23 +65024,6 @@ loc_00045E89: ;
     PUSH32(esp, 0x00045E93u); RECOMP_ABI_CALL(0x00484EABu, sub_00484EAB); /* call 0x00484EAB */
 
 loc_00045E93: ;
-#ifdef NFL2K5_FORCE_UNBLOCK_NETPOLL
-    /* EXPERIMENTAL, 2026-09-22: sub_00045E60 (called from network init,
-     * sub_00046080 stage 3 -- XNetStartup) polls sub_00484EAB/B6 in a real
-     * (sleeping, not spinning) retry loop via sub_0001B601, forever, while
-     * it keeps returning exactly 0. Confirmed via live cdb across multiple
-     * runs: the main thread consistently parks here. There is no real
-     * network hardware behind this poll in this recompiler, so it can
-     * never resolve on its own. After a bounded number of retries, force
-     * eax to a nonzero "not found" status (2, not 1 -- 1 takes a different,
-     * true-success-only branch) so the function's own existing fallback
-     * path runs, same as a real Xbox with no network link would see. */
-    {
-        static volatile long retries;
-        if (eax == 0 && ++retries > 50)
-            eax = 2;
-    }
-#endif
     _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;
     _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test eax, eax (32-bit) */
     if (TEST_Z(_fa, _fb)) goto loc_00045E80; /* je: equal / zero */
@@ -65129,14 +65069,6 @@ loc_00045EDA: ;
     PUSH32(esp, 0x00045EE4u); RECOMP_ABI_CALL(0x00484EB6u, sub_00484EB6); /* call 0x00484EB6 */
 
 loc_00045EE4: ;
-#ifdef NFL2K5_FORCE_UNBLOCK_NETPOLL
-    /* Second instance of the same poll, see the first one above. */
-    {
-        static volatile long retries;
-        if (eax == 0 && ++retries > 50)
-            eax = 2;
-    }
-#endif
     _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;
     _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test eax, eax (32-bit) */
     if (TEST_Z(_fa, _fb)) goto loc_00045ED1; /* je: equal / zero */

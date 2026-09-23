@@ -165,6 +165,117 @@ static LONG CALLBACK pb_write_watch(EXCEPTION_POINTERS *ep)
     return EXCEPTION_CONTINUE_EXECUTION;
 }
 
+#ifdef RECOMP_COVERAGE
+/* Global function-coverage tracker, opt-in via RECOMP_COVERAGE (a build-time
+ * CMake option, NFL2K5_COVERAGE=ON -- see config/game.cmake and
+ * recomp_types.h's RECOMP_ABI_CALL). 2026-09-22: this project's own comment
+ * two blocks below, written earlier this same investigation, says RECOMP_
+ * ABI_CALL "is a direct C call... the only way to intercept every call site
+ * to a given function at once is a software breakpoint at that function's
+ * own compiled entry" -- true for hooking one function at a time, but misses
+ * that RECOMP_ABI_CALL is itself a macro used at every direct call site in
+ * the whole codebase, so changing its expansion (once, at the definition)
+ * hooks all of them simultaneously, without the per-function INT3/single-
+ * step machinery below. This answers a different, bigger question than any
+ * single exec_watch entry can: not "does this one function run," but "what
+ * fraction of the ~32,620-function program ever runs at all" (see
+ * PROJECT_STATUS.md's "reframe the investigation" entry). Lock-free open-
+ * addressing hash set, sized well above the known function count to keep
+ * collision chains short; touches no emulated-register globals, so it can't
+ * perturb guest state the way RECOMP_DATA_WATCH's page-guard did. */
+#define COVERAGE_TABLE_SIZE (1u << 17) /* 131072, ~4x the ~32620 known functions */
+static volatile LONG g_coverage_va[COVERAGE_TABLE_SIZE];
+static volatile LONG g_coverage_hits[COVERAGE_TABLE_SIZE];
+static volatile LONG g_coverage_unique_count;
+
+void recomp_coverage_hit(uint32_t va)
+{
+    uint32_t idx = ((va >> 3) ^ (va >> 15)) & (COVERAGE_TABLE_SIZE - 1);
+    for (;;) {
+        LONG cur = g_coverage_va[idx];
+        if (cur == (LONG)va) {
+            InterlockedIncrement(&g_coverage_hits[idx]);
+            return;
+        }
+        if (cur == 0) {
+            LONG prev = InterlockedCompareExchange(&g_coverage_va[idx], (LONG)va, 0);
+            if (prev == 0 || prev == (LONG)va) {
+                InterlockedIncrement(&g_coverage_hits[idx]);
+                if (prev == 0) InterlockedIncrement(&g_coverage_unique_count);
+                return;
+            }
+            /* Another thread just claimed this slot with a different va;
+             * fall through and keep probing. */
+        }
+        idx = (idx + 1) & (COVERAGE_TABLE_SIZE - 1);
+    }
+}
+
+/* Prints the summary every tick, and the full list of registered-but-never-
+ * hit functions once, throttled -- the full list is the actual deliverable
+ * (which specific functions never ran), the summary is just the headline
+ * number for the periodic log. */
+void nfl2k5_coverage_print(void)
+{
+    extern size_t recomp_get_count(void);
+    size_t total = recomp_get_count();
+    LONG unique = g_coverage_unique_count;
+    fprintf(stderr, "  [COVERAGE] %ld/%zu functions entered (%.1f%%)\n",
+            unique, total, total ? (100.0 * unique / (double)total) : 0.0);
+
+    static LONG dumped;
+    if (InterlockedCompareExchange(&dumped, 1, 0) != 0)
+        return;
+    /* One-shot: give the process a little runway before the first dump so
+     * boot has a chance to populate the table; called from the same 3s
+     * periodic tick as everything else, so this just skips the first few. */
+    static LONG tick_count;
+    if (InterlockedIncrement(&tick_count) < 10)
+        { InterlockedExchange(&dumped, 0); return; }
+
+    FILE *f = fopen("logs/coverage_hit.dump", "w");
+    if (f) {
+        fprintf(f, "# functions actually entered via RECOMP_ABI_CALL during this run\n");
+        fprintf(f, "# %ld/%zu of all registered functions entered (%.1f%%)\n", unique, total,
+                total ? (100.0 * unique / (double)total) : 0.0);
+        fprintf(f, "# format: <va> <hit_count>\n");
+        for (uint32_t i = 0; i < COVERAGE_TABLE_SIZE; i++) {
+            LONG va = g_coverage_va[i];
+            if (va) fprintf(f, "%08lX %ld\n", (unsigned long)va, g_coverage_hits[i]);
+        }
+        fclose(f);
+    }
+
+    /* The actual deliverable: the complement against every registered
+     * function, computed directly via recomp_get_va_at (added to
+     * recomp_dispatch.c alongside recomp_get_count/recomp_lookup). */
+    extern uint32_t recomp_get_va_at(size_t index);
+    FILE *fd = fopen("logs/coverage_dead.dump", "w");
+    if (fd) {
+        size_t dead = 0;
+        fprintf(fd, "# functions registered in recomp_dispatch.c but never entered via\n");
+        fprintf(fd, "# RECOMP_ABI_CALL during this run -- the real, direct complement, not\n");
+        fprintf(fd, "# an offline diff. format: <va>\n");
+        for (size_t i = 0; i < total; i++) {
+            uint32_t va = recomp_get_va_at(i);
+            if (!va) continue;
+            uint32_t idx = ((va >> 3) ^ (va >> 15)) & (COVERAGE_TABLE_SIZE - 1);
+            int hit = 0;
+            for (;;) {
+                LONG cur = g_coverage_va[idx];
+                if (cur == (LONG)va) { hit = 1; break; }
+                if (cur == 0) break;
+                idx = (idx + 1) & (COVERAGE_TABLE_SIZE - 1);
+            }
+            if (!hit) { fprintf(fd, "%08X\n", va); dead++; }
+        }
+        fclose(fd);
+        fprintf(stderr, "  [COVERAGE] wrote logs/coverage_hit.dump (%ld hit) and "
+                        "logs/coverage_dead.dump (%zu dead of %zu total)\n", unique, dead, total);
+    }
+}
+#endif
+
 /* Multi-address execution-count breakpoint, opt-in via RECOMP_EXEC_WATCH=1.
  *
  * Session context: mapped a whole cooperative per-frame scheduler cluster
@@ -334,6 +445,9 @@ extern volatile uint32_t nfl2k5_gpu_notify_register_callback;
  * so the counts are visible on every tick without a separate sample pass. */
 void nfl2k5_execwatch_print(void)
 {
+#ifdef RECOMP_COVERAGE
+    nfl2k5_coverage_print();
+#endif
     /* 2026-09-22: the game runs forever, so atexit() never fires and the
      * previously-existing dump only happened under RECOMP_NATIVE_SAMPLE,
      * which perturbs boot timing enough to change which path is taken.
@@ -1643,6 +1757,7 @@ int main(int argc, char **argv)
              * (sub_00043AC0, sub_00043BE0). See PROJECT_STATUS.md. */
             exec_watch_add(0x00043980u, "s_43980_REAL_archive_read_submit");
             exec_watch_add(0x00043AC0u, "s_43AC0_caller1");
+            exec_watch_add(0x000650A0u, "NEWFN_650A0_seeded_2026_09_22");
             exec_watch_add(0x00043BE0u, "s_43BE0_caller2");
             exec_watch_add(0x00043850u, "s_43850");
             exec_watch_add(0x00043E90u, "s_43E90");

@@ -1,0 +1,18 @@
+[
+ {
+  "start": "0x004DA7E0",
+  "note": "Observed native runtime indirect-call target; verified XPP function prologue in the original XBE."
+ },
+ {
+  "start": "0x00016856",
+  "note": "Observed native runtime indirect-call target; verified short callback body in the original XBE."
+ },
+ {
+  "start": "0x004945A3",
+  "note": "Observed native frontend state-machine vtable target; verified 26-state dispatcher in the user's extracted XBE."
+ },
+ {
+  "start": "0x000650A0",
+  "note": "2026-09-22: found via live xemu (reference oracle) hardware-breakpoint trace of the archive-load call chain (sub_0008D2B0 -> sub_00043AC0 -> sub_00043BE0 -> sub_00043980), confirmed real, working, and reachable on a correct boot. This address is the true caller of sub_00064CD0 (return address 0x650a9 landed 14 bytes past sub_00064FE0's declared end, in a 277-byte gap with no registered function at all -- confirmed real x86 code via Capstone disassembly of the original XBE: `push ecx; push ebx; mov ebx,ecx; call 0x64cd0; cmp [0xa83a18],3; jne 0x651a8; ...; ret`, 16-byte aligned, 5 bytes of NOP padding immediately before it at 0x6509B). The analyzer never discovered this function at all (not a boundary-extension bug like three earlier instances this session -- a genuine gap), almost certainly because whatever calls it does so indirectly and was never seeded before. See PROJECT_STATUS.md, 2026-09-22 xemu entries, for the full trace this depends on."
+ }
+]
