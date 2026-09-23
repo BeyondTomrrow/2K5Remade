@@ -60,17 +60,18 @@ PATCHES = [
     if (eax) MEM32(esp + 4) = 0;
 #endif
 """),
-    ("33660_DRAIN", "sub_00033660", "eax = MEM32(esi + 8);", "after", """\
+    # Anchored on the retry loop's label, not on "eax = MEM32(esi + 8);" --
+    # that line appears first in the entry check at loc_00033668, and a patch
+    # there leaves the loop below it spinning forever (2026-09-23).
+    ("33660_DRAIN_LOOP", "sub_00033660", "loc_0003367A: ;", "after", """\
 #ifdef NFL2K5_FORCE_UNBLOCK_33660_DRAIN
     /* EXPERIMENTAL, 2026-09-22: MEM32(esi+8) frozen at 1 across tens of
      * thousands of retries (live cdb). Force after 200 retries so a real
      * short wait still resolves on its own. See PROJECT_STATUS.md. */
-    if (eax) {
+    if (MEM32(esi + 8)) {
         static volatile long retries;
-        if (++retries > 200) {
+        if (++retries > 200)
             MEM32(esi + 8) = 0;
-            eax = 0;
-        }
     }
 #endif
 """),

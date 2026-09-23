@@ -8794,19 +8794,6 @@ loc_00033660: ;
 
 loc_00033668: ;
     eax = MEM32(esi + 8);
-    /* NFL2K5-GENPATCH:33660_DRAIN */
-#ifdef NFL2K5_FORCE_UNBLOCK_33660_DRAIN
-    /* EXPERIMENTAL, 2026-09-22: MEM32(esi+8) frozen at 1 across tens of
-     * thousands of retries (live cdb). Force after 200 retries so a real
-     * short wait still resolves on its own. See PROJECT_STATUS.md. */
-    if (eax) {
-        static volatile long retries;
-        if (++retries > 200) {
-            MEM32(esi + 8) = 0;
-            eax = 0;
-        }
-    }
-#endif
     _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;
     _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test eax, eax (32-bit) */
     if (TEST_Z(_fa, _fb)) goto loc_00033681; /* je: equal / zero */
@@ -8819,6 +8806,17 @@ loc_00033670: ;
     PUSH32(esp, 0x0003367Au); RECOMP_ABI_CALL(0x000341A0u, sub_000341A0); /* call 0x000341A0 */
 
 loc_0003367A: ;
+    /* NFL2K5-GENPATCH:33660_DRAIN_LOOP */
+#ifdef NFL2K5_FORCE_UNBLOCK_33660_DRAIN
+    /* EXPERIMENTAL, 2026-09-22: MEM32(esi+8) frozen at 1 across tens of
+     * thousands of retries (live cdb). Force after 200 retries so a real
+     * short wait still resolves on its own. See PROJECT_STATUS.md. */
+    if (MEM32(esi + 8)) {
+        static volatile long retries;
+        if (++retries > 200)
+            MEM32(esi + 8) = 0;
+    }
+#endif
     eax = MEM32(esi + 8);
     _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;
     _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test eax, eax (32-bit) */

@@ -360,6 +360,23 @@ static void exec_watch_add(uint32_t guest_va, const char *name)
 {
     typedef void (*exec_watch_fn)(void);
     extern exec_watch_fn recomp_lookup(uint32_t address);
+    /* Each hit is an INT3 exception round-trip, so arming the hot entries
+     * (100k+ hits a run) distorts timing badly enough to change where boot
+     * stalls. RECOMP_EXEC_WATCH_ONLY=<prefix>[,<prefix>...] arms only the
+     * watches whose name starts with one of the prefixes. */
+    {
+        const char *only = getenv("RECOMP_EXEC_WATCH_ONLY");
+        if (only && *only) {
+            int match = 0;
+            for (const char *p = only; *p && !match; ) {
+                size_t len = strcspn(p, ",");
+                if (len && strncmp(name, p, len) == 0) match = 1;
+                p += len;
+                if (*p == ',') p++;
+            }
+            if (!match) return;
+        }
+    }
     if (g_exec_watch_count >= EXEC_WATCH_MAX) {
         fprintf(stderr, "  [EXECWATCH] table full (%d), dropping guest 0x%08X (%s)\n",
                 EXEC_WATCH_MAX, guest_va, name);
@@ -499,8 +516,31 @@ void nfl2k5_execwatch_print(void)
                 q && q != 0xA75D50u + 0x58u ? NFL2K5_PEEK32(q + 0x10u) : 0u);
         /* Every scheduler object and every message still queued on it
          * (state 1 new, 2 in flight at the driver, 3 done). */
+        /* GPU handshakes sub_00426110 / sub_00422AF0 spin on. */
+        fprintf(stderr, "  [GPUPEEK] PFB_WBC=%08X CACHE1_PUT=%08X CACHE1_GET=%08X PGRAPH_STATUS=%08X USER_PUT=%08X USER_GET=%08X\n",
+                NFL2K5_PEEK32(0xFD100410u), NFL2K5_PEEK32(0xFD003240u), NFL2K5_PEEK32(0xFD003244u),
+                NFL2K5_PEEK32(0xFD400700u), NFL2K5_PEEK32(0xFD800040u), NFL2K5_PEEK32(0xFD800044u));
         fprintf(stderr, "  [DEVPEEK] state_A7D300=0x%X arg_A7D304=0x%08X event_A7A238=0x%08X\n",
                 NFL2K5_PEEK32(0xA7D300u), NFL2K5_PEEK32(0xA7D304u), NFL2K5_PEEK32(0xA7A238u));
+        /* Stream-loader chunk handler registry (sub_000436A0): list head
+         * 0xB0957C, node {next, prev, tag, handler}. */
+        /* sub_00038CD0 pump table: count 0xB04D1C, entries {busy, fn} at
+         * 0xB04D20; an entry left busy is never called again. */
+        fprintf(stderr, "  [PUMP] n=%u", NFL2K5_PEEK32(0xB04D1Cu));
+        for (uint32_t k = 0; k < NFL2K5_PEEK32(0xB04D1Cu) && k < 16; k++)
+            fprintf(stderr, " %X:%s", NFL2K5_PEEK32(0xB04D24u + k * 8u),
+                    NFL2K5_PEEK32(0xB04D20u + k * 8u) ? "BUSY" : "idle");
+        fprintf(stderr, " B09584=%u\n", NFL2K5_PEEK32(0xB09584u));
+        fprintf(stderr, "  [CHUNKREG]");
+        {
+            uint32_t n = NFL2K5_PEEK32(0xB0957Cu);
+            for (int k = 0; n && k < 64; k++, n = NFL2K5_PEEK32(n)) {
+                uint32_t tag = NFL2K5_PEEK32(n + 8u);
+                fprintf(stderr, " %c%c%c%c=%X", (char)(tag >> 24), (char)(tag >> 16),
+                        (char)(tag >> 8), (char)tag, NFL2K5_PEEK32(n + 0xCu));
+            }
+        }
+        fprintf(stderr, "\n");
         uint32_t obj = NFL2K5_PEEK32(0xB0565Cu);
         for (int n = 0; obj && obj != 0xB05618u && n < 64; n++, obj = NFL2K5_PEEK32(obj + 0x44u)) {
             uint32_t drv = NFL2K5_PEEK32(obj + 0x188u);
@@ -1826,6 +1866,28 @@ int main(int argc, char **argv)
             /* sub_0004D900 = CreateThread(start 0x4D810, CREATE_SUSPENDED),
              * handle -> 0xA7A238; sub_0004B930 resumes it, sub_0004B920
              * (end of the step) suspends it again. */
+            /* Loader chunk chain: native reads the XDSP chunk (disc offset
+             * 0x19D130) and never reads the next one (SCNE @0x1A0850). */
+            /* Teardowns that unregister the early chunk-handler group
+             * (FONT/HITX/TXTR/ENCS/...) via sub_000436F0 on native. */
+            exec_watch_add(0x0004C020u, "lowcb_4C020");
+            exec_watch_add(0x0004C060u, "lowop_4C060");
+            exec_watch_add(0x0004BB50u, "devop_4BB50");
+            exec_watch_add(0x00044DF0u, "arccb_44DF0");
+            exec_watch_add(0x00044D50u, "unreg_44D50");
+            exec_watch_add(0x00044F90u, "unreg_44F90");
+            exec_watch_add(0x00045330u, "unreg_45330");
+            exec_watch_add(0x000454D0u, "unreg_454D0");
+            exec_watch_add(0x00045630u, "unreg_45630");
+            exec_watch_add(0x000457F0u, "unreg_457F0");
+            exec_watch_add(0x00045B90u, "unreg_45B90");
+            exec_watch_add(0x00165DC0u, "xdsp_handler_165DC0");
+            exec_watch_add(0x000ECB30u, "xdsp_readdone_ECB30");
+            exec_watch_add(0x00165DA0u, "xdsp_cont_165DA0");
+            exec_watch_add(0x00043D20u, "xdsp_submit_43D20");
+            exec_watch_add(0x00165D60u, "xdsp_download_165D60");
+            exec_watch_add(0x0003D4F0u, "xdsp_dl_3D4F0");
+            exec_watch_add(0x00165D90u, "xdsp_done_165D90");
             exec_watch_add(0x0004D900u, "dev_create_4D900");
             exec_watch_add(0x0004B920u, "dev_suspend_4B920");
             exec_watch_add(0x0001714Cu, "xapi_CreateThread_1714C");
