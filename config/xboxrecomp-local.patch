@@ -159,7 +159,7 @@ index e515377..7e97cd3 100644
 +
  #endif /* XBOX_KERNEL_H */
 diff --git a/src/kernel/kernel_bridge.c b/src/kernel/kernel_bridge.c
-index 5b56513..0cf4b07 100644
+index 5b56513..d22e699 100644
 --- a/src/kernel/kernel_bridge.c
 +++ b/src/kernel/kernel_bridge.c
 @@ -49,6 +49,7 @@
@@ -1004,7 +1004,39 @@ index 5b56513..0cf4b07 100644
  /* Call a connected interrupt service routine.
   *
   * BOOLEAN ServiceRoutine(PKINTERRUPT, PVOID ServiceContext), __stdcall: its
-@@ -2006,17 +2453,6 @@ static void kernel_vblank_tick(void)
+@@ -1992,31 +2439,33 @@ static void kernel_vblank_tick(void)
+     if (!xbox_GetConnectedInterrupt(NV2A_VECTOR))
+         return;
+ 
+-    BRIDGE_MEM32(XBOX_NV2A_REG_BASE + NV2A_PCRTC_INTR_0) |= NV2A_PCRTC_INTR_VBLANK;
++    /* Only the PMC summary bit is raised. PCRTC_INTR_0 stays 0 so that a
++     * nonzero value there can only be D3D's write-1-to-clear acknowledgement,
++     * which the ack thread (xbox_memory_layout.c) completes by dropping the
++     * summary bit. Raising PCRTC_INTR_0 too made the two indistinguishable,
++     * and any flag telling them apart had to be held across guest code (the
++     * ISR), where a blocking host call can hand the guest lock to a thread
++     * that then spins in the DPC waiting for the ack: a deadlock. NFL 2K5's
++     * ISR (0x42D3E0) and DPC (0x42DDB0) read only PMC_INTR_0. */
++    (void)NV2A_PCRTC_INTR_VBLANK;
+     BRIDGE_MEM32(XBOX_NV2A_REG_BASE + NV2A_PMC_INTR_0)   |= NV2A_PMC_INTR_PCRTC;
+ 
+     {
+         static unsigned n;
++        uint32_t pmc_before = BRIDGE_MEM32(XBOX_NV2A_REG_BASE + NV2A_PMC_INTR_0);
+         int claimed = kernel_raise_interrupt(NV2A_VECTOR);
+-        if (n++ < 3)
+-            fprintf(stderr, "  [NV2A] vblank -> ISR %s\n",
+-                    claimed < 0 ? "not callable" :
+-                    claimed ? "claimed it" : "declined it");
++        if (n < 3 || n % 300 == 0)
++            fprintf(stderr, "  [NV2A] vblank #%u -> ISR %s (PMC_INTR_0 %08X -> %08X, PCRTC_INTR_0 %08X, PMC_INTR_EN %08X)\n",
++                    n, claimed < 0 ? "not callable" :
++                    claimed ? "claimed it" : "declined it",
++                    pmc_before, BRIDGE_MEM32(XBOX_NV2A_REG_BASE + NV2A_PMC_INTR_0),
++                    BRIDGE_MEM32(XBOX_NV2A_REG_BASE + NV2A_PCRTC_INTR_0),
++                    BRIDGE_MEM32(XBOX_NV2A_REG_BASE + 0x140u));
++        n++;
+         fflush(stderr);
      }
  }
  
@@ -1022,7 +1054,7 @@ index 5b56513..0cf4b07 100644
  
  /* ── KeInitializeDpc (ordinal 107) ────────────────────────
   * VOID KeInitializeDpc(PKDPC Dpc, PKDEFERRED_ROUTINE DeferredRoutine,
-@@ -2084,6 +2520,13 @@ static void bridge_KeInitializeInterrupt(void)
+@@ -2084,6 +2533,13 @@ static void bridge_KeInitializeInterrupt(void)
      BRIDGE_MEM32(interrupt_va + 0)  = routine;
      BRIDGE_MEM32(interrupt_va + 4)  = context;
      BRIDGE_MEM32(interrupt_va + 8)  = vector;
@@ -1036,7 +1068,7 @@ index 5b56513..0cf4b07 100644
      g_eax = 0;
  }
  
-@@ -2225,17 +2668,6 @@ static void bridge_KeInitializeTimerEx(void)
+@@ -2225,17 +2681,6 @@ static void bridge_KeInitializeTimerEx(void)
   * audio off a timer. A title that needs better wants the host's timer queue,
   * not a smaller sleep.
   */
@@ -1054,7 +1086,7 @@ index 5b56513..0cf4b07 100644
  static DWORD WINAPI kernel_timer_thread(LPVOID unused)
  {
      int slot = xbox_worker_stack_alloc();
-@@ -2263,114 +2695,78 @@ static DWORD WINAPI kernel_timer_thread(LPVOID unused)
+@@ -2263,114 +2708,78 @@ static DWORD WINAPI kernel_timer_thread(LPVOID unused)
          g_fs_base = tib;
      }
  
@@ -1226,7 +1258,7 @@ index 5b56513..0cf4b07 100644
  }
  
  /* ── ExQueryPoolBlockSize (ordinal 24) ────────────────────
-@@ -2792,13 +3188,17 @@ static void bridge_NtCreateFile(void)
+@@ -2792,13 +3201,17 @@ static void bridge_NtCreateFile(void)
      {
          extern uint32_t xbox_LastFileError(void);
          uint32_t _e = g_eax ? xbox_LastFileError() : 0u;
@@ -1246,7 +1278,7 @@ index 5b56513..0cf4b07 100644
              fprintf(stderr, "  [FILE] -> 0x%08X\n", g_eax);
      }
      fflush(stderr);
-@@ -2846,16 +3246,34 @@ static void deliver_one_apc(uint32_t apc_routine, uint32_t apc_context,
+@@ -2846,16 +3259,34 @@ static void deliver_one_apc(uint32_t apc_routine, uint32_t apc_context,
       * dispatch correctly fails to find it and the kernel fallback is the one
       * that matters. Checking only recomp_lookup left it undelivered. */
      recomp_func_t fn = recomp_lookup(apc_routine);
@@ -1284,7 +1316,7 @@ index 5b56513..0cf4b07 100644
      } else {
          uint32_t ord = 0;
          if (apc_routine >= KERNEL_VA_BASE && apc_routine < KERNEL_VA_END) {
-@@ -3041,6 +3459,21 @@ static void bridge_NtReadFile(void)
+@@ -3041,6 +3472,21 @@ static void bridge_NtReadFile(void)
          off.HighPart = (LONG)BRIDGE_MEM32(offset_va + 4);
          poff = &off;
      }
@@ -1306,7 +1338,7 @@ index 5b56513..0cf4b07 100644
      g_eax = (uint32_t)xbox_NtReadFile(handle, NULL, NULL, NULL, &ios,
                  XBOX_TO_NATIVE(buffer_va), length, poff);
  
-@@ -3515,6 +3948,12 @@ static void bridge_IoCreateSymbolicLink(void)
+@@ -3515,6 +3961,12 @@ static void bridge_IoCreateSymbolicLink(void)
  }
  
  /* ── ObReferenceObjectByHandle (ordinal 246) ─────────────── */
@@ -1319,7 +1351,7 @@ index 5b56513..0cf4b07 100644
  static void bridge_ObReferenceObjectByHandle(void)
  {
      /* Xbox: NTSTATUS ObReferenceObjectByHandle(HANDLE Handle, PVOID ObjectType, PVOID* Object)
-@@ -3524,6 +3963,12 @@ static void bridge_ObReferenceObjectByHandle(void)
+@@ -3524,6 +3976,12 @@ static void bridge_ObReferenceObjectByHandle(void)
      uint32_t object_ptr = STACK_ARG(2);
      if (object_ptr) BRIDGE_MEM32(object_ptr) = 0;
      g_eax = 0;  /* STATUS_SUCCESS */
@@ -1332,7 +1364,7 @@ index 5b56513..0cf4b07 100644
  }
  
  /* ── RtlRaiseException (ordinal 302) ─────────────────────
-@@ -3736,6 +4181,20 @@ static void bridge_KeQueryBasePriorityThread(void)
+@@ -3736,6 +4194,20 @@ static void bridge_KeQueryBasePriorityThread(void)
  
  static void bridge_KeSetBasePriorityThread(void)
  {
@@ -1353,7 +1385,7 @@ index 5b56513..0cf4b07 100644
      g_eax = (uint32_t)xbox_KeSetBasePriorityThread(
          XBOX_TO_NATIVE(STACK_ARG(0)), (LONG)STACK_ARG(1));
  }
-@@ -3766,7 +4225,8 @@ static void bridge_MmLockUnlockBufferPages(void)
+@@ -3766,7 +4238,8 @@ static void bridge_MmLockUnlockBufferPages(void)
   */
  static void bridge_MmQueryAllocationSize(void)
  {
@@ -1363,7 +1395,7 @@ index 5b56513..0cf4b07 100644
  }
  
  /* ── NtCreateMutant (ordinal 192, 3 args) */
-@@ -3825,18 +4285,33 @@ static void bridge_NtReleaseMutant(void)
+@@ -3825,18 +4298,33 @@ static void bridge_NtReleaseMutant(void)
  static void bridge_NtSuspendThread(void)
  {
      uint32_t count_va = STACK_ARG(1);
@@ -1400,7 +1432,7 @@ index 5b56513..0cf4b07 100644
  }
  
  /* ── ObfDereferenceObject (ordinal 250, fastcall: object in ecx)
-@@ -4034,6 +4509,7 @@ static void bridge_KeAlertThread(void)
+@@ -4034,6 +4522,7 @@ static void bridge_KeAlertThread(void)
  
  static void bridge_KeWaitForMultipleObjects(void)
  {
@@ -1408,7 +1440,7 @@ index 5b56513..0cf4b07 100644
      uint32_t count      = STACK_ARG(0);
      uint32_t objects_va = STACK_ARG(1);
      uint32_t wait_type  = STACK_ARG(2);
-@@ -4042,6 +4518,8 @@ static void bridge_KeWaitForMultipleObjects(void)
+@@ -4042,6 +4531,8 @@ static void bridge_KeWaitForMultipleObjects(void)
      HANDLE handles[BRIDGE_MAXIMUM_WAIT_OBJECTS];
      uint32_t i;
  
@@ -1417,7 +1449,7 @@ index 5b56513..0cf4b07 100644
      if (count == 0) {
          g_eax = (uint32_t)STATUS_INVALID_PARAMETER;
          return;
-@@ -4052,11 +4530,23 @@ static void bridge_KeWaitForMultipleObjects(void)
+@@ -4052,11 +4543,23 @@ static void bridge_KeWaitForMultipleObjects(void)
          handles[i] = bridge_resolve_handle(
              objects_va ? BRIDGE_MEM32(objects_va + i * 4) : 0);
  
@@ -1446,7 +1478,7 @@ index 5b56513..0cf4b07 100644
  }
  
  #undef BRIDGE_MAXIMUM_WAIT_OBJECTS
-@@ -8816,6 +9306,7 @@ static void kernel_thunk_dispatch(void)
+@@ -8816,6 +9319,7 @@ static void kernel_thunk_dispatch(void)
      int slot = g_kernel_dispatch_slot;
      bridge_func_t bridge;
      ULONG ordinal;
@@ -1454,7 +1486,7 @@ index 5b56513..0cf4b07 100644
  
      if (slot < 0 || slot >= XBOX_KERNEL_THUNK_TABLE_SIZE) {
          fprintf(stderr, "  [KERNEL] bad slot %d\n", slot);
-@@ -8824,8 +9315,14 @@ static void kernel_thunk_dispatch(void)
+@@ -8824,8 +9328,14 @@ static void kernel_thunk_dispatch(void)
          return;
      }
  
@@ -1469,7 +1501,7 @@ index 5b56513..0cf4b07 100644
  
      g_kernel_call_count++;
      if (ordinal < XBOX_KERNEL_THUNK_TABLE_SIZE)
-@@ -8848,8 +9345,14 @@ static void kernel_thunk_dispatch(void)
+@@ -8848,8 +9358,14 @@ static void kernel_thunk_dispatch(void)
          DWORD now = GetTickCount();
          if (last_summary_tick == 0) last_summary_tick = now;
          if (now - last_summary_tick >= 2000 && g_kernel_call_count > 200) {
@@ -1486,7 +1518,7 @@ index 5b56513..0cf4b07 100644
              /* And which ones, ranked. "Latest" names whatever the sample
               * happened to land on; the question behind this line is what a
               * title sitting still is actually asking the kernel for, and
-@@ -8872,8 +9375,124 @@ static void kernel_thunk_dispatch(void)
+@@ -8872,8 +9388,124 @@ static void kernel_thunk_dispatch(void)
                              (unsigned long long)g_ordinal_calls[best]);
                  }
              }
@@ -1612,7 +1644,7 @@ index 5b56513..0cf4b07 100644
          }
      }
  
-@@ -8951,8 +9570,58 @@ static void kernel_thunk_dispatch(void)
+@@ -8951,8 +9583,58 @@ static void kernel_thunk_dispatch(void)
       * On real x86, stdcall callee does "ret N" to pop the return address
       * and N bytes of arguments. We already popped the dummy return address
       * above; now pop the args. */
@@ -1671,7 +1703,7 @@ index 5b56513..0cf4b07 100644
      if (g_kernel_watch_va) {
          uint32_t _after = BRIDGE_MEM32(g_kernel_watch_va);
          if (_after != _watch_before) {
-@@ -8988,6 +9657,35 @@ recomp_func_t recomp_lookup_kernel(uint32_t xbox_va)
+@@ -8988,6 +9670,35 @@ recomp_func_t recomp_lookup_kernel(uint32_t xbox_va)
      return NULL;
  }
  
@@ -1707,7 +1739,7 @@ index 5b56513..0cf4b07 100644
  /* ── Initialization ─────────────────────────────────────── */
  
  /*
-@@ -9076,6 +9774,13 @@ void xbox_kernel_bridge_init(void)
+@@ -9076,6 +9787,13 @@ void xbox_kernel_bridge_init(void)
  
      /* Initialize kernel data export values first */
      kernel_data_init();
@@ -1721,7 +1753,7 @@ index 5b56513..0cf4b07 100644
  
      for (i = 0; i < g_thunk_table_count; i++) {
          uint32_t va = g_thunk_table_base + i * 4;
-@@ -9192,4 +9897,33 @@ void xbox_kernel_bridge_init(void)
+@@ -9192,4 +9910,33 @@ void xbox_kernel_bridge_init(void)
      fprintf(stderr, "  Synthetic VA range: 0x%08X-0x%08X\n",
              KERNEL_VA_BASE, KERNEL_VA_BASE + (resolved - 1) * 4);
  
@@ -1986,10 +2018,59 @@ index 17cb31f..172d860 100644
      if (PreviousSuspendCount)
          *PreviousSuspendCount = (ULONG)prev;
 diff --git a/src/kernel/nv2a_pb_exec.c b/src/kernel/nv2a_pb_exec.c
-index b3dcbf7..bafc290 100644
+index b3dcbf7..d3cf7ca 100644
 --- a/src/kernel/nv2a_pb_exec.c
 +++ b/src/kernel/nv2a_pb_exec.c
-@@ -291,9 +291,22 @@ static void record_tex_reg(uint32_t method, uint32_t param)
+@@ -38,6 +38,7 @@
+ extern ptrdiff_t xbox_GetMemoryOffset(void);
+ extern void xbox_FramebufferWindowSet(uint32_t fb_va, uint32_t pitch);
+ extern void xbox_FramebufferWindowStart(void);
++extern uint32_t g_nv2a_pb_calls;   /* nv2a_pb_scan.c */
+ extern uint32_t g_xbox_image_lo, g_xbox_image_hi;
+ 
+ /* Would writing this surface land on the title's own image?
+@@ -139,12 +140,21 @@ static int surface_write_refused(uint32_t base, uint32_t bytes, const char *what
+ #define NV097_SET_SURFACE_PITCH           0x020C
+ #define NV097_SET_SURFACE_COLOR_OFFSET    0x0210
+ #define NV097_SET_COLOR_CLEAR_VALUE       0x1D90
++#define NV097_SET_ALPHA_TEST_ENABLE       0x0300
++#define NV097_SET_BLEND_ENABLE            0x0304
++#define NV097_SET_ALPHA_FUNC              0x033C
++#define NV097_SET_ALPHA_REF               0x0340
++#define NV097_SET_BLEND_FUNC_SFACTOR      0x0344
++#define NV097_SET_BLEND_FUNC_DFACTOR      0x0348
++#define NV097_SET_BLEND_COLOR             0x034C
++#define NV097_SET_BLEND_EQUATION          0x0350
+ #define NV097_CLEAR_SURFACE               0x1D94
+ #define NV097_SET_VERTEX_DATA_ARRAY_OFFSET 0x1720   /* +i*4, 16 attributes */
+ #define NV097_SET_VERTEX_DATA_ARRAY_FORMAT 0x1760   /* +i*4 */
+ #define NV097_SET_BEGIN_END               0x17FC
+ #define NV097_SET_TEXTURE_OFFSET          0x1B00   /* +i*0x40 */
+ #define NV097_SET_TEXTURE_FORMAT          0x1B04
++#define NV097_SET_TEXTURE_PALETTE         0x1B0C   /* +i*0x40 */
+ #define NV097_SET_TEXTURE_ADDRESS         0x1B08
+ #define NV097_SET_TEXTURE_CONTROL1        0x1B10
+ #define NV097_SET_TEXTURE_IMAGE_RECT      0x1B1C
+@@ -214,6 +224,7 @@ typedef struct {
+     uint32_t pitch;                     /* bytes per row, from CONTROL1  */
+     uint32_t color;                     /* NV097 colour-format code      */
+     uint32_t addr_u, addr_v;            /* wrap mode per axis            */
++    uint32_t palette;                   /* guest address of A8R8G8B8 CLUT */
+     int      valid;
+ } Texture;
+ 
+@@ -247,6 +258,10 @@ static struct {
+     uint32_t pixel_max;   /* brightest value any pixel write carried */
+     uint32_t clip_x, clip_w, clip_y, clip_h;
+     uint32_t clear_color;
++    /* Fixed-function output merge: alpha test and blend, GL enums as the
++     * NV2A takes them. Defaults are GL's (blend ONE/ZERO/ADD, test ALWAYS). */
++    uint32_t alpha_test, alpha_func, alpha_ref;
++    uint32_t blend, blend_sf, blend_df, blend_eq, blend_color;
+     uint32_t clears, unhandled_total;
+     uint32_t flip_read, flip_write, flip_modulo, flips;
+     uint32_t tris_drawn, tris_skipped_offscreen, batches_untransformed;
+@@ -291,9 +306,22 @@ static void record_tex_reg(uint32_t method, uint32_t param)
       * which is nearly all of them, since swizzled is the Xbox default. That
       * left the title's own textures unsampled and every textured quad drawn in
       * flat vertex colour. */
@@ -2012,7 +2093,235 @@ index b3dcbf7..bafc290 100644
  }
  
  /* Every distinct texture a batch was drawn with, and how many batches used it.
-@@ -1596,6 +1609,9 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -597,7 +625,12 @@ static void clear_surface(uint32_t param)
+      * would show the one nothing is writing. */
+     /* The window has to read where the pixels actually are, which is the
+      * resolved address rather than the DMA-object offset. */
+-    xbox_FramebufferWindowSet(dma_resolve(s_gpu.color_offset), s_gpu.pitch);
++    /* Until the title flips, anyway: from the first FLIP_STALL on, the window
++     * follows finished frames (see there), and following clears as well would
++     * keep showing a buffer mid-redraw -- flicker between the clear colour
++     * and the picture. */
++    if (!s_gpu.flips)
++        xbox_FramebufferWindowSet(dma_resolve(s_gpu.color_offset), s_gpu.pitch);
+ 
+     /* And open the window, rather than waiting for AvSetDisplayMode to do it.
+      *
+@@ -710,6 +743,17 @@ static int sample_texture(uint32_t u, uint32_t v, uint32_t *argb)
+     if (d3d8_format_dxt_block_bytes(fmt))
+         return d3d8_dxt_decode_texel(mem + s_gpu.tex.offset, fmt, u, v,
+                                      s_gpu.tex.width, argb);
++    if (fmt == 0x0B) {
++        /* SZ_I8_A8R8G8B8: swizzled 8-bit indices into a 256-entry A8R8G8B8
++         * palette (SET_TEXTURE_PALETTE). NFL 2K5's legal screen and intro
++         * movie frames are this format. */
++        uint8_t idx;
++        if (!s_gpu.tex.palette)
++            return 0;
++        idx = mem[s_gpu.tex.offset + swizzle_offset(u, v, s_gpu.tex.width, s_gpu.tex.height)];
++        *argb = *(const uint32_t *)(mem + s_gpu.tex.palette + (size_t)idx * 4u);
++        return 1;
++    }
+     if (d3d8_format_is_swizzled(fmt)) {
+         /* Morton order: a texel's index is interleaved from x and y instead of
+          * v*pitch + u, so index from the base of the image. The switch below
+@@ -913,6 +957,97 @@ static void put_pixel(uint8_t *mem, uint32_t bpp, int x, int y, uint32_t argb)
+     }
+ }
+ 
++/* One blend factor, per channel, for source s and destination d (0..255,
++ * index 3 is alpha). GL enum values, which is what the NV2A takes. */
++static uint32_t blend_factor(uint32_t f, const uint32_t s[4], const uint32_t d[4], int ch)
++{
++    uint32_t k[4];
++    k[0] = (s_gpu.blend_color >> 16) & 0xFF; k[1] = (s_gpu.blend_color >> 8) & 0xFF;
++    k[2] = s_gpu.blend_color & 0xFF;         k[3] = s_gpu.blend_color >> 24;
++    switch (f) {
++    case 0x0000: return 0;
++    case 0x0001: return 255;
++    case 0x0300: return s[ch];
++    case 0x0301: return 255 - s[ch];
++    case 0x0302: return s[3];
++    case 0x0303: return 255 - s[3];
++    case 0x0304: return d[3];
++    case 0x0305: return 255 - d[3];
++    case 0x0306: return d[ch];
++    case 0x0307: return 255 - d[ch];
++    case 0x0308: return ch == 3 ? 255 : (s[3] < 255 - d[3] ? s[3] : 255 - d[3]);
++    case 0x8001: return k[ch];
++    case 0x8002: return 255 - k[ch];
++    case 0x8003: return k[3];
++    case 0x8004: return 255 - k[3];
++    default:     return 255;
++    }
++}
++
++/* Write one fragment through alpha test and blending.
++ *
++ * The rasteriser used to store the texel as-is, so every translucent quad
++ * painted solid: NFL 2K5 draws a 16x16 grey texture over its intro movie
++ * (a fade, alpha from the vertex colour) and the movie vanished under flat
++ * grey. The colour is texture MODULATE diffuse -- D3D's default stage 0 op,
++ * and the identity for the white-vertex quads that were already right. */
++static void shade_pixel(uint8_t *mem, uint32_t bpp, int x, int y, uint32_t src)
++{
++    uint32_t a = src >> 24;
++
++    if (s_gpu.alpha_test) {
++        uint32_t r = s_gpu.alpha_ref;
++        int pass;
++        switch (s_gpu.alpha_func) {
++        case 0x0200: pass = 0; break;              /* NEVER    */
++        case 0x0201: pass = a <  r; break;          /* LESS     */
++        case 0x0202: pass = a == r; break;          /* EQUAL    */
++        case 0x0203: pass = a <= r; break;          /* LEQUAL   */
++        case 0x0204: pass = a >  r; break;          /* GREATER  */
++        case 0x0205: pass = a != r; break;          /* NOTEQUAL */
++        case 0x0206: pass = a >= r; break;          /* GEQUAL   */
++        default:     pass = 1; break;               /* ALWAYS   */
++        }
++        if (!pass)
++            return;
++    }
++    if (s_gpu.blend && bpp == 4
++            && x >= (int)s_gpu.clip_x && x < (int)(s_gpu.clip_x + s_gpu.clip_w)
++            && y >= (int)s_gpu.clip_y && y < (int)(s_gpu.clip_y + s_gpu.clip_h)) {
++        uint32_t dst = ((uint32_t *)(s_surface + (size_t)y * s_gpu.pitch))[x];
++        uint32_t sv[4], dv[4], out = 0;
++        int ch;
++        sv[0] = (src >> 16) & 0xFF; sv[1] = (src >> 8) & 0xFF; sv[2] = src & 0xFF; sv[3] = a;
++        dv[0] = (dst >> 16) & 0xFF; dv[1] = (dst >> 8) & 0xFF; dv[2] = dst & 0xFF; dv[3] = dst >> 24;
++        for (ch = 0; ch < 4; ch++) {
++            int32_t sp = (int32_t)(sv[ch] * blend_factor(s_gpu.blend_sf, sv, dv, ch) / 255);
++            int32_t dp = (int32_t)(dv[ch] * blend_factor(s_gpu.blend_df, sv, dv, ch) / 255);
++            int32_t v;
++            switch (s_gpu.blend_eq) {
++            case 0x800A: v = sp - dp; break;                     /* SUBTRACT     */
++            case 0x800B: v = dp - sp; break;                     /* REV_SUBTRACT */
++            case 0x8007: v = sv[ch] < dv[ch] ? sv[ch] : dv[ch]; break; /* MIN */
++            case 0x8008: v = sv[ch] > dv[ch] ? sv[ch] : dv[ch]; break; /* MAX */
++            default:     v = sp + dp; break;                     /* ADD          */
++            }
++            if (v < 0) v = 0;
++            if (v > 255) v = 255;
++            out |= (uint32_t)v << (ch == 3 ? 24 : 16 - 8 * ch);
++        }
++        src = out;
++    }
++    put_pixel(mem, bpp, x, y, src);
++}
++
++static uint32_t modulate(uint32_t t, uint32_t c)
++{
++    uint32_t out = 0;
++    int sh;
++    for (sh = 0; sh < 32; sh += 8)
++        out |= ((((t >> sh) & 0xFF) * ((c >> sh) & 0xFF) + 127) / 255) << sh;
++    return out;
++}
++
+ /* Half-space fill. Barycentric edge functions rather than scanline slopes:
+  * the same test decides both windings, so a title that emits clockwise
+  * triangles does not silently render nothing. */
+@@ -976,11 +1111,11 @@ static void raster_triangle(const float a[2], const float b[2],
+                 if (su < 0.0f) su = 0.0f;
+                 if (sv < 0.0f) sv = 0.0f;
+                 if (sample_texture((uint32_t)su, (uint32_t)sv, &texel)) {
+-                    put_pixel(mem, bpp, x, y, texel);
++                    shade_pixel(mem, bpp, x, y, modulate(texel, argb));
+                     continue;
+                 }
+             }
+-            put_pixel(mem, bpp, x, y, argb);
++            shade_pixel(mem, bpp, x, y, argb);
+         }
+     }
+     s_gpu.tris_drawn++;
+@@ -1136,11 +1271,15 @@ static int batch_is_screen_space(void)
+ }
+ 
+ /* NV097 primitive types that are triangles under some winding. */
+-#define NV_PRIM_TRIANGLES      4
+-#define NV_PRIM_TRIANGLE_STRIP 5
+-#define NV_PRIM_TRIANGLE_FAN   6
+-#define NV_PRIM_QUADS          7
+-#define NV_PRIM_QUAD_STRIP     8
++/* NV097_SET_BEGIN_END operands (0 = end, 1 points, 2 lines, 3 line loop,
++ * 4 line strip). These were one lower -- a strip drew as a fan, which left a
++ * triangle-shaped hole in NFL 2K5's full-screen movie quad. */
++#define NV_PRIM_TRIANGLES      5
++#define NV_PRIM_TRIANGLE_STRIP 6
++#define NV_PRIM_TRIANGLE_FAN   7
++#define NV_PRIM_QUADS          8
++#define NV_PRIM_QUAD_STRIP     9
++#define NV_PRIM_POLYGON        10
+ 
+ /* How many post-draw captures to keep: enough to see whether the geometry
+  * is stable from frame to frame, few enough not to fill a directory. */
+@@ -1210,14 +1349,30 @@ static void raster_batch(void)
+                            vertex_color(s_gpu.idx[i]));
+         break;
+     case NV_PRIM_TRIANGLE_FAN:
+-    case NV_PRIM_QUADS:
+-    case NV_PRIM_QUAD_STRIP:
+-        /* A fan and a quad both rasterise as a triangle fan around index 0;
+-         * for a quad that is exactly its two triangles. */
++    case NV_PRIM_POLYGON:
+         for (i = 1; i + 1 < s_gpu.idx_count; i++)
+             raster_indexed(s_gpu.idx[0], s_gpu.idx[i], s_gpu.idx[i+1],
+                            vertex_color(s_gpu.idx[0]));
+         break;
++    case NV_PRIM_QUADS:
++        /* Each group of four is its own quad: two triangles around its first
++         * vertex. */
++        for (i = 0; i + 3 < s_gpu.idx_count; i += 4) {
++            raster_indexed(s_gpu.idx[i], s_gpu.idx[i+1], s_gpu.idx[i+2],
++                           vertex_color(s_gpu.idx[i]));
++            raster_indexed(s_gpu.idx[i], s_gpu.idx[i+2], s_gpu.idx[i+3],
++                           vertex_color(s_gpu.idx[i]));
++        }
++        break;
++    case NV_PRIM_QUAD_STRIP:
++        /* Vertices pair up; each new pair closes a quad with the previous. */
++        for (i = 0; i + 3 < s_gpu.idx_count; i += 2) {
++            raster_indexed(s_gpu.idx[i], s_gpu.idx[i+1], s_gpu.idx[i+3],
++                           vertex_color(s_gpu.idx[i]));
++            raster_indexed(s_gpu.idx[i], s_gpu.idx[i+3], s_gpu.idx[i+2],
++                           vertex_color(s_gpu.idx[i]));
++        }
++        break;
+     default:
+         break;                             /* points and lines: not yet */
+     }
+@@ -1390,6 +1545,12 @@ static void draw_inline_array(void)
+         case 0:  bytes = 4;                        break;  /* D3DCOLOR   */
+         case 2:  bytes = 4 * s_gpu.attr[a].size;   break;  /* float      */
+         case 4:  bytes = s_gpu.attr[a].size;       break;  /* ubyte norm */
++        /* Shorts are two bytes each. Sizing them as floats pushed every later
++         * attribute 4 bytes too far: NFL 2K5's movie quad (float3, short2,
++         * D3DCOLOR, float2 = 28 bytes) decoded at stride 32 with x = 0. */
++        case 1:                                            /* short norm */
++        case 5:  bytes = 2 * s_gpu.attr[a].size;   break;  /* short      */
++        case 6:  bytes = 4;                        break;  /* packed CMP */
+         default: bytes = 4 * s_gpu.attr[a].size;   break;
+         }
+         s_gpu.attr[a].offset = off;
+@@ -1571,6 +1732,14 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+         return;
+     }
+     switch (method) {
++    case NV097_SET_ALPHA_TEST_ENABLE: s_gpu.alpha_test = param; break;
++    case NV097_SET_ALPHA_FUNC:        s_gpu.alpha_func = param; break;
++    case NV097_SET_ALPHA_REF:         s_gpu.alpha_ref  = param & 0xFF; break;
++    case NV097_SET_BLEND_ENABLE:      s_gpu.blend      = param; break;
++    case NV097_SET_BLEND_FUNC_SFACTOR: s_gpu.blend_sf  = param; break;
++    case NV097_SET_BLEND_FUNC_DFACTOR: s_gpu.blend_df  = param; break;
++    case NV097_SET_BLEND_EQUATION:    s_gpu.blend_eq   = param; break;
++    case NV097_SET_BLEND_COLOR:       s_gpu.blend_color = param; break;
+     case NV097_SET_SURFACE_CLIP_HORIZONTAL:
+         s_gpu.clip_x = param & 0xFFFF;
+         s_gpu.clip_w = (param >> 16) & 0xFFFF;
+@@ -1596,6 +1765,9 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
          break;
  
      case NV097_SET_BEGIN_END:
@@ -2022,7 +2331,7 @@ index b3dcbf7..bafc290 100644
          if (param) {
              s_gpu.prim = param;
              s_gpu.idx_count = 0;
-@@ -1620,8 +1636,15 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1620,8 +1792,15 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
      case NV097_INLINE_ARRAY:
          /* Vertex data, not a pointer to it. Buffered rather than decoded here
           * because the format is only fully known at END. */
@@ -2039,7 +2348,30 @@ index b3dcbf7..bafc290 100644
          break;
  
      case NV097_DRAW_ARRAYS: {
-@@ -1696,6 +1719,11 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1659,6 +1838,13 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+         record_tex_reg(method, param);
+         break;
+ 
++    case NV097_SET_TEXTURE_PALETTE:
++        /* Bits 1:0 pick the DMA context, 5:2 the length; the palette itself
++         * is 64-byte aligned, so the rest of the word is its offset. */
++        s_gpu.tex.palette = dma_resolve(param & ~0x3Fu);
++        record_tex_reg(method, param);
++        break;
++
+     case NV097_SET_FLIP_READ:
+         s_gpu.flip_read = param;
+         return;
+@@ -1682,6 +1868,8 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+         /* The stall ends when the buffer being read is the one just finished.
+          * There is no scanout here to wait for, so that is now. */
+         s_gpu.flip_read = s_gpu.flip_write;
++        /* The surface drawn into up to here is a finished frame: show it. */
++        xbox_FramebufferWindowSet(dma_resolve(s_gpu.color_offset), s_gpu.pitch);
+         /* And this is a completed swap, which is what a title's own swap
+          * counter counts -- see xbox_Nv2aFrameCounterFlip. */
+         xbox_Nv2aFrameCounterFlip();
+@@ -1696,6 +1884,11 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
          return;
  
      case NV097_SET_TEXTURE_FORMAT:
@@ -2051,7 +2383,7 @@ index b3dcbf7..bafc290 100644
          s_gpu.tex.color = (param >> 8) & 0xFF;
          /* A swizzled texture carries its own dimensions here, as log2 in
           * BASE_SIZE_U/V (nv2a_regs.h: 0x00F00000 / 0x0F000000). It has to:
-@@ -1729,6 +1757,9 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1729,6 +1922,9 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
      case NV097_SET_TEXTURE_IMAGE_RECT:
          s_gpu.tex.width  = param >> 16;
          s_gpu.tex.height = param & 0xFFFF;
@@ -2061,11 +2393,31 @@ index b3dcbf7..bafc290 100644
          record_tex_reg(method, param);
          break;
  
+@@ -1948,9 +2144,9 @@ void nv2a_pb_exec_report(void)
+             dma_resolve(s_gpu.drawn_offset), s_gpu.color_offset,
+             dma_resolve(s_gpu.color_offset));
+     fprintf(stderr, "[GPU] rasterised %u triangles; %u batches skipped as not"
+-                    " screen-space, %u triangles fully off-surface\n",
++                    " screen-space, %u triangles fully off-surface; %u pushbuffer CALLs followed\n",
+             s_gpu.tris_drawn, s_gpu.batches_untransformed,
+-            s_gpu.tris_skipped_offscreen);
++            s_gpu.tris_skipped_offscreen, g_nv2a_pb_calls);
+ 
+     /* And of the batches that did rasterise, how many sampled anything. A menu
+      * that draws its background from one texture and its text from another
 diff --git a/src/kernel/nv2a_pb_scan.c b/src/kernel/nv2a_pb_scan.c
-index ce1196e..5ac311a 100644
+index ce1196e..74d19c7 100644
 --- a/src/kernel/nv2a_pb_scan.c
 +++ b/src/kernel/nv2a_pb_scan.c
-@@ -45,6 +45,13 @@ extern void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -38,6 +38,7 @@ static int s_seen_count;
+  * looking method numbers out of parameter data, and the counts then describe
+  * nothing. Unrecognised words are the tell. */
+ static uint32_t s_tot_words, s_tot_unknown, s_tot_jumps, s_tot_segments;
++uint32_t g_nv2a_pb_calls;   /* CALLs followed, see nv2a_pb_scan */
+ 
+ /* Executing is opt-in separately from surveying: a survey is read-only, while
+  * the executor writes to guest memory. */
+@@ -45,6 +46,13 @@ extern void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
  extern void nv2a_pb_exec_report(void);
  static int s_exec_enabled = -1;
  
@@ -2079,7 +2431,7 @@ index ce1196e..5ac311a 100644
  static void note(uint32_t subch, uint32_t method)
  {
      for (int i = 0; i < s_seen_count; i++) {
-@@ -125,13 +132,22 @@ static const char *nv097_name(uint32_t m)
+@@ -125,13 +133,22 @@ static const char *nv097_name(uint32_t m)
      return "";
  }
  
@@ -2103,16 +2455,78 @@ index ce1196e..5ac311a 100644
          return;
      fprintf(stderr, "[PB] %u segments, %u words, %u jumps, %u unrecognised"
                      " -- %d distinct (subchannel, method) pairs\n",
-@@ -152,7 +168,7 @@ void nv2a_pb_scan(uint32_t start_va, uint32_t end_va)
+@@ -149,40 +166,74 @@ void nv2a_pb_scan(uint32_t start_va, uint32_t end_va)
+     const uint8_t *mem = (const uint8_t *)xbox_GetMemoryOffset();
+     uint32_t va = start_va;
+     uint32_t words = 0, jumps = 0, unknown = 0;
++    /* Walk the way the GPU does: from the old PUT, following JUMPs and one
++     * level of CALL/RETURN, until the walk arrives at the new PUT.
++     *
++     * The range [start, end) is not a flat buffer. NFL 2K5's DMA_PUT lives in
++     * a small ring at physical 0x010Axxxx, and D3D reaches its 2.6 MB command
++     * buffer (0x03470000.., where every draw is written) by JUMPing there
++     * and back. This used to stop at the first JUMP and skipped CALLs, so the
++     * executor saw only the ring's own few state methods -- 0 draws for the
++     * whole game. Jump and call targets are physical, like DMA_PUT, and the
++     * contiguous window is the physical view, hence the OR with its base.
++     *
++     * Termination: arriving at end_va, a word budget, and a jump budget (a
++     * stream the title is still writing can contain a jump to itself). */
++    const uint32_t base = start_va & ~0x0FFFFFFFu;
++    uint32_t ret_va = 0;
++    int in_sub = 0;
  
      if (s_exec_enabled < 0)
          s_exec_enabled = getenv("RECOMP_PB_EXEC") != NULL;
 -    if (!(getenv("RECOMP_PB_SCAN") || s_exec_enabled) || end_va <= start_va)
-+    if (!(pb_scan_env_on() || s_exec_enabled) || end_va <= start_va)
++    if (!(pb_scan_env_on() || s_exec_enabled) || end_va == start_va)
          return;
-     if (end_va - start_va > 0x400000u)        /* a sane single-frame bound */
-         end_va = start_va + 0x400000u;
-@@ -180,9 +196,11 @@ void nv2a_pb_scan(uint32_t start_va, uint32_t end_va)
+-    if (end_va - start_va > 0x400000u)        /* a sane single-frame bound */
+-        end_va = start_va + 0x400000u;
+ 
+-    while (va < end_va && words < 0x100000u) {
+-        uint32_t w = *(const uint32_t *)(mem + va);
++    while (va != end_va && words < 0x100000u && jumps < 4096u) {
++        uint32_t w;
++        /* A jump decoded from a word the title has not finished writing can
++         * point anywhere; physical memory is 64 MB. */
++        if (va - base >= 64u * 1024u * 1024u) { unknown++; break; }
++        w = *(const uint32_t *)(mem + va);
+         va += 4;
+         words++;
+ 
+         if ((w & 3u) == 1u || (w & 0xE0000003u) == 0x20000000u) {
+             jumps++;
+-            break;                            /* a jump ends this segment */
++            va = base | (((w & 3u) == 1u ? w : (w & 0x1FFFFFFFu)) & 0x0FFFFFFCu);
++            continue;
+         }
+-        if ((w & 3u) == 2u || (w & 0xFFFF0003u) == 0x00020000u)
++        if ((w & 3u) == 2u) {                 /* call */
++            if (in_sub) { unknown++; break; } /* no nesting on the NV2A */
++            g_nv2a_pb_calls++;
++            ret_va = va;
++            in_sub = 1;
++            va = base | (w & 0x0FFFFFFCu);
+             continue;
++        }
++        if ((w & 0xFFFF0003u) == 0x00020000u) { /* return */
++            if (in_sub) {
++                va = ret_va;
++                in_sub = 0;
++            }
++            continue;
++        }
+         if ((w & 0x00030003u) == 0u) {
+             uint32_t count  = (w >> 18) & 0x7FFu;
+             uint32_t subch  = (w >> 13) & 7u;
+             uint32_t method =  w & 0x1FFCu;
+             int noninc = (w & 0xE0000000u) == 0x40000000u;
+ 
+-            for (uint32_t i = 0; i < count && va < end_va; i++) {
++            for (uint32_t i = 0; i < count && va != end_va && va - base < 64u * 1024u * 1024u; i++) {
+                 uint32_t m = noninc ? method : method + i * 4;
+                 note(subch, m);
                  /* Same walk, two consumers: the survey counts, the executor
                   * acts. Keeping them on one decode means they can never
                   * disagree about what the stream said. */
@@ -2535,7 +2949,7 @@ index 0000000..6def568
 +
 +#endif /* XBOX_GGL_H */
 diff --git a/src/kernel/xbox_memory_layout.c b/src/kernel/xbox_memory_layout.c
-index 53d8c75..ff970be 100644
+index 53d8c75..5eb1c3c 100644
 --- a/src/kernel/xbox_memory_layout.c
 +++ b/src/kernel/xbox_memory_layout.c
 @@ -14,8 +14,12 @@
@@ -2551,7 +2965,70 @@ index 53d8c75..ff970be 100644
  #include <string.h>
  #include <setjmp.h>
  #if !defined(_WIN32)
-@@ -913,6 +917,7 @@ ptrdiff_t g_xbox_mem_offset = 0;
+@@ -190,13 +194,31 @@ static const struct { uint32_t offset; uint32_t busy_mask; } NV2A_ACK[] = {
+      *
+      * Holding them at zero is correct rather than convenient: nothing here
+      * ever raises a GPU interrupt, so "none pending" is the truth. */
+-    { 0x000100, 0xFFFFFFFFu },  /* PMC_INTR_0    */
++    { 0x000100, 0xFEFFFFFFu },  /* PMC_INTR_0 (PCRTC bit: see below) */
+     { 0x001100, 0xFFFFFFFFu },  /* PBUS_INTR_0   */
+     { 0x002100, 0xFFFFFFFFu },  /* PFIFO_INTR_0  */
+     { 0x400100, 0xFFFFFFFFu },  /* PGRAPH_INTR   */
+-    { 0x600100, 0xFFFFFFFFu },  /* PCRTC_INTR_0  */
+ };
+ 
++/*
++ * The vblank interrupt is the exception: kernel_vblank_tick (RECOMP_VBLANK)
++ * really does raise it, so "none pending" stops being the truth. It raises
++ * the PMC_INTR_0 PCRTC summary bit and leaves it pending for the D3D DPC, the
++ * way hardware does. D3D's vblank handler acknowledges by writing 1 to
++ * PCRTC_INTR_0 and spinning until the summary bit drops (NFL 2K5 0x42D690 /
++ * 0x42DE20); nothing else makes PCRTC_INTR_0 nonzero, so this thread turns
++ * that write into write-1-to-clear.
++ *
++ * These registers used to sit in the table above and be zeroed on every
++ * pass. With vblank on, that raced the DPC: the summary bit was usually gone
++ * before the DPC looked, D3D saw about one vblank in ten, and anything
++ * pacing itself on vblank (Present's frame-interval wait) ran ~10x slow.
++ */
++#define NV2A_PMC_INTR_0_OFS    0x000100u
++#define NV2A_PMC_INTR_PCRTC    0x01000000u
++#define NV2A_PCRTC_INTR_0_OFS  0x600100u
++
++
+ /*
+  * Bits that must always read as SET. The mirror image of the table above:
+  * where an interrupt-pending bit is false because nothing raises interrupts,
+@@ -748,6 +770,16 @@ static DWORD WINAPI nv2a_ack_thread(LPVOID param)
+ {
+     volatile uint32_t *regs = (volatile uint32_t *)param;
+     while (!InterlockedCompareExchange(&g_nv2a_ack_stop, 0, 0)) {
++        {
++            volatile uint32_t *pcrtc =
++                (volatile uint32_t *)((char *)regs + NV2A_PCRTC_INTR_0_OFS);
++            volatile uint32_t *pmc =
++                (volatile uint32_t *)((char *)regs + NV2A_PMC_INTR_0_OFS);
++            if (*pcrtc) {          /* the handler wrote its ack */
++                *pcrtc = 0;
++                *pmc &= ~NV2A_PMC_INTR_PCRTC;
++            }
++        }
+         for (size_t i = 0; i < sizeof(NV2A_ACK) / sizeof(NV2A_ACK[0]); i++) {
+             volatile uint32_t *r =
+                 (volatile uint32_t *)((char *)regs + NV2A_ACK[i].offset);
+@@ -817,7 +849,10 @@ static DWORD WINAPI nv2a_ack_thread(LPVOID param)
+                      * The contiguous window IS the physical-address view, so
+                      * OR-ing its base is the documented round trip, not a
+                      * guess. */
+-                    if (last_put && put > last_put)
++                    /* Any change, not only growth: a PUT that went backwards
++                     * wrapped the ring, and the walk follows the ring's own
++                     * JUMP back to its start. */
++                    if (last_put && put != last_put)
+                         nv2a_pb_scan(XBOX_CONTIG_BASE | (last_put & 0x0FFFFFFFu),
+                                      XBOX_CONTIG_BASE | (put      & 0x0FFFFFFFu));
+                     /* Periodic, because what the title submits at init is not
+@@ -913,6 +948,7 @@ ptrdiff_t g_xbox_mem_offset = 0;
   * nothing breaks before the title is loaded. */
  uint32_t g_xbox_image_lo = 0;
  uint32_t g_xbox_image_hi = 0;
@@ -2559,7 +3036,7 @@ index 53d8c75..ff970be 100644
  uint32_t g_xbox_code_lo = 0;
  uint32_t g_xbox_code_hi = 0;
  
-@@ -1081,6 +1086,7 @@ extern volatile uint32_t g_icall_trace_idx;
+@@ -1081,6 +1117,7 @@ extern volatile uint32_t g_icall_trace_idx;
  extern volatile uint64_t g_icall_count;
  
  static uint32_t *s_watchdog_esp;
@@ -2567,7 +3044,7 @@ index 53d8c75..ff970be 100644
  /* The other guest registers are thread-local too, so the watchdog has to be
   * handed the guest thread's copies rather than reading its own -- which are
   * always zero, and read as "every register is null" at exactly the moment the
-@@ -1224,11 +1230,15 @@ static DWORD WINAPI xbox_watchdog_thread(LPVOID unused)
+@@ -1224,11 +1261,15 @@ static DWORD WINAPI xbox_watchdog_thread(LPVOID unused)
  
      for (i = 0; i < 400 && esp; i++) {
          uint32_t a = esp + i * 4;
@@ -2584,7 +3061,7 @@ index 53d8c75..ff970be 100644
      _exit(3);
      return 0;
  }
-@@ -1248,6 +1258,8 @@ void xbox_WatchdogStart(void)
+@@ -1248,6 +1289,8 @@ void xbox_WatchdogStart(void)
       * be handed the address of the one that matters rather than reading its
       * own, which is always zero. */
      s_watchdog_esp = &g_esp;
@@ -2593,7 +3070,7 @@ index 53d8c75..ff970be 100644
      s_watchdog_regs[0] = &g_eax; s_watchdog_regs[1] = &g_ecx;
      s_watchdog_regs[2] = &g_edx; s_watchdog_regs[3] = &g_ebx;
      s_watchdog_regs[4] = &g_esi; s_watchdog_regs[5] = &g_edi;
-@@ -1669,6 +1681,8 @@ BOOL xbox_MemoryLayoutInit(const void *xbe_data, size_t xbe_size)
+@@ -1669,6 +1712,8 @@ BOOL xbox_MemoryLayoutInit(const void *xbe_data, size_t xbe_size)
  
      /* Set the global offset for recompiled code MEM macros */
      g_xbox_mem_offset = g_memory_offset;
@@ -2602,7 +3079,7 @@ index 53d8c75..ff970be 100644
  
      /*
       * Initialize the Xbox stack for recompiled code.
-@@ -1718,7 +1732,12 @@ BOOL xbox_MemoryLayoutInit(const void *xbe_data, size_t xbe_size)
+@@ -1718,7 +1763,12 @@ BOOL xbox_MemoryLayoutInit(const void *xbe_data, size_t xbe_size)
           * only worked while page zero was mapped. Pointing at real zeroed
           * memory says the same thing to the title and survives that page being
           * unmapped, which is what makes a genuine null dereference visible. */
@@ -2616,7 +3093,7 @@ index 53d8c75..ff970be 100644
          memset(XBOX_VA(FAKE_PRCB_VA), 0, 0x400);
          MEM32_INIT(XBOX_FS_BASE + 0x20, FAKE_PRCB_VA);
          #undef FAKE_PRCB_VA
-@@ -1729,8 +1748,8 @@ BOOL xbox_MemoryLayoutInit(const void *xbe_data, size_t xbe_size)
+@@ -1729,8 +1779,8 @@ BOOL xbox_MemoryLayoutInit(const void *xbe_data, size_t xbe_size)
           * to its data area. We allocate a fake structure at 0x00760000
           * (in the BSS area) and a data buffer at 0x00700000.
           */
@@ -2627,7 +3104,7 @@ index 53d8c75..ff970be 100644
  
          MEM32_INIT(XBOX_FS_BASE + 0x28, FAKE_TLS_VA);
          /* TLS[0x28] = pointer to RW data area */
-@@ -1764,8 +1783,8 @@ BOOL xbox_MemoryLayoutInit(const void *xbe_data, size_t xbe_size)
+@@ -1764,8 +1814,8 @@ BOOL xbox_MemoryLayoutInit(const void *xbe_data, size_t xbe_size)
           * Every guest thread therefore shares LastError. Give this a per-thread
           * allocation when a title is observed to care.
           */
@@ -2638,7 +3115,7 @@ index 53d8c75..ff970be 100644
          {
              DWORD tls_dir_va = *(const DWORD *)(xbe + XBE_TLS_ADDR_OFFSET);
  
-@@ -1971,6 +1990,20 @@ BOOL xbox_MemoryLayoutInit(const void *xbe_data, size_t xbe_size)
+@@ -1971,6 +2021,20 @@ BOOL xbox_MemoryLayoutInit(const void *xbe_data, size_t xbe_size)
                  if (VirtualProtect((char *)g_mcpx_memory, 0x00080000u,
                                     PAGE_NOACCESS, &old_protect))
                      g_apu_mmio_trapped = 1;
@@ -2659,7 +3136,7 @@ index 53d8c75..ff970be 100644
                  if (g_apu_mmio_trapped)
                      fprintf(stderr, "  APU: 0x%08X..0x%08X trapped for MMIO\n",
                              XBOX_MCPX_BASE, XBOX_MCPX_BASE + 0x00080000u);
-@@ -2504,55 +2537,161 @@ void xbox_FreeThreadStack(uint32_t stack_top)
+@@ -2504,55 +2568,161 @@ void xbox_FreeThreadStack(uint32_t stack_top)
          g_thread_stacks_used--;
  }
  

@@ -509,6 +509,14 @@ void nfl2k5_execwatch_print(void)
         const uint8_t *m = (const uint8_t *)xbox_GetMemoryOffset();
         #define NFL2K5_PEEK32(va) (*(const uint32_t *)(m + (va)))
         uint32_t q = NFL2K5_PEEK32(0xA75D50u + 0x5Cu);
+        /* 2026-09-24: Present (sub_00028DE0) sleeps while 0xA6A9B0 > 0; the
+         * vblank callback sub_00026EE0 decrements it and counts in 0xA6A9B4.
+         * D3D's vblank handler (0x42D5E0, DPC context 0x4425D8) calls the
+         * title callback in [ctx+0x190] and counts vblanks in [ctx+0x1C0]. */
+        fprintf(stderr, "  [VBLANKPEEK] A6A9B0=%d A6A9AC=%d A6A9B4=%u cb=0x%08X vblanks=%u ctx820=%08X ctx824=%08X\n",
+                (int)NFL2K5_PEEK32(0xA6A9B0u), (int)NFL2K5_PEEK32(0xA6A9ACu), NFL2K5_PEEK32(0xA6A9B4u),
+                NFL2K5_PEEK32(0x4425D8u + 0x190u), NFL2K5_PEEK32(0x4425D8u + 0x1C0u),
+                NFL2K5_PEEK32(0x4425D8u + 0x820u), NFL2K5_PEEK32(0x4425D8u + 0x824u));
         fprintf(stderr, "  [SCHEDPEEK] guard_B057D0=%u head=0x%08X obj_A75D50: link=0x%08X q_first=0x%08X q_state=%u q_type=%u q_fn=0x%08X\n",
                 NFL2K5_PEEK32(0xB057D0u), NFL2K5_PEEK32(0xB0565Cu), NFL2K5_PEEK32(0xA75D50u + 0x44u), q,
                 q && q != 0xA75D50u + 0x58u ? NFL2K5_PEEK32(q + 8u) : 0xFFFFFFFFu,
@@ -516,6 +524,13 @@ void nfl2k5_execwatch_print(void)
                 q && q != 0xA75D50u + 0x58u ? NFL2K5_PEEK32(q + 0x10u) : 0u);
         /* Every scheduler object and every message still queued on it
          * (state 1 new, 2 in flight at the driver, 3 done). */
+        /* NV2A video overlay (PVIDEO), which Xbox movie playback uses. */
+        fprintf(stderr, "  [PVIDEO] BUFFER=%08X STOP=%08X BASE0=%08X LIMIT0=%08X OFFSET0=%08X SIZE_IN0=%08X POINT_IN0=%08X DS_DX0=%08X DT_DY0=%08X POINT_OUT0=%08X SIZE_OUT0=%08X FORMAT0=%08X\n",
+                NFL2K5_PEEK32(0xFD008700u), NFL2K5_PEEK32(0xFD008704u),
+                NFL2K5_PEEK32(0xFD008900u), NFL2K5_PEEK32(0xFD008908u), NFL2K5_PEEK32(0xFD008920u),
+                NFL2K5_PEEK32(0xFD008928u), NFL2K5_PEEK32(0xFD008930u), NFL2K5_PEEK32(0xFD008938u),
+                NFL2K5_PEEK32(0xFD008940u), NFL2K5_PEEK32(0xFD008948u), NFL2K5_PEEK32(0xFD008950u),
+                NFL2K5_PEEK32(0xFD008958u));
         /* GPU handshakes sub_00426110 / sub_00422AF0 spin on. */
         fprintf(stderr, "  [GPUPEEK] PFB_WBC=%08X CACHE1_PUT=%08X CACHE1_GET=%08X PGRAPH_STATUS=%08X USER_PUT=%08X USER_GET=%08X\n",
                 NFL2K5_PEEK32(0xFD100410u), NFL2K5_PEEK32(0xFD003240u), NFL2K5_PEEK32(0xFD003244u),
@@ -1730,6 +1745,14 @@ int main(int argc, char **argv)
         if (!getenv("RECOMP_SKIP_THREAD_PRIORITY")) _putenv_s("RECOMP_SKIP_THREAD_PRIORITY", "1");
         if (!getenv("RECOMP_FB_WINDOW")) _putenv_s("RECOMP_FB_WINDOW", "1");
         if (!getenv("RECOMP_PB_EXEC")) _putenv_s("RECOMP_PB_EXEC", "1");
+        /* 2026-09-24: what the intro movie needs to play in the window --
+         * guest threads one at a time (xbox_ggl.h) and the vblank interrupt
+         * that D3D's Present paces itself on. Same defaults as
+         * tools/run-bringup.ps1, plus its quiet kernel logging. */
+        if (!getenv("RECOMP_GGL")) _putenv_s("RECOMP_GGL", "1");
+        if (!getenv("RECOMP_VBLANK")) _putenv_s("RECOMP_VBLANK", "1");
+        if (!getenv("XBOX_LOG_LEVEL")) _putenv_s("XBOX_LOG_LEVEL", "0");
+        if (!getenv("RECOMP_KERNEL_LOG_BUDGET")) _putenv_s("RECOMP_KERNEL_LOG_BUDGET", "0");
     }
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
     SetUnhandledExceptionFilter(crash_report);
@@ -1845,6 +1868,15 @@ int main(int argc, char **argv)
             fprintf(stderr, "[BOOT] Failed to install execution-count watch.\n");
         } else {
             InitializeCriticalSection(&g_exec_watch_lock);
+            /* 2026-09-24: intro movie loop (sub_00178150) per-frame steps:
+             * Present, frame fetch, quad begin/vertex/end, player status. */
+            exec_watch_add(0x00028F70u, "MOV_28F70_present");
+            exec_watch_add(0x003CC0D0u, "MOV_3CC0D0_getframe");
+            exec_watch_add(0x0002D2A0u, "MOV_2D2A0_begin");
+            exec_watch_add(0x0002CA70u, "MOV_2CA70_vertex");
+            exec_watch_add(0x0002CA00u, "MOV_2CA00_end");
+            exec_watch_add(0x003CBD70u, "MOV_3CBD70_status");
+            exec_watch_add(0x0002C940u, "MOV_2C940_pbbegin");
             exec_watch_add(0x00028C40u, "28C40");
             exec_watch_add(0x00028BC0u, "28BC0");
             exec_watch_add(0x000292E0u, "292E0");

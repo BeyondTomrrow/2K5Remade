@@ -690,5 +690,41 @@
  {
   "start": "0x0040FEF0",
   "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+ },
+ {
+  "start": "0x004D6F20",
+  "note": "2026-09-23: MPEG-2 movie decoder PSFD_I picture routine (whole section, one function), called through the decoder's function table ([ebx+0x2A0]) and never reached by static analysis. Without it every intro movie frame decode jumped to an unresolved target and the intro drew nothing."
+ },
+ {
+  "start": "0x004D7C20",
+  "note": "2026-09-23: MPEG-2 movie decoder PSFD_P picture routine (whole section, one function), called through the decoder's function table ([ebx+0x2A0]) and never reached by static analysis. Without it every intro movie frame decode jumped to an unresolved target and the intro drew nothing."
+ },
+ {
+  "start": "0x00400900",
+  "note": "2026-09-23: MPEG decoder helper (.text). Found by scanning every code section for 16-aligned starts after int3 padding that were not recompiled; disassembles to a clean prologue in the original XBE. 0x413970 was hit live as an unresolved icall during the intro movie."
+ },
+ {
+  "start": "0x00413970",
+  "note": "2026-09-23: MPEG DCT-coefficient decode, called via a function pointer from PSFD00 0x4D96C7. Found by scanning every code section for 16-aligned starts after int3 padding that were not recompiled; disassembles to a clean prologue in the original XBE. 0x413970 was hit live as an unresolved icall during the intro movie."
+ },
+ {
+  "start": "0x004D9A90",
+  "note": "2026-09-23: MPEG decoder (PSFD00). Found by scanning every code section for 16-aligned starts after int3 padding that were not recompiled; disassembles to a clean prologue in the original XBE. 0x413970 was hit live as an unresolved icall during the intro movie."
+ },
+ {
+  "start": "0x00421D10",
+  "note": "2026-09-23: D3D. Found by scanning every code section for 16-aligned starts after int3 padding that were not recompiled; disassembles to a clean prologue in the original XBE. 0x413970 was hit live as an unresolved icall during the intro movie."
+ },
+ {
+  "start": "0x00428920",
+  "note": "2026-09-23: D3D. Found by scanning every code section for 16-aligned starts after int3 padding that were not recompiled; disassembles to a clean prologue in the original XBE. 0x413970 was hit live as an unresolved icall during the intro movie."
+ },
+ {
+  "start": "0x0042ADE0",
+  "note": "2026-09-23: D3D. Found by scanning every code section for 16-aligned starts after int3 padding that were not recompiled; disassembles to a clean prologue in the original XBE. 0x413970 was hit live as an unresolved icall during the intro movie."
+ },
+ {
+  "start": "0x004D9F50",
+  "note": "2026-09-24: MPEG motion-compensation routine, entry 3 of the decoder's function table at 0xCE2220 (filled by sub_0040C370/sub_00417470 with 0x4DA1C0, 0x4DA120, 0x4DA070, 0x4D9F50). Preceded by lea-alignment padding rather than int3, so the int3-padding scan missed it. Its unresolved call left esp off by 4 and every later call in sub_004D9xxx read a garbage target (0xCC8xxx)."
  }
 ]
