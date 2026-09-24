@@ -1877,6 +1877,12 @@ int main(int argc, char **argv)
             exec_watch_add(0x0002CA00u, "MOV_2CA00_end");
             exec_watch_add(0x003CBD70u, "MOV_3CBD70_status");
             exec_watch_add(0x0002C940u, "MOV_2C940_pbbegin");
+            /* 2026-09-24: in-game frame loop (sub_000F4EF0) after Start Game:
+             * frames, render pass, D3D kickoff to the GPU. */
+            exec_watch_add(0x000F4EF0u, "MOV_F4EF0_gameloop");
+            exec_watch_add(0x0006E6E0u, "MOV_6E6E0_render");
+            exec_watch_add(0x00426110u, "MOV_426110_kickoff");
+            exec_watch_add(0x00027CA0u, "MOV_27CA0_workflag");
             exec_watch_add(0x00028C40u, "28C40");
             exec_watch_add(0x00028BC0u, "28BC0");
             exec_watch_add(0x000292E0u, "292E0");
