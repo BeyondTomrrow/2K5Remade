@@ -2041,7 +2041,7 @@ index 17cb31f..172d860 100644
      if (PreviousSuspendCount)
          *PreviousSuspendCount = (ULONG)prev;
 diff --git a/src/kernel/nv2a_pb_exec.c b/src/kernel/nv2a_pb_exec.c
-index b3dcbf7..83f4afc 100644
+index b3dcbf7..612c191 100644
 --- a/src/kernel/nv2a_pb_exec.c
 +++ b/src/kernel/nv2a_pb_exec.c
 @@ -24,8 +24,10 @@
@@ -2188,7 +2188,58 @@ index b3dcbf7..83f4afc 100644
      default:
          return 0;
      }
-@@ -597,7 +678,12 @@ static void clear_surface(uint32_t param)
+@@ -501,6 +582,11 @@ static void raster_triangle(const float a[2], const float b[2],
+                             const float c[2], uint32_t argb,
+                             const float uv[3][2]);
+ 
++/* Early copies of output-merge state the later vertex-program block owns
++ * (s_vp), for the clear and pixel-write paths defined before it. */
++static uint32_t g_clear_rx = 0x0FFF0000u, g_clear_ry = 0x0FFF0000u;
++static uint32_t g_color_mask = 0x01010101u;
++
+ static void clear_surface(uint32_t param)
+ {
+     uint8_t *mem = (uint8_t *)xbox_GetMemoryOffset();
+@@ -520,6 +606,30 @@ static void clear_surface(uint32_t param)
+         s_gpu.color_base = base;
+     }
+ 
++    {
++        /* Only inside SET_CLEAR_RECT (inclusive) and only the channels the
++         * clear names (bits 4..7 = R,G,B,A). Clearing the whole surface wiped
++         * layers a title had already drawn when it cleared one region. */
++        uint32_t rx0 = g_clear_rx & 0xFFF, rx1 = ((g_clear_rx >> 16) & 0xFFF) + 1;
++        uint32_t ry0 = g_clear_ry & 0xFFF, ry1 = ((g_clear_ry >> 16) & 0xFFF) + 1;
++        uint32_t keep = 0;
++        if (!(param & 0x10)) keep |= 0x00FF0000u;
++        if (!(param & 0x20)) keep |= 0x0000FF00u;
++        if (!(param & 0x40)) keep |= 0x000000FFu;
++        if (!(param & 0x80)) keep |= 0xFF000000u;
++        if (rx0 < s_gpu.clip_x) rx0 = s_gpu.clip_x;
++        if (ry0 < s_gpu.clip_y) ry0 = s_gpu.clip_y;
++        if (rx1 > s_gpu.clip_x + s_gpu.clip_w) rx1 = s_gpu.clip_x + s_gpu.clip_w;
++        if (ry1 > s_gpu.clip_y + s_gpu.clip_h) ry1 = s_gpu.clip_y + s_gpu.clip_h;
++        if (bpp == 4) {
++            for (y = ry0; y < ry1; y++) {
++                uint32_t *p = (uint32_t *)(mem + s_gpu.color_base + (size_t)y * s_gpu.pitch);
++                for (x = rx0; x < rx1; x++)
++                    p[x] = (p[x] & keep) | (s_gpu.clear_color & ~keep);
++            }
++            goto cleared;
++        }
++    }
+     for (y = 0; y < s_gpu.clip_h; y++) {
+         uint8_t *row = mem + s_gpu.color_base
+                      + (size_t)(s_gpu.clip_y + y) * s_gpu.pitch;
+@@ -538,6 +648,7 @@ static void clear_surface(uint32_t param)
+                 p[x] = v;
+         }
+     }
++cleared:
+     s_gpu.clears++;
+     /* Progress markers, interleaved with everything else in the log. The
+      * summary says drawing stopped; only a marker next to the surrounding
+@@ -597,7 +708,12 @@ static void clear_surface(uint32_t param)
       * would show the one nothing is writing. */
      /* The window has to read where the pixels actually are, which is the
       * resolved address rather than the DMA-object offset. */
@@ -2202,7 +2253,7 @@ index b3dcbf7..83f4afc 100644
  
      /* And open the window, rather than waiting for AvSetDisplayMode to do it.
       *
-@@ -710,6 +796,17 @@ static int sample_texture(uint32_t u, uint32_t v, uint32_t *argb)
+@@ -710,6 +826,17 @@ static int sample_texture(uint32_t u, uint32_t v, uint32_t *argb)
      if (d3d8_format_dxt_block_bytes(fmt))
          return d3d8_dxt_decode_texel(mem + s_gpu.tex.offset, fmt, u, v,
                                       s_gpu.tex.width, argb);
@@ -2220,7 +2271,7 @@ index b3dcbf7..83f4afc 100644
      if (d3d8_format_is_swizzled(fmt)) {
          /* Morton order: a texel's index is interleaved from x and y instead of
           * v*pitch + u, so index from the base of the image. The switch below
-@@ -830,8 +927,9 @@ static void dump_texture_bmp(uint32_t seq)
+@@ -830,8 +957,9 @@ static void dump_texture_bmp(uint32_t seq)
      pad = (4 - (row_bytes & 3)) & 3;
      filesz = 54 + (row_bytes + pad) * h;
  
@@ -2232,7 +2283,7 @@ index b3dcbf7..83f4afc 100644
      f = fopen(path, "wb");
      if (!f)
          return;
-@@ -913,6 +1011,97 @@ static void put_pixel(uint8_t *mem, uint32_t bpp, int x, int y, uint32_t argb)
+@@ -913,6 +1041,112 @@ static void put_pixel(uint8_t *mem, uint32_t bpp, int x, int y, uint32_t argb)
      }
  }
  
@@ -2315,6 +2366,21 @@ index b3dcbf7..83f4afc 100644
 +        }
 +        src = out;
 +    }
++    /* SET_COLOR_MASK: channels with their write-enable cleared keep what the
++     * surface already holds. */
++    if (g_color_mask != 0x01010101u && bpp == 4
++            && x >= (int)s_gpu.clip_x && x < (int)(s_gpu.clip_x + s_gpu.clip_w)
++            && y >= (int)s_gpu.clip_y && y < (int)(s_gpu.clip_y + s_gpu.clip_h)) {
++        uint32_t dst = ((uint32_t *)(s_surface + (size_t)y * s_gpu.pitch))[x];
++        uint32_t keep = 0;
++        if (!(g_color_mask & 0x00000001u)) keep |= 0x000000FFu;   /* blue  */
++        if (!(g_color_mask & 0x00000100u)) keep |= 0x0000FF00u;   /* green */
++        if (!(g_color_mask & 0x00010000u)) keep |= 0x00FF0000u;   /* red   */
++        if (!(g_color_mask & 0x01000000u)) keep |= 0xFF000000u;   /* alpha */
++        if (keep == 0xFFFFFFFFu)
++            return;
++        src = (dst & keep) | (src & ~keep);
++    }
 +    put_pixel(mem, bpp, x, y, src);
 +}
 +
@@ -2330,7 +2396,7 @@ index b3dcbf7..83f4afc 100644
  /* Half-space fill. Barycentric edge functions rather than scanline slopes:
   * the same test decides both windings, so a title that emits clockwise
   * triangles does not silently render nothing. */
-@@ -976,11 +1165,11 @@ static void raster_triangle(const float a[2], const float b[2],
+@@ -976,11 +1210,11 @@ static void raster_triangle(const float a[2], const float b[2],
                  if (su < 0.0f) su = 0.0f;
                  if (sv < 0.0f) sv = 0.0f;
                  if (sample_texture((uint32_t)su, (uint32_t)sv, &texel)) {
@@ -2344,7 +2410,7 @@ index b3dcbf7..83f4afc 100644
          }
      }
      s_gpu.tris_drawn++;
-@@ -1136,11 +1325,15 @@ static int batch_is_screen_space(void)
+@@ -1136,11 +1370,15 @@ static int batch_is_screen_space(void)
  }
  
  /* NV097 primitive types that are triangles under some winding. */
@@ -2365,7 +2431,7 @@ index b3dcbf7..83f4afc 100644
  
  /* How many post-draw captures to keep: enough to see whether the geometry
   * is stable from frame to frame, few enough not to fill a directory. */
-@@ -1210,14 +1403,30 @@ static void raster_batch(void)
+@@ -1210,14 +1448,30 @@ static void raster_batch(void)
                             vertex_color(s_gpu.idx[i]));
          break;
      case NV_PRIM_TRIANGLE_FAN:
@@ -2400,7 +2466,7 @@ index b3dcbf7..83f4afc 100644
      default:
          break;                             /* points and lines: not yet */
      }
-@@ -1242,6 +1451,1012 @@ static void raster_batch(void)
+@@ -1242,6 +1496,1116 @@ static void raster_batch(void)
   * question is what space attribute 0 arrives in: a title running a vertex
   * program hands over object-space positions that mean nothing without running
   * it, while pre-transformed screen-space coordinates can be drawn directly. */
@@ -2749,10 +2815,23 @@ index b3dcbf7..83f4afc 100644
 +    uint32_t depth_test, depth_func, depth_mask;
 +    uint32_t cull, cull_face, front_face;
 +    uint32_t zclear;
++    /* Stencil and colour write mask. NFL 2K5's menus mask their skewed
++     * panels with the stencil: a colour-masked pass writes the panel shape,
++     * then the studio is drawn only where the stencil matches. Without it
++     * the studio filled the whole screen and the mask passes drew as
++     * geometry. GL enums, as the NV2A takes them. */
++    uint32_t stencil_test, stencil_wmask, stencil_func, stencil_ref, stencil_fmask;
++    uint32_t op_fail, op_zfail, op_zpass;
++    uint32_t color_mask;                  /* NV097_SET_COLOR_MASK */
++    uint32_t clear_rx, clear_ry;          /* SET_CLEAR_RECT_HORIZONTAL/VERTICAL */
 +    uint32_t batches, verts;              /* counters for the report */
 +    uint32_t rej_bad, rej_area, rej_cull, rej_clip, drawn;
 +} s_vp = { .depth_func = 0x0201, .depth_mask = 1, .cull_face = 0x0405,
-+           .front_face = 0x0901 };
++           .front_face = 0x0901,
++           .stencil_wmask = 0xFF, .stencil_func = 0x0207, .stencil_fmask = 0xFF,
++           .op_fail = 0x1E00, .op_zfail = 0x1E00, .op_zpass = 0x1E00,
++           .color_mask = 0x01010101u,
++           .clear_rx = 0x0FFF0000u, .clear_ry = 0x0FFF0000u };
 +
 +/* Returns 1 when the method was a transform-engine method. */
 +static int vp_method(uint32_t method, uint32_t param)
@@ -2796,6 +2875,17 @@ index b3dcbf7..83f4afc 100644
 +    case NV097_SET_CULL_FACE:                s_vp.cull_face = param; return 1;
 +    case NV097_SET_FRONT_FACE:               s_vp.front_face = param; return 1;
 +    case NV097_SET_ZSTENCIL_CLEAR_VALUE:     s_vp.zclear = param; return 1;
++    case 0x032C: s_vp.stencil_test  = param; return 1;   /* SET_STENCIL_TEST_ENABLE */
++    case 0x0358: s_vp.color_mask = g_color_mask = param; return 1;   /* SET_COLOR_MASK */
++    case 0x0360: s_vp.stencil_wmask = param & 0xFF; return 1;
++    case 0x0364: s_vp.stencil_func  = param; return 1;
++    case 0x0368: s_vp.stencil_ref   = param & 0xFF; return 1;
++    case 0x036C: s_vp.stencil_fmask = param & 0xFF; return 1;
++    case 0x0370: s_vp.op_fail       = param; return 1;
++    case 0x0374: s_vp.op_zfail      = param; return 1;
++    case 0x0378: s_vp.op_zpass      = param; return 1;
++    case 0x1D98: s_vp.clear_rx = g_clear_rx = param; return 1;   /* SET_CLEAR_RECT_HORIZONTAL */
++    case 0x1D9C: s_vp.clear_ry = g_clear_ry = param; return 1;   /* SET_CLEAR_RECT_VERTICAL */
 +    default: return 0;
 +    }
 +}
@@ -3063,14 +3153,68 @@ index b3dcbf7..83f4afc 100644
 +#define ZB_H 1024
 +static float s_zbuf[ZB_W * ZB_H];
 +
++static uint8_t s_sbuf[ZB_W * ZB_H];      /* stencil, one byte per pixel */
++
++/* The rectangle SET_CLEAR_RECT_* names (inclusive), clipped to the buffers. */
++static void clear_rect(uint32_t *x0, uint32_t *y0, uint32_t *x1, uint32_t *y1)
++{
++    *x0 = s_vp.clear_rx & 0xFFF;
++    *x1 = ((s_vp.clear_rx >> 16) & 0xFFF) + 1;
++    *y0 = s_vp.clear_ry & 0xFFF;
++    *y1 = ((s_vp.clear_ry >> 16) & 0xFFF) + 1;
++    if (*x1 > ZB_W) *x1 = ZB_W;
++    if (*y1 > ZB_H) *y1 = ZB_H;
++}
++
++/* Depth (CLEAR_SURFACE bit 0) and/or stencil (bit 1), inside the clear
++ * rectangle only. The clear value is Z24S8: depth in the top 24 bits, in the
++ * units the shaders scale oPos.z to; stencil in the low 8. */
++static void zbuf_clear_bits(uint32_t param)
++{
++    float z = (float)(s_vp.zclear >> 8);
++    uint8_t st = (uint8_t)(s_vp.zclear & 0xFF);
++    uint32_t x0, y0, x1, y1, x, y;
++    clear_rect(&x0, &y0, &x1, &y1);
++    for (y = y0; y < y1; y++)
++        for (x = x0; x < x1; x++) {
++            if (param & 1u) s_zbuf[(size_t)y * ZB_W + x] = z;
++            if (param & 2u) s_sbuf[(size_t)y * ZB_W + x] = st;
++        }
++}
++
 +static void zbuf_clear(void)
 +{
-+    /* The clear value is in the depth buffer's own units (24-bit Z in the
-+     * top bits of Z24S8); the shaders' oPos.z is scaled to the same range. */
-+    float v = (float)(s_vp.zclear >> 8);
-+    size_t i;
-+    for (i = 0; i < (size_t)ZB_W * ZB_H; i++)
-+        s_zbuf[i] = v;
++    zbuf_clear_bits(1u);
++}
++
++static int stencil_cmp(uint32_t func, uint32_t ref, uint32_t val)
++{
++    switch (func) {
++    case 0x0200: return 0;
++    case 0x0201: return ref <  val;
++    case 0x0202: return ref == val;
++    case 0x0203: return ref <= val;
++    case 0x0204: return ref >  val;
++    case 0x0205: return ref != val;
++    case 0x0206: return ref >= val;
++    default:     return 1;
++    }
++}
++
++static void stencil_apply(uint8_t *s, uint32_t op)
++{
++    uint32_t v = *s, n;
++    switch (op) {
++    case 0x0000: n = 0; break;                                   /* ZERO    */
++    case 0x1E01: n = s_vp.stencil_ref; break;                    /* REPLACE */
++    case 0x1E02: n = v < 255 ? v + 1 : 255; break;               /* INCRSAT */
++    case 0x1E03: n = v > 0 ? v - 1 : 0; break;                   /* DECRSAT */
++    case 0x150A: n = ~v & 0xFF; break;                           /* INVERT  */
++    case 0x8507: n = (v + 1) & 0xFF; break;                      /* INCR    */
++    case 0x8508: n = (v - 1) & 0xFF; break;                      /* DECR    */
++    default:     return;                                         /* KEEP    */
++    }
++    *s = (uint8_t)((v & ~s_vp.stencil_wmask) | (n & s_vp.stencil_wmask));
 +}
 +
 +static int depth_pass(float z, float d)
@@ -3133,7 +3277,14 @@ index b3dcbf7..83f4afc 100644
 +        }
 +        return;
 +    }
-+    if (s_vp.cull) {
++    /* Culling is opt-in (RECOMP_CULL=1) until its winding convention is
++     * checked against xemu: with one sign NFL 2K5's movie quad was culled,
++     * with the other its main-menu frame, panel and logos were (2026-09-24).
++     * Drawing back faces costs little -- the depth test hides most. */
++    static int no_cull = -1;
++    if (no_cull < 0)
++        no_cull = getenv("RECOMP_CULL") == NULL;
++    if (s_vp.cull && !no_cull) {
 +        /* Winding as the NV2A sees it: its window space has y growing
 +         * upward, so in these y-down screen coordinates a positive area is
 +         * counter-clockwise. (Taking it as clockwise culled NFL 2K5's movie
@@ -3181,12 +3332,31 @@ index b3dcbf7..83f4afc 100644
 +            /* Barycentrics: w1 is opposite a, w2 opposite b, w0 opposite c. */
 +            la = w1 / area; lb = w2 / area; lc = w0 / area;
 +            z = la * a->z + lb * b->z + lc * c->z;
-+            if (s_vp.depth_test) {
-+                float *zp = &s_zbuf[(size_t)y * ZB_W + (size_t)x];
-+                if (!depth_pass(z, *zp))
++            {
++                /* Stencil test, then depth test, then the matching stencil
++                 * op -- the fixed order of the NV2A (and GL). */
++                size_t zi = (size_t)y * ZB_W + (size_t)x;
++                float *zp = &s_zbuf[zi];
++                uint8_t *sp = &s_sbuf[zi];
++                if (s_vp.stencil_test
++                        && !stencil_cmp(s_vp.stencil_func, s_vp.stencil_ref & s_vp.stencil_fmask,
++                                        *sp & s_vp.stencil_fmask)) {
++                    stencil_apply(sp, s_vp.op_fail);
 +                    continue;
-+                if (s_vp.depth_mask)
++                }
++                if (s_vp.depth_test && !depth_pass(z, *zp)) {
++                    if (s_vp.stencil_test)
++                        stencil_apply(sp, s_vp.op_zfail);
++                    continue;
++                }
++                if (s_vp.stencil_test)
++                    stencil_apply(sp, s_vp.op_zpass);
++                if (s_vp.depth_test && s_vp.depth_mask)
 +                    *zp = z;
++                /* Nothing to write when every colour channel is masked:
++                 * a stencil- or depth-only pass. */
++                if ((s_vp.color_mask & 0x01010101u) == 0)
++                    continue;
 +            }
 +            pa = la * iwa; pb = lb * iwb; pc = lc * iwc;
 +            iw = pa + pb + pc;
@@ -3413,7 +3583,7 @@ index b3dcbf7..83f4afc 100644
  static void draw_primitive(void)
  {
      float v[4];
-@@ -1270,7 +2485,24 @@ static void draw_primitive(void)
+@@ -1270,7 +2634,24 @@ static void draw_primitive(void)
          }
      }
  
@@ -3439,7 +3609,7 @@ index b3dcbf7..83f4afc 100644
  
      if (getenv("RECOMP_PB_EXEC_VERBOSE")) {
          static int shown;
-@@ -1390,6 +2622,12 @@ static void draw_inline_array(void)
+@@ -1390,6 +2771,12 @@ static void draw_inline_array(void)
          case 0:  bytes = 4;                        break;  /* D3DCOLOR   */
          case 2:  bytes = 4 * s_gpu.attr[a].size;   break;  /* float      */
          case 4:  bytes = s_gpu.attr[a].size;       break;  /* ubyte norm */
@@ -3452,7 +3622,7 @@ index b3dcbf7..83f4afc 100644
          default: bytes = 4 * s_gpu.attr[a].size;   break;
          }
          s_gpu.attr[a].offset = off;
-@@ -1570,7 +2808,22 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1570,7 +2957,22 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
          note_unhandled(method, param);
          return;
      }
@@ -3475,12 +3645,26 @@ index b3dcbf7..83f4afc 100644
      case NV097_SET_SURFACE_CLIP_HORIZONTAL:
          s_gpu.clip_x = param & 0xFFFF;
          s_gpu.clip_w = (param >> 16) & 0xFFFF;
-@@ -1593,9 +2846,14 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1586,6 +2988,13 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+         s_gpu.pitch = param & 0xFFFF;      /* colour pitch; zeta is the top half */
+         break;
+     case NV097_SET_SURFACE_COLOR_OFFSET:
++        if (getenv("RECOMP_SURF_TRACE") && param != s_gpu.color_offset) {
++            static unsigned shown;
++            if (shown++ < 400)
++                fprintf(stderr, "  [SURF] color %08X -> %08X (pitch %u clip %ux%u fmt %08X) flips %u draws %u\n",
++                        s_gpu.color_offset, param, s_gpu.pitch, s_gpu.clip_w, s_gpu.clip_h,
++                        s_gpu.format, s_gpu.flips, s_gpu.draws);
++        }
+         s_gpu.color_offset = param;
+         break;
+     case NV097_SET_COLOR_CLEAR_VALUE:
+@@ -1593,9 +3002,14 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
          break;
      case NV097_CLEAR_SURFACE:
          clear_surface(param);
-+        if (param & 1u)                    /* NV097_CLEAR_SURFACE_Z */
-+            zbuf_clear();
++        if (param & 3u)                    /* NV097_CLEAR_SURFACE_Z / _STENCIL */
++            zbuf_clear_bits(param);
          break;
  
      case NV097_SET_BEGIN_END:
@@ -3490,7 +3674,7 @@ index b3dcbf7..83f4afc 100644
          if (param) {
              s_gpu.prim = param;
              s_gpu.idx_count = 0;
-@@ -1620,8 +2878,15 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1620,8 +3034,15 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
      case NV097_INLINE_ARRAY:
          /* Vertex data, not a pointer to it. Buffered rather than decoded here
           * because the format is only fully known at END. */
@@ -3507,7 +3691,7 @@ index b3dcbf7..83f4afc 100644
          break;
  
      case NV097_DRAW_ARRAYS: {
-@@ -1644,6 +2909,13 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1644,6 +3065,13 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
          break;
      }
  
@@ -3521,7 +3705,7 @@ index b3dcbf7..83f4afc 100644
      case NV097_ARRAY_ELEMENT16:
          /* Two 16-bit indices per parameter word. */
          if (s_gpu.prim && s_gpu.idx_count + 2 <= NV_MAX_INDICES) {
-@@ -1659,6 +2931,23 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1659,6 +3087,23 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
          record_tex_reg(method, param);
          break;
  
@@ -3545,7 +3729,7 @@ index b3dcbf7..83f4afc 100644
      case NV097_SET_FLIP_READ:
          s_gpu.flip_read = param;
          return;
-@@ -1682,6 +2971,9 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1682,6 +3127,9 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
          /* The stall ends when the buffer being read is the one just finished.
           * There is no scanout here to wait for, so that is now. */
          s_gpu.flip_read = s_gpu.flip_write;
@@ -3555,7 +3739,7 @@ index b3dcbf7..83f4afc 100644
          /* And this is a completed swap, which is what a title's own swap
           * counter counts -- see xbox_Nv2aFrameCounterFlip. */
          xbox_Nv2aFrameCounterFlip();
-@@ -1696,6 +2988,11 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1696,6 +3144,11 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
          return;
  
      case NV097_SET_TEXTURE_FORMAT:
@@ -3567,7 +3751,7 @@ index b3dcbf7..83f4afc 100644
          s_gpu.tex.color = (param >> 8) & 0xFF;
          /* A swizzled texture carries its own dimensions here, as log2 in
           * BASE_SIZE_U/V (nv2a_regs.h: 0x00F00000 / 0x0F000000). It has to:
-@@ -1729,6 +3026,9 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1729,6 +3182,9 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
      case NV097_SET_TEXTURE_IMAGE_RECT:
          s_gpu.tex.width  = param >> 16;
          s_gpu.tex.height = param & 0xFFFF;
@@ -3577,7 +3761,7 @@ index b3dcbf7..83f4afc 100644
          record_tex_reg(method, param);
          break;
  
-@@ -1948,9 +3248,12 @@ void nv2a_pb_exec_report(void)
+@@ -1948,9 +3404,12 @@ void nv2a_pb_exec_report(void)
              dma_resolve(s_gpu.drawn_offset), s_gpu.color_offset,
              dma_resolve(s_gpu.color_offset));
      fprintf(stderr, "[GPU] rasterised %u triangles; %u batches skipped as not"
