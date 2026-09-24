@@ -87106,6 +87106,8 @@ void sub_0002C940(void)
     (void)_fa; (void)_fb; (void)_fas; (void)_fbs;
 
 loc_0002C940: ;
+    /* NFL2K5-GENPATCH:DIAG_PBBEGIN */
+    { extern void nfl2k5_diag_pbbegin(void); nfl2k5_diag_pbbegin(); }
     eax = MEM32(0xA6B274);
     MEM32(0xA6B284) = 0;
     eax = MEM32(eax + 0xC);

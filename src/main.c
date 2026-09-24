@@ -531,6 +531,37 @@ void nfl2k5_execwatch_print(void)
             fprintf(stderr, " %X:%s", NFL2K5_PEEK32(0xB04D24u + k * 8u),
                     NFL2K5_PEEK32(0xB04D20u + k * 8u) ? "BUSY" : "idle");
         fprintf(stderr, " B09584=%u\n", NFL2K5_PEEK32(0xB09584u));
+        /* Frontend FSM driven once per frame by sub_00074790 -> sub_0006E6A0
+         * (message 6). xemu at the main menu: index 2, stack
+         * {0x4F6870, 0x4E7370, 0x4E7EC0, 0x4F6708}; 0x4E7EC0's msg 6 handler
+         * is sub_000650A0. */
+        {
+            /* Pushbuffer state of the device object at *0xA6B274 (xemu at the
+             * menu: push 0x834706AC, limit 0x83710000, base 0x83470000, end
+             * 0x83710000 at +0xC/+0x10/+0x14/+0x18). */
+            uint32_t dev = NFL2K5_PEEK32(0xA6B274u);
+            if (dev >= 0x10000u && dev < 0x84000000u)
+                fprintf(stderr, "  [PUSHBUF] dev=%08X push=%08X limit=%08X base=%08X end=%08X +1C=%08X\n",
+                        dev, NFL2K5_PEEK32(dev + 0xCu), NFL2K5_PEEK32(dev + 0x10u),
+                        NFL2K5_PEEK32(dev + 0x14u), NFL2K5_PEEK32(dev + 0x18u),
+                        NFL2K5_PEEK32(dev + 0x1Cu));
+            /* The per-frame reset list sub_00028F70 hands to sub_000334C0. */
+            {
+                uint32_t head = NFL2K5_PEEK32(0xA6AA6Cu), node;
+                int n = 0;
+                fprintf(stderr, "  [PBLIST] A6AA6C=%08X", head);
+                if (head >= 0x10000u && head < 0x84000000u)
+                    for (node = NFL2K5_PEEK32(head); node >= 0x10000u && node < 0x84000000u && n < 8;
+                         node = NFL2K5_PEEK32(node), n++)
+                        fprintf(stderr, " -> %08X(push %08X base %08X)", node,
+                                NFL2K5_PEEK32(node + 0xCu), NFL2K5_PEEK32(node + 0x14u));
+                fprintf(stderr, "\n");
+            }
+        }
+        fprintf(stderr, "  [FSM] A84B18 idx=%u stack=%08X %08X %08X %08X %08X\n",
+                NFL2K5_PEEK32(0xA84B18u + 0x100u), NFL2K5_PEEK32(0xA84B18u),
+                NFL2K5_PEEK32(0xA84B18u + 8u), NFL2K5_PEEK32(0xA84B18u + 16u),
+                NFL2K5_PEEK32(0xA84B18u + 24u), NFL2K5_PEEK32(0xA84B18u + 32u));
         fprintf(stderr, "  [CHUNKREG]");
         {
             uint32_t n = NFL2K5_PEEK32(0xB0957Cu);
@@ -631,6 +662,44 @@ void nfl2k5_execwatch_print(void)
         if (g_exec_watch[i].hits)
             fprintf(stderr, "  [EXECWATCH-RET] %s last_ret=0x%08X\n",
                     g_exec_watch[i].name, g_exec_watch[i].last_return_addr);
+}
+
+/* 2026-09-23: pushbuffer overrun after START. sub_000331A0 resets a device
+ * context's write pointer to its base once per present (via sub_00028F70 ->
+ * sub_000334C0); sub_0002C940 opens an inline-vertex batch at the write
+ * pointer of the device at *0xA6B274 without checking its limit. */
+static volatile LONG g_pbreset_count[4];
+static volatile uint32_t g_pbreset_dev[4];
+void nfl2k5_diag_pbreset(uint32_t dev)
+{
+    for (int i = 0; i < 4; i++) {
+        if (g_pbreset_dev[i] == dev || InterlockedCompareExchange((volatile LONG *)&g_pbreset_dev[i], (LONG)dev, 0) == 0) {
+            InterlockedIncrement(&g_pbreset_count[i]);
+            return;
+        }
+    }
+}
+
+void nfl2k5_diag_pbbegin(void)
+{
+    static volatile LONG reported;
+    const uint8_t *m = (const uint8_t *)xbox_GetMemoryOffset();
+    uint32_t dev = *(const uint32_t *)(m + 0xA6B274u);
+    if (dev < 0x10000u || dev >= 0x84000000u) return;
+    uint32_t push = *(const uint32_t *)(m + dev + 0xCu);
+    uint32_t limit = *(const uint32_t *)(m + dev + 0x10u);
+    if (push > limit && InterlockedExchange(&reported, 1) == 0) {
+        fprintf(stderr, "  [PBOVER] dev=%08X push=%08X limit=%08X resets:", dev, push, limit);
+        for (int i = 0; i < 4; i++)
+            if (g_pbreset_dev[i]) fprintf(stderr, " %08X=%ld", g_pbreset_dev[i], g_pbreset_count[i]);
+        fprintf(stderr, "\n  [PBOVER] guest stack:");
+        for (int i = 0; i < 48; i++) {
+            uint32_t w = *(const uint32_t *)(m + g_esp + 4u * (uint32_t)i);
+            if (w >= 0x11000u && w < 0x420000u) fprintf(stderr, " %08X", w);
+        }
+        fprintf(stderr, "\n");
+        fflush(stderr);
+    }
 }
 
 /* Fixed-interval flush of the above, independent of kernel_bridge.c's own
@@ -1870,6 +1939,12 @@ int main(int argc, char **argv)
              * 0x19D130) and never reads the next one (SCNE @0x1A0850). */
             /* Teardowns that unregister the early chunk-handler group
              * (FONT/HITX/TXTR/ENCS/...) via sub_000436F0 on native. */
+            /* Per-frame pushbuffer reset (xemu): sub_00028F70 flips frame
+             * contexts and calls sub_000334C0 at 0x29034, which resets each
+             * context in the list at [0xA6AA6C] via sub_000331A0 (push=base). */
+            exec_watch_add(0x00028F70u, "pb_present_28F70");
+            exec_watch_add(0x000334C0u, "pb_resetlist_334C0");
+            exec_watch_add(0x000331A0u, "pb_reset_331A0");
             exec_watch_add(0x0004C020u, "lowcb_4C020");
             exec_watch_add(0x0004C060u, "lowop_4C060");
             exec_watch_add(0x0004BB50u, "devop_4BB50");

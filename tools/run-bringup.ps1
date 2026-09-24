@@ -1,7 +1,7 @@
-param([ValidateRange(1,600)][int]$Seconds = 120, [switch]$ValidateOnly)
+param([ValidateRange(1,600)][int]$Seconds = 120, [switch]$ValidateOnly, [switch]$Optimized)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
-$exe = "$root\build\Release\NFL2K5.exe"
+$exe = if ($Optimized) { "$root\build\Release-opt\NFL2K5.exe" } else { "$root\build\Release\NFL2K5.exe" }
 if (-not (Test-Path $exe)) { throw 'Build the game first with tools/build.ps1 -Game.' }
 $label = if ($ValidateOnly) { 'validate' } else { 'startup' }
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'

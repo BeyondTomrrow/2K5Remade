@@ -112,6 +112,28 @@ PATCHES = [
         if (skip) { eax = 2; esp += 8; return; /* ret 4 */ }
     }
 """),
+    # XInput HLE entry points (XPP section): see src/nfl2k5_input_hle.c.
+    ("XINPUT_XGETDEVICES", "sub_004DBC0A", "loc_004DBC0A: ;", "after", """\n    { extern int nfl2k5_hle_XGetDevices(void); if (nfl2k5_hle_XGetDevices()) return; } /* src/nfl2k5_input_hle.c */
+"""),
+    ("XINPUT_XGETDEVICECHANGES", "sub_004DBC2C", "loc_004DBC2C: ;", "after", """\n    { extern int nfl2k5_hle_XGetDeviceChanges(void); if (nfl2k5_hle_XGetDeviceChanges()) return; } /* src/nfl2k5_input_hle.c */
+"""),
+    ("XINPUT_XINPUTOPEN", "sub_004DBC99", "loc_004DBC99: ;", "after", """\n    { extern int nfl2k5_hle_XInputOpen(void); if (nfl2k5_hle_XInputOpen()) return; } /* src/nfl2k5_input_hle.c */
+"""),
+    ("XINPUT_XINPUTCLOSE", "sub_004DBCEF", "loc_004DBCEF: ;", "after", """\n    { extern int nfl2k5_hle_XInputClose(void); if (nfl2k5_hle_XInputClose()) return; } /* src/nfl2k5_input_hle.c */
+"""),
+    ("XINPUT_XINPUTGETCAPABILITIES", "sub_004DBCFB", "loc_004DBCFB: ;", "after", """\n    { extern int nfl2k5_hle_XInputGetCapabilities(void); if (nfl2k5_hle_XInputGetCapabilities()) return; } /* src/nfl2k5_input_hle.c */
+"""),
+    ("XINPUT_XINPUTGETSTATE", "sub_004DBED3", "loc_004DBED3: ;", "after", """\n    { extern int nfl2k5_hle_XInputGetState(void); if (nfl2k5_hle_XInputGetState()) return; } /* src/nfl2k5_input_hle.c */
+"""),
+    ("XINPUT_XINPUTSETSTATE", "sub_004DBF46", "loc_004DBF46: ;", "after", """\n    { extern int nfl2k5_hle_XInputSetState(void); if (nfl2k5_hle_XInputSetState()) return; } /* src/nfl2k5_input_hle.c */
+"""),
+    # Diagnostics for the pushbuffer overrun after START (2026-09-23).
+    ("DIAG_PBRESET", "sub_000331A0", "loc_000331A0: ;", "after", """\
+    { extern void nfl2k5_diag_pbreset(uint32_t dev); nfl2k5_diag_pbreset(ecx); }
+"""),
+    ("DIAG_PBBEGIN", "sub_0002C940", "loc_0002C940: ;", "after", """\
+    { extern void nfl2k5_diag_pbbegin(void); nfl2k5_diag_pbbegin(); }
+"""),
     ("AUDIO_LOCK", "sub_0044BB44", "loc_0044BCAB: ;", "before", """\
 #ifdef NFL2K5_FORCE_UNBLOCK_AUDIO_LOCK
     /* EXPERIMENTAL, 2026-09-21: the busy-wait at loc_0044BCAB spins on a

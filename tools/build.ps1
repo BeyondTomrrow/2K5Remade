@@ -1,4 +1,4 @@
-param([ValidateSet('Release','Debug')][string]$Configuration = 'Release', [switch]$Game)
+param([ValidateSet('Release','Debug')][string]$Configuration = 'Release', [switch]$Game, [switch]$Optimize)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 $vs = $null
@@ -34,12 +34,17 @@ if ($Game) {
   }
 }
 $gameOption = if ($Game) { 'ON' } else { 'OFF' }
-& $cmake -S $root -B "$root\build\$Configuration" -G Ninja "-DCMAKE_BUILD_TYPE=$Configuration" "-DNFL2K5_BUILD_GAME=$gameOption" -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl 2>&1 | Tee-Object "$root\logs\configure-$Configuration.log"
+# -Optimize: generated code compiled with optimisation (NFL2K5_OPTIMIZE=ON) in its
+# own build directory, so the /Od build stays usable. A fresh cache there gets the
+# current recommended force-unblock set (see PROJECT_STATUS.md, 2026-09-23).
+$buildDir = if ($Optimize) { "$root\build\$Configuration-opt" } else { "$root\build\$Configuration" }
+$extra = if ($Optimize) { @('-DNFL2K5_OPTIMIZE=ON', '-DNFL2K5_FORCE_UNBLOCK_AUDIO_LOCK=ON', '-DNFL2K5_FORCE_UNBLOCK_33660_DRAIN=ON', '-DNFL2K5_FORCE_UNBLOCK_NETPOLL=ON', '-DNFL2K5_FORCE_UNBLOCK_STATE9_READY=ON') } else { @() }
+& $cmake -S $root -B $buildDir -G Ninja "-DCMAKE_BUILD_TYPE=$Configuration" "-DNFL2K5_BUILD_GAME=$gameOption" @extra -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl 2>&1 | Tee-Object "$root\logs\configure-$Configuration.log"
 if ($LASTEXITCODE) { throw 'CMake configure failed.' }
 if ($Game) { $buildTargets = @('--target','NFL2K5','NFL2K5_toolchain_check') }
 else { $buildTargets = @() }
-& $cmake --build "$root\build\$Configuration" @buildTargets --parallel 4 2>&1 | Tee-Object "$root\logs\build-$Configuration.log"
+& $cmake --build $buildDir @buildTargets --parallel 4 2>&1 | Tee-Object "$root\logs\build-$Configuration.log"
 if ($LASTEXITCODE) { throw 'Build failed; see logs.' }
-& "$root\build\$Configuration\NFL2K5_toolchain_check.exe"
+& "$buildDir\NFL2K5_toolchain_check.exe"
 if ($LASTEXITCODE) { throw 'Native toolchain check failed.' }
 if (-not $Game -and -not (Test-Path "$root\build\$Configuration\NFL2K5_Rebuild.exe")) { throw 'Native reconstruction build missing.' }

@@ -8220,6 +8220,8 @@ void sub_000331A0(void)
     ebp = g_seh_ebp; /* fpo_leaf: inherit caller's frame */
 
 loc_000331A0: ;
+    /* NFL2K5-GENPATCH:DIAG_PBRESET */
+    { extern void nfl2k5_diag_pbreset(uint32_t dev); nfl2k5_diag_pbreset(ecx); }
     PUSH32(esp, esi);
     esi = ecx;
     eax = MEM32(esi + 0xC);
