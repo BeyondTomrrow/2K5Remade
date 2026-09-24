@@ -2271,6 +2271,8 @@ int main(int argc, char **argv)
         }
         CreateThread(NULL, 0, nfl2k5_forced_display_thread, NULL, 0, NULL);
         printf("[BOOT] Entering recompiled NFL 2K5 code.\n");
+        /* Guest code runs one thread at a time (RECOMP_GGL); see xbox_ggl.h. */
+        { extern void xbox_ggl_enter(void); xbox_ggl_enter(); }
         __try { entry(); }
         __except(crash_report(GetExceptionInformation())) {
             /* 2026-09-21: forced-display path -- a guest crash used to exit
@@ -2278,6 +2280,7 @@ int main(int argc, char **argv)
              * with it) down. Keep the process alive so the forced synthetic
              * window keeps painting regardless of what the guest logic did;
              * only Ctrl+C or closing the window should end the run now. */
+            { extern int xbox_ggl_release_all(void); xbox_ggl_release_all(); }
             fprintf(stderr, "[BOOT] Guest crashed; process kept alive for the forced display window.\n");
             for (;;) Sleep(1000);
         }

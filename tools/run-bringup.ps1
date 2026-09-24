@@ -12,6 +12,12 @@ $stderr = "$root\logs\$label-$stamp.stderr.log"
 # ranking emitted at the ten-second pushbuffer report.
 $env:RECOMP_WATCHDOG_SECS = [string]($Seconds + 5)
 $env:RECOMP_AC97_READY = '1'
+# 2026-09-23 defaults (set the variable beforehand to override): run guest
+# threads one at a time like the single-core Xbox (xbox_ggl.h), drive the vblank
+# ISR, and skip the intro movies the way a button press would.
+if (-not $env:RECOMP_GGL) { $env:RECOMP_GGL = '1' }
+if (-not $env:RECOMP_VBLANK) { $env:RECOMP_VBLANK = '1' }
+if (-not $env:NFL2K5_SKIP_INTRO) { $env:NFL2K5_SKIP_INTRO = '1' }
 # The first game worker now runs: it is required to advance the title's
 # front-end state once audio and callback compatibility are in place.
 Remove-Item Env:RECOMP_SKIP_NFL2K5_BOOT_WORKER -ErrorAction SilentlyContinue

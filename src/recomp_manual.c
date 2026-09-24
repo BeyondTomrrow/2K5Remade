@@ -4,6 +4,8 @@
 #include <string.h>
 #include <windows.h>
 #include "xbox_memory_layout.h"
+/* Host yields in guest context must give up the guest CPU (RECOMP_GGL). */
+#include "xbox_ggl.h"
 #include "recomp_funcs.h"
 /* Boot-only AC97 channel reset acknowledgement. This does not synthesize audio. */
 void nfl2k5_ack_ac97_reset(uint32_t address)

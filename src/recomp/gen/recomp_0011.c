@@ -61434,6 +61434,19 @@ void sub_00178150(void)
     #define fp_st1() fp_st(1)
 
 loc_00178150: ;
+    /* NFL2K5-GENPATCH:SKIP_INTRO */
+    /* Runtime option NFL2K5_SKIP_INTRO=1 (2026-09-23): sub_00178150 plays one
+     * intro movie (espn_videogames, vc, espn_game_sound, intro -- the table at
+     * 0x4E9730) and returns 2 when the player skips it, which ends the intro
+     * loop at 0x74BC0. There is no input yet, and with the guest on one core
+     * the movies run far below real time, so this does what pressing a button
+     * would. */
+    {
+        extern char *__cdecl getenv(const char *);
+        static int skip = -1;
+        if (skip < 0) { const char *v = getenv("NFL2K5_SKIP_INTRO"); skip = v && *v && *v != '0'; }
+        if (skip) { eax = 2; esp += 8; return; /* ret 4 */ }
+    }
     PUSH32(esp, ebp);
     ebp = esp;
     g_ebp = ebp; /* publish frame for frameless callees */

@@ -78,10 +78,18 @@ index 1a662a8..c9f5989 100644
      }
  
 diff --git a/src/kernel/CMakeLists.txt b/src/kernel/CMakeLists.txt
-index 90060bd..1647a3e 100644
+index 90060bd..d756b60 100644
 --- a/src/kernel/CMakeLists.txt
 +++ b/src/kernel/CMakeLists.txt
-@@ -55,3 +55,12 @@ else()
+@@ -11,6 +11,7 @@ set(KERNEL_SOURCES
+     kernel_memory.c
+     kernel_file.c
+     kernel_thread.c
++    xbox_ggl.c
+     kernel_sync.c
+     kernel_hal.c
+     kernel_xbox.c
+@@ -55,3 +56,12 @@ else()
  endif()
  
  target_compile_definitions(xbox_kernel PRIVATE $<$<CONFIG:Debug>:_DEBUG>)
@@ -95,7 +103,7 @@ index 90060bd..1647a3e 100644
 +# target itself.
 +target_compile_definitions(xbox_kernel PUBLIC RECOMP_ICALL_FEEDBACK)
 diff --git a/src/kernel/kernel.h b/src/kernel/kernel.h
-index e515377..c94de27 100644
+index e515377..7e97cd3 100644
 --- a/src/kernel/kernel.h
 +++ b/src/kernel/kernel.h
 @@ -508,6 +508,7 @@ ULONG_PTR xbox_resolve_ordinal(ULONG ordinal);
@@ -141,8 +149,17 @@ index e515377..c94de27 100644
  
  BOOLEAN  __stdcall xbox_KeSynchronizeExecution(PXBOX_KINTERRUPT Interrupt, PVOID SynchronizeRoutine, PVOID SynchronizeContext);
  
+@@ -1074,4 +1089,8 @@ void xbox_log(int level, const char* subsystem, const char* fmt, ...);
+ }
+ #endif
+ 
++/* Guest code runs one host thread at a time; host blocking calls in the
++ * kernel layer release that lock. See xbox_ggl.h. */
++#include "xbox_ggl.h"
++
+ #endif /* XBOX_KERNEL_H */
 diff --git a/src/kernel/kernel_bridge.c b/src/kernel/kernel_bridge.c
-index 5b56513..e31b5f3 100644
+index 5b56513..c05dfd5 100644
 --- a/src/kernel/kernel_bridge.c
 +++ b/src/kernel/kernel_bridge.c
 @@ -49,6 +49,7 @@
@@ -153,7 +170,7 @@ index 5b56513..e31b5f3 100644
  extern uint32_t g_xbox_code_lo, g_xbox_code_hi;
  extern RECOMP_TLS uint32_t g_seh_ebp;
  extern ptrdiff_t g_xbox_mem_offset;
-@@ -61,9 +62,350 @@ int  xbox_worker_stack_alloc(void);
+@@ -61,9 +62,359 @@ int  xbox_worker_stack_alloc(void);
  
  recomp_func_t recomp_lookup_manual(uint32_t xbox_va);
  
@@ -300,11 +317,20 @@ index 5b56513..e31b5f3 100644
 +
 +void xbox_bridge_drain_guest_dpcs(void)
 +{
++    /* One pass over what is queued now, not "until empty": periodic host
++     * timers keep queueing DPCs, and a drain that chases them never returns --
++     * with the guest lock (RECOMP_GGL) at interrupt priority that starved every
++     * guest thread. Anything queued meanwhile runs on the next pass. */
++    LONG stop_at;
++    InitOnceExecuteOnce(&g_pending_dpc_once, bridge_init_dpc_lock, NULL, NULL);
++    EnterCriticalSection(&g_pending_dpc_lock);
++    stop_at = g_pending_dpc_tail;
++    LeaveCriticalSection(&g_pending_dpc_lock);
 +    for (;;) {
 +        bridge_guest_dpc item;
 +        InitOnceExecuteOnce(&g_pending_dpc_once, bridge_init_dpc_lock, NULL, NULL);
 +        EnterCriticalSection(&g_pending_dpc_lock);
-+        if (g_pending_dpc_head == g_pending_dpc_tail) {
++        if (g_pending_dpc_head == g_pending_dpc_tail || g_pending_dpc_head == stop_at) {
 +            LeaveCriticalSection(&g_pending_dpc_lock);
 +            break;
 +        }
@@ -505,12 +531,17 @@ index 5b56513..e31b5f3 100644
  /* Translate Xbox VA to native pointer (NULL-safe: 0 → NULL) */
  #define XBOX_TO_NATIVE(va) ((va) ? (void*)((uintptr_t)(va) + g_xbox_mem_offset) : NULL)
  
-@@ -434,10 +776,13 @@ static DWORD WINAPI bridge_thread_main(LPVOID param)
+@@ -434,10 +785,18 @@ static DWORD WINAPI bridge_thread_main(LPVOID param)
      }
      free(s);
  
 +    { extern void nfl2k5_trace_worker_bridge_start(uint32_t); nfl2k5_trace_worker_bridge_start(ctx1); }
++    if (xbox_ggl_enabled())
++        fprintf(stderr, "  [GGL] guest thread %lu runs start routine 0x%08X (ctx 0x%08X)\n",
++                GetCurrentThreadId(), ctx1, ctx2);
++    xbox_ggl_enter();
      bridge_run_thread_inline(fn, ctx1, ctx2);
++    xbox_ggl_release_all();
  
 -    fprintf(stderr, "  [KERNEL] worker thread returned (eax=0x%08X)\n", g_eax);
 -    fflush(stderr);
@@ -521,7 +552,7 @@ index 5b56513..e31b5f3 100644
      /* The routine returned instead of calling PsTerminateSystemThread; the
       * stack is still ours to give back. */
      xbox_FreeThreadStack(g_thread_stack_top);
-@@ -490,15 +835,30 @@ static void bridge_PsCreateSystemThreadEx(void)
+@@ -490,15 +849,30 @@ static void bridge_PsCreateSystemThreadEx(void)
                          && (g_thread_call_count == 0);
      g_thread_call_count++;
  
@@ -555,7 +586,7 @@ index 5b56513..e31b5f3 100644
      /* Call the start routine synchronously through the recomp dispatch.
       * Xbox thread start routines receive two parameters:
       *   void ThreadRoutine(PVOID StartContext1, PVOID StartContext2)
-@@ -521,8 +881,10 @@ static void bridge_PsCreateSystemThreadEx(void)
+@@ -521,8 +895,10 @@ static void bridge_PsCreateSystemThreadEx(void)
                  g_esp -= 4; BRIDGE_MEM32(g_esp) = 0;
                  fn();
                  g_esp += 12;
@@ -568,7 +599,7 @@ index 5b56513..e31b5f3 100644
              } else {
                  /* Worker thread: a real one.
                   *
-@@ -566,10 +928,12 @@ static void bridge_PsCreateSystemThreadEx(void)
+@@ -566,10 +942,12 @@ static void bridge_PsCreateSystemThreadEx(void)
                  } else {
                      HANDLE th = bridge_spawn_thread(fn, start_context1,
                                                      start_context2, stack_top);
@@ -585,7 +616,7 @@ index 5b56513..e31b5f3 100644
                      if (xbox_handle_ptr && th) {
                          bridge_write_handle(xbox_handle_ptr, th);
                      }
-@@ -738,7 +1102,7 @@ static void bridge_MmAllocateContiguousMemoryEx(void)
+@@ -738,7 +1116,7 @@ static void bridge_MmAllocateContiguousMemoryEx(void)
  static void bridge_MmFreeContiguousMemory(void)
  {
      uint32_t addr = STACK_ARG(0);
@@ -594,7 +625,7 @@ index 5b56513..e31b5f3 100644
      g_eax = 0;
  }
  
-@@ -1328,23 +1692,24 @@ static void bridge_KeSetEvent(void)
+@@ -1328,23 +1706,24 @@ static void bridge_KeSetEvent(void)
      uint32_t wait = STACK_ARG(2);
      HANDLE h;
  
@@ -629,7 +660,7 @@ index 5b56513..e31b5f3 100644
      uint32_t object = STACK_ARG(0);
      uint32_t wait_reason = STACK_ARG(1);
      uint32_t wait_mode = STACK_ARG(2);
-@@ -1358,9 +1723,28 @@ static void bridge_KeWaitForSingleObject(void)
+@@ -1358,9 +1737,28 @@ static void bridge_KeWaitForSingleObject(void)
      if (!h)
          h = XBOX_TO_NATIVE(object);
  
@@ -661,7 +692,7 @@ index 5b56513..e31b5f3 100644
  }
  
  /* ── NtWaitForSingleObject (ordinal 233) ─────────────────── */
-@@ -1372,6 +1756,7 @@ static void bridge_KeWaitForSingleObject(void)
+@@ -1372,6 +1770,7 @@ static void bridge_KeWaitForSingleObject(void)
   */
  static void bridge_NtWaitForSingleObject(void)
  {
@@ -669,7 +700,7 @@ index 5b56513..e31b5f3 100644
      HANDLE   handle      = bridge_resolve_handle(STACK_ARG(0));
      uint32_t alertable   = STACK_ARG(1);
      uint32_t timeout_ptr = STACK_ARG(2);
-@@ -1425,6 +1810,7 @@ static HANDLE bridge_resolve_handle(uint32_t token);
+@@ -1425,6 +1824,7 @@ static HANDLE bridge_resolve_handle(uint32_t token);
  
  static void bridge_NtWaitForSingleObjectEx(void)
  {
@@ -677,7 +708,7 @@ index 5b56513..e31b5f3 100644
      HANDLE   handle      = bridge_resolve_handle(STACK_ARG(0));
      uint32_t wait_mode   = STACK_ARG(1);
      uint32_t alertable   = STACK_ARG(2);
-@@ -1480,6 +1866,7 @@ static void bridge_NtWaitForSingleObjectEx(void)
+@@ -1480,6 +1880,7 @@ static void bridge_NtWaitForSingleObjectEx(void)
   */
  static void bridge_NtWaitForMultipleObjectsEx(void)
  {
@@ -685,7 +716,7 @@ index 5b56513..e31b5f3 100644
      uint32_t count       = STACK_ARG(0);
      uint32_t handles_va  = STACK_ARG(1);
      uint32_t wait_type   = STACK_ARG(2);
-@@ -1575,19 +1962,144 @@ static void bridge_NtUserIoApcDispatcher(void)
+@@ -1575,19 +1976,144 @@ static void bridge_NtUserIoApcDispatcher(void)
      g_eax = 0;
  }
  
@@ -830,7 +861,7 @@ index 5b56513..e31b5f3 100644
  }
  
  /* ── KeBugCheck (ordinal 95) / KeBugCheckEx (96) ─────────── */
-@@ -1618,6 +2130,7 @@ static void bridge_KeBugCheckEx(void)
+@@ -1618,6 +2144,7 @@ static void bridge_KeBugCheckEx(void)
  /* ── NtYieldExecution (ordinal 238) ──────────────────────── */
  static void bridge_NtYieldExecution(void)
  {
@@ -838,7 +869,15 @@ index 5b56513..e31b5f3 100644
      g_eax = (uint32_t)xbox_NtYieldExecution();
  }
  
-@@ -1763,54 +2276,13 @@ static void bridge_HalReadSMCTrayState(void)
+@@ -1731,6 +2258,7 @@ static void bridge_PsTerminateSystemThread(void)
+          * to do it. */
+         xbox_FreeThreadStack(g_thread_stack_top);
+         g_thread_stack_top = 0;
++        xbox_ggl_release_all();
+         ExitThread(exit_status);
+     }
+ }
+@@ -1763,54 +2291,13 @@ static void bridge_HalReadSMCTrayState(void)
   * interrupt enable and queues here, and the enumeration it should have started
   * lives entirely in the deferred routine.
   *
@@ -847,13 +886,7 @@ index 5b56513..e31b5f3 100644
 - * ISR returns, on whichever thread queued it. That ordering difference has not
 - * mattered for anything here yet; when it does, the upgrade is a real queue
 - * drained by the thread that lowered IRQL, not a second call site.
-+ * 2026-09-22: this ordinal is implemented for real below (bridge_KeInsertQueueDpc,
-+ * queued into g_pending_dpcs and drained via xbox_bridge_drain_guest_dpcs on
-+ * the timer thread), not inline. An independent, near-duplicate inline
-+ * implementation (kernel_run_dpc + its own g_dpc_queue) briefly existed here
-+ * too after an upstream merge; removed in favour of the one implementation
-+ * this project's recomp_manual.c already depends on.
-  */
+- */
 -/* Run a DPC's deferred routine on the calling thread.
 - *
 - * VOID DeferredRoutine(PKDPC, PVOID Context, PVOID Arg1, PVOID Arg2),
@@ -863,7 +896,13 @@ index 5b56513..e31b5f3 100644
 - * taken a worker slice.
 - *
 - * Returns 1 if the routine was found and called.
-- */
++ * 2026-09-22: this ordinal is implemented for real below (bridge_KeInsertQueueDpc,
++ * queued into g_pending_dpcs and drained via xbox_bridge_drain_guest_dpcs on
++ * the timer thread), not inline. An independent, near-duplicate inline
++ * implementation (kernel_run_dpc + its own g_dpc_queue) briefly existed here
++ * too after an upstream merge; removed in favour of the one implementation
++ * this project's recomp_manual.c already depends on.
+  */
 -static int kernel_run_dpc(uint32_t dpc_va, uint32_t arg1, uint32_t arg2)
 -{
 -    uint32_t routine, context;
@@ -899,7 +938,7 @@ index 5b56513..e31b5f3 100644
  
  /* -- KeSynchronizeExecution (ordinal 153) ------------------
   * BOOLEAN KeSynchronizeExecution(PKINTERRUPT Interrupt,
-@@ -1865,52 +2337,6 @@ static void bridge_KeRemoveQueueDpc(void)
+@@ -1865,52 +2352,6 @@ static void bridge_KeRemoveQueueDpc(void)
      g_eax = 0;
  }
  
@@ -952,7 +991,7 @@ index 5b56513..e31b5f3 100644
  /* Call a connected interrupt service routine.
   *
   * BOOLEAN ServiceRoutine(PKINTERRUPT, PVOID ServiceContext), __stdcall: its
-@@ -2006,17 +2432,6 @@ static void kernel_vblank_tick(void)
+@@ -2006,17 +2447,6 @@ static void kernel_vblank_tick(void)
      }
  }
  
@@ -970,7 +1009,7 @@ index 5b56513..e31b5f3 100644
  
  /* ── KeInitializeDpc (ordinal 107) ────────────────────────
   * VOID KeInitializeDpc(PKDPC Dpc, PKDEFERRED_ROUTINE DeferredRoutine,
-@@ -2084,6 +2499,13 @@ static void bridge_KeInitializeInterrupt(void)
+@@ -2084,6 +2514,13 @@ static void bridge_KeInitializeInterrupt(void)
      BRIDGE_MEM32(interrupt_va + 0)  = routine;
      BRIDGE_MEM32(interrupt_va + 4)  = context;
      BRIDGE_MEM32(interrupt_va + 8)  = vector;
@@ -984,7 +1023,7 @@ index 5b56513..e31b5f3 100644
      g_eax = 0;
  }
  
-@@ -2225,17 +2647,6 @@ static void bridge_KeInitializeTimerEx(void)
+@@ -2225,17 +2662,6 @@ static void bridge_KeInitializeTimerEx(void)
   * audio off a timer. A title that needs better wants the host's timer queue,
   * not a smaller sleep.
   */
@@ -1002,7 +1041,7 @@ index 5b56513..e31b5f3 100644
  static DWORD WINAPI kernel_timer_thread(LPVOID unused)
  {
      int slot = xbox_worker_stack_alloc();
-@@ -2263,114 +2674,74 @@ static DWORD WINAPI kernel_timer_thread(LPVOID unused)
+@@ -2263,114 +2689,78 @@ static DWORD WINAPI kernel_timer_thread(LPVOID unused)
          g_fs_base = tib;
      }
  
@@ -1022,6 +1061,9 @@ index 5b56513..e31b5f3 100644
 -        int i;
 -
          Sleep(10);
++        { static int named; if (!named && xbox_ggl_enabled()) { named = 1; fprintf(stderr, "  [GGL] timer/DPC thread %lu\n", GetCurrentThreadId()); } }
++        xbox_ggl_set_priority(100);  /* ISRs/DPCs preempt threads, as on hardware */
++        xbox_ggl_enter();      /* the ISR and DPCs are guest code */
          kernel_vblank_tick();  /* the GPU's frame clock */
 -        kernel_drain_dpcs();   /* deferred work, before due timers */
 -        now = (long long)GetTickCount64();
@@ -1057,6 +1099,7 @@ index 5b56513..e31b5f3 100644
 -            }
 -        }
 +        xbox_bridge_drain_guest_dpcs();
++        xbox_ggl_leave();
      }
  }
  
@@ -1170,7 +1213,7 @@ index 5b56513..e31b5f3 100644
  }
  
  /* ── ExQueryPoolBlockSize (ordinal 24) ────────────────────
-@@ -2792,13 +3163,17 @@ static void bridge_NtCreateFile(void)
+@@ -2792,13 +3182,17 @@ static void bridge_NtCreateFile(void)
      {
          extern uint32_t xbox_LastFileError(void);
          uint32_t _e = g_eax ? xbox_LastFileError() : 0u;
@@ -1190,7 +1233,7 @@ index 5b56513..e31b5f3 100644
              fprintf(stderr, "  [FILE] -> 0x%08X\n", g_eax);
      }
      fflush(stderr);
-@@ -2846,16 +3221,34 @@ static void deliver_one_apc(uint32_t apc_routine, uint32_t apc_context,
+@@ -2846,16 +3240,34 @@ static void deliver_one_apc(uint32_t apc_routine, uint32_t apc_context,
       * dispatch correctly fails to find it and the kernel fallback is the one
       * that matters. Checking only recomp_lookup left it undelivered. */
      recomp_func_t fn = recomp_lookup(apc_routine);
@@ -1228,7 +1271,7 @@ index 5b56513..e31b5f3 100644
      } else {
          uint32_t ord = 0;
          if (apc_routine >= KERNEL_VA_BASE && apc_routine < KERNEL_VA_END) {
-@@ -3041,6 +3434,21 @@ static void bridge_NtReadFile(void)
+@@ -3041,6 +3453,21 @@ static void bridge_NtReadFile(void)
          off.HighPart = (LONG)BRIDGE_MEM32(offset_va + 4);
          poff = &off;
      }
@@ -1250,7 +1293,7 @@ index 5b56513..e31b5f3 100644
      g_eax = (uint32_t)xbox_NtReadFile(handle, NULL, NULL, NULL, &ios,
                  XBOX_TO_NATIVE(buffer_va), length, poff);
  
-@@ -3515,6 +3923,12 @@ static void bridge_IoCreateSymbolicLink(void)
+@@ -3515,6 +3942,12 @@ static void bridge_IoCreateSymbolicLink(void)
  }
  
  /* ── ObReferenceObjectByHandle (ordinal 246) ─────────────── */
@@ -1263,7 +1306,7 @@ index 5b56513..e31b5f3 100644
  static void bridge_ObReferenceObjectByHandle(void)
  {
      /* Xbox: NTSTATUS ObReferenceObjectByHandle(HANDLE Handle, PVOID ObjectType, PVOID* Object)
-@@ -3524,6 +3938,12 @@ static void bridge_ObReferenceObjectByHandle(void)
+@@ -3524,6 +3957,12 @@ static void bridge_ObReferenceObjectByHandle(void)
      uint32_t object_ptr = STACK_ARG(2);
      if (object_ptr) BRIDGE_MEM32(object_ptr) = 0;
      g_eax = 0;  /* STATUS_SUCCESS */
@@ -1276,7 +1319,7 @@ index 5b56513..e31b5f3 100644
  }
  
  /* ── RtlRaiseException (ordinal 302) ─────────────────────
-@@ -3736,6 +4156,20 @@ static void bridge_KeQueryBasePriorityThread(void)
+@@ -3736,6 +4175,20 @@ static void bridge_KeQueryBasePriorityThread(void)
  
  static void bridge_KeSetBasePriorityThread(void)
  {
@@ -1297,7 +1340,7 @@ index 5b56513..e31b5f3 100644
      g_eax = (uint32_t)xbox_KeSetBasePriorityThread(
          XBOX_TO_NATIVE(STACK_ARG(0)), (LONG)STACK_ARG(1));
  }
-@@ -3766,7 +4200,8 @@ static void bridge_MmLockUnlockBufferPages(void)
+@@ -3766,7 +4219,8 @@ static void bridge_MmLockUnlockBufferPages(void)
   */
  static void bridge_MmQueryAllocationSize(void)
  {
@@ -1307,7 +1350,7 @@ index 5b56513..e31b5f3 100644
  }
  
  /* ── NtCreateMutant (ordinal 192, 3 args) */
-@@ -3825,18 +4260,33 @@ static void bridge_NtReleaseMutant(void)
+@@ -3825,18 +4279,33 @@ static void bridge_NtReleaseMutant(void)
  static void bridge_NtSuspendThread(void)
  {
      uint32_t count_va = STACK_ARG(1);
@@ -1344,7 +1387,7 @@ index 5b56513..e31b5f3 100644
  }
  
  /* ── ObfDereferenceObject (ordinal 250, fastcall: object in ecx)
-@@ -4034,6 +4484,7 @@ static void bridge_KeAlertThread(void)
+@@ -4034,6 +4503,7 @@ static void bridge_KeAlertThread(void)
  
  static void bridge_KeWaitForMultipleObjects(void)
  {
@@ -1352,7 +1395,7 @@ index 5b56513..e31b5f3 100644
      uint32_t count      = STACK_ARG(0);
      uint32_t objects_va = STACK_ARG(1);
      uint32_t wait_type  = STACK_ARG(2);
-@@ -4042,6 +4493,8 @@ static void bridge_KeWaitForMultipleObjects(void)
+@@ -4042,6 +4512,8 @@ static void bridge_KeWaitForMultipleObjects(void)
      HANDLE handles[BRIDGE_MAXIMUM_WAIT_OBJECTS];
      uint32_t i;
  
@@ -1361,7 +1404,7 @@ index 5b56513..e31b5f3 100644
      if (count == 0) {
          g_eax = (uint32_t)STATUS_INVALID_PARAMETER;
          return;
-@@ -4052,11 +4505,23 @@ static void bridge_KeWaitForMultipleObjects(void)
+@@ -4052,11 +4524,23 @@ static void bridge_KeWaitForMultipleObjects(void)
          handles[i] = bridge_resolve_handle(
              objects_va ? BRIDGE_MEM32(objects_va + i * 4) : 0);
  
@@ -1390,7 +1433,7 @@ index 5b56513..e31b5f3 100644
  }
  
  #undef BRIDGE_MAXIMUM_WAIT_OBJECTS
-@@ -8816,6 +9281,7 @@ static void kernel_thunk_dispatch(void)
+@@ -8816,6 +9300,7 @@ static void kernel_thunk_dispatch(void)
      int slot = g_kernel_dispatch_slot;
      bridge_func_t bridge;
      ULONG ordinal;
@@ -1398,8 +1441,14 @@ index 5b56513..e31b5f3 100644
  
      if (slot < 0 || slot >= XBOX_KERNEL_THUNK_TABLE_SIZE) {
          fprintf(stderr, "  [KERNEL] bad slot %d\n", slot);
-@@ -8826,6 +9292,8 @@ static void kernel_thunk_dispatch(void)
+@@ -8824,8 +9309,14 @@ static void kernel_thunk_dispatch(void)
+         return;
+     }
  
++    /* Kernel-call boundary: stand-in for the timer preemption a single-core
++     * Xbox would do here. See xbox_ggl.h. */
++    xbox_ggl_preempt_point(g_esp ? BRIDGE_MEM32(g_esp) : 0);
++
      ordinal = g_slot_ordinals[slot];
      bridge = g_slot_bridges[slot];
 +    if (g_esp)
@@ -1407,19 +1456,24 @@ index 5b56513..e31b5f3 100644
  
      g_kernel_call_count++;
      if (ordinal < XBOX_KERNEL_THUNK_TABLE_SIZE)
-@@ -8848,8 +9316,9 @@ static void kernel_thunk_dispatch(void)
+@@ -8848,8 +9339,14 @@ static void kernel_thunk_dispatch(void)
          DWORD now = GetTickCount();
          if (last_summary_tick == 0) last_summary_tick = now;
          if (now - last_summary_tick >= 2000 && g_kernel_call_count > 200) {
 -            fprintf(stderr, "  [KERNEL] summary: %d total calls, latest ordinal %u (slot %d) esp=0x%08X\n",
 -                    g_kernel_call_count, ordinal, slot, g_esp);
++            /* A multi-kilobyte dump: do it off the guest CPU (RECOMP_GGL), and
++             * claim the tick first so a second thread does not start one too. */
++            int ggl_depth;
++            last_summary_tick = now;
++            ggl_depth = xbox_ggl_release_all();
 +            fprintf(stderr, "  [KERNEL] summary: %d total calls, latest ordinal %u (slot %d) esp=0x%08X ret=0x%08X\n",
 +                    g_kernel_call_count, ordinal, slot, g_esp,
 +                    g_esp ? BRIDGE_MEM32(g_esp) : 0);
              /* And which ones, ranked. "Latest" names whatever the sample
               * happened to land on; the question behind this line is what a
               * title sitting still is actually asking the kernel for, and
-@@ -8872,6 +9341,122 @@ static void kernel_thunk_dispatch(void)
+@@ -8872,8 +9369,124 @@ static void kernel_thunk_dispatch(void)
                              (unsigned long long)g_ordinal_calls[best]);
                  }
              }
@@ -1540,9 +1594,12 @@ index 5b56513..e31b5f3 100644
 +                }
 +            }
              fflush(stderr);
-             last_summary_tick = now;
+-            last_summary_tick = now;
++            xbox_ggl_reacquire(ggl_depth);
          }
-@@ -8951,8 +9536,58 @@ static void kernel_thunk_dispatch(void)
+     }
+ 
+@@ -8951,8 +9564,58 @@ static void kernel_thunk_dispatch(void)
       * On real x86, stdcall callee does "ret N" to pop the return address
       * and N bytes of arguments. We already popped the dummy return address
       * above; now pop the args. */
@@ -1601,7 +1658,7 @@ index 5b56513..e31b5f3 100644
      if (g_kernel_watch_va) {
          uint32_t _after = BRIDGE_MEM32(g_kernel_watch_va);
          if (_after != _watch_before) {
-@@ -8988,6 +9623,35 @@ recomp_func_t recomp_lookup_kernel(uint32_t xbox_va)
+@@ -8988,6 +9651,35 @@ recomp_func_t recomp_lookup_kernel(uint32_t xbox_va)
      return NULL;
  }
  
@@ -1637,7 +1694,7 @@ index 5b56513..e31b5f3 100644
  /* ── Initialization ─────────────────────────────────────── */
  
  /*
-@@ -9076,6 +9740,13 @@ void xbox_kernel_bridge_init(void)
+@@ -9076,6 +9768,13 @@ void xbox_kernel_bridge_init(void)
  
      /* Initialize kernel data export values first */
      kernel_data_init();
@@ -1651,7 +1708,7 @@ index 5b56513..e31b5f3 100644
  
      for (i = 0; i < g_thunk_table_count; i++) {
          uint32_t va = g_thunk_table_base + i * 4;
-@@ -9192,4 +9863,33 @@ void xbox_kernel_bridge_init(void)
+@@ -9192,4 +9891,33 @@ void xbox_kernel_bridge_init(void)
      fprintf(stderr, "  Synthetic VA range: 0x%08X-0x%08X\n",
              KERNEL_VA_BASE, KERNEL_VA_BASE + (resolved - 1) * 4);
  
@@ -1725,10 +1782,18 @@ index 9957219..e982656 100644
  {
      /* Creating the shadow here is not required -- Enter does it -- but doing
 diff --git a/src/kernel/kernel_thread.c b/src/kernel/kernel_thread.c
-index 17cb31f..0d65104 100644
+index 17cb31f..172d860 100644
 --- a/src/kernel/kernel_thread.c
 +++ b/src/kernel/kernel_thread.c
-@@ -344,31 +344,126 @@ NTSTATUS __stdcall xbox_NtDuplicateObject(
+@@ -138,6 +138,7 @@ NTSTATUS __stdcall xbox_PsTerminateSystemThread(NTSTATUS ExitStatus)
+         "PsTerminateSystemThread: thread %u exiting with status 0x%08X",
+         GetCurrentThreadId(), ExitStatus);
+ 
++    xbox_ggl_release_all();
+     ExitThread((DWORD)ExitStatus);
+ 
+     /* ExitThread never returns, but the compiler needs this */
+@@ -344,31 +345,126 @@ NTSTATUS __stdcall xbox_NtDuplicateObject(
      return STATUS_SUCCESS;
  }
  
@@ -1870,7 +1935,7 @@ index 17cb31f..0d65104 100644
      return STATUS_SUCCESS;
  }
  
-@@ -376,15 +471,35 @@ NTSTATUS __stdcall xbox_NtResumeThread(
+@@ -376,15 +472,35 @@ NTSTATUS __stdcall xbox_NtResumeThread(
      HANDLE ThreadHandle,
      PULONG PreviousSuspendCount)
  {
@@ -1984,7 +2049,7 @@ index b3dcbf7..bafc290 100644
          break;
  
 diff --git a/src/kernel/nv2a_pb_scan.c b/src/kernel/nv2a_pb_scan.c
-index ce1196e..b07eb84 100644
+index ce1196e..5ac311a 100644
 --- a/src/kernel/nv2a_pb_scan.c
 +++ b/src/kernel/nv2a_pb_scan.c
 @@ -45,6 +45,13 @@ extern void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
@@ -2001,7 +2066,40 @@ index ce1196e..b07eb84 100644
  static void note(uint32_t subch, uint32_t method)
  {
      for (int i = 0; i < s_seen_count; i++) {
-@@ -180,9 +187,11 @@ void nv2a_pb_scan(uint32_t start_va, uint32_t end_va)
+@@ -125,13 +132,22 @@ static const char *nv097_name(uint32_t m)
+     return "";
+ }
+ 
++/* Set-but-"0" means off: tools/run-bringup.ps1 sets RECOMP_PB_SCAN=0 to
++ * disable the survey, and a presence test turned that into "on", dumping a
++ * few thousand [PB] lines every ten seconds. */
++static int pb_scan_env_on(void)
++{
++    const char *v = getenv("RECOMP_PB_SCAN");
++    return v && *v && strcmp(v, "0") != 0;
++}
++
+ void nv2a_pb_scan_report(void)
+ {
+     int i;
+ 
+     if (s_exec_enabled > 0)
+         nv2a_pb_exec_report();
+-    if (!s_seen_count || !getenv("RECOMP_PB_SCAN"))
++    if (!s_seen_count || !pb_scan_env_on())
+         return;
+     fprintf(stderr, "[PB] %u segments, %u words, %u jumps, %u unrecognised"
+                     " -- %d distinct (subchannel, method) pairs\n",
+@@ -152,7 +168,7 @@ void nv2a_pb_scan(uint32_t start_va, uint32_t end_va)
+ 
+     if (s_exec_enabled < 0)
+         s_exec_enabled = getenv("RECOMP_PB_EXEC") != NULL;
+-    if (!(getenv("RECOMP_PB_SCAN") || s_exec_enabled) || end_va <= start_va)
++    if (!(pb_scan_env_on() || s_exec_enabled) || end_va <= start_va)
+         return;
+     if (end_va - start_va > 0x400000u)        /* a sane single-frame bound */
+         end_va = start_va + 0x400000u;
+@@ -180,9 +196,11 @@ void nv2a_pb_scan(uint32_t start_va, uint32_t end_va)
                  /* Same walk, two consumers: the survey counts, the executor
                   * acts. Keeping them on one decode means they can never
                   * disagree about what the stream said. */
@@ -2014,8 +2112,397 @@ index ce1196e..b07eb84 100644
                  va += 4;
                  words++;
              }
+diff --git a/src/kernel/xbox_ggl.c b/src/kernel/xbox_ggl.c
+new file mode 100644
+index 0000000..462944f
+--- /dev/null
++++ b/src/kernel/xbox_ggl.c
+@@ -0,0 +1,302 @@
++/* Global guest lock -- see xbox_ggl.h for why. */
++#define XBOX_GGL_IMPL
++#include <windows.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include "xbox_ggl.h"
++
++static int g_enabled = -1;
++static SRWLOCK g_lock = SRWLOCK_INIT;
++static CONDITION_VARIABLE g_turn = CONDITION_VARIABLE_INIT;
++static volatile LONG g_waiters;
++static unsigned long long g_next_seq;
++
++/* Waiting threads. The lock goes to the highest priority waiter, FIFO among
++ * equals -- the Xbox scheduler's rule. The timer/DPC thread runs at the top
++ * priority, so vblank ISRs and DPCs preempt guest threads at their next kernel
++ * call the way an interrupt would, instead of queueing behind them. */
++#define GGL_MAX_WAITERS 64
++static struct { DWORD tid; int prio; unsigned long long seq; } g_wait[GGL_MAX_WAITERS];
++static int g_nwait;
++static volatile LONG g_best_waiting_prio = -1000;
++static __declspec(thread) int t_prio;
++static volatile DWORD g_owner;
++static volatile LONGLONG g_owner_since;      /* QPC when the owner got the lock */
++static volatile LONGLONG g_owner_last_point; /* QPC of its last kernel call */
++static volatile unsigned int g_owner_last_site; /* guest return address of that call */
++static LONGLONG g_qpc_freq, g_quantum_ticks;
++
++static __declspec(thread) int t_depth;
++
++/* Per-thread accounting, reported by the watchdog every 10 s: how long each
++ * guest thread held the guest CPU and how long it queued for it. */
++#define GGL_STAT_SLOTS 32
++static struct { volatile DWORD tid; volatile LONGLONG held, waited; volatile LONG grants; } g_stat[GGL_STAT_SLOTS];
++static __declspec(thread) int t_stat = -1;
++
++static int ggl_stat_slot(void)
++{
++    if (t_stat < 0) {
++        DWORD tid = GetCurrentThreadId();
++        for (int i = 0; i < GGL_STAT_SLOTS; i++) {
++            if (InterlockedCompareExchange((volatile LONG *)&g_stat[i].tid, (LONG)tid, 0) == 0
++                || g_stat[i].tid == tid) { t_stat = i; break; }
++        }
++    }
++    return t_stat;
++}
++
++static LONGLONG qpc_now(void)
++{
++    LARGE_INTEGER v;
++    QueryPerformanceCounter(&v);
++    return v.QuadPart;
++}
++
++static DWORD WINAPI ggl_watchdog(LPVOID unused)
++{
++    DWORD reported = 0;
++    int tick = 0;
++    (void)unused;
++    for (;;) {
++        Sleep(1000);
++        if (++tick % 10 == 0) {
++            fprintf(stderr, "  [GGL] stats (ms held / ms waiting / grants):");
++            for (int i = 0; i < GGL_STAT_SLOTS; i++)
++                if (g_stat[i].tid && g_stat[i].grants)
++                    fprintf(stderr, " t%lu=%lld/%lld/%ld", g_stat[i].tid,
++                            g_stat[i].held * 1000 / g_qpc_freq,
++                            g_stat[i].waited * 1000 / g_qpc_freq, g_stat[i].grants);
++            fprintf(stderr, "\n");
++            fflush(stderr);
++        }
++        DWORD owner = g_owner;
++        LONGLONG last = g_owner_last_point;
++        if (!owner || !g_waiters || !last) { reported = 0; continue; }
++        LONGLONG ms = (qpc_now() - last) * 1000 / g_qpc_freq;
++        if (ms >= 2000 && owner != reported) {
++            fprintf(stderr, "  [GGL] thread %lu has held the guest CPU for %lld ms "
++                            "without a kernel call (last one returned to guest 0x%08X); "
++                            "%ld thread(s) waiting -- a guest spin loop the lock cannot preempt?\n",
++                    owner, ms, g_owner_last_site, g_waiters);
++            fflush(stderr);
++            reported = owner;
++        }
++    }
++}
++
++int xbox_ggl_enabled(void)
++{
++    if (g_enabled < 0) {
++        const char *v = getenv("RECOMP_GGL");
++        LARGE_INTEGER f;
++        int enabled = v && *v && strcmp(v, "0") != 0;
++        QueryPerformanceFrequency(&f);
++        g_qpc_freq = f.QuadPart;
++        {
++            const char *q = getenv("RECOMP_GGL_QUANTUM_MS");
++            int ms = q ? atoi(q) : 2;
++            if (ms < 1) ms = 1;
++            g_quantum_ticks = g_qpc_freq * ms / 1000;
++        }
++        if (enabled) {
++            const char *w = getenv("RECOMP_GGL_WATCHDOG");
++            if (!w || strcmp(w, "0") != 0) {
++                HANDLE t = CreateThread(NULL, 0, ggl_watchdog, NULL, 0, NULL);
++                if (t) CloseHandle(t);
++            }
++            fprintf(stderr, "  [GGL] global guest lock enabled (quantum %lld ms)\n",
++                    g_quantum_ticks * 1000 / g_qpc_freq);
++            fflush(stderr);
++        }
++        g_enabled = enabled;
++    }
++    return g_enabled;
++}
++
++static __declspec(thread) LONGLONG t_acquired_at;
++
++/* Caller holds g_lock. */
++static void ggl_update_best(void)
++{
++    int best = -1000;
++    for (int i = 0; i < g_nwait; i++)
++        if (g_wait[i].prio > best) best = g_wait[i].prio;
++    g_best_waiting_prio = best;
++}
++
++/* Caller holds g_lock: is this waiter the one the lock should go to? */
++static int ggl_is_next(unsigned long long seq, int prio)
++{
++    for (int i = 0; i < g_nwait; i++) {
++        if (g_wait[i].prio > prio) return 0;
++        if (g_wait[i].prio == prio && g_wait[i].seq < seq) return 0;
++    }
++    return 1;
++}
++
++static void ggl_acquire_raw(void)
++{
++    LONGLONG asked = qpc_now();
++    int slot = ggl_stat_slot();
++    DWORD tid = GetCurrentThreadId();
++    AcquireSRWLockExclusive(&g_lock);
++    if (g_owner != 0 || g_nwait > 0) {
++        unsigned long long seq = g_next_seq++;
++        int me = g_nwait < GGL_MAX_WAITERS ? g_nwait++ : GGL_MAX_WAITERS - 1;
++        g_wait[me].tid = tid; g_wait[me].prio = t_prio; g_wait[me].seq = seq;
++        ggl_update_best();
++        InterlockedIncrement(&g_waiters);
++        while (g_owner != 0 || !ggl_is_next(seq, t_prio))
++            SleepConditionVariableSRW(&g_turn, &g_lock, INFINITE, 0);
++        InterlockedDecrement(&g_waiters);
++        for (int i = 0; i < g_nwait; i++)
++            if (g_wait[i].tid == tid) { g_wait[i] = g_wait[--g_nwait]; break; }
++        ggl_update_best();
++    }
++    g_owner = tid;
++    g_owner_since = g_owner_last_point = t_acquired_at = qpc_now();
++    ReleaseSRWLockExclusive(&g_lock);
++    if (slot >= 0) {
++        g_stat[slot].waited += t_acquired_at - asked;
++        InterlockedIncrement(&g_stat[slot].grants);
++    }
++}
++
++static void ggl_release_raw(void)
++{
++    int slot = ggl_stat_slot();
++    if (slot >= 0)
++        g_stat[slot].held += qpc_now() - t_acquired_at;
++    AcquireSRWLockExclusive(&g_lock);
++    g_owner = 0;
++    ReleaseSRWLockExclusive(&g_lock);
++    WakeAllConditionVariable(&g_turn);
++}
++
++void xbox_ggl_enter(void)
++{
++    if (!xbox_ggl_enabled()) return;
++    if (t_depth++ == 0)
++        ggl_acquire_raw();
++}
++
++void xbox_ggl_leave(void)
++{
++    if (!xbox_ggl_enabled() || t_depth <= 0) return;
++    if (--t_depth == 0)
++        ggl_release_raw();
++}
++
++int xbox_ggl_release_all(void)
++{
++    int depth = t_depth;
++    if (depth > 0) {
++        t_depth = 0;
++        ggl_release_raw();
++    }
++    return depth;
++}
++
++void xbox_ggl_reacquire(int depth)
++{
++    if (depth > 0) {
++        ggl_acquire_raw();
++        t_depth = depth;
++    }
++}
++
++void xbox_ggl_set_priority(int prio)
++{
++    t_prio = prio;
++}
++
++void xbox_ggl_preempt_point(unsigned int guest_site)
++{
++    LONGLONG now;
++    if (t_depth <= 0) return;
++    now = qpc_now();
++    g_owner_last_point = now;
++    g_owner_last_site = guest_site;
++    if (g_waiters > 0 &&
++        (g_best_waiting_prio > t_prio ||
++         (g_best_waiting_prio == t_prio && now - g_owner_since >= g_quantum_ticks))) {
++        int depth = xbox_ggl_release_all();
++        xbox_ggl_reacquire(depth);
++    }
++}
++
++/* Blocking primitives: give up the guest CPU for the duration. A thread that
++ * does not hold it (host-only threads) goes straight through. */
++#define GGL_BLOCKING(expr) do { int _d = xbox_ggl_release_all(); expr; xbox_ggl_reacquire(_d); } while (0)
++
++void xbox_ggl_Sleep(DWORD ms)
++{
++    GGL_BLOCKING(Sleep(ms));
++}
++
++DWORD xbox_ggl_SleepEx(DWORD ms, BOOL alertable)
++{
++    DWORD r;
++    GGL_BLOCKING(r = SleepEx(ms, alertable));
++    return r;
++}
++
++BOOL xbox_ggl_SwitchToThread(void)
++{
++    BOOL r;
++    GGL_BLOCKING(r = SwitchToThread());
++    return r;
++}
++
++DWORD xbox_ggl_WaitForSingleObject(HANDLE h, DWORD ms)
++{
++    DWORD r;
++    if (ms == 0) return WaitForSingleObject(h, 0);   /* a poll, not a block */
++    GGL_BLOCKING(r = WaitForSingleObject(h, ms));
++    return r;
++}
++
++DWORD xbox_ggl_WaitForSingleObjectEx(HANDLE h, DWORD ms, BOOL alertable)
++{
++    DWORD r;
++    if (ms == 0) return WaitForSingleObjectEx(h, 0, alertable);
++    GGL_BLOCKING(r = WaitForSingleObjectEx(h, ms, alertable));
++    return r;
++}
++
++DWORD xbox_ggl_WaitForMultipleObjects(DWORD n, const HANDLE *h, BOOL all, DWORD ms)
++{
++    DWORD r;
++    if (ms == 0) return WaitForMultipleObjects(n, h, all, 0);
++    GGL_BLOCKING(r = WaitForMultipleObjects(n, h, all, ms));
++    return r;
++}
++
++DWORD xbox_ggl_WaitForMultipleObjectsEx(DWORD n, const HANDLE *h, BOOL all, DWORD ms, BOOL alertable)
++{
++    DWORD r;
++    if (ms == 0) return WaitForMultipleObjectsEx(n, h, all, 0, alertable);
++    GGL_BLOCKING(r = WaitForMultipleObjectsEx(n, h, all, ms, alertable));
++    return r;
++}
++
++void xbox_ggl_EnterCriticalSection(LPCRITICAL_SECTION cs)
++{
++    if (TryEnterCriticalSection(cs)) return;
++    GGL_BLOCKING(EnterCriticalSection(cs));
++}
++
++BOOL xbox_ggl_SleepConditionVariableCS(PCONDITION_VARIABLE cv, PCRITICAL_SECTION cs, DWORD ms)
++{
++    BOOL r;
++    GGL_BLOCKING(r = SleepConditionVariableCS(cv, cs, ms));
++    return r;
++}
++
++BOOL xbox_ggl_SleepConditionVariableSRW(PCONDITION_VARIABLE cv, PSRWLOCK l, DWORD ms, ULONG flags)
++{
++    BOOL r;
++    GGL_BLOCKING(r = SleepConditionVariableSRW(cv, l, ms, flags));
++    return r;
++}
+diff --git a/src/kernel/xbox_ggl.h b/src/kernel/xbox_ggl.h
+new file mode 100644
+index 0000000..6def568
+--- /dev/null
++++ b/src/kernel/xbox_ggl.h
+@@ -0,0 +1,75 @@
++/*
++ * Global guest lock: run translated guest code on one host thread at a time.
++ *
++ * The Xbox has a single CPU core. Titles and the XDK were written for that,
++ * and quietly depend on it: a worker that checks "nothing to do" and then
++ * suspends itself cannot lose the requester's resume in between, a lock-free
++ * list touched by two threads is never touched by both at once, a DPC never
++ * runs in parallel with the thread it interrupted. The runtime maps each guest
++ * thread onto a real host thread, so all of those assumptions break at once --
++ * NFL 2K5 hit four separate races of this kind in one day (lost resumes,
++ * suspends landing inside host fprintf, a starved scheduler pump, a lock cycle
++ * through XAPI's thread-notify lock).
++ *
++ * With RECOMP_GGL=1 every host thread that runs guest code holds this lock
++ * while it does, so guest code executes one thread at a time, exactly like the
++ * original machine. The lock is released:
++ *   - inside every host blocking primitive the kernel layer uses (the macros
++ *     below reroute Sleep, waits, contended EnterCriticalSection and condition
++ *     variable sleeps), because on the Xbox a thread that blocks gives up the
++ *     CPU;
++ *   - at kernel-call boundaries once the holder has run for a quantum and
++ *     someone is waiting (xbox_ggl_preempt_point), standing in for the
++ *     scheduler's timer preemption.
++ * A guest loop that spins on memory without ever calling the kernel cannot be
++ * preempted here; the watchdog reports it (RECOMP_GGL_WATCHDOG, default on).
++ *
++ * The lock is a FIFO ticket lock so round-robin between ready threads is fair.
++ * It is recursive per thread: the bridge sometimes runs guest callbacks from
++ * inside a kernel call on a thread that already holds it.
++ */
++#ifndef XBOX_GGL_H
++#define XBOX_GGL_H
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++int  xbox_ggl_enabled(void);
++void xbox_ggl_enter(void);          /* take (recursive) */
++void xbox_ggl_leave(void);          /* drop one level */
++int  xbox_ggl_release_all(void);    /* drop every level, return the depth */
++void xbox_ggl_reacquire(int depth); /* restore a depth from release_all */
++void xbox_ggl_preempt_point(unsigned int guest_site); /* kernel-call boundary: maybe yield */
++void xbox_ggl_set_priority(int prio); /* this thread; higher wins, default 0 */
++
++#ifndef XBOX_GGL_IMPL
++#include <windows.h>
++void  xbox_ggl_Sleep(DWORD ms);
++DWORD xbox_ggl_SleepEx(DWORD ms, BOOL alertable);
++BOOL  xbox_ggl_SwitchToThread(void);
++DWORD xbox_ggl_WaitForSingleObject(HANDLE h, DWORD ms);
++DWORD xbox_ggl_WaitForSingleObjectEx(HANDLE h, DWORD ms, BOOL alertable);
++DWORD xbox_ggl_WaitForMultipleObjects(DWORD n, const HANDLE *h, BOOL all, DWORD ms);
++DWORD xbox_ggl_WaitForMultipleObjectsEx(DWORD n, const HANDLE *h, BOOL all, DWORD ms, BOOL alertable);
++void  xbox_ggl_EnterCriticalSection(LPCRITICAL_SECTION cs);
++BOOL  xbox_ggl_SleepConditionVariableCS(PCONDITION_VARIABLE cv, PCRITICAL_SECTION cs, DWORD ms);
++BOOL  xbox_ggl_SleepConditionVariableSRW(PCONDITION_VARIABLE cv, PSRWLOCK l, DWORD ms, ULONG flags);
++
++#define Sleep(ms)                          xbox_ggl_Sleep(ms)
++#define SleepEx(ms, a)                     xbox_ggl_SleepEx(ms, a)
++#define SwitchToThread()                   xbox_ggl_SwitchToThread()
++#define WaitForSingleObject(h, ms)         xbox_ggl_WaitForSingleObject(h, ms)
++#define WaitForSingleObjectEx(h, ms, a)    xbox_ggl_WaitForSingleObjectEx(h, ms, a)
++#define WaitForMultipleObjects(n, h, w, ms)      xbox_ggl_WaitForMultipleObjects(n, h, w, ms)
++#define WaitForMultipleObjectsEx(n, h, w, ms, a) xbox_ggl_WaitForMultipleObjectsEx(n, h, w, ms, a)
++#define EnterCriticalSection(cs)           xbox_ggl_EnterCriticalSection(cs)
++#define SleepConditionVariableCS(cv, cs, ms)     xbox_ggl_SleepConditionVariableCS(cv, cs, ms)
++#define SleepConditionVariableSRW(cv, l, ms, f)  xbox_ggl_SleepConditionVariableSRW(cv, l, ms, f)
++#endif
++
++#ifdef __cplusplus
++}
++#endif
++
++#endif /* XBOX_GGL_H */
 diff --git a/src/kernel/xbox_memory_layout.c b/src/kernel/xbox_memory_layout.c
-index 53d8c75..7a51c37 100644
+index 53d8c75..5aeb7bf 100644
 --- a/src/kernel/xbox_memory_layout.c
 +++ b/src/kernel/xbox_memory_layout.c
 @@ -14,8 +14,12 @@
@@ -2118,7 +2605,28 @@ index 53d8c75..7a51c37 100644
          {
              DWORD tls_dir_va = *(const DWORD *)(xbe + XBE_TLS_ADDR_OFFSET);
  
-@@ -2521,25 +2540,69 @@ void xbox_FreeThreadStack(uint32_t stack_top)
+@@ -1971,6 +1990,20 @@ BOOL xbox_MemoryLayoutInit(const void *xbe_data, size_t xbe_size)
+                 if (VirtualProtect((char *)g_mcpx_memory, 0x00080000u,
+                                    PAGE_NOACCESS, &old_protect))
+                     g_apu_mmio_trapped = 1;
++                /* Except the GP and EP DSPs' memory windows (X/Y/P memory,
++                 * 0x30000..0x3EFFF and 0x50000..0x5EFFF). The emulated APU
++                 * ignores those ranges, and the title copies whole DSP images
++                 * through them -- NFL 2K5's XDSP chunk loader does it with a
++                 * rep movsd the host lowers to an AVX memcpy, which the
++                 * MMIO decoder cannot emulate. As plain memory they read back
++                 * what was written. Each window's last page (GPRST/EPRST at
++                 * +0xFFFC) stays trapped. */
++                if (g_apu_mmio_trapped) {
++                    VirtualProtect((char *)g_mcpx_memory + 0x30000u, 0xF000u,
++                                   PAGE_READWRITE, &old_protect);
++                    VirtualProtect((char *)g_mcpx_memory + 0x50000u, 0xF000u,
++                                   PAGE_READWRITE, &old_protect);
++                }
+                 if (g_apu_mmio_trapped)
+                     fprintf(stderr, "  APU: 0x%08X..0x%08X trapped for MMIO\n",
+                             XBOX_MCPX_BASE, XBOX_MCPX_BASE + 0x00080000u);
+@@ -2521,25 +2554,69 @@ void xbox_FreeThreadStack(uint32_t stack_top)
   * Never freed: contiguous blocks are framebuffers and pushbuffers, which a
   * title allocates once. */
  static uint32_t g_contig_next = XBOX_CONTIG_BASE;

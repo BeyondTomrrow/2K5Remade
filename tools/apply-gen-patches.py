@@ -98,6 +98,20 @@ PATCHES = [
     }
 #endif
 """),
+    ("SKIP_INTRO", "sub_00178150", "loc_00178150: ;", "after", """\
+    /* Runtime option NFL2K5_SKIP_INTRO=1 (2026-09-23): sub_00178150 plays one
+     * intro movie (espn_videogames, vc, espn_game_sound, intro -- the table at
+     * 0x4E9730) and returns 2 when the player skips it, which ends the intro
+     * loop at 0x74BC0. There is no input yet, and with the guest on one core
+     * the movies run far below real time, so this does what pressing a button
+     * would. */
+    {
+        extern char *__cdecl getenv(const char *);
+        static int skip = -1;
+        if (skip < 0) { const char *v = getenv("NFL2K5_SKIP_INTRO"); skip = v && *v && *v != '0'; }
+        if (skip) { eax = 2; esp += 8; return; /* ret 4 */ }
+    }
+"""),
     ("AUDIO_LOCK", "sub_0044BB44", "loc_0044BCAB: ;", "before", """\
 #ifdef NFL2K5_FORCE_UNBLOCK_AUDIO_LOCK
     /* EXPERIMENTAL, 2026-09-21: the busy-wait at loc_0044BCAB spins on a
