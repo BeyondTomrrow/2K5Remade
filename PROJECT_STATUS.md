@@ -2153,3 +2153,18 @@ First real images: the SEGA splash and the ESPN Videogames intro movie render th
 - **Window**: now follows the surface at each `FLIP_STALL` (a finished frame) instead of every clear (mid-redraw). `NFL2K5.exe` with no arguments now defaults `RECOMP_GGL=1`, `RECOMP_VBLANK=1` and quiet kernel logging, like `tools/run-bringup.ps1` (which launches hidden).
 
 **Current blocker**: the first movie (archive offset 25114624..28723200) plays to the end, then the player keeps presenting a never-decoded (grey = YUV 128/128/128) frame and never moves on to the next movie. Likely waiting for the movie's audio stream to finish, which stubbed audio never reports. Diagnostics: `[VBLANKPEEK]`, `[NV2A] vblank #n` every 300 ticks, `[GPU] ... pushbuffer CALLs followed`, exec watch `RECOMP_EXEC_WATCH=1 RECOMP_EXEC_WATCH_ONLY=MOV_` (movie loop steps).
+
+## 2026-09-24 (afternoon): menus, 3D, VIP flow
+
+Reached natively (user-verified): intro movies, legal/SEGA screens, title, main menu, VIP name entry, VIP save to the Xbox HDD image, Team Select, Favorite Team. The user also saw a first 3D stadium scene.
+
+- **Menu crash after VIP entry fixed**: `0x172A50` (a two-instruction vtable method returning a float, reached via `[eax+0x1C]` from `0x1702CE`) was never recompiled; the caller read a garbage float and the next draw loop overran the 2.6 MB pushbuffer. Seeded with 12 others found by scanning data-section pointer tables (SSE math `0x3AA3F8..0x3AC598`, `0x15DD30`, `0x360FA0`).
+- **Vertex programs** (`nv2a_pb_exec.c`): NV2A vertex-shader interpreter (MAC/ILU ops, swizzles, A0 addressing, R12=oPos), constants and viewport, per-batch transformed-vertex cache, perspective-correct Gouraud rasteriser with a depth buffer and culling. Everything the title draws goes through its own shader -- even the 2D movie quad, whose matrix index comes from attribute 1 as raw shorts (type 5), which the vertex reader now supports (also S1 and CMP).
+- **Register combiners**: full general + final combiner interpreter (xemu psh.c semantics). Fixes the half-brightness movie (diffuse 0.5, combiner x2). Specular (oD1) now reaches the combiners (3D lighting lands there).
+- **NV2A winding**: window space is y-up, so in our y-down screen coords positive area = CCW; the old sign culled the movie quad.
+- **Palette register was wrong**: `SET_TEXTURE_PALETTE` is `0x1B20`, not `0x1B0C` (that is `TEXTURE_CONTROL0`, bit 30 = stage enable). Every paletted texture read a palette from a garbage address; the SEGA screen was right by luck. Stage enable now respected.
+- **Pushbuffer execution moved to its own thread** (`pb_exec_thread`, `xbox_memory_layout.c`): running it on the ack thread starved the vblank acknowledgement -> ~4 vblanks/s. Now ~27/s.
+- Window follows the surface size (720x480); a batch that faults on a bad texture/vertex address is skipped (SEH) instead of killing the game.
+- Diagnostics: `RECOMP_VP_TRACE`, `RECOMP_COMB_TRACE`, `RECOMP_TEX_DUMP` (now names palette), `[GPU] vertex-program triangles: ... rejected ...`.
+
+**Next**: 3D scenes (stadium, Favorite Team helmet panel) still render dark/partly wrong; texture stages 1-3 are not sampled; no mipmaps/filtering; performance (software rasteriser, /Od gen code).

@@ -1,11 +1,28 @@
 /**
  * ESPN NFL 2K5 - Recompiled code chunk 19
- * Functions: 1000 (0x002A3CA0 - 0x002C1600)
+ * Functions: 1000 (0x002A3C90 - 0x002C15D0)
  */
 
 #define RECOMP_GENERATED_CODE
 #include "recomp_funcs.h"
 #include <math.h>
+
+/**
+ * sub_002A3C90
+ * Original: 0x002A3C90 - 0x002A3C95 (5 bytes, 1 insns)
+ * CC: cdecl, 0 params, returns int_or_void
+ * Frame: fpo_leaf
+ */
+void sub_002A3C90(void)
+{
+    uint32_t ebp = 0;
+    ebp = g_ebp;  /* frameless: caller's frame */
+    ebp = g_seh_ebp; /* fpo_leaf: inherit caller's frame */
+
+loc_002A3C90: ;
+    g_seh_ebp = ebp; sub_0029CA10(); return; /* tail jmp 0x0029CA10 */
+
+}
 
 /**
  * sub_002A3CA0
@@ -306419,51 +306436,6 @@ loc_002C15EA: ;
     if (TEST_NZ(_fa, _fb)) goto loc_002C15E0; /* jne: not equal / not zero */
 
 loc_002C15EE: ;
-    eax = 1;
-    esp += 4; return; /* ret */
-
-}
-
-/**
- * sub_002C1600
- * Original: 0x002C1600 - 0x002C1624 (36 bytes, 11 insns)
- * Category: game_vtable
- * CC: cdecl, 0 params, returns int_or_void
- * Frame: fpo_leaf
- */
-void sub_002C1600(void)
-{
-    int _flags = 0; /* fallback flag var */
-    uint32_t _fa = 0, _fb = 0;
-    int32_t _fas = 0, _fbs = 0;
-    (void)_fa; (void)_fb; (void)_fas; (void)_fbs;
-
-loc_002C1600: ;
-    PUSH32(esp, 0x002C1605u); RECOMP_ABI_CALL(0x000774E0u, sub_000774E0); /* call 0x000774E0 */
-
-loc_002C1605: ;
-    PUSH32(esp, 0x002C160Au); RECOMP_ABI_CALL(0x002C0C20u, sub_002C0C20); /* call 0x002C0C20 */
-
-loc_002C160A: ;
-    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;
-    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test eax, eax (32-bit) */
-    if (TEST_Z(_fa, _fb)) goto loc_002C161E; /* je: equal / zero */
-
-loc_002C160E: ;
-    edi = edi;
-
-loc_002C1610: ;
-    PUSH32(esp, 0x002C1615u); RECOMP_ABI_CALL(0x000774E0u, sub_000774E0); /* call 0x000774E0 */
-
-loc_002C1615: ;
-    PUSH32(esp, 0x002C161Au); RECOMP_ABI_CALL(0x002C0C20u, sub_002C0C20); /* call 0x002C0C20 */
-
-loc_002C161A: ;
-    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;
-    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test eax, eax (32-bit) */
-    if (TEST_NZ(_fa, _fb)) goto loc_002C1610; /* jne: not equal / not zero */
-
-loc_002C161E: ;
     eax = 1;
     esp += 4; return; /* ret */
 

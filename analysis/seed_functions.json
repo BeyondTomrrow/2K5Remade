@@ -726,5 +726,53 @@
  {
   "start": "0x004D9F50",
   "note": "2026-09-24: MPEG motion-compensation routine, entry 3 of the decoder's function table at 0xCE2220 (filled by sub_0040C370/sub_00417470 with 0x4DA1C0, 0x4DA120, 0x4DA070, 0x4D9F50). Preceded by lea-alignment padding rather than int3, so the int3-padding scan missed it. Its unresolved call left esp off by 4 and every later call in sub_004D9xxx read a garbage target (0xCC8xxx)."
+ },
+ {
+  "start": "0x00172A50",
+  "note": "2026-09-24: vtable method (mov eax,ecx; jmp 0x16FAB0) returning a float, called via [eax+0x1C] from 0x1702CE in the menu layout path. Unresolved on native: the caller read a garbage float, preceding the post-START pushbuffer overrun (sub_00069880 -> sub_0002D2A0). Preceded by a jump table, so no padding-based scan found it."
+ },
+ {
+  "start": "0x00360FA0",
+  "note": "2026-09-24: function referenced from a data-section pointer table whose neighbouring entries are recompiled functions; clean prologue in the original XBE (0x3AA3F8.. are SSE math routines with an aligned-stack prologue)."
+ },
+ {
+  "start": "0x003AA3F8",
+  "note": "2026-09-24: function referenced from a data-section pointer table whose neighbouring entries are recompiled functions; clean prologue in the original XBE (0x3AA3F8.. are SSE math routines with an aligned-stack prologue)."
+ },
+ {
+  "start": "0x003AA6D8",
+  "note": "2026-09-24: function referenced from a data-section pointer table whose neighbouring entries are recompiled functions; clean prologue in the original XBE (0x3AA3F8.. are SSE math routines with an aligned-stack prologue)."
+ },
+ {
+  "start": "0x003AA9B8",
+  "note": "2026-09-24: function referenced from a data-section pointer table whose neighbouring entries are recompiled functions; clean prologue in the original XBE (0x3AA3F8.. are SSE math routines with an aligned-stack prologue)."
+ },
+ {
+  "start": "0x003AACE8",
+  "note": "2026-09-24: function referenced from a data-section pointer table whose neighbouring entries are recompiled functions; clean prologue in the original XBE (0x3AA3F8.. are SSE math routines with an aligned-stack prologue)."
+ },
+ {
+  "start": "0x003AB4C8",
+  "note": "2026-09-24: function referenced from a data-section pointer table whose neighbouring entries are recompiled functions; clean prologue in the original XBE (0x3AA3F8.. are SSE math routines with an aligned-stack prologue)."
+ },
+ {
+  "start": "0x003AB778",
+  "note": "2026-09-24: function referenced from a data-section pointer table whose neighbouring entries are recompiled functions; clean prologue in the original XBE (0x3AA3F8.. are SSE math routines with an aligned-stack prologue)."
+ },
+ {
+  "start": "0x003ABA28",
+  "note": "2026-09-24: function referenced from a data-section pointer table whose neighbouring entries are recompiled functions; clean prologue in the original XBE (0x3AA3F8.. are SSE math routines with an aligned-stack prologue)."
+ },
+ {
+  "start": "0x003AC338",
+  "note": "2026-09-24: function referenced from a data-section pointer table whose neighbouring entries are recompiled functions; clean prologue in the original XBE (0x3AA3F8.. are SSE math routines with an aligned-stack prologue)."
+ },
+ {
+  "start": "0x003AC468",
+  "note": "2026-09-24: function referenced from a data-section pointer table whose neighbouring entries are recompiled functions; clean prologue in the original XBE (0x3AA3F8.. are SSE math routines with an aligned-stack prologue)."
+ },
+ {
+  "start": "0x003AC598",
+  "note": "2026-09-24: function referenced from a data-section pointer table whose neighbouring entries are recompiled functions; clean prologue in the original XBE (0x3AA3F8.. are SSE math routines with an aligned-stack prologue)."
  }
 ]
