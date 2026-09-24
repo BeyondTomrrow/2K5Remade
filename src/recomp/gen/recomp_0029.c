@@ -5423,6 +5423,8 @@ loc_0042615C: ;
     edx = edx & 0xFFFFFFF;
     _fa = (uint32_t)(edx) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* and result */
     MEM32(ecx + 0x40) = edx;
+    /* NFL2K5-GENPATCH:NV2A_KICK_426110 */
+    { extern void xbox_Nv2aKick(void); xbox_Nv2aKick(); }
     eax = MEM32(0x440500);
     _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;
     _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test eax, eax (32-bit) */
@@ -5524,6 +5526,8 @@ loc_0042620C: ;
     esi = esi & 0xFFFFFFF;
     _fa = (uint32_t)(esi) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* and result */
     MEM32(ecx + 0x40) = esi;
+    /* NFL2K5-GENPATCH:NV2A_KICK_4261C0 */
+    { extern void xbox_Nv2aKick(void); xbox_Nv2aKick(); }
     goto loc_00426220;
 
     /* nop */

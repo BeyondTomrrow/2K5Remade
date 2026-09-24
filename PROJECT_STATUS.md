@@ -2168,3 +2168,14 @@ Reached natively (user-verified): intro movies, legal/SEGA screens, title, main 
 - Diagnostics: `RECOMP_VP_TRACE`, `RECOMP_COMB_TRACE`, `RECOMP_TEX_DUMP` (now names palette), `[GPU] vertex-program triangles: ... rejected ...`.
 
 **Next**: 3D scenes (stadium, Favorite Team helmet panel) still render dark/partly wrong; texture stages 1-3 are not sampled; no mipmaps/filtering; performance (software rasteriser, /Od gen code).
+
+## 2026-09-24 (evening): Start Game, pushbuffer ownership, logging
+
+- **Start Game deadlock**: the timer/DPC thread ran the I/O scheduler tick after draining DPCs; a load-completion callback on it called Present, which waits for a vblank only that thread delivers. `g_scheduler_tick_suppressed = 1` on the timer thread (kernel_bridge.c).
+- **Pushbuffer consumption is now synchronous with KickOff.** Two async bugs, in order: (1) the ack thread set `DMA_GET = PUT` immediately, so D3D reused ring space before the executor thread read it (garbage surfaces/methods under load) -- now the executor advances GET after walking; (2) D3D patches the JUMP at the end of the chunk it just submitted to point at its next chunk, so a walker running later followed the patched jump past PUT into unwritten memory (`[PBDESYNC]` trail: ring `810A12FC -> 03470001 -> 03445001 -> 03435001 -> 010A17C9` with PUT at `810A1308`). Gen patches `NV2A_KICK_426110` / `NV2A_KICK_4261C0` call `xbox_Nv2aKick()` right after D3D writes `DMA_PUT`; `pb_exec_thread` remains a fallback poller under the same SRW lock. Costs speed (drawing now on the game thread) but menus render cleanly (Team Select controller icons no longer garbled).
+- **Logging stalls**: stderr was unbuffered; with several threads printing, `WriteFile` calls piled up and a thread holding the guest lock stalled vblanks. Now 64 KB fully buffered + 500 ms flusher + flush in the crash handler. The retired forced-display thread (1.2 MB BMP every second) is opt-in via `NFL2K5_FORCED_DISPLAY=1`.
+- Window: copies only surfaces inside guest RAM, under SEH (it crashed the process at Start Game following an off-screen target). Executor `getenv` lookups cached. `ARRAY_ELEMENT32` handled. Near-plane clipping is opt-in (`RECOMP_CLIP=1`; made spikes on pie charts). Texture stages 1-3 sampled into combiners.
+- Frame timing checked: the game-loop frame wait uses RDTSC against 733,333,333 Hz and the period float `0xA6A9A8` (= 1/60, fine).
+- Handoff for other assistants: `docs/HANDOFF-CHATGPT.md`; helpers `tools/capwin.ps1`, `tools/catch-freeze.ps1`, `tools/run-to-game.ps1`.
+
+**Open**: in-game the scene is black -- tens of millions of zero-area triangles (vertices collapsing); tracing with `RECOMP_VP_TRACE` (`[VPZERO]` now prints the shader and constants). No audio.

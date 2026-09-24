@@ -513,6 +513,18 @@ void nfl2k5_execwatch_print(void)
          * vblank callback sub_00026EE0 decrements it and counts in 0xA6A9B4.
          * D3D's vblank handler (0x42D5E0, DPC context 0x4425D8) calls the
          * title callback in [ctx+0x190] and counts vblanks in [ctx+0x1C0]. */
+        /* 2026-09-24: frame period (1/refresh) and the presentation
+         * parameters' FullScreen_RefreshRateInHz it comes from. A zero
+         * refresh makes the game-loop frame wait (sub_000F4EF0) endless. */
+        {
+            float period;
+            uint32_t pbits = NFL2K5_PEEK32(0xA6A9A8u);
+            memcpy(&period, &pbits, 4);
+            fprintf(stderr, "  [FRAMEPEEK] period=%g refresh=%u size=%ux%u fmt=%08X flags=%08X interval=%08X\n",
+                    period, NFL2K5_PEEK32(0xA6A9C4u + 0x2Cu), NFL2K5_PEEK32(0xA6A9C4u),
+                    NFL2K5_PEEK32(0xA6A9C4u + 4u), NFL2K5_PEEK32(0xA6A9C4u + 8u),
+                    NFL2K5_PEEK32(0xA6A9C4u + 0x28u), NFL2K5_PEEK32(0xA6A9C4u + 0x30u));
+        }
         fprintf(stderr, "  [VBLANKPEEK] A6A9B0=%d A6A9AC=%d A6A9B4=%u cb=0x%08X vblanks=%u ctx820=%08X ctx824=%08X\n",
                 (int)NFL2K5_PEEK32(0xA6A9B0u), (int)NFL2K5_PEEK32(0xA6A9ACu), NFL2K5_PEEK32(0xA6A9B4u),
                 NFL2K5_PEEK32(0x4425D8u + 0x190u), NFL2K5_PEEK32(0x4425D8u + 0x1C0u),
@@ -1214,12 +1226,24 @@ extern int recomp_dispatch_init(void);
 extern void xbox_path_init(const char *game_dir, const char *save_dir);
 static uint32_t main_stack_begin, main_stack_end;
 
+/* Keeps the (buffered) log current; see the setvbuf call in main(). */
+static DWORD WINAPI nfl2k5_stderr_flusher(LPVOID unused)
+{
+    (void)unused;
+    for (;;) {
+        Sleep(500);
+        fflush(stderr);
+    }
+    return 0;
+}
+
 static LONG CALLBACK crash_report(EXCEPTION_POINTERS *ep)
 {
     DWORD code = ep->ExceptionRecord->ExceptionCode;
     if (code != EXCEPTION_ACCESS_VIOLATION && code != EXCEPTION_ILLEGAL_INSTRUCTION &&
         code != EXCEPTION_STACK_OVERFLOW && code != EXCEPTION_INT_DIVIDE_BY_ZERO)
         return EXCEPTION_CONTINUE_SEARCH;
+    fflush(stderr);   /* what was logged before the fault, in order */
     fprintf(stderr, "[CRASH] exception=0x%08lX host=0x%llX\n", code,
             (unsigned long long)ep->ContextRecord->Rip);
     if (code == EXCEPTION_ACCESS_VIOLATION)
@@ -1733,7 +1757,17 @@ int main(int argc, char **argv)
     }
     setvbuf(stdout, NULL, _IONBF, 0);
     RECOMP_ICALL_FEEDBACK_INIT();
-    setvbuf(stderr, NULL, _IONBF, 0);
+    /* 2026-09-24: stderr was unbuffered, so every fragment of every fprintf
+     * was its own WriteFile, and with several threads logging at once (the
+     * pushbuffer executor, the kernel summary, the watchdog) those writes
+     * piled up badly enough to stall a thread holding the guest lock and stop
+     * vblanks. Buffer it; a flusher keeps the log current, and the crash
+     * handler flushes before reporting. */
+    {
+        static char stderr_buf[1 << 16];
+        setvbuf(stderr, stderr_buf, _IOFBF, sizeof stderr_buf);
+        CloseHandle(CreateThread(NULL, 0, nfl2k5_stderr_flusher, NULL, 0, NULL));
+    }
     /* A double-click is a normal game launch.  Keep explicit --validate for
      * the allocator check, but give a no-argument launch the same essentials
      * as the diagnostic launcher so it opens the framebuffer window instead
@@ -2382,7 +2416,13 @@ int main(int argc, char **argv)
                 else CloseHandle(main_thread);
             }
         }
-        CreateThread(NULL, 0, nfl2k5_forced_display_thread, NULL, 0, NULL);
+        /* 2026-09-24: the synthetic forced-display pattern is retired -- the
+         * real framebuffer window shows the game now -- and its once-a-second
+         * 1.2 MB BMP rewrite made log writes stall long enough (with the
+         * guest lock held) to stop vblanks. Opt back in with
+         * NFL2K5_FORCED_DISPLAY=1. */
+        if (getenv("NFL2K5_FORCED_DISPLAY"))
+            CreateThread(NULL, 0, nfl2k5_forced_display_thread, NULL, 0, NULL);
         printf("[BOOT] Entering recompiled NFL 2K5 code.\n");
         /* Guest code runs one thread at a time (RECOMP_GGL); see xbox_ggl.h. */
         { extern void xbox_ggl_enter(void); xbox_ggl_enter(); }

@@ -134,6 +134,14 @@ PATCHES = [
     ("DIAG_PBBEGIN", "sub_0002C940", "loc_0002C940: ;", "after", """\
     { extern void nfl2k5_diag_pbbegin(void); nfl2k5_diag_pbbegin(); }
 """),
+    # D3D KickOff: process the submission the moment DMA_PUT is written, as
+    # the GPU does (2026-09-24). See xbox_Nv2aKick in xbox_memory_layout.c.
+    ("NV2A_KICK_426110", "sub_00426110", "MEM32(ecx + 0x40) = edx;", "after", """\
+    { extern void xbox_Nv2aKick(void); xbox_Nv2aKick(); }
+"""),
+    ("NV2A_KICK_4261C0", "sub_004261C0", "MEM32(ecx + 0x40) = esi;", "after", """\
+    { extern void xbox_Nv2aKick(void); xbox_Nv2aKick(); }
+"""),
     ("AUDIO_LOCK", "sub_0044BB44", "loc_0044BCAB: ;", "before", """\
 #ifdef NFL2K5_FORCE_UNBLOCK_AUDIO_LOCK
     /* EXPERIMENTAL, 2026-09-21: the busy-wait at loc_0044BCAB spins on a
