@@ -84,10 +84,10 @@ index dd6bec1..a7cd974 100644
  
  /* Stub address space - just passed to ldl_le_phys etc. (ignored) */
 diff --git a/src/apu/apu_vp.c b/src/apu/apu_vp.c
-index b9f429e..d7b61b2 100644
+index b9f429e..5af33d8 100644
 --- a/src/apu/apu_vp.c
 +++ b/src/apu/apu_vp.c
-@@ -185,6 +185,14 @@ static void fe_method(MCPXAPUState *d, uint32_t method, uint32_t argument)
+@@ -185,6 +185,20 @@ static void fe_method(MCPXAPUState *d, uint32_t method, uint32_t argument)
      d->regs[NV_PAPU_FEDECMETH] = method;
      d->regs[NV_PAPU_FEDECPARAM] = argument;
      unsigned int selected_handle, list;
@@ -96,13 +96,19 @@ index b9f429e..d7b61b2 100644
 +         * then a running count (2026-09-24, NFL 2K5 speech never finishing). */
 +        static unsigned long n;
 +        n++;
++        static unsigned long ons, offs;
++        if (method == NV1BA0_PIO_VOICE_ON && ++ons <= 30)
++            fprintf(stderr, "[APU] VOICE_ON #%lu arg %08X (method #%lu)\n", ons, argument, n);
++        if (method == NV1BA0_PIO_VOICE_OFF && ++offs <= 30)
++            fprintf(stderr, "[APU] VOICE_OFF #%lu arg %08X (method #%lu)\n", offs, argument, n);
 +        if (n <= 40 || (n % 5000) == 0)
-+            fprintf(stderr, "[APU] method #%lu %04X arg %08X\n", n, method, argument);
++            fprintf(stderr, "[APU] method #%lu %04X arg %08X (voice on %lu off %lu)\n",
++                    n, method, argument, ons, offs);
 +    }
  
      switch (method) {
      case NV1BA0_PIO_VOICE_LOCK:
-@@ -843,7 +851,7 @@ static int voice_get_samples(MCPXAPUState *d, uint32_t v, float samples[][2],
+@@ -843,7 +857,7 @@ static int voice_get_samples(MCPXAPUState *d, uint32_t v, float samples[][2],
                  uint32_t linear_addr = block_index * (uint32_t)block_size;
                  if (stream) {
                      hwaddr addr = segment_offset + linear_addr;
@@ -111,6 +117,52 @@ index b9f429e..d7b61b2 100644
                             block_size);
                  } else {
                      linear_addr += ba;
+@@ -1173,6 +1187,33 @@ void mcpx_apu_vp_frame(MCPXAPUState *d,
+                         float mixbins[NUM_MIXBINS][NUM_SAMPLES_PER_FRAME])
+ {
+     memset(d->vp.sample_buf, 0, sizeof(d->vp.sample_buf));
++    static unsigned long frames, processed, idle, last_ms;
++    frames++;
++    {
++        unsigned long now = GetTickCount();
++        if (now - last_ms >= 5000) {
++            extern uint32_t xbox_ContiguousAllocatedBytes(void);
++            fprintf(stderr, "[APU] vp frames=%lu voices processed=%lu idle=%lu tops=%04X/%04X/%04X"
++                    " VPVADDR=%08X contig_hw=%08X\n", frames, processed, idle,
++                    (unsigned)d->regs[voice_list_regs[0].top], (unsigned)d->regs[voice_list_regs[1].top],
++                    (unsigned)d->regs[voice_list_regs[2].top], (unsigned)d->regs[NV_PAPU_VPVADDR],
++                    xbox_ContiguousAllocatedBytes());
++            /* The active voices and where each is playing (CBO), EBO end,
++             * paused bit -- speech that never advances shows up here. */
++            for (int l = 0; l < 3; l++) {
++                uint16_t v = (uint16_t)d->regs[voice_list_regs[l].top];
++                for (int k = 0; v != 0xFFFF && k < 24; k++) {
++                    fprintf(stderr, "[APU]   list%d voice %03X cbo=%06X ebo=%06X state=%08X\n", l, v,
++                            voice_get_mask(d, v, NV_PAVS_VOICE_PAR_OFFSET, NV_PAVS_VOICE_PAR_OFFSET_CBO),
++                            voice_get_mask(d, v, NV_PAVS_VOICE_PAR_NEXT, NV_PAVS_VOICE_PAR_NEXT_EBO),
++                            voice_get_mask(d, v, NV_PAVS_VOICE_PAR_STATE, 0xFFFFFFFFu));
++                    v = (uint16_t)voice_get_mask(d, v, NV_PAVS_VOICE_TAR_PITCH_LINK,
++                                                 NV_PAVS_VOICE_TAR_PITCH_LINK_NEXT_VOICE_HANDLE);
++                }
++            }
++            last_ms = now;
++        }
++    }
+ 
+     for (int list = 0; list < 3; list++) {
+         hwaddr top, current, next;
+@@ -1194,9 +1235,11 @@ void mcpx_apu_vp_frame(MCPXAPUState *d,
+ 
+             if (!voice_get_mask(d, v, NV_PAVS_VOICE_PAR_STATE,
+                                 NV_PAVS_VOICE_PAR_STATE_ACTIVE_VOICE)) {
++                idle++;
+                 fe_method(d, SE2FE_IDLE_VOICE, v);
+             } else {
+                 /* Process voice directly (single-threaded) */
++                processed++;
+                 voice_process(d, mixbins, d->vp.sample_buf, v, list);
+             }
+             d->regs[current] = d->regs[next];
 diff --git a/src/input/xinput_device.c b/src/input/xinput_device.c
 index 1a662a8..c9f5989 100644
 --- a/src/input/xinput_device.c
@@ -3103,7 +3155,7 @@ index 0000000..95a4aa7
 +                s_gpu11.frame, s_gpu11.draws, s_gpu11.tris, s_gpu11.tex_uploads, s_gpu11.readbacks);
 +}
 diff --git a/src/kernel/nv2a_pb_exec.c b/src/kernel/nv2a_pb_exec.c
-index b3dcbf7..4d25c7b 100644
+index b3dcbf7..f791b47 100644
 --- a/src/kernel/nv2a_pb_exec.c
 +++ b/src/kernel/nv2a_pb_exec.c
 @@ -24,8 +24,10 @@
@@ -3197,7 +3249,26 @@ index b3dcbf7..4d25c7b 100644
      uint32_t clears, unhandled_total;
      uint32_t flip_read, flip_write, flip_modulo, flips;
      uint32_t tris_drawn, tris_skipped_offscreen, batches_untransformed;
-@@ -291,9 +336,22 @@ static void record_tex_reg(uint32_t method, uint32_t param)
+@@ -257,6 +302,18 @@ static struct {
+     Texture  tex;
+ } s_gpu;
+ 
++/* What each vertex attribute reads when the batch does not supply it as an
++ * array: the last SET_VERTEX_DATA* value, or the last element of the last
++ * array draw that did supply it (xemu pgraph: inline_value,
++ * pgraph_update_inline_value). A model whose colour is one value for the
++ * whole mesh sends it this way; reading a fixed default instead gave NFL 2K5's
++ * 3D characters -- Create Player, the pregame studio -- alpha 0, so they drew
++ * fully transparent (2026-09-24). */
++static float s_attr_inline[NV_VERTEX_ATTRS][4] = {
++    {0,0,0,1},{0,0,0,1},{0,0,0,1},{0,0,0,1},{0,0,0,1},{0,0,0,1},{0,0,0,1},{0,0,0,1},
++    {0,0,0,1},{0,0,0,1},{0,0,0,1},{0,0,0,1},{0,0,0,1},{0,0,0,1},{0,0,0,1},{0,0,0,1},
++};
++
+ /* Unhandled methods, ranked. The interesting output is not that something was
+  * skipped but which things dominate, because that is the order to implement
+  * them in. */
+@@ -291,9 +348,22 @@ static void record_tex_reg(uint32_t method, uint32_t param)
       * which is nearly all of them, since swizzled is the Xbox default. That
       * left the title's own textures unsampled and every textured quad drawn in
       * flat vertex colour. */
@@ -3220,7 +3291,21 @@ index b3dcbf7..4d25c7b 100644
  }
  
  /* Every distinct texture a batch was drawn with, and how many batches used it.
-@@ -402,6 +460,29 @@ static int fetch_attr(const VertexAttr *a, uint32_t index, float out[4])
+@@ -367,8 +437,12 @@ static int fetch_attr(const VertexAttr *a, uint32_t index, float out[4])
+ 
+     out[0] = out[1] = out[2] = 0.0f;
+     out[3] = 1.0f;
+-    if (!a->size || !a->stride)
++    if (!a->size || !a->stride) {
++        ptrdiff_t k = a - s_gpu.attr;
++        if (k >= 0 && k < NV_VERTEX_ATTRS)
++            memcpy(out, s_attr_inline[k], sizeof s_attr_inline[k]);
+         return 0;
++    }
+     if (s_gpu.inline_active) {
+         /* The batch arrived as INLINE_ARRAY, so `offset` is a byte offset into
+          * the buffered payload rather than a guest address -- and 0 is a legal
+@@ -402,6 +476,29 @@ static int fetch_attr(const VertexAttr *a, uint32_t index, float out[4])
          for (i = 0; i < a->size && i < 4; i++)
              out[i] = (float)p[i] / 255.0f;
          return 1;
@@ -3250,7 +3335,7 @@ index b3dcbf7..4d25c7b 100644
      default:
          return 0;
      }
-@@ -501,6 +582,11 @@ static void raster_triangle(const float a[2], const float b[2],
+@@ -501,6 +598,11 @@ static void raster_triangle(const float a[2], const float b[2],
                              const float c[2], uint32_t argb,
                              const float uv[3][2]);
  
@@ -3262,7 +3347,7 @@ index b3dcbf7..4d25c7b 100644
  static void clear_surface(uint32_t param)
  {
      uint8_t *mem = (uint8_t *)xbox_GetMemoryOffset();
-@@ -520,6 +606,30 @@ static void clear_surface(uint32_t param)
+@@ -520,6 +622,30 @@ static void clear_surface(uint32_t param)
          s_gpu.color_base = base;
      }
  
@@ -3293,7 +3378,7 @@ index b3dcbf7..4d25c7b 100644
      for (y = 0; y < s_gpu.clip_h; y++) {
          uint8_t *row = mem + s_gpu.color_base
                       + (size_t)(s_gpu.clip_y + y) * s_gpu.pitch;
-@@ -538,6 +648,7 @@ static void clear_surface(uint32_t param)
+@@ -538,6 +664,7 @@ static void clear_surface(uint32_t param)
                  p[x] = v;
          }
      }
@@ -3301,7 +3386,7 @@ index b3dcbf7..4d25c7b 100644
      s_gpu.clears++;
      /* Progress markers, interleaved with everything else in the log. The
       * summary says drawing stopped; only a marker next to the surrounding
-@@ -597,7 +708,12 @@ static void clear_surface(uint32_t param)
+@@ -597,7 +724,12 @@ static void clear_surface(uint32_t param)
       * would show the one nothing is writing. */
      /* The window has to read where the pixels actually are, which is the
       * resolved address rather than the DMA-object offset. */
@@ -3315,7 +3400,7 @@ index b3dcbf7..4d25c7b 100644
  
      /* And open the window, rather than waiting for AvSetDisplayMode to do it.
       *
-@@ -710,6 +826,17 @@ static int sample_texture(uint32_t u, uint32_t v, uint32_t *argb)
+@@ -710,6 +842,17 @@ static int sample_texture(uint32_t u, uint32_t v, uint32_t *argb)
      if (d3d8_format_dxt_block_bytes(fmt))
          return d3d8_dxt_decode_texel(mem + s_gpu.tex.offset, fmt, u, v,
                                       s_gpu.tex.width, argb);
@@ -3333,7 +3418,7 @@ index b3dcbf7..4d25c7b 100644
      if (d3d8_format_is_swizzled(fmt)) {
          /* Morton order: a texel's index is interleaved from x and y instead of
           * v*pitch + u, so index from the base of the image. The switch below
-@@ -830,8 +957,9 @@ static void dump_texture_bmp(uint32_t seq)
+@@ -830,8 +973,9 @@ static void dump_texture_bmp(uint32_t seq)
      pad = (4 - (row_bytes & 3)) & 3;
      filesz = 54 + (row_bytes + pad) * h;
  
@@ -3345,7 +3430,7 @@ index b3dcbf7..4d25c7b 100644
      f = fopen(path, "wb");
      if (!f)
          return;
-@@ -913,6 +1041,112 @@ static void put_pixel(uint8_t *mem, uint32_t bpp, int x, int y, uint32_t argb)
+@@ -913,6 +1057,112 @@ static void put_pixel(uint8_t *mem, uint32_t bpp, int x, int y, uint32_t argb)
      }
  }
  
@@ -3458,7 +3543,7 @@ index b3dcbf7..4d25c7b 100644
  /* Half-space fill. Barycentric edge functions rather than scanline slopes:
   * the same test decides both windings, so a title that emits clockwise
   * triangles does not silently render nothing. */
-@@ -976,11 +1210,11 @@ static void raster_triangle(const float a[2], const float b[2],
+@@ -976,11 +1226,11 @@ static void raster_triangle(const float a[2], const float b[2],
                  if (su < 0.0f) su = 0.0f;
                  if (sv < 0.0f) sv = 0.0f;
                  if (sample_texture((uint32_t)su, (uint32_t)sv, &texel)) {
@@ -3472,7 +3557,7 @@ index b3dcbf7..4d25c7b 100644
          }
      }
      s_gpu.tris_drawn++;
-@@ -1136,11 +1370,15 @@ static int batch_is_screen_space(void)
+@@ -1136,11 +1386,15 @@ static int batch_is_screen_space(void)
  }
  
  /* NV097 primitive types that are triangles under some winding. */
@@ -3493,7 +3578,7 @@ index b3dcbf7..4d25c7b 100644
  
  /* How many post-draw captures to keep: enough to see whether the geometry
   * is stable from frame to frame, few enough not to fill a directory. */
-@@ -1210,14 +1448,30 @@ static void raster_batch(void)
+@@ -1210,14 +1464,30 @@ static void raster_batch(void)
                             vertex_color(s_gpu.idx[i]));
          break;
      case NV_PRIM_TRIANGLE_FAN:
@@ -3528,7 +3613,7 @@ index b3dcbf7..4d25c7b 100644
      default:
          break;                             /* points and lines: not yet */
      }
-@@ -1242,6 +1496,1126 @@ static void raster_batch(void)
+@@ -1242,6 +1512,1126 @@ static void raster_batch(void)
   * question is what space attribute 0 arrives in: a title running a vertex
   * program hands over object-space positions that mean nothing without running
   * it, while pre-transformed screen-space coordinates can be drawn directly. */
@@ -4655,7 +4740,7 @@ index b3dcbf7..4d25c7b 100644
  static void draw_primitive(void)
  {
      float v[4];
-@@ -1270,7 +2644,27 @@ static void draw_primitive(void)
+@@ -1270,7 +2660,44 @@ static void draw_primitive(void)
          }
      }
  
@@ -4681,10 +4766,27 @@ index b3dcbf7..4d25c7b 100644
 +            fprintf(stderr, "  [GPU] batch %u faulted (exception 0x%08lX); skipped\n",
 +                    s_gpu.draws, (unsigned long)GetExceptionCode());
 +    }
++
++    /* An array attribute leaves its last element behind as the inline value
++     * a later batch reads if it disables the array (xemu
++     * pgraph_update_inline_value, which keeps D3DCOLOR's raw byte order). */
++    __try {
++        uint32_t a, last = s_gpu.idx[s_gpu.idx_count - 1];
++        for (a = 0; a < NV_VERTEX_ATTRS; a++) {
++            float v[4];
++            if (s_gpu.attr[a].size && s_gpu.attr[a].stride && fetch_attr(&s_gpu.attr[a], last, v)) {
++                if (s_gpu.attr[a].type == 0) {
++                    float t = v[0]; v[0] = v[2]; v[2] = t;
++                }
++                memcpy(s_attr_inline[a], v, sizeof v);
++            }
++        }
++    } __except (EXCEPTION_EXECUTE_HANDLER) {
++    }
  
      if (getenv("RECOMP_PB_EXEC_VERBOSE")) {
          static int shown;
-@@ -1390,6 +2784,12 @@ static void draw_inline_array(void)
+@@ -1390,6 +2817,12 @@ static void draw_inline_array(void)
          case 0:  bytes = 4;                        break;  /* D3DCOLOR   */
          case 2:  bytes = 4 * s_gpu.attr[a].size;   break;  /* float      */
          case 4:  bytes = s_gpu.attr[a].size;       break;  /* ubyte norm */
@@ -4697,7 +4799,45 @@ index b3dcbf7..4d25c7b 100644
          default: bytes = 4 * s_gpu.attr[a].size;   break;
          }
          s_gpu.attr[a].offset = off;
-@@ -1570,7 +2970,22 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1493,6 +2926,37 @@ static int imm_vertex_method(uint32_t method, uint32_t param)
+     union { uint32_t u; float f; } v;
+     v.u = param;
+ 
++    /* Every SET_VERTEX_DATA* write is also the attribute's inline value
++     * (xemu pgraph.c), whatever else it does below. */
++    if (method >= 0x1880 && method < 0x1880 + NV_VERTEX_ATTRS * 8) {        /* DATA2F_M */
++        uint32_t a = (method - 0x1880) / 8, c = ((method - 0x1880) % 8) / 4;
++        s_attr_inline[a][c] = v.f;
++        s_attr_inline[a][2] = 0.0f;
++        s_attr_inline[a][3] = 1.0f;
++    } else if (method >= 0x1900 && method < 0x1900 + NV_VERTEX_ATTRS * 4) { /* DATA2S */
++        uint32_t a = (method - 0x1900) / 4;
++        s_attr_inline[a][0] = (float)(int16_t)(param & 0xFFFF);
++        s_attr_inline[a][1] = (float)(int16_t)(param >> 16);
++        s_attr_inline[a][2] = 0.0f;
++        s_attr_inline[a][3] = 1.0f;
++    } else if (method >= 0x1940 && method < 0x1940 + NV_VERTEX_ATTRS * 4) { /* DATA4UB */
++        uint32_t a = (method - 0x1940) / 4;
++        s_attr_inline[a][0] = (float)(param & 0xFF) / 255.0f;
++        s_attr_inline[a][1] = (float)((param >> 8) & 0xFF) / 255.0f;
++        s_attr_inline[a][2] = (float)((param >> 16) & 0xFF) / 255.0f;
++        s_attr_inline[a][3] = (float)(param >> 24) / 255.0f;
++    } else if (method >= 0x1980 && method < 0x1980 + NV_VERTEX_ATTRS * 8) { /* DATA4S_M */
++        uint32_t a = (method - 0x1980) / 8, part = ((method - 0x1980) % 8) / 4;
++        s_attr_inline[a][part * 2 + 0] = (float)(int16_t)(param & 0xFFFF);
++        s_attr_inline[a][part * 2 + 1] = (float)(int16_t)(param >> 16);
++    } else if (method >= 0x1A00 && method < 0x1A00 + NV_VERTEX_ATTRS * 16) { /* DATA4F_M */
++        s_attr_inline[(method - 0x1A00) / 16][((method - 0x1A00) % 16) / 4] = v.f;
++    }
++    if (method >= 0x1900 && method < 0x1900 + NV_VERTEX_ATTRS * 4)
++        return 1;
++    if (method >= 0x1980 && method < 0x1980 + NV_VERTEX_ATTRS * 8)
++        return 1;
++
+     if (method >= NV097_SET_VERTEX4F && method < NV097_SET_VERTEX4F + 16) {
+         uint32_t c = (method - NV097_SET_VERTEX4F) / 4;
+         s_gpu.imm_pos[c] = v.f;
+@@ -1570,7 +3034,22 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
          note_unhandled(method, param);
          return;
      }
@@ -4720,7 +4860,7 @@ index b3dcbf7..4d25c7b 100644
      case NV097_SET_SURFACE_CLIP_HORIZONTAL:
          s_gpu.clip_x = param & 0xFFFF;
          s_gpu.clip_w = (param >> 16) & 0xFFFF;
-@@ -1586,16 +3001,32 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1586,16 +3065,32 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
          s_gpu.pitch = param & 0xFFFF;      /* colour pitch; zeta is the top half */
          break;
      case NV097_SET_SURFACE_COLOR_OFFSET:
@@ -4753,7 +4893,7 @@ index b3dcbf7..4d25c7b 100644
          if (param) {
              s_gpu.prim = param;
              s_gpu.idx_count = 0;
-@@ -1620,8 +3051,15 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1620,8 +3115,15 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
      case NV097_INLINE_ARRAY:
          /* Vertex data, not a pointer to it. Buffered rather than decoded here
           * because the format is only fully known at END. */
@@ -4770,7 +4910,7 @@ index b3dcbf7..4d25c7b 100644
          break;
  
      case NV097_DRAW_ARRAYS: {
-@@ -1644,6 +3082,13 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1644,6 +3146,13 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
          break;
      }
  
@@ -4784,7 +4924,7 @@ index b3dcbf7..4d25c7b 100644
      case NV097_ARRAY_ELEMENT16:
          /* Two 16-bit indices per parameter word. */
          if (s_gpu.prim && s_gpu.idx_count + 2 <= NV_MAX_INDICES) {
-@@ -1659,6 +3104,23 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1659,6 +3168,23 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
          record_tex_reg(method, param);
          break;
  
@@ -4808,7 +4948,7 @@ index b3dcbf7..4d25c7b 100644
      case NV097_SET_FLIP_READ:
          s_gpu.flip_read = param;
          return;
-@@ -1682,6 +3144,11 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1682,6 +3208,11 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
          /* The stall ends when the buffer being read is the one just finished.
           * There is no scanout here to wait for, so that is now. */
          s_gpu.flip_read = s_gpu.flip_write;
@@ -4820,7 +4960,7 @@ index b3dcbf7..4d25c7b 100644
          /* And this is a completed swap, which is what a title's own swap
           * counter counts -- see xbox_Nv2aFrameCounterFlip. */
          xbox_Nv2aFrameCounterFlip();
-@@ -1696,6 +3163,11 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1696,6 +3227,11 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
          return;
  
      case NV097_SET_TEXTURE_FORMAT:
@@ -4832,7 +4972,7 @@ index b3dcbf7..4d25c7b 100644
          s_gpu.tex.color = (param >> 8) & 0xFF;
          /* A swizzled texture carries its own dimensions here, as log2 in
           * BASE_SIZE_U/V (nv2a_regs.h: 0x00F00000 / 0x0F000000). It has to:
-@@ -1729,6 +3201,9 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1729,6 +3265,9 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
      case NV097_SET_TEXTURE_IMAGE_RECT:
          s_gpu.tex.width  = param >> 16;
          s_gpu.tex.height = param & 0xFFFF;
@@ -4842,7 +4982,7 @@ index b3dcbf7..4d25c7b 100644
          record_tex_reg(method, param);
          break;
  
-@@ -1948,9 +3423,12 @@ void nv2a_pb_exec_report(void)
+@@ -1948,9 +3487,12 @@ void nv2a_pb_exec_report(void)
              dma_resolve(s_gpu.drawn_offset), s_gpu.color_offset,
              dma_resolve(s_gpu.color_offset));
      fprintf(stderr, "[GPU] rasterised %u triangles; %u batches skipped as not"
@@ -6076,7 +6216,7 @@ index 2189a3b..9d7605b 100644
 +    target_link_libraries(xbox_video PUBLIC mfplat mfreadwrite mfuuid mf ole32 imm32)
  endif()
 diff --git a/src/video/fb_present.c b/src/video/fb_present.c
-index 69ced11..4901588 100644
+index 69ced11..0651a5b 100644
 --- a/src/video/fb_present.c
 +++ b/src/video/fb_present.c
 @@ -17,7 +17,12 @@
@@ -6092,7 +6232,7 @@ index 69ced11..4901588 100644
  #include <stdio.h>
  #include <stdlib.h>
  #include <string.h>
-@@ -26,7 +31,19 @@ extern ptrdiff_t xbox_GetMemoryOffset(void);
+@@ -26,7 +31,30 @@ extern ptrdiff_t xbox_GetMemoryOffset(void);
  
  static volatile LONG s_fb_running;
  static uint32_t      s_fb_va, s_fb_pitch, s_fb_width = 640, s_fb_height = 480;
@@ -6102,6 +6242,17 @@ index 69ced11..4901588 100644
 + * 720x480 surface with the picture centred on it; a fixed 640x480 window cut
 + * off the right 80 columns. Applied by the window thread, which owns s_rgb. */
 +static volatile LONG s_want_w, s_want_h;
++
++/* Keep the title's 4:3 render targets intact on a modern ultrawide display.
++ * This changes only host presentation: the guest still owns its surface size,
++ * viewport and projection matrices. A real wider field of view needs separate
++ * title-side projection work; stretching the existing surface would distort
++ * every menu and HUD element. */
++static int fb_ultrawide_on(void)
++{
++    const char *v = getenv("RECOMP_ULTRAWIDE");
++    return v && *v && *v != '0';
++}
 +
 +void xbox_FramebufferWindowSize(uint32_t w, uint32_t h)
 +{
@@ -6113,7 +6264,7 @@ index 69ced11..4901588 100644
  
  void xbox_FramebufferWindowSet(uint32_t fb_va, uint32_t pitch)
  {
-@@ -125,12 +142,21 @@ int xbox_FramebufferDumpBmp(const char *path)
+@@ -125,12 +153,25 @@ int xbox_FramebufferDumpBmp(const char *path)
  static DWORD WINAPI fb_thread(LPVOID unused)
  {
      HWND hwnd;
@@ -6122,6 +6273,10 @@ index 69ced11..4901588 100644
      RECT r;
 +    HDC hdc;
 +    BITMAPINFO bmi;
++    int ultrawide = fb_ultrawide_on();
++    DWORD style = WS_OVERLAPPEDWINDOW | WS_VISIBLE;
++    int win_x = CW_USEDEFAULT, win_y = CW_USEDEFAULT;
++    int win_w, win_h;
  
      (void)unused;
  
@@ -6137,7 +6292,35 @@ index 69ced11..4901588 100644
      {
          WNDCLASSA wc;
          memset(&wc, 0, sizeof(wc));
-@@ -151,41 +177,91 @@ static DWORD WINAPI fb_thread(LPVOID unused)
+@@ -142,50 +183,137 @@ static DWORD WINAPI fb_thread(LPVOID unused)
+     }
+     r.left = 0; r.top = 0; r.right = (LONG)s_fb_width; r.bottom = (LONG)s_fb_height;
+     AdjustWindowRect(&r, WS_OVERLAPPEDWINDOW, FALSE);
++    win_w = r.right - r.left;
++    win_h = r.bottom - r.top;
++    if (ultrawide) {
++        POINT cursor = { 0, 0 };
++        MONITORINFO mi;
++        HMONITOR monitor;
++        GetCursorPos(&cursor);
++        monitor = MonitorFromPoint(cursor, MONITOR_DEFAULTTOPRIMARY);
++        memset(&mi, 0, sizeof(mi));
++        mi.cbSize = sizeof(mi);
++        if (GetMonitorInfoA(monitor, &mi)) {
++            win_x = mi.rcMonitor.left;
++            win_y = mi.rcMonitor.top;
++            win_w = mi.rcMonitor.right - mi.rcMonitor.left;
++            win_h = mi.rcMonitor.bottom - mi.rcMonitor.top;
++        }
++        style = WS_POPUP | WS_VISIBLE;
++    }
+     hwnd = CreateWindowExA(0, "XboxRecompFramebuffer", "Xbox Recomp - Framebuffer",
+-                           WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+-                           CW_USEDEFAULT, CW_USEDEFAULT,
+-                           r.right - r.left, r.bottom - r.top,
++                           style, win_x, win_y, win_w, win_h,
+                            NULL, NULL, GetModuleHandleA(NULL), NULL);
+     if (!hwnd) {
          InterlockedExchange(&s_fb_running, 0);
          return 0;
      }
@@ -6206,10 +6389,12 @@ index 69ced11..4901588 100644
 +                    s_fb_height = wh;
 +                    bmi.bmiHeader.biWidth = (LONG)ww;
 +                    bmi.bmiHeader.biHeight = -(LONG)wh;
-+                    wr.left = 0; wr.top = 0; wr.right = (LONG)ww; wr.bottom = (LONG)wh;
-+                    AdjustWindowRect(&wr, WS_OVERLAPPEDWINDOW, FALSE);
-+                    SetWindowPos(hwnd, NULL, 0, 0, wr.right - wr.left, wr.bottom - wr.top,
-+                                 SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
++                    if (!ultrawide) {
++                        wr.left = 0; wr.top = 0; wr.right = (LONG)ww; wr.bottom = (LONG)wh;
++                        AdjustWindowRect(&wr, WS_OVERLAPPEDWINDOW, FALSE);
++                        SetWindowPos(hwnd, NULL, 0, 0, wr.right - wr.left, wr.bottom - wr.top,
++                                     SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
++                    }
 +                }
 +            }
 +        }
@@ -6226,7 +6411,26 @@ index 69ced11..4901588 100644
 +                    (const uint8_t *)((uintptr_t)s_fb_va + xbox_GetMemoryOffset());
 +                __try {
 +                    fb_convert(src, s_fb_pitch / s_fb_width);
-+                    StretchDIBits(hdc, 0, 0, (int)s_fb_width, (int)s_fb_height,
++                    int dst_x = 0, dst_y = 0;
++                    int dst_w = (int)s_fb_width, dst_h = (int)s_fb_height;
++                    if (ultrawide) {
++                        RECT client;
++                        GetClientRect(hwnd, &client);
++                        dst_w = client.right - client.left;
++                        dst_h = client.bottom - client.top;
++                        if (dst_w > 0 && dst_h > 0) {
++                            double scale_x = (double)dst_w / s_fb_width;
++                            double scale_y = (double)dst_h / s_fb_height;
++                            double scale = scale_x < scale_y ? scale_x : scale_y;
++                            dst_w = (int)(s_fb_width * scale + 0.5);
++                            dst_h = (int)(s_fb_height * scale + 0.5);
++                            dst_x = (client.right - dst_w) / 2;
++                            dst_y = (client.bottom - dst_h) / 2;
++                            PatBlt(hdc, 0, 0, client.right, client.bottom, BLACKNESS);
++                        }
++                    }
++                    SetStretchBltMode(hdc, HALFTONE);
++                    StretchDIBits(hdc, dst_x, dst_y, dst_w, dst_h,
 +                                  0, 0, (int)s_fb_width, (int)s_fb_height,
 +                                  s_rgb, &bmi, DIB_RGB_COLORS, SRCCOPY);
 +                } __except (EXCEPTION_EXECUTE_HANDLER) {
@@ -6246,7 +6450,7 @@ index 69ced11..4901588 100644
                  xbox_FramebufferDumpBmp(dump);
          }
          Sleep(16);
-@@ -195,15 +271,18 @@ static DWORD WINAPI fb_thread(LPVOID unused)
+@@ -195,15 +323,18 @@ static DWORD WINAPI fb_thread(LPVOID unused)
      DestroyWindow(hwnd);
      free(s_rgb);
      s_rgb = NULL;
@@ -6268,7 +6472,7 @@ index 69ced11..4901588 100644
      if (InterlockedCompareExchange(&s_fb_running, 1, 0) != 0)
          return;
      th = CreateThread(NULL, 0, fb_thread, NULL, 0, NULL);
-@@ -213,7 +292,24 @@ void xbox_FramebufferWindowStart(void)
+@@ -213,7 +344,24 @@ void xbox_FramebufferWindowStart(void)
          InterlockedExchange(&s_fb_running, 0);
  }
  
