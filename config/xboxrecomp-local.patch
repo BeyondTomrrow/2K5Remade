@@ -2261,10 +2261,10 @@ index 17cb31f..172d860 100644
          *PreviousSuspendCount = (ULONG)prev;
 diff --git a/src/kernel/nv2a_gpu_d3d11.hlsl b/src/kernel/nv2a_gpu_d3d11.hlsl
 new file mode 100644
-index 0000000..554f231
+index 0000000..c13d083
 --- /dev/null
 +++ b/src/kernel/nv2a_gpu_d3d11.hlsl
-@@ -0,0 +1,262 @@
+@@ -0,0 +1,290 @@
 +// NV2A pixel pipeline for the Direct3D 11 renderer (nv2a_gpu_d3d11.inc.c).
 +//
 +// Edit this file, then run tools/gen-gpu-hlsl.py to regenerate
@@ -2278,10 +2278,16 @@ index 0000000..554f231
 +struct VIn {
 +    float4 pos : POSITION; float4 d0 : COLOR0; float4 d1 : COLOR1;
 +    float4 t0 : TEXCOORD0; float4 t1 : TEXCOORD1; float4 t2 : TEXCOORD2; float4 t3 : TEXCOORD3;
++    float4 wz : TEXCOORD4;   // x: oPos.w, for w-buffered depth
 +};
 +struct PIn {
 +    float4 pos : SV_Position; float4 d0 : COLOR0; float4 d1 : COLOR1;
 +    float4 t0 : TEXCOORD0; float4 t1 : TEXCOORD1; float4 t2 : TEXCOORD2; float4 t3 : TEXCOORD3;
++    float4 wz : TEXCOORD4;
++};
++struct POut {
++    float4 c : SV_Target;
++    float  d : SV_Depth;
 +};
 +
 +PIn vs_main(VIn v)
@@ -2289,6 +2295,7 @@ index 0000000..554f231
 +    PIn o;
 +    o.pos = v.pos; o.d0 = v.d0; o.d1 = v.d1;
 +    o.t0 = v.t0; o.t1 = v.t1; o.t2 = v.t2; o.t3 = v.t3;
++    o.wz = v.wz;
 +    return o;
 +}
 +
@@ -2307,6 +2314,8 @@ index 0000000..554f231
 +    uint4  cube;          // 1 when the stage's texture is a cube map
 +    uint4  rect;          // 1 when the stage's coordinates are in texels
 +    float4 tsize[4];      // texture width, height per stage
++    uint4  show;          // RECOMP_GPU_SHOW debug view (x): 0 normal, 1-4 t0-t3, 5 d0, 6 alpha
++    float4 depthp;        // x: w-buffer (Z perspective), y: zmax, z/w: clip min/max
 +};
 +
 +Texture2D   T0 : register(t0); Texture2D   T1 : register(t1);
@@ -2401,7 +2410,23 @@ index 0000000..554f231
 +    return mapin(a ? R[r].a : R[r].b, b & 0xE0u);
 +}
 +
-+float4 ps_main(PIn i) : SV_Target
++float4 shade(PIn i);
++
++// Depth as the NV2A computes it (xemu psh.c): with Z perspective the
++// perspective-correct w, otherwise the interpolated z; either way in
++// depth-buffer units, clamped to the clip range, over the format's maximum.
++POut ps_main(PIn i)
++{
++    POut r;
++    r.c = shade(i);
++    if (depthp.x != 0.0)
++        r.d = clamp(i.wz.x, depthp.z, depthp.w) / depthp.y;
++    else
++        r.d = i.pos.z;
++    return r;
++}
++
++float4 shade(PIn i)
 +{
 +    float4 T[4] = { i.t0, i.t1, i.t2, i.t3 };
 +    float4 t[4] = { float4(0, 0, 0, 1), float4(0, 0, 0, 1), float4(0, 0, 0, 1), float4(0, 0, 0, 1) };
@@ -2513,6 +2538,9 @@ index 0000000..554f231
 +        }
 +        o = saturate(o);
 +    }
++    if (show.x >= 1u && show.x <= 4u) return float4(t[show.x - 1u].rgb, 1.0);
++    if (show.x == 5u) return float4(d0.rgb, 1.0);
++    if (show.x == 6u) return float4(o.aaa, 1.0);
 +    if (alpha.x != 0u) {
 +        uint a8 = (uint)(saturate(o.a) * 255.0 + 0.5), ref = alpha.z;
 +        bool ok = true;
@@ -2529,10 +2557,10 @@ index 0000000..554f231
 +}
 diff --git a/src/kernel/nv2a_gpu_d3d11.inc.c b/src/kernel/nv2a_gpu_d3d11.inc.c
 new file mode 100644
-index 0000000..0f4e573
+index 0000000..1e335a0
 --- /dev/null
 +++ b/src/kernel/nv2a_gpu_d3d11.inc.c
-@@ -0,0 +1,1121 @@
+@@ -0,0 +1,1191 @@
 +/* ── Hardware rendering (Direct3D 11) ─────────────────────────────────────
 + *
 + * Included into nv2a_pb_exec.c (it reads that file's state directly), after
@@ -2573,6 +2601,7 @@ index 0000000..0f4e573
 +    float d0[4];
 +    float d1[4];
 +    float t[4][4];                       /* oT0..oT3 as written */
++    float wz[4];                         /* x: oPos.w, for w-buffered depth */
 +} GpuVertex;
 +
 +typedef struct {
@@ -2636,6 +2665,8 @@ index 0000000..0f4e573
 +    uint32_t cube[4];                    /* stage texture is a cube map */
 +    uint32_t rect[4];                    /* stage coordinates are in texels */
 +    float    tsize[4][4];                /* stage texture width, height */
++    uint32_t show[4];                    /* RECOMP_GPU_SHOW debug view */
++    float    depthp[4];                  /* w-buffer, zmax, clip min, clip max */
 +} GpuConsts;
 +
 +#include "nv2a_gpu_d3d11_hlsl.inc"   /* k_gpu_hlsl, from nv2a_gpu_d3d11.hlsl */
@@ -2720,8 +2751,9 @@ index 0000000..0f4e573
 +            { "TEXCOORD", 1, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, (UINT)offsetof(GpuVertex, t[1]), D3D11_INPUT_PER_VERTEX_DATA, 0 },
 +            { "TEXCOORD", 2, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, (UINT)offsetof(GpuVertex, t[2]), D3D11_INPUT_PER_VERTEX_DATA, 0 },
 +            { "TEXCOORD", 3, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, (UINT)offsetof(GpuVertex, t[3]), D3D11_INPUT_PER_VERTEX_DATA, 0 },
++            { "TEXCOORD", 4, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, (UINT)offsetof(GpuVertex, wz), D3D11_INPUT_PER_VERTEX_DATA, 0 },
 +        };
-+        ID3D11Device_CreateInputLayout(s_gpu11.dev, el, 7, ID3D10Blob_GetBufferPointer(vsb),
++        ID3D11Device_CreateInputLayout(s_gpu11.dev, el, 8, ID3D10Blob_GetBufferPointer(vsb),
 +                                       ID3D10Blob_GetBufferSize(vsb), &s_gpu11.layout);
 +    }
 +    {
@@ -2874,7 +2906,7 @@ index 0000000..0f4e573
 +        td.Usage = D3D11_USAGE_STAGING; td.BindFlags = 0; td.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
 +        ID3D11Device_CreateTexture2D(s_gpu11.dev, &td, NULL, &s->staging);
 +        td.Usage = D3D11_USAGE_DEFAULT; td.CPUAccessFlags = 0;
-+        td.Format = DXGI_FORMAT_D24_UNORM_S8_UINT; td.BindFlags = D3D11_BIND_DEPTH_STENCIL;
++        td.Format = DXGI_FORMAT_D32_FLOAT_S8X24_UINT; td.BindFlags = D3D11_BIND_DEPTH_STENCIL;
 +        ID3D11Device_CreateTexture2D(s_gpu11.dev, &td, NULL, &s->ds);
 +        ID3D11Device_CreateDepthStencilView(s_gpu11.dev, (ID3D11Resource *)s->ds, NULL, &s->dsv);
 +        ID3D11DeviceContext_ClearDepthStencilView(s_gpu11.ctx, s->dsv, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
@@ -3029,6 +3061,39 @@ index 0000000..0f4e573
 +        }
 +        t->offset = base;
 +        if (!ok) { free(pix); return NULL; }
++    }
++    /* RECOMP_GPU_TEXDUMP=<prefix>: write what was decoded (face 0, BGRA over
++     * mid-grey), textures of 128x128 and up, first 400. */
++    if (env_cached("RECOMP_GPU_TEXDUMP") && n >= 128u * 128u) {
++        static unsigned dumped;
++        if (dumped < 400) {
++            char path[512];
++            FILE *df;
++            snprintf(path, sizeof path, "%s%03u_%08X_fmt%02X_pal%08X_%ux%u%s.bmp",
++                     env_cached("RECOMP_GPU_TEXDUMP"), dumped++, t->offset, t->color, t->palette,
++                     t->width, t->height, cube ? "_cube" : "");
++            df = fopen(path, "wb");
++            if (df) {
++                uint32_t size = 54 + n * 3, u2, v2;
++                uint8_t hdr[54] = { 'B', 'M' };
++                memcpy(hdr + 2, &size, 4);
++                hdr[10] = 54; hdr[14] = 40;
++                memcpy(hdr + 18, &t->width, 4);
++                { int32_t nh = -(int32_t)t->height; memcpy(hdr + 22, &nh, 4); }
++                hdr[26] = 1; hdr[28] = 24;
++                fwrite(hdr, 1, 54, df);
++                for (v2 = 0; v2 < t->height; v2++)
++                    for (u2 = 0; u2 < t->width; u2++) {
++                        uint32_t px = pix[(size_t)v2 * t->width + u2], a = px >> 24;
++                        uint8_t o3[3];
++                        o3[0] = (uint8_t)(((px & 0xFF) * a + 128u * (255u - a)) / 255u);
++                        o3[1] = (uint8_t)((((px >> 8) & 0xFF) * a + 128u * (255u - a)) / 255u);
++                        o3[2] = (uint8_t)((((px >> 16) & 0xFF) * a + 128u * (255u - a)) / 255u);
++                        fwrite(o3, 1, 3, df);
++                    }
++                fclose(df);
++            }
++        }
 +    }
 +    {
 +        D3D11_TEXTURE2D_DESC td;
@@ -3217,7 +3282,7 @@ index 0000000..0f4e573
 +        if (keys[i] == key)
 +            return cache[i];
 +    memset(&dd, 0, sizeof dd);
-+    dd.DepthEnable = s_vp.depth_test ? TRUE : FALSE;
++    dd.DepthEnable = s_vp.depth_test && !env_cached("RECOMP_GPU_NODEPTH") ? TRUE : FALSE;
 +    dd.DepthWriteMask = (s_vp.depth_test && s_vp.depth_mask) ? D3D11_DEPTH_WRITE_MASK_ALL : D3D11_DEPTH_WRITE_MASK_ZERO;
 +    dd.DepthFunc = gpu_cmp(s_vp.depth_func);
 +    dd.StencilEnable = s_vp.stencil_test ? TRUE : FALSE;
@@ -3250,16 +3315,32 @@ index 0000000..0f4e573
 +    return st;
 +}
 +
++/* The depth buffer's full-scale value (xemu pgraph_glsl_set_clip_range):
++ * Z16 or Z24, integer or floating point (SET_CONTROL0 bit 12). */
++static float gpu_zmax(void)
++{
++    int z16 = ((s_gpu.format >> 4) & 0xF) == 1;
++    int zfloat = (s_vp.control0 >> 12) & 1;
++    if (zfloat)
++        return z16 ? 511.9375f : 1.0e30f;
++    return z16 ? 65535.0f : 16777215.0f;
++}
++
 +/* ---- drawing ---------------------------------------------------------- */
 +
 +static void gpu_vertex(GpuVertex *o, const XfVert *x, uint32_t rw, uint32_t rh)
 +{
 +    /* oPos is in screen space, already divided by w; undo the divide so the
 +     * GPU clips and interpolates perspective-correctly (as xemu does). */
-+    float zmin = s_vp.clip_min, zmax = s_vp.clip_max > zmin ? s_vp.clip_max : 16777215.0f;
++    float zfull = gpu_zmax(), zc = x->z;
 +    float nx = x->x / (float)rw * 2.0f - 1.0f;
 +    float ny = 1.0f - x->y / (float)rh * 2.0f;
-+    float nz = (x->z - zmin) / (zmax - zmin);
++    float nz;
++    if (s_vp.clip_max > s_vp.clip_min) {
++        if (zc < s_vp.clip_min) zc = s_vp.clip_min;
++        if (zc > s_vp.clip_max) zc = s_vp.clip_max;
++    }
++    nz = zc / zfull;
 +    float w = x->w;
 +    int k;
 +    if (w > -5.192093e-39f && w < 5.192093e-39f) w = 5.192093e-39f;
@@ -3270,6 +3351,7 @@ index 0000000..0f4e573
 +    memcpy(o->d1, x->spec, sizeof o->d1);
 +    /* As the program wrote them; the shader applies each stage's convention. */
 +    memcpy(o->t, x->tc, sizeof o->t);
++    o->wz[0] = x->w; o->wz[1] = o->wz[2] = 0.0f; o->wz[3] = 1.0f;
 +    if (env_cached("RECOMP_GPU_NOPROJ"))
 +        for (k = 0; k < 4; k++)
 +            o->t[k][3] = 1.0f;
@@ -3461,6 +3543,12 @@ index 0000000..0f4e573
 +    comb_unpack(s_comb.specfog[0], c.specfog0);
 +    comb_unpack(s_comb.specfog[1], c.specfog1);
 +    c.alpha[0] = s_gpu.alpha_test; c.alpha[1] = s_gpu.alpha_func;
++    c.depthp[0] = (s_vp.control0 >> 16) & 1 ? 1.0f : 0.0f;
++    c.depthp[1] = gpu_zmax();
++    c.depthp[2] = s_vp.clip_max > s_vp.clip_min ? s_vp.clip_min : 0.0f;
++    c.depthp[3] = s_vp.clip_max > s_vp.clip_min ? s_vp.clip_max : c.depthp[1];
++    if (env_cached("RECOMP_GPU_SHOW"))
++        c.show[0] = (uint32_t)atoi(env_cached("RECOMP_GPU_SHOW"));
 +    c.alpha[2] = s_gpu.alpha_ref; c.alpha[3] = !flat2d && comb_active() ? 1u : 0u;
 +    /* Texture stage modes (SET_SHADER_STAGE_PROGRAM, 5 bits a stage), the dot
 +     * mappings and stage inputs (NV_PGRAPH_SHADERCTL), as xemu's psh.c reads
@@ -3582,8 +3670,18 @@ index 0000000..0f4e573
 +    }
 +    if (param & 3u) {
 +        UINT flags = ((param & 1u) ? D3D11_CLEAR_DEPTH : 0) | ((param & 2u) ? D3D11_CLEAR_STENCIL : 0);
-+        float zmin = s_vp.clip_min, zmax = s_vp.clip_max > zmin ? s_vp.clip_max : 16777215.0f;
-+        float z = ((float)(s_vp.zclear >> 8) - zmin) / (zmax - zmin);
++        /* xemu pgraph_get_clear_depth: the clear value in the buffer's own
++         * format -- a 24-bit float is the top 24 bits of an IEEE single. */
++        uint32_t zc24 = s_vp.zclear >> 8;
++        float z;
++        if ((s_vp.control0 >> 12) & 1) {
++            uint32_t bits = zc24 << 7;
++            float fz;
++            memcpy(&fz, &bits, 4);
++            z = zc24 ? fz / gpu_zmax() : 0.0f;
++        } else {
++            z = (float)zc24 / 16777215.0f;
++        }
 +        if (z < 0.0f) z = 0.0f;
 +        if (z > 1.0f) z = 1.0f;
 +        ID3D11DeviceContext_ClearDepthStencilView(s_gpu11.ctx, s->dsv, flags, z, (UINT8)(s_vp.zclear & 0xFF));
@@ -3656,10 +3754,10 @@ index 0000000..0f4e573
 +}
 diff --git a/src/kernel/nv2a_gpu_d3d11_hlsl.inc b/src/kernel/nv2a_gpu_d3d11_hlsl.inc
 new file mode 100644
-index 0000000..f93ea00
+index 0000000..0c01e22
 --- /dev/null
 +++ b/src/kernel/nv2a_gpu_d3d11_hlsl.inc
-@@ -0,0 +1,264 @@
+@@ -0,0 +1,292 @@
 +/* Generated from nv2a_gpu_d3d11.hlsl by tools/gen-gpu-hlsl.py -- do not edit. */
 +static const char k_gpu_hlsl[] =
 +    "// NV2A pixel pipeline for the Direct3D 11 renderer (nv2a_gpu_d3d11.inc.c).\n"
@@ -3675,10 +3773,16 @@ index 0000000..f93ea00
 +    "struct VIn {\n"
 +    "    float4 pos : POSITION; float4 d0 : COLOR0; float4 d1 : COLOR1;\n"
 +    "    float4 t0 : TEXCOORD0; float4 t1 : TEXCOORD1; float4 t2 : TEXCOORD2; float4 t3 : TEXCOORD3;\n"
++    "    float4 wz : TEXCOORD4;   // x: oPos.w, for w-buffered depth\n"
 +    "};\n"
 +    "struct PIn {\n"
 +    "    float4 pos : SV_Position; float4 d0 : COLOR0; float4 d1 : COLOR1;\n"
 +    "    float4 t0 : TEXCOORD0; float4 t1 : TEXCOORD1; float4 t2 : TEXCOORD2; float4 t3 : TEXCOORD3;\n"
++    "    float4 wz : TEXCOORD4;\n"
++    "};\n"
++    "struct POut {\n"
++    "    float4 c : SV_Target;\n"
++    "    float  d : SV_Depth;\n"
 +    "};\n"
 +    "\n"
 +    "PIn vs_main(VIn v)\n"
@@ -3686,6 +3790,7 @@ index 0000000..f93ea00
 +    "    PIn o;\n"
 +    "    o.pos = v.pos; o.d0 = v.d0; o.d1 = v.d1;\n"
 +    "    o.t0 = v.t0; o.t1 = v.t1; o.t2 = v.t2; o.t3 = v.t3;\n"
++    "    o.wz = v.wz;\n"
 +    "    return o;\n"
 +    "}\n"
 +    "\n"
@@ -3704,6 +3809,8 @@ index 0000000..f93ea00
 +    "    uint4  cube;          // 1 when the stage's texture is a cube map\n"
 +    "    uint4  rect;          // 1 when the stage's coordinates are in texels\n"
 +    "    float4 tsize[4];      // texture width, height per stage\n"
++    "    uint4  show;          // RECOMP_GPU_SHOW debug view (x): 0 normal, 1-4 t0-t3, 5 d0, 6 alpha\n"
++    "    float4 depthp;        // x: w-buffer (Z perspective), y: zmax, z/w: clip min/max\n"
 +    "};\n"
 +    "\n"
 +    "Texture2D   T0 : register(t0); Texture2D   T1 : register(t1);\n"
@@ -3798,7 +3905,23 @@ index 0000000..f93ea00
 +    "    return mapin(a ? R[r].a : R[r].b, b & 0xE0u);\n"
 +    "}\n"
 +    "\n"
-+    "float4 ps_main(PIn i) : SV_Target\n"
++    "float4 shade(PIn i);\n"
++    "\n"
++    "// Depth as the NV2A computes it (xemu psh.c): with Z perspective the\n"
++    "// perspective-correct w, otherwise the interpolated z; either way in\n"
++    "// depth-buffer units, clamped to the clip range, over the format's maximum.\n"
++    "POut ps_main(PIn i)\n"
++    "{\n"
++    "    POut r;\n"
++    "    r.c = shade(i);\n"
++    "    if (depthp.x != 0.0)\n"
++    "        r.d = clamp(i.wz.x, depthp.z, depthp.w) / depthp.y;\n"
++    "    else\n"
++    "        r.d = i.pos.z;\n"
++    "    return r;\n"
++    "}\n"
++    "\n"
++    "float4 shade(PIn i)\n"
 +    "{\n"
 +    "    float4 T[4] = { i.t0, i.t1, i.t2, i.t3 };\n"
 +    "    float4 t[4] = { float4(0, 0, 0, 1), float4(0, 0, 0, 1), float4(0, 0, 0, 1), float4(0, 0, 0, 1) };\n"
@@ -3910,6 +4033,9 @@ index 0000000..f93ea00
 +    "        }\n"
 +    "        o = saturate(o);\n"
 +    "    }\n"
++    "    if (show.x >= 1u && show.x <= 4u) return float4(t[show.x - 1u].rgb, 1.0);\n"
++    "    if (show.x == 5u) return float4(d0.rgb, 1.0);\n"
++    "    if (show.x == 6u) return float4(o.aaa, 1.0);\n"
 +    "    if (alpha.x != 0u) {\n"
 +    "        uint a8 = (uint)(saturate(o.a) * 255.0 + 0.5), ref = alpha.z;\n"
 +    "        bool ok = true;\n"
@@ -3925,7 +4051,7 @@ index 0000000..f93ea00
 +    "    return o;\n"
 +    "}\n";
 diff --git a/src/kernel/nv2a_pb_exec.c b/src/kernel/nv2a_pb_exec.c
-index b3dcbf7..68ce05e 100644
+index b3dcbf7..9bb45e9 100644
 --- a/src/kernel/nv2a_pb_exec.c
 +++ b/src/kernel/nv2a_pb_exec.c
 @@ -24,8 +24,10 @@
@@ -4383,7 +4509,7 @@ index b3dcbf7..68ce05e 100644
      default:
          break;                             /* points and lines: not yet */
      }
-@@ -1242,6 +1512,1143 @@ static void raster_batch(void)
+@@ -1242,6 +1512,1145 @@ static void raster_batch(void)
   * question is what space attribute 0 arrives in: a title running a vertex
   * program hands over object-space positions that mean nothing without running
   * it, while pre-transformed screen-space coordinates can be drawn directly. */
@@ -4746,6 +4872,7 @@ index b3dcbf7..68ce05e 100644
 +    uint32_t color_mask;                  /* NV097_SET_COLOR_MASK */
 +    uint32_t clear_rx, clear_ry;          /* SET_CLEAR_RECT_HORIZONTAL/VERTICAL */
 +    float    clip_min, clip_max;          /* SET_CLIP_MIN/MAX: depth range oPos.z is in */
++    uint32_t control0;                    /* SET_CONTROL0: bit 16 Z perspective (w-buffer), bit 12 float Z */
 +    uint32_t batches, verts;              /* counters for the report */
 +    uint32_t rej_bad, rej_area, rej_cull, rej_clip, drawn;
 +} s_vp = { .depth_func = 0x0201, .depth_mask = 1, .cull_face = 0x0405,
@@ -4806,6 +4933,7 @@ index b3dcbf7..68ce05e 100644
 +    case 0x0370: s_vp.op_fail       = param; return 1;
 +    case 0x0374: s_vp.op_zfail      = param; return 1;
 +    case 0x0378: s_vp.op_zpass      = param; return 1;
++    case 0x0290: s_vp.control0 = param; return 1;  /* SET_CONTROL0 */
 +    case 0x0394: s_vp.clip_min = f; return 1;   /* SET_CLIP_MIN */
 +    case 0x0398: s_vp.clip_max = f; return 1;   /* SET_CLIP_MAX */
 +    case 0x1D98: s_vp.clear_rx = g_clear_rx = param; return 1;   /* SET_CLEAR_RECT_HORIZONTAL */
@@ -5527,7 +5655,7 @@ index b3dcbf7..68ce05e 100644
  static void draw_primitive(void)
  {
      float v[4];
-@@ -1270,7 +2677,44 @@ static void draw_primitive(void)
+@@ -1270,7 +2679,44 @@ static void draw_primitive(void)
          }
      }
  
@@ -5573,7 +5701,7 @@ index b3dcbf7..68ce05e 100644
  
      if (getenv("RECOMP_PB_EXEC_VERBOSE")) {
          static int shown;
-@@ -1390,6 +2834,12 @@ static void draw_inline_array(void)
+@@ -1390,6 +2836,12 @@ static void draw_inline_array(void)
          case 0:  bytes = 4;                        break;  /* D3DCOLOR   */
          case 2:  bytes = 4 * s_gpu.attr[a].size;   break;  /* float      */
          case 4:  bytes = s_gpu.attr[a].size;       break;  /* ubyte norm */
@@ -5586,7 +5714,7 @@ index b3dcbf7..68ce05e 100644
          default: bytes = 4 * s_gpu.attr[a].size;   break;
          }
          s_gpu.attr[a].offset = off;
-@@ -1493,6 +2943,37 @@ static int imm_vertex_method(uint32_t method, uint32_t param)
+@@ -1493,6 +2945,37 @@ static int imm_vertex_method(uint32_t method, uint32_t param)
      union { uint32_t u; float f; } v;
      v.u = param;
  
@@ -5624,7 +5752,7 @@ index b3dcbf7..68ce05e 100644
      if (method >= NV097_SET_VERTEX4F && method < NV097_SET_VERTEX4F + 16) {
          uint32_t c = (method - NV097_SET_VERTEX4F) / 4;
          s_gpu.imm_pos[c] = v.f;
-@@ -1570,7 +3051,22 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1570,7 +3053,22 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
          note_unhandled(method, param);
          return;
      }
@@ -5647,7 +5775,7 @@ index b3dcbf7..68ce05e 100644
      case NV097_SET_SURFACE_CLIP_HORIZONTAL:
          s_gpu.clip_x = param & 0xFFFF;
          s_gpu.clip_w = (param >> 16) & 0xFFFF;
-@@ -1586,16 +3082,32 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1586,16 +3084,32 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
          s_gpu.pitch = param & 0xFFFF;      /* colour pitch; zeta is the top half */
          break;
      case NV097_SET_SURFACE_COLOR_OFFSET:
@@ -5680,7 +5808,7 @@ index b3dcbf7..68ce05e 100644
          if (param) {
              s_gpu.prim = param;
              s_gpu.idx_count = 0;
-@@ -1620,8 +3132,15 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1620,8 +3134,15 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
      case NV097_INLINE_ARRAY:
          /* Vertex data, not a pointer to it. Buffered rather than decoded here
           * because the format is only fully known at END. */
@@ -5697,7 +5825,7 @@ index b3dcbf7..68ce05e 100644
          break;
  
      case NV097_DRAW_ARRAYS: {
-@@ -1644,6 +3163,13 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1644,6 +3165,13 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
          break;
      }
  
@@ -5711,7 +5839,7 @@ index b3dcbf7..68ce05e 100644
      case NV097_ARRAY_ELEMENT16:
          /* Two 16-bit indices per parameter word. */
          if (s_gpu.prim && s_gpu.idx_count + 2 <= NV_MAX_INDICES) {
-@@ -1659,6 +3185,23 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1659,6 +3187,23 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
          record_tex_reg(method, param);
          break;
  
@@ -5735,7 +5863,7 @@ index b3dcbf7..68ce05e 100644
      case NV097_SET_FLIP_READ:
          s_gpu.flip_read = param;
          return;
-@@ -1682,6 +3225,47 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1682,6 +3227,47 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
          /* The stall ends when the buffer being read is the one just finished.
           * There is no scanout here to wait for, so that is now. */
          s_gpu.flip_read = s_gpu.flip_write;
@@ -5783,7 +5911,7 @@ index b3dcbf7..68ce05e 100644
          /* And this is a completed swap, which is what a title's own swap
           * counter counts -- see xbox_Nv2aFrameCounterFlip. */
          xbox_Nv2aFrameCounterFlip();
-@@ -1696,6 +3280,11 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1696,6 +3282,11 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
          return;
  
      case NV097_SET_TEXTURE_FORMAT:
@@ -5795,7 +5923,7 @@ index b3dcbf7..68ce05e 100644
          s_gpu.tex.color = (param >> 8) & 0xFF;
          /* A swizzled texture carries its own dimensions here, as log2 in
           * BASE_SIZE_U/V (nv2a_regs.h: 0x00F00000 / 0x0F000000). It has to:
-@@ -1729,6 +3318,9 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1729,6 +3320,9 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
      case NV097_SET_TEXTURE_IMAGE_RECT:
          s_gpu.tex.width  = param >> 16;
          s_gpu.tex.height = param & 0xFFFF;
@@ -5805,7 +5933,7 @@ index b3dcbf7..68ce05e 100644
          record_tex_reg(method, param);
          break;
  
-@@ -1948,9 +3540,12 @@ void nv2a_pb_exec_report(void)
+@@ -1948,9 +3542,12 @@ void nv2a_pb_exec_report(void)
              dma_resolve(s_gpu.drawn_offset), s_gpu.color_offset,
              dma_resolve(s_gpu.color_offset));
      fprintf(stderr, "[GPU] rasterised %u triangles; %u batches skipped as not"
