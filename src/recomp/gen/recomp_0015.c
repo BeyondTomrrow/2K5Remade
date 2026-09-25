@@ -8801,7 +8801,7 @@ void sub_00217672(void)
 
 loc_00217672: ;
     edi = edi;
-    /* TODO: int1  */
+    RECOMP_TODO(0x00217674u); /* TODO: int1  */
     if (RECOMP_FLAGS_FALLBACK(0x00217675u, _flags) /* jne: not equal / not zero */) (void)0; /* goto loc_00217698 - dead code, label not in function */
 
 loc_00217677: ;
@@ -24722,11 +24722,11 @@ loc_0021C7F2: ;
     _cf = 0; /* logical op clears CF */
     MEM32(eax) = MEM32(eax) & eax;
     _fa = (uint32_t)(MEM32(eax)) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* and result */
-    /* TODO: in eax, 0xc7 */
+    RECOMP_TODO(0x0021C7F4u); /* TODO: in eax, 0xc7 */
     _cf = 0; /* logical op clears CF */
     MEM32(eax) = MEM32(eax) & eax;
     _fa = (uint32_t)(MEM32(eax)) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* and result */
-    /* TODO: in eax, 0xc7 */
+    RECOMP_TODO(0x0021C7F8u); /* TODO: in eax, 0xc7 */
     _cf = 0; /* logical op clears CF */
     MEM32(eax) = MEM32(eax) & eax;
     _fa = (uint32_t)(MEM32(eax)) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* and result */
@@ -24972,11 +24972,11 @@ loc_0021C7F2: ;
     _cf = 0; /* logical op clears CF */
     MEM32(eax) = MEM32(eax) & eax;
     _fa = (uint32_t)(MEM32(eax)) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* and result */
-    /* TODO: in eax, 0xc7 */
+    RECOMP_TODO(0x0021C7F4u); /* TODO: in eax, 0xc7 */
     _cf = 0; /* logical op clears CF */
     MEM32(eax) = MEM32(eax) & eax;
     _fa = (uint32_t)(MEM32(eax)) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* and result */
-    /* TODO: in eax, 0xc7 */
+    RECOMP_TODO(0x0021C7F8u); /* TODO: in eax, 0xc7 */
     _cf = 0; /* logical op clears CF */
     MEM32(eax) = MEM32(eax) & eax;
     _fa = (uint32_t)(MEM32(eax)) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* and result */
@@ -25216,11 +25216,11 @@ loc_0021C7F2: ;
     _cf = 0; /* logical op clears CF */
     MEM32(eax) = MEM32(eax) & eax;
     _fa = (uint32_t)(MEM32(eax)) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* and result */
-    /* TODO: in eax, 0xc7 */
+    RECOMP_TODO(0x0021C7F4u); /* TODO: in eax, 0xc7 */
     _cf = 0; /* logical op clears CF */
     MEM32(eax) = MEM32(eax) & eax;
     _fa = (uint32_t)(MEM32(eax)) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* and result */
-    /* TODO: in eax, 0xc7 */
+    RECOMP_TODO(0x0021C7F8u); /* TODO: in eax, 0xc7 */
     _cf = 0; /* logical op clears CF */
     MEM32(eax) = MEM32(eax) & eax;
     _fa = (uint32_t)(MEM32(eax)) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* and result */
@@ -25458,11 +25458,11 @@ loc_0021C7F2: ;
     _cf = 0; /* logical op clears CF */
     MEM32(eax) = MEM32(eax) & eax;
     _fa = (uint32_t)(MEM32(eax)) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* and result */
-    /* TODO: in eax, 0xc7 */
+    RECOMP_TODO(0x0021C7F4u); /* TODO: in eax, 0xc7 */
     _cf = 0; /* logical op clears CF */
     MEM32(eax) = MEM32(eax) & eax;
     _fa = (uint32_t)(MEM32(eax)) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* and result */
-    /* TODO: in eax, 0xc7 */
+    RECOMP_TODO(0x0021C7F8u); /* TODO: in eax, 0xc7 */
     _cf = 0; /* logical op clears CF */
     MEM32(eax) = MEM32(eax) & eax;
     _fa = (uint32_t)(MEM32(eax)) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* and result */
@@ -40112,8 +40112,8 @@ void sub_0021F22E(void)
 
 loc_0021F22E: ;
     edi = edi;
-    /* TODO: in al, dx */
-    /* TODO: int1  */
+    RECOMP_TODO(0x0021F230u); /* TODO: in al, dx */
+    RECOMP_TODO(0x0021F231u); /* TODO: int1  */
     _cf = 0; /* logical op clears CF */
     MEM32(eax) = MEM32(eax) & eax;
     _fa = (uint32_t)(MEM32(eax)) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* and result */
@@ -40125,7 +40125,7 @@ loc_0021F22E: ;
     MEM32(eax) = MEM32(eax) & eax;
     _fa = (uint32_t)(MEM32(eax)) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* and result */
     _cf = !_cf; /* cmc */
-    /* TODO: int1  */
+    RECOMP_TODO(0x0021F239u); /* TODO: int1  */
     _cf = 0; /* logical op clears CF */
     MEM32(eax) = MEM32(eax) & eax;
     _fa = (uint32_t)(MEM32(eax)) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* and result */
@@ -121208,19 +121208,19 @@ loc_00240B92: ;
     _fa = (uint32_t)(LO8(ecx)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* xor result */
     SET_LO8(eax, LO8(eax) & 0);
     _fa = (uint32_t)(LO8(eax)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* and result */
-    /* TODO: popal  */
+    RECOMP_TODO(0x00240B98u); /* TODO: popal  */
     esp = esp | MEM32(eax + eax);
     _fa = (uint32_t)(esp) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* or result */
-    /* TODO: popal  */
+    RECOMP_TODO(0x00240B9Cu); /* TODO: popal  */
     esp = esp | MEM32(eax + eax);
     _fa = (uint32_t)(esp) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* or result */
-    /* TODO: popal  */
+    RECOMP_TODO(0x00240BA0u); /* TODO: popal  */
     esp = esp | MEM32(eax + eax);
     _fa = (uint32_t)(esp) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* or result */
-    /* TODO: popal  */
+    RECOMP_TODO(0x00240BA4u); /* TODO: popal  */
     esp = esp | MEM32(eax + eax);
     _fa = (uint32_t)(esp) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* or result */
-    /* TODO: popal  */
+    RECOMP_TODO(0x00240BA8u); /* TODO: popal  */
     esp = esp | MEM32(eax + eax);
     _fa = (uint32_t)(esp) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* or result */
     ecx--;

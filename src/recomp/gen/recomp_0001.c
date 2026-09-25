@@ -9537,7 +9537,7 @@ void sub_00033C80(void)
 {
 
 loc_00033C80: ;
-    /* TODO: wbinvd  */
+    RECOMP_TODO(0x00033C80u); /* TODO: wbinvd  */
     (void)0; /* sfence: cache/ordering hint, nothing to model */
     esp += 4; return; /* ret */
 
@@ -13687,7 +13687,7 @@ loc_000355CE: ;
     _fb = (uint32_t)(MEM32(eax)) & 0xFFFFFFFFu; _fbs = (int32_t)(int32_t)(_fb); /* add source, before the write */
     eax = eax + MEM32(eax);
     _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* add result */
-    /* TODO: pushal  */
+    RECOMP_TODO(0x000355D8u); /* TODO: pushal  */
     PUSH32(esp, ebp);
     _fb = (uint32_t)(MEM32(eax)) & 0xFFFFFFFFu; _fbs = (int32_t)(int32_t)(_fb); /* add source, before the write */
     eax = eax + MEM32(eax);
@@ -72849,7 +72849,7 @@ void sub_00048DD0(void)
 loc_00048DD0: ;
     PUSH32(esp, ecx);
     MEM32(esp) = ecx;
-    /* TODO: wbinvd  */
+    RECOMP_TODO(0x00048DD5u); /* TODO: wbinvd  */
     (void)0; /* sfence: cache/ordering hint, nothing to model */
     POP32(esp, ecx);
     esp += 4; return; /* ret */
@@ -72874,7 +72874,7 @@ loc_00048DE0: ;
     _fa = (uint32_t)(esp) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* sub result */
     MEM32(esp + 4) = edx;
     MEM32(esp) = ecx;
-    /* TODO: wbinvd  */
+    RECOMP_TODO(0x00048DEBu); /* TODO: wbinvd  */
     (void)0; /* sfence: cache/ordering hint, nothing to model */
     _fb = (uint32_t)(8) & 0xFFFFFFFFu; _fbs = (int32_t)(int32_t)(_fb); /* add source, before the write */
     esp = esp + 8;
@@ -74327,7 +74327,7 @@ loc_00049786: ;
     _fb = (uint32_t)(0) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
     SET_LO8(eax, LO8(eax) + 0);
     _fa = (uint32_t)(LO8(eax)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* add result */
-    /* TODO: sti  */
+    RECOMP_TODO(0x00049794u); /* TODO: sti  */
     { uint32_t _tmp = esi;
     esi = eax;
     eax = _tmp; }

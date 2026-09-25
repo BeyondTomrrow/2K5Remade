@@ -10633,7 +10633,7 @@ loc_00014696: ;
     _cf = (int)((((uint64_t)(MEM32(eax)) + (uint64_t)(eax)) >> 32) & 1);
     MEM32(eax) = MEM32(eax) + eax;
     _fa = (uint32_t)(MEM32(eax)) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* add result */
-    /* TODO: enter 0x146, 0 */
+    RECOMP_TODO(0x000146A0u); /* TODO: enter 0x146, 0 */
     MEM8(esi + 1) = ROL8(MEM8(esi + 1), 0);
     eax = 0xB0000146u;
     esi++;
@@ -10982,7 +10982,7 @@ loc_0001481E: ;
     _cf = (int)((((uint64_t)(MEM32(eax)) + (uint64_t)(eax)) >> 32) & 1);
     MEM32(eax) = MEM32(eax) + eax;
     _fa = (uint32_t)(MEM32(eax)) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* add result */
-    /* TODO: insb byte ptr es:[edi], dx */
+    RECOMP_TODO(0x0001483Cu); /* TODO: insb byte ptr es:[edi], dx */
     eax--;
     _fa = (uint32_t)(eax) & 0xFFFFFFFFu;
     _fas = (int32_t)(int32_t)(_fa); _fb = (_fa == 0x7FFFFFFFu); /* dec result/SF/OF; CF unchanged */
@@ -34458,9 +34458,9 @@ loc_0001B197: ;
     }
 
 loc_0001B1A6: ;
-    /* TODO: cli  */
+    RECOMP_TODO(0x0001B1A6u); /* TODO: cli  */
     MEM32(esi) = 0x28C5048D;
-    /* TODO: sti  */
+    RECOMP_TODO(0x0001B1ADu); /* TODO: sti  */
     { uint32_t _icall_esp = g_esp;
     PUSH32(esp, ebx);
     PUSH32(esp, 4);
@@ -42856,17 +42856,17 @@ void sub_0001D724(void)
 loc_0001D724: ;
     ecx = MEM32(esp + 4);
     edx = MEM32(esp + 8);
-    /* TODO: sgdt [esp + 6] */
+    RECOMP_TODO(0x0001D72Cu); /* TODO: sgdt [esp + 6] */
     eax = MEM32(esp + 8);
-    /* TODO: cli  */
+    RECOMP_TODO(0x0001D735u); /* TODO: cli  */
     { uint32_t _tmp = MEM32(eax + 8);
     MEM32(eax + 8) = ecx;
     ecx = _tmp; }
     { uint32_t _tmp = MEM32(eax + 0xC);
     MEM32(eax + 0xC) = edx;
     edx = _tmp; }
-    /* TODO: sti  */
-    /* TODO: ljmp 8:0x1d744 */
+    RECOMP_TODO(0x0001D73Cu); /* TODO: sti  */
+    RECOMP_TODO(0x0001D73Du); /* TODO: ljmp 8:0x1d744 */
     eax = ecx;
     esp += 12; return; /* ret 8 */
 
@@ -72891,7 +72891,7 @@ void sub_000261B0(void)
 {
 
 loc_000261B0: ;
-    /* TODO: wbinvd  */
+    RECOMP_TODO(0x000261B0u); /* TODO: wbinvd  */
     (void)0; /* sfence: cache/ordering hint, nothing to model */
     esp += 4; return; /* ret */
 
@@ -75047,7 +75047,7 @@ void sub_0002716E(void)
 
 loc_0002716E: ;
     edi = edi;
-    /* TODO: bound esi, qword ptr [ecx + 2] */
+    RECOMP_TODO(0x00027170u); /* TODO: bound esi, qword ptr [ecx + 2] */
     _fb = (uint32_t)(LO8(ebx)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
     MEM8(ecx + esi * 2 + 2) = MEM8(ecx + esi * 2 + 2) + LO8(ebx);
     _fa = (uint32_t)(MEM8(ecx + esi * 2 + 2)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* add result */

@@ -11078,7 +11078,7 @@ loc_001922A9: ;
     goto loc_0019221B;
 
     /* nop */
-    /* TODO: cmpsb byte ptr [esi], byte ptr es:[edi] */
+    RECOMP_TODO(0x001922B0u); /* TODO: cmpsb byte ptr [esi], byte ptr es:[edi] */
     MEM32(ecx) = MEM32(ecx) & ebx;
     _fa = (uint32_t)(MEM32(ecx)) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* and result */
     _fb = (uint32_t)(HI8(edx)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
@@ -11401,7 +11401,7 @@ loc_001922A9: ;
     g_seh_ebp = ebp; sub_0019221B(); return; /* tail jmp 0x0019221B */
 
     /* nop */
-    /* TODO: cmpsb byte ptr [esi], byte ptr es:[edi] */
+    RECOMP_TODO(0x001922B0u); /* TODO: cmpsb byte ptr [esi], byte ptr es:[edi] */
     MEM32(ecx) = MEM32(ecx) & ebx;
     _fa = (uint32_t)(MEM32(ecx)) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* and result */
     _fb = (uint32_t)(HI8(edx)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
@@ -69297,7 +69297,7 @@ loc_001A9606: ;
 loc_001A962E: ;
     { uint64_t _t = (uint64_t)(LO8(eax)) - (uint64_t)(MEM8(eax)) - (uint64_t)_cf; _cf = (int)((_t >> 8) & 1); SET_LO8(eax, (uint32_t)_t); }  /* sbb */
     _fa = (uint32_t)(LO8(eax)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* sbb result */
-    /* TODO: int1  */
+    RECOMP_TODO(0x001A9630u); /* TODO: int1  */
     { uint32_t _tmp = edx;
     edx = eax;
     eax = _tmp; }

@@ -313750,10 +313750,10 @@ loc_0034AA06: ;
     _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test eax, 0xA9C40034u (32-bit) */
     SET_LO8(eax, LO8(eax) ^ 0);
     _fa = (uint32_t)(LO8(eax)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* xor result */
-    /* TODO: les ebp, ptr [ecx - 0x5636ffcc] */
+    RECOMP_TODO(0x0034AA18u); /* TODO: les ebp, ptr [ecx - 0x5636ffcc] */
     SET_LO8(eax, LO8(eax) ^ 0);
     _fa = (uint32_t)(LO8(eax)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* xor result */
-    /* TODO: aam 0xa9 */
+    RECOMP_TODO(0x0034AA20u); /* TODO: aam 0xa9 */
     SET_LO8(eax, LO8(eax) ^ 0);
     _fa = (uint32_t)(LO8(eax)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* xor result */
     fp_top() = (double)SMEM32(ecx + -1869610956) - fp_top(); /* fisubr dword ptr [ecx - 0x6f6fffcc] */

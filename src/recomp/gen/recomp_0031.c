@@ -42227,14 +42227,14 @@ loc_0049EE31: ;
     _fb = (uint32_t)(HI8(edx)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
     MEM8(edx) = MEM8(edx) + HI8(edx);
     _fa = (uint32_t)(MEM8(edx)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* add result */
-    /* TODO: in eax, dx */
+    RECOMP_TODO(0x0049EE40u); /* TODO: in eax, dx */
     ecx--;
     _fa = (uint32_t)(ecx) & 0xFFFFFFFFu;
     _fas = (int32_t)(int32_t)(_fa); _fb = (_fa == 0x7FFFFFFFu); /* dec result/SF/OF; CF unchanged */
     _fb = (uint32_t)(HI8(edx)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
     MEM8(edi) = MEM8(edi) + HI8(edx);
     _fa = (uint32_t)(MEM8(edi)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* add result */
-    /* TODO: in eax, dx */
+    RECOMP_TODO(0x0049EE44u); /* TODO: in eax, dx */
     ecx--;
     _fa = (uint32_t)(ecx) & 0xFFFFFFFFu;
     _fas = (int32_t)(int32_t)(_fa); _fb = (_fa == 0x7FFFFFFFu); /* dec result/SF/OF; CF unchanged */
@@ -42265,7 +42265,7 @@ loc_0049EE31: ;
     _fb = (uint32_t)(LO8(ecx)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
     MEM8(ebp + 0x10049ED) = MEM8(ebp + 0x10049ED) + LO8(ecx);
     _fa = (uint32_t)(MEM8(ebp + 0x10049ED)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* add result */
-    /* TODO: out dx, al */
+    RECOMP_TODO(0x0049EE60u); /* TODO: out dx, al */
     ecx--;
     _fa = (uint32_t)(ecx) & 0xFFFFFFFFu;
     _fas = (int32_t)(int32_t)(_fa); _fb = (_fa == 0x7FFFFFFFu); /* dec result/SF/OF; CF unchanged */
@@ -105462,12 +105462,12 @@ loc_004B3011: ;
     MEM32(esi + 8) = 7;
     goto loc_004B2F5A;
 
-    /* TODO: sti  */
+    RECOMP_TODO(0x004B301Du); /* TODO: sti  */
     _fb = (uint32_t)(ecx) & 0xFFFFFFFFu; _fbs = (int32_t)(int32_t)(_fb); /* sub source, before the write */
     _cf = (int)((uint32_t)(MEM32(ebx)) < (uint32_t)(ecx));
     MEM32(ebx) = MEM32(ebx) - ecx;
     _fa = (uint32_t)(MEM32(ebx)) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* sub result */
-    /* TODO: daa  */
+    RECOMP_TODO(0x004B3021u); /* TODO: daa  */
     _fb = (uint32_t)(MEM8(ebx)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* sub source, before the write */
     _cf = (int)((uint32_t)(LO8(ecx)) < (uint32_t)(MEM8(ebx)));
     SET_LO8(ecx, LO8(ecx) - MEM8(ebx));
@@ -105479,7 +105479,7 @@ loc_004B3011: ;
     _cf = (int)((uint32_t)(ecx) < (uint32_t)(MEM32(ebx)));
     ecx = ecx - MEM32(ebx);
     _fa = (uint32_t)(ecx) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* sub result */
-    /* TODO: lock sub ecx, dword ptr [ebx] */
+    RECOMP_TODO(0x004B3029u); /* TODO: lock sub ecx, dword ptr [ebx] */
     { uint64_t _t = (uint64_t)(MEM8(0x2DD8004B)) + (uint64_t)(HI8(ecx)) + (uint64_t)_cf; _cf = (int)((_t >> 8) & 1); MEM8(0x2DD8004B) = (uint32_t)_t; }  /* adc */
     _fa = (uint32_t)(MEM8(0x2DD8004B)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* adc result */
     ebx--;
@@ -105944,12 +105944,12 @@ loc_004B3011: ;
     MEM32(esi + 8) = 7;
     goto loc_004B2F5A;
 
-    /* TODO: sti  */
+    RECOMP_TODO(0x004B301Du); /* TODO: sti  */
     _fb = (uint32_t)(ecx) & 0xFFFFFFFFu; _fbs = (int32_t)(int32_t)(_fb); /* sub source, before the write */
     _cf = (int)((uint32_t)(MEM32(ebx)) < (uint32_t)(ecx));
     MEM32(ebx) = MEM32(ebx) - ecx;
     _fa = (uint32_t)(MEM32(ebx)) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* sub result */
-    /* TODO: daa  */
+    RECOMP_TODO(0x004B3021u); /* TODO: daa  */
     _fb = (uint32_t)(MEM8(ebx)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* sub source, before the write */
     _cf = (int)((uint32_t)(LO8(ecx)) < (uint32_t)(MEM8(ebx)));
     SET_LO8(ecx, LO8(ecx) - MEM8(ebx));
@@ -105961,7 +105961,7 @@ loc_004B3011: ;
     _cf = (int)((uint32_t)(ecx) < (uint32_t)(MEM32(ebx)));
     ecx = ecx - MEM32(ebx);
     _fa = (uint32_t)(ecx) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* sub result */
-    /* TODO: lock sub ecx, dword ptr [ebx] */
+    RECOMP_TODO(0x004B3029u); /* TODO: lock sub ecx, dword ptr [ebx] */
     { uint64_t _t = (uint64_t)(MEM8(0x2DD8004B)) + (uint64_t)(HI8(ecx)) + (uint64_t)_cf; _cf = (int)((_t >> 8) & 1); MEM8(0x2DD8004B) = (uint32_t)_t; }  /* adc */
     _fa = (uint32_t)(MEM8(0x2DD8004B)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* adc result */
     ebx--;

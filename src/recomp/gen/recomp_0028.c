@@ -24497,7 +24497,7 @@ void sub_00400680(void)
     (void)_fa; (void)_fb; (void)_fas; (void)_fbs;
 
 loc_00400680: ;
-    /* TODO: in eax, dx */
+    RECOMP_TODO(0x00400680u); /* TODO: in eax, dx */
     _fb = (uint32_t)(0x63E0040) & 0xFFFFFFFFu; _fbs = (int32_t)(int32_t)(_fb); /* add source, before the write */
     eax = eax + 0x63E0040;
     _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* add result */
@@ -285699,11 +285699,15 @@ loc_0041A5DF: ;
     if (1) _cf = (int)(((ecx) >> ((1) - 1)) & 1);
     ecx = ecx >> 1;
     _fa = (uint32_t)(ecx) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* shift result */
-    /* TODO: rcr ebx, 1 */
+    { uint32_t _v = (uint32_t)(ebx) & 0xFFFFFFFFu; unsigned _n = ((unsigned)(1) & 31u) % 33u;
+      while (_n--) { int _nc = (int)(_v & 1u); _v = ((_v >> 1) | ((uint32_t)(_cf & 1) << 31)) & 0xFFFFFFFFu; _cf = _nc; }
+      ebx = _v; } /* rcr */
     if (1) _cf = (int)(((edx) >> ((1) - 1)) & 1);
     edx = edx >> 1;
     _fa = (uint32_t)(edx) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* shift result */
-    /* TODO: rcr eax, 1 */
+    { uint32_t _v = (uint32_t)(eax) & 0xFFFFFFFFu; unsigned _n = ((unsigned)(1) & 31u) % 33u;
+      while (_n--) { int _nc = (int)(_v & 1u); _v = ((_v >> 1) | ((uint32_t)(_cf & 1) << 31)) & 0xFFFFFFFFu; _cf = _nc; }
+      eax = _v; } /* rcr */
     _cf = 0; /* logical op clears CF */
     ecx = ecx | ecx;
     _fa = (uint32_t)(ecx) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* or result */
@@ -287400,11 +287404,15 @@ loc_0041AC88: ;
     if (1) _cf = (int)(((ebx) >> ((1) - 1)) & 1);
     ebx = ebx >> 1;
     _fa = (uint32_t)(ebx) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* shift result */
-    /* TODO: rcr ecx, 1 */
+    { uint32_t _v = (uint32_t)(ecx) & 0xFFFFFFFFu; unsigned _n = ((unsigned)(1) & 31u) % 33u;
+      while (_n--) { int _nc = (int)(_v & 1u); _v = ((_v >> 1) | ((uint32_t)(_cf & 1) << 31)) & 0xFFFFFFFFu; _cf = _nc; }
+      ecx = _v; } /* rcr */
     if (1) _cf = (int)(((edx) >> ((1) - 1)) & 1);
     edx = edx >> 1;
     _fa = (uint32_t)(edx) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* shift result */
-    /* TODO: rcr eax, 1 */
+    { uint32_t _v = (uint32_t)(eax) & 0xFFFFFFFFu; unsigned _n = ((unsigned)(1) & 31u) % 33u;
+      while (_n--) { int _nc = (int)(_v & 1u); _v = ((_v >> 1) | ((uint32_t)(_cf & 1) << 31)) & 0xFFFFFFFFu; _cf = _nc; }
+      eax = _v; } /* rcr */
     _cf = 0; /* logical op clears CF */
     ebx = ebx | ebx;
     _fa = (uint32_t)(ebx) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* or result */
@@ -291738,11 +291746,15 @@ loc_0041BCFA: ;
     if (1) _cf = (int)(((ebx) >> ((1) - 1)) & 1);
     ebx = ebx >> 1;
     _fa = (uint32_t)(ebx) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* shift result */
-    /* TODO: rcr ecx, 1 */
+    { uint32_t _v = (uint32_t)(ecx) & 0xFFFFFFFFu; unsigned _n = ((unsigned)(1) & 31u) % 33u;
+      while (_n--) { int _nc = (int)(_v & 1u); _v = ((_v >> 1) | ((uint32_t)(_cf & 1) << 31)) & 0xFFFFFFFFu; _cf = _nc; }
+      ecx = _v; } /* rcr */
     if (1) _cf = (int)(((edx) >> ((1) - 1)) & 1);
     edx = edx >> 1;
     _fa = (uint32_t)(edx) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* shift result */
-    /* TODO: rcr eax, 1 */
+    { uint32_t _v = (uint32_t)(eax) & 0xFFFFFFFFu; unsigned _n = ((unsigned)(1) & 31u) % 33u;
+      while (_n--) { int _nc = (int)(_v & 1u); _v = ((_v >> 1) | ((uint32_t)(_cf & 1) << 31)) & 0xFFFFFFFFu; _cf = _nc; }
+      eax = _v; } /* rcr */
     _cf = 0; /* logical op clears CF */
     ebx = ebx | ebx;
     _fa = (uint32_t)(ebx) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* or result */

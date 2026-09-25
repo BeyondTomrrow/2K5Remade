@@ -19572,7 +19572,7 @@ void sub_003EE666(void)
 loc_003EE666: ;
     edi = edi;
     POP32(esp, esp);
-    /* TODO: out 0x3e, al */
+    RECOMP_TODO(0x003EE669u); /* TODO: out 0x3e, al */
     _fb = (uint32_t)(LO8(ebx)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
     MEM8(esi + -26) = MEM8(esi + -26) + LO8(ebx);
     _fa = (uint32_t)(MEM8(esi + -26)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* add result */
@@ -29607,12 +29607,12 @@ loc_003F0F2E: ;
     edi = edi;
     ecx = ecx | MEM32(edi);
     _fa = (uint32_t)(ecx) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* or result */
-    /* TODO: aas  */
+    RECOMP_TODO(0x003F0F32u); /* TODO: aas  */
     _fb = (uint32_t)(HI8(eax)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
     SET_HI8(ecx, HI8(ecx) + HI8(eax));
     _fa = (uint32_t)(HI8(ecx)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* add result */
     PUSH32(esp, 0 /* seg:cs */);
-    /* TODO: aas  */
+    RECOMP_TODO(0x003F0F36u); /* TODO: aas  */
     _fb = (uint32_t)(HI8(ecx)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
     MEM8(ecx) = MEM8(ecx) + HI8(ecx);
     _fa = (uint32_t)(MEM8(ecx)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* add result */

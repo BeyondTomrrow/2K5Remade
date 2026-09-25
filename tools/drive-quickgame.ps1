@@ -1,4 +1,4 @@
-param([string]$Tag = 'qd', [int]$PlaySeconds = 300, [int]$ShotEvery = 30, [string]$Exe = 'build\Release\NFL2K5.exe')
+﻿param([string]$Side = '', [string]$Tag = 'qd', [int]$PlaySeconds = 300, [int]$ShotEvery = 30, [string]$Exe = 'build\Release\NFL2K5.exe')
 # Drive a CPU-vs-CPU Quick Game: title -> main menu -> Quick Game -> Team
 # Select (controller left in the middle) -> Coach Matchup -> Start Game ->
 # skip the pregame. Presses go through NFL2K5_PRESS_FILE (tools\press.ps1),
@@ -19,6 +19,7 @@ function Press([string[]]$b, [int]$after) { & "$PSScriptRoot\press.ps1" @b; Star
 Start-Sleep 35
 Press start 10      # title -> main menu
 Press a 12          # Quick Game
+if ($Side) { Press $Side 3 }   # controller onto a team (left = away, right = home)
 Press start 12      # Team Select -> Coach Matchup
 Press a 30          # Start Game -> loading -> pregame
 Press a 5           # skip pregame

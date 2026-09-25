@@ -50554,7 +50554,7 @@ loc_000C68C8: ;
     _fa = (uint32_t)(MEM8(ecx + 0x68)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* add result */
     SET_LO8(eax, LO8(eax) | 0);
     _fa = (uint32_t)(LO8(eax)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* or result */
-    /* TODO: enter 0xc68, 0 */
+    RECOMP_TODO(0x000C68D8u); /* TODO: enter 0xc68, 0 */
     POP32(esp, edx);
     PUSH32(esp, 0x684B000C);
     SET_LO8(eax, LO8(eax) | 0);
@@ -83228,7 +83228,7 @@ void sub_000CA66E(void)
 
 loc_000CA66E: ;
     edi = edi;
-    /* TODO: cmpsb byte ptr gs:[esi], byte ptr es:[edi] */
+    RECOMP_TODO(0x000CA670u); /* TODO: cmpsb byte ptr gs:[esi], byte ptr es:[edi] */
     SET_LO8(eax, LO8(eax) | 0);
     _fa = (uint32_t)(LO8(eax)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* or result */
     SET_LO8(edx, 0xA5);
@@ -83237,25 +83237,25 @@ loc_000CA66E: ;
     fp_top() = fp_top() - MEMD(ebp + -1505689588); /* fsub qword ptr [ebp - 0x59befff4] */
     SET_LO8(eax, LO8(eax) | 0);
     _fa = (uint32_t)(LO8(eax)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* or result */
-    /* TODO: cmpsb byte ptr gs:[esi], byte ptr es:[edi] */
+    RECOMP_TODO(0x000CA680u); /* TODO: cmpsb byte ptr gs:[esi], byte ptr es:[edi] */
     SET_LO8(eax, LO8(eax) | 0);
     _fa = (uint32_t)(LO8(eax)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* or result */
     esi--;
     _fa = (uint32_t)(esi) & 0xFFFFFFFFu;
     _fas = (int32_t)(int32_t)(_fa); _fb = (_fa == 0x7FFFFFFFu); /* dec result/SF/OF; CF unchanged */
-    /* TODO: cmpsb byte ptr [esi], byte ptr es:[edi] */
+    RECOMP_TODO(0x000CA685u); /* TODO: cmpsb byte ptr [esi], byte ptr es:[edi] */
     SET_LO8(eax, LO8(eax) | 0);
     _fa = (uint32_t)(LO8(eax)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* or result */
     esi--;
     _fa = (uint32_t)(esi) & 0xFFFFFFFFu;
     _fas = (int32_t)(int32_t)(_fa); _fb = (_fa == 0x7FFFFFFFu); /* dec result/SF/OF; CF unchanged */
-    /* TODO: cmpsb byte ptr [esi], byte ptr es:[edi] */
+    RECOMP_TODO(0x000CA689u); /* TODO: cmpsb byte ptr [esi], byte ptr es:[edi] */
     SET_LO8(eax, LO8(eax) | 0);
     _fa = (uint32_t)(LO8(eax)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* or result */
     ecx++;
     _fa = (uint32_t)(ecx) & 0xFFFFFFFFu;
     _fas = (int32_t)(int32_t)(_fa); _fb = (_fa == 0x80000000u); /* inc result/SF/OF; CF unchanged */
-    /* TODO: cmpsb byte ptr [esi], byte ptr es:[edi] */
+    RECOMP_TODO(0x000CA68Du); /* TODO: cmpsb byte ptr [esi], byte ptr es:[edi] */
     SET_LO8(eax, LO8(eax) | 0);
     _fa = (uint32_t)(LO8(eax)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* or result */
 
@@ -83447,8 +83447,8 @@ void sub_000CA786(void)
 
 loc_000CA786: ;
     edi = edi;
-    /* TODO: salc  */
-    /* TODO: cmpsb byte ptr [esi], byte ptr es:[edi] */
+    RECOMP_TODO(0x000CA788u); /* TODO: salc  */
+    RECOMP_TODO(0x000CA789u); /* TODO: cmpsb byte ptr [esi], byte ptr es:[edi] */
     _cf = 0; /* logical op clears CF */
     SET_LO8(eax, LO8(eax) | 0);
     _fa = (uint32_t)(LO8(eax)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* or result */
@@ -83475,8 +83475,8 @@ loc_000CA79E: ;
     _cf = 0; /* logical op clears CF */
     SET_LO8(eax, LO8(eax) | 0);
     _fa = (uint32_t)(LO8(eax)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* or result */
-    /* TODO: insb byte ptr es:[edi], dx */
-    /* TODO: cmpsd dword ptr [esi], dword ptr es:[edi] */
+    RECOMP_TODO(0x000CA7A0u); /* TODO: insb byte ptr es:[edi], dx */
+    RECOMP_TODO(0x000CA7A1u); /* TODO: cmpsd dword ptr [esi], dword ptr es:[edi] */
     _cf = 0; /* logical op clears CF */
     SET_LO8(eax, LO8(eax) | 0);
     _fa = (uint32_t)(LO8(eax)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* or result */

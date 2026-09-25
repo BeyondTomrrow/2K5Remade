@@ -714,6 +714,26 @@ void recomp_flags_fallback_hit(uint32_t address)
     }
 }
 
+/* An instruction the lifter left unimplemented ran; it was skipped, which is
+ * only harmless if the code around it does not depend on it. Once per address. */
+void recomp_todo_hit(uint32_t address)
+{
+    static volatile LONG seen[1024];
+    static volatile LONG reported;
+    uint32_t h = (address * 2654435761u) >> 22, k;
+    for (k = 0; k < 16; k++) {
+        uint32_t slot = (h + k) & 1023u;
+        LONG cur = seen[slot];
+        if (cur == (LONG)address)
+            return;
+        if (cur == 0 && InterlockedCompareExchange(&seen[slot], (LONG)address, 0) == 0) {
+            if (InterlockedIncrement(&reported) <= 200)
+                fprintf(stderr, "  [TODO] unimplemented instruction at %08X ran (skipped)\n", address);
+            return;
+        }
+    }
+}
+
 /* 2026-09-24: game state machines (sub_0006E390 push, sub_0006E400 pop;
  * idx at +0x100, state descriptors at +idx*8). Logs each push/pop and
  * remembers the objects so the periodic peek can print every stack -- the

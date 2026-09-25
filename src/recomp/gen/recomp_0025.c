@@ -29711,14 +29711,14 @@ loc_00395C36: ;
     PUSH32(esp, ebx);
     PUSH32(esp, ecx);
     PUSH32(esp, edx);
-    /* TODO: pushfd  */
+    RECOMP_TODO(0x00395C3Au); /* TODO: pushfd  */
     POP32(esp, eax);
     ecx = eax;
     eax = eax ^ 0x200000;
     _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* xor result */
     PUSH32(esp, eax);
-    /* TODO: popfd  */
-    /* TODO: pushfd  */
+    RECOMP_TODO(0x00395C44u); /* TODO: popfd  */
+    RECOMP_TODO(0x00395C45u); /* TODO: pushfd  */
     POP32(esp, eax);
     eax = eax ^ ecx;
     _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* xor result */
@@ -29726,7 +29726,7 @@ loc_00395C36: ;
 
 loc_00395C4B: ;
     eax = 0;
-    /* TODO: cpuid  */
+    RECOMP_TODO(0x00395C50u); /* TODO: cpuid  */
     MEM32(0xCC78E4) = eax;
     MEM32(0xCC78E8) = ebx;
     MEM32(0xCC78EC) = edx;
@@ -29737,7 +29737,7 @@ loc_00395C4B: ;
 
 loc_00395C6E: ;
     eax = 1;
-    /* TODO: cpuid  */
+    RECOMP_TODO(0x00395C73u); /* TODO: cpuid  */
     MEM32(0xCC78F4) = eax;
     MEM32(0xCC78F8) = edx;
     MEM32(0xCC78FC) = ebx;
@@ -45268,7 +45268,7 @@ loc_0039BA90: ;
     PUSH32(esp, esi);
     PUSH32(esp, edi);
     eax = 1;
-    /* TODO: cpuid  */
+    RECOMP_TODO(0x0039BA9Du); /* TODO: cpuid  */
     esi = MEM32(esp + 0x24);
     ecx = eax;
     eax = eax & 0xF;
@@ -45311,7 +45311,7 @@ loc_0039BA90: ;
     SET_LO8(eax, (TEST_NZ(_fa, _fb)) ? 1 : 0); /* setne */
     MEM32(esi + 0x28) = eax;
     eax = 2;
-    /* TODO: cpuid  */
+    RECOMP_TODO(0x0039BAFBu); /* TODO: cpuid  */
     MEM32(esi + 0x14) = eax;
     MEM32(esi + 0x18) = edx;
     POP32(esp, edi);
@@ -166596,11 +166596,11 @@ loc_003CB1B2: ;
     _fa = (uint32_t)(LO8(eax)) & 0xFFu; _fb = (uint32_t)(0) & 0xFFu;
     _fas = (int32_t)(int8_t)(_fa); _fbs = (int32_t)(int8_t)(_fb); /* cmp LO8(eax), 0 (8-bit) */
     /* lahf - load AH from flags (used in FPU compare idiom) */
-    /* TODO: scasd eax, dword ptr es:[edi] */
+    RECOMP_TODO(0x003CB1B5u); /* TODO: scasd eax, dword ptr es:[edi] */
     _fa = (uint32_t)(LO8(eax)) & 0xFFu; _fb = (uint32_t)(0) & 0xFFu;
     _fas = (int32_t)(int8_t)(_fa); _fbs = (int32_t)(int8_t)(_fb); /* cmp LO8(eax), 0 (8-bit) */
     /* lahf - load AH from flags (used in FPU compare idiom) */
-    /* TODO: scasd eax, dword ptr es:[edi] */
+    RECOMP_TODO(0x003CB1B9u); /* TODO: scasd eax, dword ptr es:[edi] */
     _fa = (uint32_t)(LO8(eax)) & 0xFFu; _fb = (uint32_t)(0) & 0xFFu;
     _fas = (int32_t)(int8_t)(_fa); _fbs = (int32_t)(int8_t)(_fb); /* cmp LO8(eax), 0 (8-bit) */
     /* nop */
@@ -171718,7 +171718,7 @@ loc_003CD3EE: ;
     _fa = (uint32_t)(LO8(eax)) & 0xFFu; _fb = (uint32_t)(0) & 0xFFu;
     _fas = (int32_t)(int8_t)(_fa); _fbs = (int32_t)(int8_t)(_fb); /* cmp LO8(eax), 0 (8-bit) */
     _cf = (int)(_fa < _fb);
-    /* TODO: pushfd  */
+    RECOMP_TODO(0x003CD3F0u); /* TODO: pushfd  */
     if (((LO8(ecx)) & 31u)) _cf = (int)(((uint32_t)((int32_t)(int32_t)(MEM32(eax + eax))) >> ((((LO8(ecx)) & 31u)) - 1)) & 1);
     MEM32(eax + eax) = (uint32_t)(((int32_t)(int32_t)(MEM32(eax + eax))) >> ((LO8(ecx)) & 31u));
     _fa = (uint32_t)(MEM32(eax + eax)) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* sar result */
@@ -172529,16 +172529,16 @@ void sub_003CDB06(void)
 
 loc_003CDB06: ;
     edi = edi;
-    /* TODO: hlt  */
+    RECOMP_TODO(0x003CDB08u); /* TODO: hlt  */
     fp_top() = (double)SMEM32(eax + eax) / fp_top(); /* fidivr dword ptr [eax + eax] */
-    /* TODO: cli  */
+    RECOMP_TODO(0x003CDB0Cu); /* TODO: cli  */
     fp_top() = (double)SMEM32(eax + eax) / fp_top(); /* fidivr dword ptr [eax + eax] */
     _fb = (uint32_t)(LO8(ebx)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
     SET_LO8(ebx, LO8(ebx) + LO8(ebx));
     _fa = (uint32_t)(LO8(ebx)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* add result */
     _fa = (uint32_t)(LO8(eax)) & 0xFFu; _fb = (uint32_t)(0) & 0xFFu;
     _fas = (int32_t)(int8_t)(_fa); _fbs = (int32_t)(int8_t)(_fb); /* cmp LO8(eax), 0 (8-bit) */
-    /* TODO: out dx, al */
+    RECOMP_TODO(0x003CDB14u); /* TODO: out dx, al */
     fp_top() = (double)SMEM32(eax + eax) / fp_top(); /* fidivr dword ptr [eax + eax] */
     _fb = (uint32_t)(LO8(eax)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
     MEM8(eax) = MEM8(eax) + LO8(eax);
@@ -177371,7 +177371,7 @@ void sub_003CF7FA(void)
 
 loc_003CF7FA: ;
     edi = edi;
-    /* TODO: enter 0x3cf7, 0 */
+    RECOMP_TODO(0x003CF7FCu); /* TODO: enter 0x3cf7, 0 */
     edx = 0xC2003CF7u;
     { int64_t _dividend = ((int64_t)(int32_t)edx << 32) | eax;
       eax = (uint32_t)((int32_t)(_dividend / (int32_t)MEM32(eax + eax)));
