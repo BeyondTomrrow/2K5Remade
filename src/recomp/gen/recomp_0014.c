@@ -155953,7 +155953,7 @@ loc_00211EA9: ;
     _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test eax, eax (32-bit) */
 
 loc_00211EAE: ;
-    if (_flags /* jne: not equal / not zero */) goto loc_00211D54;
+    if (TEST_NZ(_fa, _fb)) goto loc_00211D54; /* jne: not equal / not zero */
 
 loc_00211EB4: ;
     ecx = MEM32(esp + 0x10);

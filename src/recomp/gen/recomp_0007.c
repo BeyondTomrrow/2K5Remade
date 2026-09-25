@@ -94785,7 +94785,7 @@ loc_000F4AED: ;
     _fas = (int32_t)(int8_t)(_fa); _fbs = (int32_t)(int8_t)(_fb); /* test HI8(eax), 0x41 (8-bit) */
 
 loc_000F4AFB: ;
-    if (_flags /* jne: not equal / not zero */) goto loc_000F4B02;
+    if (TEST_NZ(_fa, _fb)) goto loc_000F4B02; /* jne: not equal / not zero */
 
 loc_000F4AFD: ;
     g_ebp = ebp; /* frame stays current across calls */
@@ -129813,7 +129813,7 @@ loc_00105352: ;
     _cf = (int)(_fa < _fb);
 
 loc_00105354: ;
-    if (_flags /* je: equal / zero */) goto loc_00105246;
+    if (CMP_EQ(_fa, _fb)) goto loc_00105246; /* je: equal / zero */
 
 loc_0010535A: ;
     POP32(esp, edi);

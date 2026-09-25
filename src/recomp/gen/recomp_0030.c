@@ -86754,7 +86754,7 @@ loc_004860C6: ;
     _cf = (int)(_fa < _fb);
 
 loc_004860CF: ;
-    SET_LO8(eax, _flags /* sete */);
+    SET_LO8(eax, (CMP_EQ(_fa, _fb)) ? 1 : 0); /* sete */
     goto loc_0048613F;
 
 loc_004860D4: ;

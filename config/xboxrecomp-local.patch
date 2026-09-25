@@ -6354,3 +6354,102 @@ index 159f56c..f11e961 100644
      "EnglishXlate", "JapaneseXlate", "GermanXlate",
      "FrenchXlate", "SpanishXlate", "ItalianXlate",
  }
+diff --git a/tools/recomp/lifter.py b/tools/recomp/lifter.py
+index f0ba077..5eddf3e 100644
+--- a/tools/recomp/lifter.py
++++ b/tools/recomp/lifter.py
+@@ -521,6 +521,12 @@ def _make_condition(jcc, flag_setter, flag_ops):
+     # comparison happens. Use those rather than re-reading registers that may
+     # since have changed.
+     SIGNED = {"CMP_L", "CMP_LE", "CMP_G", "CMP_GE", "TEST_S"}
++    # A cmp/test join of different widths (translator._merge_flag_states):
++    # the snapshot answers everything except the sign/overflow of a cmp's
++    # difference, which depends on the width.
++    if (getattr(flag_ops, "mixed_width", False) and flag_setter == "cmp"
++            and not cmp_macro and jcc not in ("jp", "jnp")):
++        return None
+     if flag_setter in ("cmp", "test", "bsf", "bsr") and len(flag_ops) >= 2:
+         signed = (cmp_macro in SIGNED) or (test_macro in SIGNED)
+         lhs, rhs = ("_fas", "_fbs") if signed else ("_fa", "_fb")
+diff --git a/tools/recomp/test_flag_join.py b/tools/recomp/test_flag_join.py
+index 74a9e84..ebed463 100644
+--- a/tools/recomp/test_flag_join.py
++++ b/tools/recomp/test_flag_join.py
+@@ -33,7 +33,28 @@ def test_mixed_operations_are_not_guessed():
+     b = Operand(type='reg', reg='edx')
+     assert _merge_flag_states([('cmp', [a, b]), ('test', [a, b])]) is None
+ 
+-def test_mixed_widths_are_not_guessed():
++def test_mixed_widths_merge_but_are_tagged():
+     wide = [Operand(type='reg', reg='eax'), Operand(type='reg', reg='edx')]
+     narrow = [Operand(type='reg', reg='al'), Operand(type='reg', reg='dl')]
+-    assert _merge_flag_states([('cmp', wide), ('cmp', narrow)]) is None
++    kind, ops = _merge_flag_states([('cmp', wide), ('cmp', narrow)])
++    assert kind == 'cmp' and getattr(ops, 'mixed_width', False)
++
++def test_mixed_width_test_join_for_jne():
++    # test ecx,ecx; jz alternate; test eax,eax; jmp join; nop;
++    # alternate: test ah,41h; join: jne +1; nop; ret  (NFL 2K5 0xF4AFB)
++    image = bytes.fromhex('85c9740585c0eb0490f6c441') + bytes.fromhex('750190c3')
++    config._install([config.Section('.text', BASE, len(image), 0, len(image), True)],
++                    entry_point=BASE, kernel_thunk_addr=BASE, origin='flag-join-test')
++    db = {BASE: {'start': hex(BASE), 'end': BASE + len(image), '_addr': BASE, 'size': len(image)}}
++    code = FunctionTranslator(image, db).translate_function(BASE, db[BASE])
++    assert 'if (TEST_NZ(_fa, _fb))' in code, code
++    assert '_flags /* jne' not in code, code
++
++def test_mixed_width_cmp_join_refuses_sign():
++    # cmp eax,edx / cmp al,dl joined, then js: SF needs the width.
++    image = bytes.fromhex('85c9740539d0eb039038d0') + bytes.fromhex('780190c3')
++    config._install([config.Section('.text', BASE, len(image), 0, len(image), True)],
++                    entry_point=BASE, kernel_thunk_addr=BASE, origin='flag-join-test')
++    db = {BASE: {'start': hex(BASE), 'end': BASE + len(image), '_addr': BASE, 'size': len(image)}}
++    code = FunctionTranslator(image, db).translate_function(BASE, db[BASE])
++    assert '_flags /* js' in code, code
+diff --git a/tools/recomp/translator.py b/tools/recomp/translator.py
+index 4c840a1..d045197 100644
+--- a/tools/recomp/translator.py
++++ b/tools/recomp/translator.py
+@@ -32,8 +32,16 @@ def _merge_flag_states(states):
+ 
+     CMP/TEST save their operands into function-local _fa/_fb/_fas/_fbs at
+     runtime. A shared consumer can use whichever predecessor executed. Keep
+-    operation and width equal because sign/parity handling depends on them;
+-    arithmetic states still reconstruct operands and cannot use this merge.
++    the operation equal; arithmetic states still reconstruct operands and
++    cannot use this merge.
++
++    Widths may differ. The snapshot is already normalised to each
++    instruction's own width -- _fa/_fb masked, _fas/_fbs sign-extended -- so
++    ZF, CF, PF and the signed compares read the same from either edge. Only
++    SF/OF of a cmp need the width (the sign of the wrapped difference), so
++    the merged operands are tagged and _make_condition refuses those. NFL
++    2K5's match-loading check reaches one jne from `test ah, 41h` (after
++    fnstsw) and from `test eax, eax`; the fallback made it never taken.
+     """
+     if not states or any(not state or not state[0] for state in states):
+         return None
+@@ -42,15 +50,21 @@ def _merge_flag_states(states):
+         return first
+     if first[0] in ("cmp", "test") and len(first[1]) == 2:
+         width = _operand_width(first[1][0]) or _operand_width(first[1][1])
++        mixed = False
+         for kind, ops in states[1:]:
+             if kind != first[0] or len(ops) != 2:
+                 return None
+             if (_operand_width(ops[0]) or _operand_width(ops[1])) != width:
+-                return None
+-        return first
++                mixed = True
++        return (first[0], MixedWidthOps(first[1])) if mixed else first
+     return _merge_zero_flag(states)
+ 
+ 
++class MixedWidthOps(list):
++    """Operands of a cmp/test join whose predecessors differ in width."""
++    mixed_width = True
++
++
+ def _merge_zero_flag(states):
+     """Predecessors that disagree on the operation but not on the zero flag.
+ 

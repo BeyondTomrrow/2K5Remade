@@ -49911,7 +49911,7 @@ loc_0005A28B: ;
     _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp ecx, 7 (32-bit) */
 
 loc_0005A28E: ;
-    if (_flags /* jne: not equal / not zero */) goto loc_0005A2A5;
+    if (CMP_NE(_fa, _fb)) goto loc_0005A2A5; /* jne: not equal / not zero */
 
 loc_0005A290: ;
     SET_LO8(ecx, MEM8(eax + 0xC));

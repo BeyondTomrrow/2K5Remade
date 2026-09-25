@@ -310160,7 +310160,7 @@ loc_0027D594: ;
     _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test esi, esi (32-bit) */
 
 loc_0027D596: ;
-    if (_flags /* je: equal / zero */) goto loc_0027D59F;
+    if (TEST_Z(_fa, _fb)) goto loc_0027D59F; /* je: equal / zero */
 
 loc_0027D598: ;
     ecx = edi;

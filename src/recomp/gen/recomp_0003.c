@@ -12582,6 +12582,8 @@ loc_0006E3DB: ;
     PUSH32(esp, 0x0006E3E6u); RECOMP_ABI_CALL(0x0006E4E0u, sub_0006E4E0); /* call 0x0006E4E0 */
 
 loc_0006E3E6: ;
+    /* NFL2K5-GENPATCH:DIAG_FSMPUSH */
+    { extern void nfl2k5_diag_fsm(uint32_t obj, uint32_t desc, int push); nfl2k5_diag_fsm(esi, edi, 1); }
     MEM32(esi + 0x108) = 1;
 
 loc_0006E3F0: ;
@@ -12642,6 +12644,8 @@ loc_0006E42C: ;
     PUSH32(esp, 0x0006E439u); RECOMP_ABI_CALL(0x000F3180u, sub_000F3180); /* call 0x000F3180 */
 
 loc_0006E439: ;
+    /* NFL2K5-GENPATCH:DIAG_FSMPOP */
+    { extern void nfl2k5_diag_fsm(uint32_t obj, uint32_t desc, int push); nfl2k5_diag_fsm(esi, 0, 0); }
     PUSH32(esp, 3);
     edx = 0; /* xor self */
     _fa = (uint32_t)(edx) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* xor result */

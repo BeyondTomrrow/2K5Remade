@@ -411,6 +411,7 @@ static void exec_watch_add(uint32_t guest_va, const char *name)
  * negligible cost. Index order matches the call-site list in
  * PROJECT_STATUS.md / the grep for RECOMP_ABI_CALL(0x00028F70u. */
 volatile long nfl2k5_28f70_site_hits[17];
+static void nfl2k5_peek_fsms(void);
 static const uint32_t nfl2k5_28f70_site_retaddrs[17] = {
     0x000745A0u, 0x0007481Bu, 0x000F504Bu, 0x000F5D7Cu, 0x000F5D9Du,
     0x000F5DBCu, 0x000F5F7Bu, 0x0011B27Bu, 0x0012DF5Du, 0x0014E2BBu,
@@ -589,6 +590,7 @@ void nfl2k5_execwatch_print(void)
                 NFL2K5_PEEK32(0xA84B18u + 0x100u), NFL2K5_PEEK32(0xA84B18u),
                 NFL2K5_PEEK32(0xA84B18u + 8u), NFL2K5_PEEK32(0xA84B18u + 16u),
                 NFL2K5_PEEK32(0xA84B18u + 24u), NFL2K5_PEEK32(0xA84B18u + 32u));
+        nfl2k5_peek_fsms();
         fprintf(stderr, "  [CHUNKREG]");
         {
             uint32_t n = NFL2K5_PEEK32(0xB0957Cu);
@@ -689,6 +691,94 @@ void nfl2k5_execwatch_print(void)
         if (g_exec_watch[i].hits)
             fprintf(stderr, "  [EXECWATCH-RET] %s last_ret=0x%08X\n",
                     g_exec_watch[i].name, g_exec_watch[i].last_return_addr);
+}
+
+/* 2026-09-24: game state machines (sub_0006E390 push, sub_0006E400 pop;
+ * idx at +0x100, state descriptors at +idx*8). Logs each push/pop and
+ * remembers the objects so the periodic peek can print every stack -- the
+ * match runs its own machine, not the front end's at 0xA84B18. */
+static volatile uint32_t g_fsm_obj[8];
+void nfl2k5_diag_fsm(uint32_t obj, uint32_t desc, int push)
+{
+    const uint8_t *m = (const uint8_t *)xbox_GetMemoryOffset();
+    uint32_t idx = *(const uint32_t *)(m + obj + 0x100u);
+    fprintf(stderr, "  [FSMOP] %s obj=%08X idx=%u desc=%08X top=%08X\n", push ? "push" : "pop ",
+            obj, idx, desc, idx < 0x20u ? *(const uint32_t *)(m + obj + idx * 8u) : 0);
+    for (int i = 0; i < 8; i++)
+        if (g_fsm_obj[i] == obj
+                || InterlockedCompareExchange((volatile LONG *)&g_fsm_obj[i], (LONG)obj, 0) == 0)
+            break;
+}
+
+static void nfl2k5_peek_fsms(void)
+{
+    const uint8_t *m = (const uint8_t *)xbox_GetMemoryOffset();
+    for (int i = 0; i < 8 && g_fsm_obj[i]; i++) {
+        uint32_t obj = g_fsm_obj[i], idx = *(const uint32_t *)(m + obj + 0x100u);
+        fprintf(stderr, "  [FSMS] %08X idx=%u:", obj, idx);
+        for (uint32_t k = 1; k <= idx && k < 0x20u; k++)
+            fprintf(stderr, " %08X", *(const uint32_t *)(m + obj + k * 8u));
+        fprintf(stderr, "\n");
+    }
+    /* Match loading (state 0x4F6708, tick sub_000F50A0): sub_000F48E0 reports
+     * "done" into A92888, switching on the mode at A9288C and the phase at
+     * A92880. */
+    fprintf(stderr, "  [MATCHPEEK] done=%08X mode=%08X phase=%08X E20=%08X E24=%08X obj890=%08X\n",
+            *(const uint32_t *)(m + 0xA92888u), *(const uint32_t *)(m + 0xA9288Cu),
+            *(const uint32_t *)(m + 0xA92880u), *(const uint32_t *)(m + 0xA94E20u),
+            *(const uint32_t *)(m + 0xA94E24u), *(const uint32_t *)(m + 0xA92890u));
+    /* The done-check also needs sub_00072BA0() == 0: the sequence player at
+     * *(0xB3B12C) (gated on *(0xB38F20)) must not be busy (+0x2124). Steps of
+     * 0x30 bytes at +0x1D48, count +0x1D40, current +0x2128; type 0 plays an
+     * animation, 1 waits, 2+ polls a callback (sub_000D1210). */
+    {
+        uint32_t sp = *(const uint32_t *)(m + 0xB3B12Cu);
+        fprintf(stderr, "  [MATCHSEQ] gate=%08X seq=%08X", *(const uint32_t *)(m + 0xB38F20u), sp);
+        if (sp >= 0x10000u && sp < 0x84000000u) {
+            uint32_t cur = *(const uint32_t *)(m + sp + 0x2128u), n = *(const uint32_t *)(m + sp + 0x1D40u);
+            fprintf(stderr, " busy=%u paused=%u step=%d/%u f2138=%u f213C=%u f2140=%u f2188=%u snd=%u t=%g",
+                    *(const uint32_t *)(m + sp + 0x2124u), *(const uint32_t *)(m + sp + 0x2120u),
+                    (int)cur, n, *(const uint32_t *)(m + sp + 0x2138u),
+                    *(const uint32_t *)(m + sp + 0x213Cu), *(const uint32_t *)(m + sp + 0x2140u),
+                    *(const uint32_t *)(m + sp + 0x2188u), *(const uint32_t *)(m + sp + 0x2144u),
+                    *(const float *)(m + sp + 0x212Cu));
+            if (cur < n && cur < 20u) {
+                uint32_t st = sp + 0x1D48u + cur * 0x30u;
+                fprintf(stderr, " cur=[type %u %08X %08X %08X]", *(const uint32_t *)(m + st),
+                        *(const uint32_t *)(m + st + 4u), *(const uint32_t *)(m + st + 8u),
+                        *(const uint32_t *)(m + st + 0xCu));
+            }
+            /* Playing items (sub_00040390): list head at +0x1160, next at +4;
+             * ids +0x10/+0x14, length +0x18, +0x1C, loaded? +0x20, pos +0x24. */
+            {
+                uint32_t head = sp + 0x1160u, it = *(const uint32_t *)(m + head + 4u);
+                for (int k = 0; k < 6 && it != head && it >= 0x10000u && it < 0x84000000u; k++) {
+                    fprintf(stderr, " item%d=%08X[id %08X/%08X len %d +1C %08X +20 %d pos %d]", k, it,
+                            *(const uint32_t *)(m + it + 0x10u), *(const uint32_t *)(m + it + 0x14u),
+                            *(const int32_t *)(m + it + 0x18u), *(const uint32_t *)(m + it + 0x1Cu),
+                            *(const int32_t *)(m + it + 0x20u), *(const int32_t *)(m + it + 0x24u));
+                    it = *(const uint32_t *)(m + it + 4u);
+                }
+            }
+        }
+        fprintf(stderr, "\n");
+    }
+    /* Its timeline (+4 time, +8 flags, +0xC event count, +0x10 events of
+     * 0x14 bytes): an event is ready when every requested bit in the low 12
+     * of its +8 word is also set in the high 12 (sub_000254C0). */
+    {
+        uint32_t tl = *(const uint32_t *)(m + 0xA92890u);
+        if (tl >= 0x10000u && tl < 0x84000000u) {
+            uint32_t n = *(const uint32_t *)(m + tl + 0xCu), ev = *(const uint32_t *)(m + tl + 0x10u);
+            fprintf(stderr, "  [MATCHTL] time=%g flags=%08X events=%u:", *(const float *)(m + tl + 4u),
+                    *(const uint32_t *)(m + tl + 8u), n);
+            for (uint32_t k = 0; k < n && k < 12u && ev >= 0x10000u && ev < 0x84000000u; k++)
+                fprintf(stderr, " [%08X %08X %08X]", *(const uint32_t *)(m + ev + k * 0x14u),
+                        *(const uint32_t *)(m + ev + k * 0x14u + 4u),
+                        *(const uint32_t *)(m + ev + k * 0x14u + 8u));
+            fprintf(stderr, "\n");
+        }
+    }
 }
 
 /* 2026-09-23: pushbuffer overrun after START. sub_000331A0 resets a device
@@ -1785,6 +1875,10 @@ int main(int argc, char **argv)
          * tools/run-bringup.ps1, plus its quiet kernel logging. */
         if (!getenv("RECOMP_GGL")) _putenv_s("RECOMP_GGL", "1");
         if (!getenv("RECOMP_VBLANK")) _putenv_s("RECOMP_VBLANK", "1");
+        /* Direct3D 11 rendering (nv2a_gpu_d3d11.inc.c): ~4x faster than the
+         * software rasteriser and identical on every screen compared so far.
+         * RECOMP_GPU=0 goes back to software. */
+        if (!getenv("RECOMP_GPU")) _putenv_s("RECOMP_GPU", "1");
         if (!getenv("XBOX_LOG_LEVEL")) _putenv_s("XBOX_LOG_LEVEL", "0");
         if (!getenv("RECOMP_KERNEL_LOG_BUDGET")) _putenv_s("RECOMP_KERNEL_LOG_BUDGET", "0");
     }

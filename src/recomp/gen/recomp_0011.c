@@ -60487,10 +60487,18 @@ loc_00178150: ;
      * the movies run far below real time, so this does what pressing a button
      * would. */
     {
+        /* Only the boot intro: returning 2 ends that loop after its first
+         * movie. Later calls (anything played after the front end, 2026-09-24)
+         * run normally and are logged with their caller. */
         extern char *__cdecl getenv(const char *);
-        static int skip = -1;
+        extern int __cdecl fprintf(void *, const char *, ...);
+        extern void *__cdecl __acrt_iob_func(unsigned);
+        static int skip = -1, calls;
         if (skip < 0) { const char *v = getenv("NFL2K5_SKIP_INTRO"); skip = v && *v && *v != '0'; }
-        if (skip) { eax = 2; esp += 8; return; /* ret 4 */ }
+        fprintf(__acrt_iob_func(2), "  [MOVIE] sub_00178150 call %d from %08X arg %08X%s\n", calls,
+                MEM32(esp), MEM32(esp + 4), skip && calls == 0 ? " (skipped: NFL2K5_SKIP_INTRO)" : "");
+        if (skip && calls++ == 0) { eax = 2; esp += 8; return; /* ret 4 */ }
+        calls++;
     }
     PUSH32(esp, ebp);
     ebp = esp;

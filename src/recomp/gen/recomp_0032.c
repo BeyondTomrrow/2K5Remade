@@ -111542,7 +111542,7 @@ loc_004DE88E: ;
 
 loc_004DE895: ;
     MEM32(esi + 0xC) = eax;
-    if (_flags /* jne: not equal / not zero */) goto loc_004DE8FB;
+    if (TEST_NZ(_fa, _fb)) goto loc_004DE8FB; /* jne: not equal / not zero */
 
 loc_004DE89A: ;
     MEM32(esi + 0xC) = MEM32(esi + 0xC) | edx;

@@ -909,7 +909,7 @@ loc_000B2511: ;
     _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test ecx, ecx (32-bit) */
 
 loc_000B2513: ;
-    if (_flags /* je: equal / zero */) goto loc_000B2570;
+    if (TEST_Z(_fa, _fb)) goto loc_000B2570; /* je: equal / zero */
 
 loc_000B2515: ;
     ecx = MEM32(esi + 0x38);

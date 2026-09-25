@@ -165990,7 +165990,7 @@ loc_003CD3B9: ;
     _cf = (int)(_fa < _fb);
 
 loc_003CD3C1: ;
-    if (_flags /* je: equal / zero */) goto loc_003CD359;
+    if (CMP_EQ(_fa, _fb)) goto loc_003CD359; /* je: equal / zero */
 
 loc_003CD3C3: ;
     ecx = MEM32(esi + 0x94);

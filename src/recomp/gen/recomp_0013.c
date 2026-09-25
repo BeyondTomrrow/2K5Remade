@@ -4276,7 +4276,7 @@ loc_001AD085: ;
     _cf = 0; /* test/cmp-logical clears CF */
 
 loc_001AD090: ;
-    if (_flags /* jne: not equal / not zero */) goto loc_001AD0FA;
+    if (TEST_NZ(_fa, _fb)) goto loc_001AD0FA; /* jne: not equal / not zero */
 
 loc_001AD092: ;
     esi = 1;

@@ -31206,6 +31206,24 @@ loc_0003CB13: ;
     PUSH32(esp, 0x0003CB1Eu); RECOMP_ABI_CALL(0x00445BA7u, sub_00445BA7); /* call 0x00445BA7 */
 
 loc_0003CB1E: ;
+    /* NFL2K5-GENPATCH:STOPWAIT_3CAF0 */
+#ifdef NFL2K5_FORCE_UNBLOCK_AUDIO_LOCK
+    /* EXPERIMENTAL, 2026-09-24: sub_0003CAF0 stops a DirectSound buffer and
+     * spins on GetStatus until its PLAYING bit clears. Only the APU finishing
+     * the voice-off clears it (voice+0x12 state), and the APU is a stub, so
+     * after Start Game the audio task spun here forever and loading stopped
+     * (task 3E910 permanently BUSY, no disc reads). Same root cause as
+     * AUDIO_LOCK below. */
+    {
+        static volatile long spins;
+        if (!(MEM8(esp + 4) & 1))
+            spins = 0;
+        else if (++spins > 100) {
+            spins = 0;
+            goto loc_0003CB24;
+        }
+    }
+#endif
     _fa = (uint32_t)(MEM8(esp + 4)) & 0xFFu; _fb = (uint32_t)(LO8(ebx)) & 0xFFu;
     _fas = (int32_t)(int8_t)(_fa); _fbs = (int32_t)(int8_t)(_fb); /* test MEM8(esp + 4), LO8(ebx) (8-bit) */
     if (TEST_NZ(_fa, _fb)) goto loc_0003CB13; /* jne: not equal / not zero */
