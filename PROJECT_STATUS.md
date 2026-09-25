@@ -2179,3 +2179,12 @@ Reached natively (user-verified): intro movies, legal/SEGA screens, title, main 
 - Handoff for other assistants: `docs/HANDOFF-CHATGPT.md`; helpers `tools/capwin.ps1`, `tools/catch-freeze.ps1`, `tools/run-to-game.ps1`.
 
 **Open**: in-game the scene is black -- tens of millions of zero-area triangles (vertices collapsing); tracing with `RECOMP_VP_TRACE` (`[VPZERO]` now prints the shader and constants). No audio.
+
+## 2026-09-24 (night): hardware rendering (Direct3D 11), `RECOMP_GPU=1`
+
+- New `external/xboxrecomp/src/kernel/nv2a_gpu_d3d11.inc.c`, `#include`d into nv2a_pb_exec.c. Vertex programs still run on the CPU; rasterisation, texturing, register combiners (HLSL port of `comb_eval`), alpha test, depth, stencil, blending and colour mask run on the host GPU. Pre-transformed 2D batches go to the GPU too (texture x diffuse, no depth, like the software path).
+- Each guest colour surface = B8G8R8A8 render target + D24S8, seeded from guest RAM; read back into guest RAM at every FLIP_STALL so the GDI window is unchanged. `dirty`/`stale` flags hand a surface between GPU and CPU (software fallback, partial clears, render-to-texture).
+- Textures decoded once through the software sampler and cached (address/format/size/palette + sparse content hash).
+- Depth now uses `SET_CLIP_MIN/MAX` (0x394/0x398, newly captured). Positions are rebuilt as `ndc * w` (as xemu does) so the GPU clips geometry crossing the near plane.
+- Main menu identical to the software renderer (plus bilinear filtering); **~4x faster**: 2,348 vs 573 vblanks in the same 75 s (~31 vs ~8 fps).
+- Gaps: partial depth/stencil clears clear the whole buffer; no fog; no mipmaps; culling still off.

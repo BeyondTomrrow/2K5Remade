@@ -2040,8 +2040,981 @@ index 17cb31f..172d860 100644
  
      if (PreviousSuspendCount)
          *PreviousSuspendCount = (ULONG)prev;
+diff --git a/src/kernel/nv2a_gpu_d3d11.inc.c b/src/kernel/nv2a_gpu_d3d11.inc.c
+new file mode 100644
+index 0000000..95a4aa7
+--- /dev/null
++++ b/src/kernel/nv2a_gpu_d3d11.inc.c
+@@ -0,0 +1,967 @@
++/* ── Hardware rendering (Direct3D 11) ─────────────────────────────────────
++ *
++ * Included into nv2a_pb_exec.c (it reads that file's state directly), after
++ * the register combiners and the vertex-program block.
++ *
++ * Phase 1 of moving NV2A rendering off the CPU: vertex programs still run in
++ * vp_run (vertex counts are small), but rasterisation and everything per
++ * pixel -- texturing, the register combiners, alpha test, depth, stencil,
++ * blending, colour mask -- runs on the host GPU.
++ *
++ *  - Every guest colour surface the title draws into gets a render target
++ *    (B8G8R8A8, the byte order of the guest's A8R8G8B8) and a D24S8 depth-
++ *    stencil buffer. Its contents start as the guest memory, and are copied
++ *    back into guest memory at each FLIP_STALL (and before a texture that
++ *    aliases the surface is decoded), so the window and anything the title
++ *    reads back stay exactly as before.
++ *  - Guest textures are decoded once through the existing software sampler
++ *    (so every format it supports -- swizzled, linear, paletted, DXT -- works
++ *    identically) into RGBA8 and cached, keyed by address/format/size/palette
++ *    and a sparse content hash so movie frames and palette swaps refresh.
++ *  - One generic pixel shader interprets the register-combiner state from a
++ *    constant buffer, the same semantics as comb_eval.
++ *
++ * Opt-in with RECOMP_GPU=1 while it is verified against the software path.
++ *
++ * ponytail: depth/stencil clears with a partial rectangle clear the whole
++ * buffer; fog is not applied; no mipmaps (level 0 only).
++ */
++#define COBJMACROS
++#include <d3d11.h>
++#include <d3dcompiler.h>
++#pragma comment(lib, "d3d11.lib")
++#pragma comment(lib, "d3dcompiler.lib")
++
++typedef struct {
++    float pos[4];
++    float d0[4];
++    float d1[4];
++    float t[4][2];
++} GpuVertex;
++
++typedef struct {
++    uint32_t guest;                      /* resolved guest address of the surface */
++    uint32_t w, h, pitch;
++    ID3D11Texture2D *tex;
++    ID3D11RenderTargetView *rtv;
++    ID3D11Texture2D *ds;
++    ID3D11DepthStencilView *dsv;
++    ID3D11Texture2D *staging;
++    int dirty;                           /* GPU holds newer pixels than guest RAM */
++    int stale;                           /* guest RAM holds newer pixels than the GPU */
++} GpuSurface;
++
++typedef struct {
++    uint32_t addr, fmt, w, h, pitch, palette, hash;
++    ID3D11Texture2D *tex;
++    ID3D11ShaderResourceView *srv;
++    uint32_t last_use;
++} GpuTexture;
++
++#define GPU_MAX_SURFACES 8
++#define GPU_MAX_TEXTURES 256
++#define GPU_MAX_VERTS    (NV_MAX_INDICES * 3)
++
++static struct {
++    int tried, ok;
++    ID3D11Device *dev;
++    ID3D11DeviceContext *ctx;
++    ID3D11VertexShader *vs;
++    ID3D11PixelShader *ps;
++    ID3D11InputLayout *layout;
++    ID3D11Buffer *vb, *cb;
++    ID3D11RasterizerState *rs;
++    ID3D11Texture2D *white;
++    ID3D11ShaderResourceView *white_srv;
++    GpuSurface surf[GPU_MAX_SURFACES];
++    int cur;                             /* index into surf, -1 none */
++    GpuTexture texs[GPU_MAX_TEXTURES];
++    uint32_t frame;
++    uint32_t draws, tris, tex_uploads, readbacks;
++    GpuVertex verts[GPU_MAX_VERTS];
++} s_gpu11 = { .cur = -1 };
++
++/* Constant buffer the shader reads; layout matches the HLSL cbuffer below. */
++typedef struct {
++    uint32_t stage[8][4];                /* color_icw, color_ocw, alpha_icw, alpha_ocw */
++    float    f0[8][4], f1[8][4];         /* combiner factors, RGBA */
++    uint32_t misc[4];                    /* control, stage_prog, final0, final1 */
++    float    specfog0[4], specfog1[4];
++    uint32_t alpha[4];                   /* test enable, func, ref, combiner active */
++    uint32_t texon[4];                   /* per stage: 1 when a texture is bound */
++} GpuConsts;
++
++static const char *k_gpu_hlsl =
++"struct VIn { float4 pos:POSITION; float4 d0:COLOR0; float4 d1:COLOR1;\n"
++"             float2 t0:TEXCOORD0; float2 t1:TEXCOORD1; float2 t2:TEXCOORD2; float2 t3:TEXCOORD3; };\n"
++"struct PIn { float4 pos:SV_Position; float4 d0:COLOR0; float4 d1:COLOR1;\n"
++"             float2 t0:TEXCOORD0; float2 t1:TEXCOORD1; float2 t2:TEXCOORD2; float2 t3:TEXCOORD3; };\n"
++"PIn vs_main(VIn v) { PIn o; o.pos=v.pos; o.d0=v.d0; o.d1=v.d1; o.t0=v.t0; o.t1=v.t1; o.t2=v.t2; o.t3=v.t3; return o; }\n"
++"cbuffer C : register(b0) {\n"
++"  uint4 stg[8]; float4 f0[8]; float4 f1[8]; uint4 misc; float4 sf0; float4 sf1; uint4 alpha; uint4 texon; };\n"
++"Texture2D T0:register(t0); Texture2D T1:register(t1); Texture2D T2:register(t2); Texture2D T3:register(t3);\n"
++"SamplerState S0:register(s0); SamplerState S1:register(s1); SamplerState S2:register(s2); SamplerState S3:register(s3);\n"
++"float mapin(float x, uint m) {\n"
++"  float p = max(x, 0.0);\n"
++"  if (m == 0x00) return p;\n"
++"  if (m == 0x20) return 1.0 - min(p, 1.0);\n"
++"  if (m == 0x40) return 2.0 * p - 1.0;\n"
++"  if (m == 0x60) return -2.0 * p + 1.0;\n"
++"  if (m == 0x80) return p - 0.5;\n"
++"  if (m == 0xA0) return -p + 0.5;\n"
++"  if (m == 0xC0) return x;\n"
++"  return -x; }\n"
++"float mapout(float x, uint m) {\n"
++"  if (m == 0x08) x -= 0.5; else if (m == 0x10) x *= 2.0; else if (m == 0x18) x = (x - 0.5) * 2.0;\n"
++"  else if (m == 0x20) x *= 4.0; else if (m == 0x30) x *= 0.5;\n"
++"  return clamp(x, -1.0, 1.0); }\n"
++"float3 inrgb(float4 R[16], uint b) { uint r = b & 15u; bool a = (b & 0x10u) != 0u; uint m = b & 0xE0u;\n"
++"  float3 x = a ? R[r].aaa : R[r].rgb; return float3(mapin(x.r, m), mapin(x.g, m), mapin(x.b, m)); }\n"
++"float ina(float4 R[16], uint b) { uint r = b & 15u; bool a = (b & 0x10u) != 0u;\n"
++"  return mapin(a ? R[r].a : R[r].b, b & 0xE0u); }\n"
++"float4 ps_main(PIn i) : SV_Target {\n"
++"  float4 t[4];\n"
++"  t[0] = texon.x ? T0.Sample(S0, i.t0) : float4(1,1,1,1);\n"
++"  t[1] = texon.y ? T1.Sample(S1, i.t1) : float4(1,1,1,1);\n"
++"  t[2] = texon.z ? T2.Sample(S2, i.t2) : float4(1,1,1,1);\n"
++"  t[3] = texon.w ? T3.Sample(S3, i.t3) : float4(1,1,1,1);\n"
++"  float4 d0 = saturate(i.d0), d1 = saturate(i.d1);\n"
++"  float4 o;\n"
++"  if (alpha.w == 0u) {\n"
++"    o = texon.x ? t[0] * d0 : d0;\n"
++"  } else {\n"
++"    float4 R[16];\n"
++"    [unroll] for (int k = 0; k < 16; k++) R[k] = float4(0,0,0,0);\n"
++"    R[4] = d0; R[5] = d1;\n"
++"    uint sp = misc.y;\n"
++"    R[8] = t[0];\n"
++"    R[9]  = ((sp >> 5)  & 31u) ? t[1] : float4(0,0,0,0);\n"
++"    R[10] = ((sp >> 10) & 31u) ? t[2] : float4(0,0,0,0);\n"
++"    R[11] = ((sp >> 15) & 31u) ? t[3] : float4(0,0,0,0);\n"
++"    R[12].a = (sp & 31u) ? t[0].a : 1.0;\n"
++"    uint ns = min(misc.x & 255u, 8u);\n"
++"    for (uint s = 0; s < ns; s++) {\n"
++"      uint c0 = (misc.x & 0x1000u) ? s : 0u; uint c1 = (misc.x & 0x10000u) ? s : 0u;\n"
++"      R[1] = f0[c0]; R[2] = f1[c1];\n"
++"      float4 N[16]; [unroll] for (int q = 0; q < 16; q++) N[q] = R[q];\n"
++"      bool muxcd = (misc.x & 0x100u) ? (R[12].a >= 0.5) : ((uint(R[12].a * 255.0 + 0.5) & 1u) != 0u);\n"
++"      {\n"
++"        uint icw = stg[s].x, ocw = stg[s].y, fl = ocw >> 12, mp = fl & 0x38u;\n"
++"        float3 A = inrgb(R, (icw >> 24) & 255u), B = inrgb(R, (icw >> 16) & 255u);\n"
++"        float3 Cc = inrgb(R, (icw >> 8) & 255u), D = inrgb(R, icw & 255u);\n"
++"        float3 ab = (fl & 2u) ? dot(A, B).xxx : A * B;\n"
++"        float3 cd = (fl & 1u) ? dot(Cc, D).xxx : Cc * D;\n"
++"        float3 ms = (fl & 4u) ? (muxcd ? cd : ab) : ab + cd;\n"
++"        ab = float3(mapout(ab.x, mp), mapout(ab.y, mp), mapout(ab.z, mp));\n"
++"        cd = float3(mapout(cd.x, mp), mapout(cd.y, mp), mapout(cd.z, mp));\n"
++"        ms = float3(mapout(ms.x, mp), mapout(ms.y, mp), mapout(ms.z, mp));\n"
++"        uint abd = (ocw >> 4) & 15u, cdd = ocw & 15u, msd = (ocw >> 8) & 15u;\n"
++"        if (abd) { N[abd].rgb = ab; if (fl & 0x80u) N[abd].a = ab.b; }\n"
++"        if (cdd) { N[cdd].rgb = cd; if (fl & 0x40u) N[cdd].a = cd.b; }\n"
++"        if (msd) N[msd].rgb = ms;\n"
++"      }\n"
++"      {\n"
++"        uint icw = stg[s].z, ocw = stg[s].w, fl = ocw >> 12, mp = fl & 0x38u;\n"
++"        float A = ina(R, (icw >> 24) & 255u), B = ina(R, (icw >> 16) & 255u);\n"
++"        float Cc = ina(R, (icw >> 8) & 255u), D = ina(R, icw & 255u);\n"
++"        float ab = A * B, cd = Cc * D, ms = (fl & 4u) ? (muxcd ? cd : ab) : ab + cd;\n"
++"        uint abd = (ocw >> 4) & 15u, cdd = ocw & 15u, msd = (ocw >> 8) & 15u;\n"
++"        if (abd) N[abd].a = mapout(ab, mp);\n"
++"        if (cdd) N[cdd].a = mapout(cd, mp);\n"
++"        if (msd) N[msd].a = mapout(ms, mp);\n"
++"      }\n"
++"      [unroll] for (int q2 = 0; q2 < 16; q2++) R[q2] = N[q2];\n"
++"    }\n"
++"    if (misc.z != 0u || misc.w != 0u) {\n"
++"      uint fl = misc.w & 255u;\n"
++"      R[1] = sf0; R[2] = sf1;\n"
++"      float3 E = inrgb(R, (misc.w >> 24) & 255u), F = inrgb(R, (misc.w >> 16) & 255u);\n"
++"      float3 v1 = (fl & 0x40u) ? 1.0 - R[5].rgb : R[5].rgb;\n"
++"      float3 r0 = (fl & 0x20u) ? 1.0 - R[12].rgb : R[12].rgb;\n"
++"      float3 sum = v1 + r0; if (fl & 0x80u) sum = saturate(sum);\n"
++"      R[14] = float4(sum, 0); R[15] = float4(E * F, 0);\n"
++"      float3 A = inrgb(R, (misc.z >> 24) & 255u), B = inrgb(R, (misc.z >> 16) & 255u);\n"
++"      float3 Cc = inrgb(R, (misc.z >> 8) & 255u), D = inrgb(R, misc.z & 255u);\n"
++"      float G = ina(R, (misc.w >> 8) & 255u);\n"
++"      o = float4(D + Cc * (1.0 - A) + B * A, G);\n"
++"    } else {\n"
++"      o = R[12];\n"
++"    }\n"
++"    o = saturate(o);\n"
++"  }\n"
++"  if (alpha.x != 0u) {\n"
++"    uint a8 = (uint)(saturate(o.a) * 255.0 + 0.5), ref = alpha.z; bool ok = true;\n"
++"    if (alpha.y == 0x200u) ok = false; else if (alpha.y == 0x201u) ok = a8 < ref;\n"
++"    else if (alpha.y == 0x202u) ok = a8 == ref; else if (alpha.y == 0x203u) ok = a8 <= ref;\n"
++"    else if (alpha.y == 0x204u) ok = a8 > ref; else if (alpha.y == 0x205u) ok = a8 != ref;\n"
++"    else if (alpha.y == 0x206u) ok = a8 >= ref;\n"
++"    if (!ok) discard;\n"
++"  }\n"
++"  return o;\n"
++"}\n";
++
++static int gpu_enabled(void)
++{
++    static int on = -1;
++    if (on < 0)
++        on = getenv("RECOMP_GPU") && strcmp(getenv("RECOMP_GPU"), "0") != 0;
++    return on;
++}
++
++static int gpu_init(void)
++{
++    HRESULT hr;
++    ID3DBlob *vsb = NULL, *psb = NULL, *err = NULL;
++    D3D_FEATURE_LEVEL fl;
++
++    if (s_gpu11.tried)
++        return s_gpu11.ok;
++    s_gpu11.tried = 1;
++    hr = D3D11CreateDevice(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, 0, NULL, 0, D3D11_SDK_VERSION,
++                           &s_gpu11.dev, &fl, &s_gpu11.ctx);
++    if (FAILED(hr)) {
++        fprintf(stderr, "  [GPU11] D3D11CreateDevice failed 0x%08lX; staying on the software rasteriser\n",
++                (unsigned long)hr);
++        return 0;
++    }
++    hr = D3DCompile(k_gpu_hlsl, strlen(k_gpu_hlsl), "nv2a", NULL, NULL, "vs_main", "vs_4_0", 0, 0, &vsb, &err);
++    if (FAILED(hr)) {
++        fprintf(stderr, "  [GPU11] VS compile failed: %s\n", err ? (const char *)ID3D10Blob_GetBufferPointer(err) : "?");
++        return 0;
++    }
++    hr = D3DCompile(k_gpu_hlsl, strlen(k_gpu_hlsl), "nv2a", NULL, NULL, "ps_main", "ps_4_0", 0, 0, &psb, &err);
++    if (FAILED(hr)) {
++        fprintf(stderr, "  [GPU11] PS compile failed: %s\n", err ? (const char *)ID3D10Blob_GetBufferPointer(err) : "?");
++        return 0;
++    }
++    ID3D11Device_CreateVertexShader(s_gpu11.dev, ID3D10Blob_GetBufferPointer(vsb), ID3D10Blob_GetBufferSize(vsb), NULL, &s_gpu11.vs);
++    ID3D11Device_CreatePixelShader(s_gpu11.dev, ID3D10Blob_GetBufferPointer(psb), ID3D10Blob_GetBufferSize(psb), NULL, &s_gpu11.ps);
++    {
++        D3D11_INPUT_ELEMENT_DESC el[] = {
++            { "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, (UINT)offsetof(GpuVertex, pos), D3D11_INPUT_PER_VERTEX_DATA, 0 },
++            { "COLOR",    0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, (UINT)offsetof(GpuVertex, d0), D3D11_INPUT_PER_VERTEX_DATA, 0 },
++            { "COLOR",    1, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, (UINT)offsetof(GpuVertex, d1), D3D11_INPUT_PER_VERTEX_DATA, 0 },
++            { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, (UINT)offsetof(GpuVertex, t[0]), D3D11_INPUT_PER_VERTEX_DATA, 0 },
++            { "TEXCOORD", 1, DXGI_FORMAT_R32G32_FLOAT, 0, (UINT)offsetof(GpuVertex, t[1]), D3D11_INPUT_PER_VERTEX_DATA, 0 },
++            { "TEXCOORD", 2, DXGI_FORMAT_R32G32_FLOAT, 0, (UINT)offsetof(GpuVertex, t[2]), D3D11_INPUT_PER_VERTEX_DATA, 0 },
++            { "TEXCOORD", 3, DXGI_FORMAT_R32G32_FLOAT, 0, (UINT)offsetof(GpuVertex, t[3]), D3D11_INPUT_PER_VERTEX_DATA, 0 },
++        };
++        ID3D11Device_CreateInputLayout(s_gpu11.dev, el, 7, ID3D10Blob_GetBufferPointer(vsb),
++                                       ID3D10Blob_GetBufferSize(vsb), &s_gpu11.layout);
++    }
++    {
++        D3D11_BUFFER_DESC bd;
++        memset(&bd, 0, sizeof bd);
++        bd.ByteWidth = sizeof(GpuVertex) * GPU_MAX_VERTS;
++        bd.Usage = D3D11_USAGE_DYNAMIC;
++        bd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
++        bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
++        ID3D11Device_CreateBuffer(s_gpu11.dev, &bd, NULL, &s_gpu11.vb);
++        bd.ByteWidth = (sizeof(GpuConsts) + 15) & ~15u;
++        bd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
++        ID3D11Device_CreateBuffer(s_gpu11.dev, &bd, NULL, &s_gpu11.cb);
++    }
++    {
++        D3D11_RASTERIZER_DESC rd;
++        memset(&rd, 0, sizeof rd);
++        rd.FillMode = D3D11_FILL_SOLID;
++        rd.CullMode = D3D11_CULL_NONE;      /* culling stays opt-in, see raster_triangle_xf */
++        rd.DepthClipEnable = FALSE;
++        rd.ScissorEnable = TRUE;
++        ID3D11Device_CreateRasterizerState(s_gpu11.dev, &rd, &s_gpu11.rs);
++    }
++    {
++        uint32_t white = 0xFFFFFFFFu;
++        D3D11_TEXTURE2D_DESC td;
++        D3D11_SUBRESOURCE_DATA sd = { &white, 4, 4 };
++        memset(&td, 0, sizeof td);
++        td.Width = td.Height = 1; td.MipLevels = td.ArraySize = 1;
++        td.Format = DXGI_FORMAT_B8G8R8A8_UNORM; td.SampleDesc.Count = 1;
++        td.Usage = D3D11_USAGE_IMMUTABLE; td.BindFlags = D3D11_BIND_SHADER_RESOURCE;
++        ID3D11Device_CreateTexture2D(s_gpu11.dev, &td, &sd, &s_gpu11.white);
++        ID3D11Device_CreateShaderResourceView(s_gpu11.dev, (ID3D11Resource *)s_gpu11.white, NULL, &s_gpu11.white_srv);
++    }
++    s_gpu11.ok = s_gpu11.vs && s_gpu11.ps && s_gpu11.layout && s_gpu11.vb && s_gpu11.cb;
++    fprintf(stderr, "  [GPU11] Direct3D 11 renderer %s (feature level 0x%X)\n",
++            s_gpu11.ok ? "ready" : "FAILED", (unsigned)fl);
++    return s_gpu11.ok;
++}
++
++/* ---- surfaces -------------------------------------------------------- */
++
++static void gpu_readback(GpuSurface *s)
++{
++    D3D11_MAPPED_SUBRESOURCE m;
++    uint8_t *mem = (uint8_t *)xbox_GetMemoryOffset();
++    uint32_t y;
++    if (!s->tex || !s->dirty)
++        return;
++    ID3D11DeviceContext_CopyResource(s_gpu11.ctx, (ID3D11Resource *)s->staging, (ID3D11Resource *)s->tex);
++    if (FAILED(ID3D11DeviceContext_Map(s_gpu11.ctx, (ID3D11Resource *)s->staging, 0, D3D11_MAP_READ, 0, &m)))
++        return;
++    for (y = 0; y < s->h; y++)
++        memcpy(mem + s->guest + (size_t)y * s->pitch, (const uint8_t *)m.pData + (size_t)y * m.RowPitch,
++               (size_t)s->w * 4);
++    ID3D11DeviceContext_Unmap(s_gpu11.ctx, (ID3D11Resource *)s->staging, 0);
++    s->dirty = 0;
++    s_gpu11.readbacks++;
++}
++
++/* The software rasteriser is about to read or write the current surface in
++ * guest RAM: hand it the newest pixels, and take them back on the next GPU
++ * draw. */
++static void gpu_cpu_access(void)
++{
++    uint32_t guest;
++    int i;
++    if (!s_gpu11.ok)
++        return;
++    guest = dma_resolve(s_gpu.color_offset);
++    for (i = 0; i < GPU_MAX_SURFACES; i++) {
++        GpuSurface *s = &s_gpu11.surf[i];
++        if (s->tex && s->guest == guest) {
++            gpu_readback(s);
++            s->stale = 1;
++        }
++    }
++}
++
++static void gpu_release_surface(GpuSurface *s)
++{
++    if (s->rtv) ID3D11RenderTargetView_Release(s->rtv);
++    if (s->tex) ID3D11Texture2D_Release(s->tex);
++    if (s->dsv) ID3D11DepthStencilView_Release(s->dsv);
++    if (s->ds) ID3D11Texture2D_Release(s->ds);
++    if (s->staging) ID3D11Texture2D_Release(s->staging);
++    memset(s, 0, sizeof *s);
++}
++
++/* The render target for the current NV2A colour surface, created (and
++ * seeded from guest memory) on first use. -1 when it cannot be used. */
++static int gpu_bind_surface(void)
++{
++    uint32_t w = s_gpu.clip_x + s_gpu.clip_w, h = s_gpu.clip_y + s_gpu.clip_h;
++    uint32_t guest = dma_resolve(s_gpu.color_offset);
++    int i, free_i = -1;
++
++    if (surface_bpp() != 4 || !w || !h || w > 4096 || h > 4096 || !s_gpu.pitch)
++        return -1;
++    if (surface_write_refused(guest, s_gpu.pitch * h, "gpu"))
++        return -1;
++    for (i = 0; i < GPU_MAX_SURFACES; i++) {
++        GpuSurface *s = &s_gpu11.surf[i];
++        if (s->tex && s->guest == guest) {
++            if (s->w == w && s->h == h && s->pitch == s_gpu.pitch) {
++                if (s->stale) {             /* the CPU drew into it since */
++                    ID3D11DeviceContext_UpdateSubresource(s_gpu11.ctx, (ID3D11Resource *)s->tex, 0, NULL,
++                        (const uint8_t *)xbox_GetMemoryOffset() + s->guest, s->pitch, 0);
++                    s->stale = 0;
++                }
++                return i;
++            }
++            gpu_readback(s);
++            gpu_release_surface(s);
++            free_i = i;
++            break;
++        }
++        if (!s->tex && free_i < 0)
++            free_i = i;
++    }
++    if (free_i < 0) {                       /* evict the first one */
++        gpu_readback(&s_gpu11.surf[0]);
++        gpu_release_surface(&s_gpu11.surf[0]);
++        free_i = 0;
++    }
++    {
++        GpuSurface *s = &s_gpu11.surf[free_i];
++        D3D11_TEXTURE2D_DESC td;
++        uint8_t *mem = (uint8_t *)xbox_GetMemoryOffset();
++        D3D11_SUBRESOURCE_DATA sd;
++        memset(&td, 0, sizeof td);
++        td.Width = w; td.Height = h; td.MipLevels = td.ArraySize = 1;
++        td.Format = DXGI_FORMAT_B8G8R8A8_UNORM; td.SampleDesc.Count = 1;
++        td.Usage = D3D11_USAGE_DEFAULT;
++        td.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
++        sd.pSysMem = mem + guest; sd.SysMemPitch = s_gpu.pitch; sd.SysMemSlicePitch = 0;
++        if (FAILED(ID3D11Device_CreateTexture2D(s_gpu11.dev, &td, &sd, &s->tex)))
++            return -1;
++        ID3D11Device_CreateRenderTargetView(s_gpu11.dev, (ID3D11Resource *)s->tex, NULL, &s->rtv);
++        td.Usage = D3D11_USAGE_STAGING; td.BindFlags = 0; td.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
++        ID3D11Device_CreateTexture2D(s_gpu11.dev, &td, NULL, &s->staging);
++        td.Usage = D3D11_USAGE_DEFAULT; td.CPUAccessFlags = 0;
++        td.Format = DXGI_FORMAT_D24_UNORM_S8_UINT; td.BindFlags = D3D11_BIND_DEPTH_STENCIL;
++        ID3D11Device_CreateTexture2D(s_gpu11.dev, &td, NULL, &s->ds);
++        ID3D11Device_CreateDepthStencilView(s_gpu11.dev, (ID3D11Resource *)s->ds, NULL, &s->dsv);
++        ID3D11DeviceContext_ClearDepthStencilView(s_gpu11.ctx, s->dsv, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
++        s->guest = guest; s->w = w; s->h = h; s->pitch = s_gpu.pitch; s->dirty = 0;
++        return free_i;
++    }
++}
++
++/* Copy every surface that overlaps [addr, addr+bytes) back to guest RAM:
++ * before a texture reading that memory is decoded, and at a flip. */
++static void gpu_flush_range(uint32_t addr, uint32_t bytes)
++{
++    int i;
++    for (i = 0; i < GPU_MAX_SURFACES; i++) {
++        GpuSurface *s = &s_gpu11.surf[i];
++        if (s->tex && s->dirty && addr < s->guest + s->pitch * s->h && s->guest < addr + bytes)
++            gpu_readback(s);
++    }
++}
++
++/* ---- textures -------------------------------------------------------- */
++
++static uint32_t gpu_tex_bytes(const Texture *t)
++{
++    uint32_t b = d3d8_format_dxt_block_bytes(t->color);
++    if (b)
++        return (t->width / 4u) * (t->height / 4u) * b;
++    if (t->pitch && !tex_size_from_format(t->color))
++        return t->pitch * t->height;
++    return t->width * t->height * (t->color == 0x0B || t->color == 0x00 || t->color == 0x13 ? 1u : 4u);
++}
++
++static uint32_t gpu_tex_hash(const Texture *t)
++{
++    const uint8_t *mem = (const uint8_t *)xbox_GetMemoryOffset();
++    uint32_t bytes = gpu_tex_bytes(t), h = 2166136261u, i, step;
++    if (bytes > 16u * 1024u * 1024u) bytes = 16u * 1024u * 1024u;
++    step = bytes / 1024u; if (step < 4) step = 4;
++    for (i = 0; i + 4 <= bytes; i += step)
++        h = (h ^ *(const uint32_t *)(mem + t->offset + i)) * 16777619u;
++    if (t->color == 0x0B && t->palette)
++        for (i = 0; i < 1024; i += 16)
++            h = (h ^ *(const uint32_t *)(mem + t->palette + i)) * 16777619u;
++    return h;
++}
++
++/* SRV for texture stage st, decoding it through the software sampler the
++ * first time (and whenever its contents change). */
++static ID3D11ShaderResourceView *gpu_texture(int st)
++{
++    Texture *t = st == 0 ? &s_gpu.tex : &s_stage[st];
++    uint32_t hash, i, n, oldest = 0, oldest_use = 0xFFFFFFFFu;
++    uint32_t *pix;
++    GpuTexture *e = NULL;
++
++    if (!t->valid || t->width > 4096 || t->height > 4096)
++        return NULL;
++    gpu_flush_range(t->offset, gpu_tex_bytes(t));     /* render-to-texture */
++    hash = gpu_tex_hash(t);
++    for (i = 0; i < GPU_MAX_TEXTURES; i++) {
++        GpuTexture *c = &s_gpu11.texs[i];
++        if (c->srv && c->addr == t->offset && c->fmt == t->color && c->w == t->width
++                && c->h == t->height && c->pitch == t->pitch && c->palette == t->palette) {
++            if (c->hash == hash) {
++                c->last_use = s_gpu11.frame;
++                return c->srv;
++            }
++            e = c;                               /* same texture, new contents */
++            break;
++        }
++        if (c->last_use < oldest_use) { oldest_use = c->last_use; oldest = i; }
++    }
++    if (!e) {
++        e = &s_gpu11.texs[oldest];
++    }
++    if (e->srv) { ID3D11ShaderResourceView_Release(e->srv); e->srv = NULL; }
++    if (e->tex) { ID3D11Texture2D_Release(e->tex); e->tex = NULL; }
++    n = t->width * t->height;
++    pix = (uint32_t *)malloc((size_t)n * 4);
++    if (!pix)
++        return NULL;
++    {
++        uint32_t u, v;
++        int ok = 1;
++        __try {
++            for (v = 0; v < t->height; v++)
++                for (u = 0; u < t->width; u++) {
++                    uint32_t c = 0;
++                    sample_stage(st, u, v, &c);
++                    pix[(size_t)v * t->width + u] = c;
++                }
++        } __except (EXCEPTION_EXECUTE_HANDLER) {
++            ok = 0;
++        }
++        if (!ok) { free(pix); return NULL; }
++    }
++    {
++        D3D11_TEXTURE2D_DESC td;
++        D3D11_SUBRESOURCE_DATA sd;
++        memset(&td, 0, sizeof td);
++        td.Width = t->width; td.Height = t->height; td.MipLevels = td.ArraySize = 1;
++        td.Format = DXGI_FORMAT_B8G8R8A8_UNORM; td.SampleDesc.Count = 1;
++        td.Usage = D3D11_USAGE_IMMUTABLE; td.BindFlags = D3D11_BIND_SHADER_RESOURCE;
++        sd.pSysMem = pix; sd.SysMemPitch = t->width * 4; sd.SysMemSlicePitch = 0;
++        if (SUCCEEDED(ID3D11Device_CreateTexture2D(s_gpu11.dev, &td, &sd, &e->tex)))
++            ID3D11Device_CreateShaderResourceView(s_gpu11.dev, (ID3D11Resource *)e->tex, NULL, &e->srv);
++    }
++    free(pix);
++    e->addr = t->offset; e->fmt = t->color; e->w = t->width; e->h = t->height;
++    e->pitch = t->pitch; e->palette = t->palette; e->hash = hash; e->last_use = s_gpu11.frame;
++    s_gpu11.tex_uploads++;
++    return e->srv;
++}
++
++static ID3D11SamplerState *gpu_sampler(int st)
++{
++    static ID3D11SamplerState *cache[64];
++    static uint32_t keys[64];
++    const Texture *t = st == 0 ? &s_gpu.tex : &s_stage[st];
++    uint32_t filt = s_tex_reg[(0x1B14 + 0x40u * (uint32_t)st - NV_TEX_FIRST) / 4];
++    uint32_t mag = (filt >> 24) & 0xF, key;
++    D3D11_SAMPLER_DESC sd;
++    int i;
++    D3D11_TEXTURE_ADDRESS_MODE am[2];
++    uint32_t modes[2];
++    modes[0] = t->addr_u; modes[1] = t->addr_v;
++    key = (mag == 1 ? 1u : 0u) | (t->addr_u << 4) | (t->addr_v << 8);
++    for (i = 0; i < 64; i++) {
++        if (cache[i] && keys[i] == key)
++            return cache[i];
++        if (!cache[i])
++            break;
++    }
++    if (i == 64)
++        i = 0;
++    for (int k = 0; k < 2; k++)
++        am[k] = modes[k] == 1 ? D3D11_TEXTURE_ADDRESS_WRAP
++              : modes[k] == 2 ? D3D11_TEXTURE_ADDRESS_MIRROR
++              : modes[k] == 4 ? D3D11_TEXTURE_ADDRESS_BORDER
++              : D3D11_TEXTURE_ADDRESS_CLAMP;
++    memset(&sd, 0, sizeof sd);
++    sd.Filter = mag == 1 ? D3D11_FILTER_MIN_MAG_MIP_POINT : D3D11_FILTER_MIN_MAG_LINEAR_MIP_POINT;
++    sd.AddressU = am[0]; sd.AddressV = am[1]; sd.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
++    sd.MaxLOD = D3D11_FLOAT32_MAX;
++    if (cache[i]) ID3D11SamplerState_Release(cache[i]);
++    cache[i] = NULL;
++    ID3D11Device_CreateSamplerState(s_gpu11.dev, &sd, &cache[i]);
++    keys[i] = key;
++    return cache[i];
++}
++
++/* ---- output-merge state ---------------------------------------------- */
++
++static D3D11_BLEND gpu_blend_factor(uint32_t f)
++{
++    switch (f) {
++    case 0x0000: return D3D11_BLEND_ZERO;
++    case 0x0001: return D3D11_BLEND_ONE;
++    case 0x0300: return D3D11_BLEND_SRC_COLOR;
++    case 0x0301: return D3D11_BLEND_INV_SRC_COLOR;
++    case 0x0302: return D3D11_BLEND_SRC_ALPHA;
++    case 0x0303: return D3D11_BLEND_INV_SRC_ALPHA;
++    case 0x0304: return D3D11_BLEND_DEST_ALPHA;
++    case 0x0305: return D3D11_BLEND_INV_DEST_ALPHA;
++    case 0x0306: return D3D11_BLEND_DEST_COLOR;
++    case 0x0307: return D3D11_BLEND_INV_DEST_COLOR;
++    case 0x0308: return D3D11_BLEND_SRC_ALPHA_SAT;
++    case 0x8001: return D3D11_BLEND_BLEND_FACTOR;
++    case 0x8002: return D3D11_BLEND_INV_BLEND_FACTOR;
++    case 0x8003: return D3D11_BLEND_BLEND_FACTOR;
++    case 0x8004: return D3D11_BLEND_INV_BLEND_FACTOR;
++    default:     return D3D11_BLEND_ONE;
++    }
++}
++
++static D3D11_BLEND gpu_blend_alpha(D3D11_BLEND b)
++{
++    switch (b) {                     /* colour factors are not allowed for alpha */
++    case D3D11_BLEND_SRC_COLOR:      return D3D11_BLEND_SRC_ALPHA;
++    case D3D11_BLEND_INV_SRC_COLOR:  return D3D11_BLEND_INV_SRC_ALPHA;
++    case D3D11_BLEND_DEST_COLOR:     return D3D11_BLEND_DEST_ALPHA;
++    case D3D11_BLEND_INV_DEST_COLOR: return D3D11_BLEND_INV_DEST_ALPHA;
++    default: return b;
++    }
++}
++
++static ID3D11BlendState *gpu_blend_state(void)
++{
++    static ID3D11BlendState *cache[64];
++    static uint64_t keys[64];
++    static int used;
++    uint32_t cm = g_color_mask, mask = 0;
++    uint64_t key;
++    int i;
++    D3D11_BLEND_DESC bd;
++    if (cm & 0x00010000u) mask |= D3D11_COLOR_WRITE_ENABLE_RED;
++    if (cm & 0x00000100u) mask |= D3D11_COLOR_WRITE_ENABLE_GREEN;
++    if (cm & 0x00000001u) mask |= D3D11_COLOR_WRITE_ENABLE_BLUE;
++    if (cm & 0x01000000u) mask |= D3D11_COLOR_WRITE_ENABLE_ALPHA;
++    key = ((uint64_t)(s_gpu.blend ? 1 : 0)) | ((uint64_t)(s_gpu.blend_sf & 0xFFFF) << 1)
++        | ((uint64_t)(s_gpu.blend_df & 0xFFFF) << 17) | ((uint64_t)(s_gpu.blend_eq & 0xFFFF) << 33)
++        | ((uint64_t)mask << 49);
++    for (i = 0; i < used; i++)
++        if (keys[i] == key)
++            return cache[i];
++    memset(&bd, 0, sizeof bd);
++    bd.RenderTarget[0].BlendEnable = s_gpu.blend ? TRUE : FALSE;
++    bd.RenderTarget[0].SrcBlend = gpu_blend_factor(s_gpu.blend_sf);
++    bd.RenderTarget[0].DestBlend = gpu_blend_factor(s_gpu.blend_df);
++    bd.RenderTarget[0].SrcBlendAlpha = gpu_blend_alpha(bd.RenderTarget[0].SrcBlend);
++    bd.RenderTarget[0].DestBlendAlpha = gpu_blend_alpha(bd.RenderTarget[0].DestBlend);
++    switch (s_gpu.blend_eq) {
++    case 0x800A: bd.RenderTarget[0].BlendOp = D3D11_BLEND_OP_SUBTRACT; break;
++    case 0x800B: bd.RenderTarget[0].BlendOp = D3D11_BLEND_OP_REV_SUBTRACT; break;
++    case 0x8007: bd.RenderTarget[0].BlendOp = D3D11_BLEND_OP_MIN; break;
++    case 0x8008: bd.RenderTarget[0].BlendOp = D3D11_BLEND_OP_MAX; break;
++    default:     bd.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD; break;
++    }
++    bd.RenderTarget[0].BlendOpAlpha = bd.RenderTarget[0].BlendOp;
++    bd.RenderTarget[0].RenderTargetWriteMask = (UINT8)mask;
++    if (used == 64) {
++        ID3D11BlendState_Release(cache[0]);
++        used = 0;
++    }
++    ID3D11Device_CreateBlendState(s_gpu11.dev, &bd, &cache[used]);
++    keys[used] = key;
++    return cache[used++];
++}
++
++static D3D11_COMPARISON_FUNC gpu_cmp(uint32_t f)
++{
++    switch (f) {
++    case 0x0200: return D3D11_COMPARISON_NEVER;
++    case 0x0201: return D3D11_COMPARISON_LESS;
++    case 0x0202: return D3D11_COMPARISON_EQUAL;
++    case 0x0203: return D3D11_COMPARISON_LESS_EQUAL;
++    case 0x0204: return D3D11_COMPARISON_GREATER;
++    case 0x0205: return D3D11_COMPARISON_NOT_EQUAL;
++    case 0x0206: return D3D11_COMPARISON_GREATER_EQUAL;
++    default:     return D3D11_COMPARISON_ALWAYS;
++    }
++}
++
++static D3D11_STENCIL_OP gpu_sop(uint32_t op)
++{
++    switch (op) {
++    case 0x0000: return D3D11_STENCIL_OP_ZERO;
++    case 0x1E01: return D3D11_STENCIL_OP_REPLACE;
++    case 0x1E02: return D3D11_STENCIL_OP_INCR_SAT;
++    case 0x1E03: return D3D11_STENCIL_OP_DECR_SAT;
++    case 0x150A: return D3D11_STENCIL_OP_INVERT;
++    case 0x8507: return D3D11_STENCIL_OP_INCR;
++    case 0x8508: return D3D11_STENCIL_OP_DECR;
++    default:     return D3D11_STENCIL_OP_KEEP;
++    }
++}
++
++static ID3D11DepthStencilState *gpu_depth_state(void)
++{
++    static ID3D11DepthStencilState *cache[64];
++    static uint64_t keys[64];
++    static int used;
++    uint64_t key;
++    int i;
++    D3D11_DEPTH_STENCIL_DESC dd;
++    key = (uint64_t)(s_vp.depth_test ? 1 : 0) | ((uint64_t)(s_vp.depth_mask ? 1 : 0) << 1)
++        | ((uint64_t)(s_vp.depth_func & 0xF) << 2) | ((uint64_t)(s_vp.stencil_test ? 1 : 0) << 6)
++        | ((uint64_t)(s_vp.stencil_func & 0xF) << 7) | ((uint64_t)(s_vp.stencil_fmask & 0xFF) << 11)
++        | ((uint64_t)(s_vp.stencil_wmask & 0xFF) << 19) | ((uint64_t)gpu_sop(s_vp.op_fail) << 27)
++        | ((uint64_t)gpu_sop(s_vp.op_zfail) << 31) | ((uint64_t)gpu_sop(s_vp.op_zpass) << 35);
++    for (i = 0; i < used; i++)
++        if (keys[i] == key)
++            return cache[i];
++    memset(&dd, 0, sizeof dd);
++    dd.DepthEnable = s_vp.depth_test ? TRUE : FALSE;
++    dd.DepthWriteMask = (s_vp.depth_test && s_vp.depth_mask) ? D3D11_DEPTH_WRITE_MASK_ALL : D3D11_DEPTH_WRITE_MASK_ZERO;
++    dd.DepthFunc = gpu_cmp(s_vp.depth_func);
++    dd.StencilEnable = s_vp.stencil_test ? TRUE : FALSE;
++    dd.StencilReadMask = (UINT8)s_vp.stencil_fmask;
++    dd.StencilWriteMask = (UINT8)s_vp.stencil_wmask;
++    dd.FrontFace.StencilFunc = gpu_cmp(s_vp.stencil_func);
++    dd.FrontFace.StencilFailOp = gpu_sop(s_vp.op_fail);
++    dd.FrontFace.StencilDepthFailOp = gpu_sop(s_vp.op_zfail);
++    dd.FrontFace.StencilPassOp = gpu_sop(s_vp.op_zpass);
++    dd.BackFace = dd.FrontFace;
++    if (used == 64) {
++        ID3D11DepthStencilState_Release(cache[0]);
++        used = 0;
++    }
++    ID3D11Device_CreateDepthStencilState(s_gpu11.dev, &dd, &cache[used]);
++    keys[used] = key;
++    return cache[used++];
++}
++
++static ID3D11DepthStencilState *gpu_no_depth(void)
++{
++    static ID3D11DepthStencilState *st;
++    if (!st) {
++        D3D11_DEPTH_STENCIL_DESC dd;
++        memset(&dd, 0, sizeof dd);
++        dd.DepthFunc = D3D11_COMPARISON_ALWAYS;
++        dd.FrontFace.StencilFunc = dd.BackFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
++        ID3D11Device_CreateDepthStencilState(s_gpu11.dev, &dd, &st);
++    }
++    return st;
++}
++
++/* ---- drawing ---------------------------------------------------------- */
++
++static void gpu_vertex(GpuVertex *o, const XfVert *x, uint32_t rw, uint32_t rh)
++{
++    /* oPos is in screen space, already divided by w; undo the divide so the
++     * GPU clips and interpolates perspective-correctly (as xemu does). */
++    float zmin = s_vp.clip_min, zmax = s_vp.clip_max > zmin ? s_vp.clip_max : 16777215.0f;
++    float nx = x->x / (float)rw * 2.0f - 1.0f;
++    float ny = 1.0f - x->y / (float)rh * 2.0f;
++    float nz = (x->z - zmin) / (zmax - zmin);
++    float w = x->w;
++    int k;
++    if (w > -5.192093e-39f && w < 5.192093e-39f) w = 5.192093e-39f;
++    if (nz < 0.0f) nz = 0.0f;
++    if (nz > 1.0f) nz = 1.0f;
++    o->pos[0] = nx * w; o->pos[1] = ny * w; o->pos[2] = nz * w; o->pos[3] = w;
++    memcpy(o->d0, x->col, sizeof o->d0);
++    memcpy(o->d1, x->spec, sizeof o->d1);
++    /* XfVert holds texture coordinates in texels; the GPU samples [0,1). */
++    o->t[0][0] = s_gpu.tex.width  ? x->uv[0] / (float)s_gpu.tex.width  : 0.0f;
++    o->t[0][1] = s_gpu.tex.height ? x->uv[1] / (float)s_gpu.tex.height : 0.0f;
++    for (k = 0; k < 3; k++) {
++        const Texture *st = &s_stage[k + 1];
++        o->t[k + 1][0] = st->width  ? x->uvn[k][0] / (float)st->width  : 0.0f;
++        o->t[k + 1][1] = st->height ? x->uvn[k][1] / (float)st->height : 0.0f;
++    }
++}
++
++/* A pre-transformed (fixed-function mode) vertex, read the way the software
++ * 2D path reads it: attribute 0 in pixels, no perspective, texel coordinates. */
++static const XfVert *gpu_vertex_2d(uint32_t index)
++{
++    static XfVert ring[3];
++    static unsigned next;
++    XfVert *x = &ring[next++ % 3];
++    float p[4], c[4];
++    memset(x, 0, sizeof *x);
++    x->ok = fetch_attr(&s_gpu.attr[0], index, p);
++    x->x = p[0]; x->y = p[1]; x->z = 0.0f; x->w = 1.0f;
++    if (fetch_attr(color_attr(), index, c))
++        memcpy(x->col, c, sizeof x->col);
++    else
++        x->col[0] = x->col[1] = x->col[2] = x->col[3] = 1.0f;
++    if (!fetch_texcoord(index, x->uv))
++        x->uv[0] = x->uv[1] = 0.0f;
++    return x;
++}
++
++/* Draw the triangles of the current batch: transformed by the vertex
++ * program, or (flat2d) pre-transformed screen-space vertices shaded like the
++ * software 2D path -- texture x diffuse, no combiners, depth or stencil.
++ * Returns 0 to fall back to the software rasteriser. */
++static int gpu_draw_batch(int flat2d)
++{
++    const uint16_t *ix = s_gpu.idx;
++    uint32_t n = s_gpu.idx_count, i, nv = 0, rw, rh;
++    int si, st;
++    GpuSurface *surf;
++    D3D11_MAPPED_SUBRESOURCE m;
++    GpuConsts c;
++    ID3D11ShaderResourceView *srv[4];
++    ID3D11SamplerState *smp[4];
++    const XfVert *(*get)(uint32_t);
++
++    if (!gpu_enabled() || !gpu_init())
++        return 0;
++    si = gpu_bind_surface();
++    if (si < 0)
++        return 0;
++    surf = &s_gpu11.surf[si];
++    rw = surf->w; rh = surf->h;
++
++#define GPU_TRI(a_, b_, c_) do { \
++        const XfVert *A_ = get(ix[a_]), *B_ = get(ix[b_]), *C_ = get(ix[c_]); \
++        if (A_->ok && B_->ok && C_->ok && nv + 3 <= GPU_MAX_VERTS) { \
++            gpu_vertex(&s_gpu11.verts[nv++], A_, rw, rh); \
++            gpu_vertex(&s_gpu11.verts[nv++], B_, rw, rh); \
++            gpu_vertex(&s_gpu11.verts[nv++], C_, rw, rh); \
++        } else s_vp.rej_bad++; } while (0)
++    if (flat2d) {
++        get = gpu_vertex_2d;
++        if (n < 3)
++            return 1;
++        if (!batch_is_screen_space()) {
++            s_gpu.batches_untransformed++;
++            return 1;
++        }
++    } else {
++        get = vp_vertex;
++        vp_begin_batch();
++        s_vp.batches++;
++    }
++    switch (s_gpu.prim) {
++    case NV_PRIM_TRIANGLES:
++        for (i = 0; i + 2 < n; i += 3) GPU_TRI(i, i + 1, i + 2);
++        break;
++    case NV_PRIM_TRIANGLE_STRIP:
++        for (i = 0; i + 2 < n; i++) {
++            if (i & 1) GPU_TRI(i + 1, i, i + 2); else GPU_TRI(i, i + 1, i + 2);
++        }
++        break;
++    case NV_PRIM_TRIANGLE_FAN:
++    case NV_PRIM_POLYGON:
++        for (i = 1; i + 1 < n; i++) GPU_TRI(0, i, i + 1);
++        break;
++    case NV_PRIM_QUADS:
++        for (i = 0; i + 3 < n; i += 4) { GPU_TRI(i, i + 1, i + 2); GPU_TRI(i, i + 2, i + 3); }
++        break;
++    case NV_PRIM_QUAD_STRIP:
++        for (i = 0; i + 3 < n; i += 2) { GPU_TRI(i, i + 1, i + 3); GPU_TRI(i, i + 3, i + 2); }
++        break;
++    default:
++        break;
++    }
++#undef GPU_TRI
++    if (!nv)
++        return 1;
++
++    /* RECOMP_GPU_TRACE=1: every draw of one frame in 300, with where its
++     * first vertex lands and the state that decides whether it shows. */
++    if (env_cached("RECOMP_GPU_TRACE") && (s_gpu11.frame % 300) == 0) {
++        const GpuVertex *v = &s_gpu11.verts[0];
++        float mnx = 1e30f, mxx = -1e30f, mny = 1e30f, mxy = -1e30f;
++        for (i = 0; i < nv; i++) {
++            float iw = s_gpu11.verts[i].pos[3];
++            float px = s_gpu11.verts[i].pos[0] / iw, py = s_gpu11.verts[i].pos[1] / iw;
++            if (iw <= 0) continue;
++            if (px < mnx) mnx = px; if (px > mxx) mxx = px;
++            if (py < mny) mny = py; if (py > mxy) mxy = py;
++        }
++        fprintf(stderr, "  [GPUTRACE] f%u %s surf=%08X %ux%u tris=%u ndc x[%.2f,%.2f] y[%.2f,%.2f] "
++                "v0 pos=(%.3g %.3g %.3g %.3g) d0=(%.2f %.2f %.2f %.2f) z=%u/%04X ztest=%u zmask=%u "
++                "clip=[%g,%g] zclear=%08X sten=%u/%04X blend=%u %04X/%04X cmask=%08X atest=%u/%04X/%u "
++                "comb=%u tex0=%08X fmt=%02X %ux%u\n",
++                s_gpu11.frame, flat2d ? "2D" : "VP", surf->guest, rw, rh, nv / 3, mnx, mxx, mny, mxy,
++                v->pos[0], v->pos[1], v->pos[2], v->pos[3], v->d0[0], v->d0[1], v->d0[2], v->d0[3],
++                s_vp.depth_test, s_vp.depth_func, s_vp.depth_test, s_vp.depth_mask,
++                s_vp.clip_min, s_vp.clip_max, s_vp.zclear, s_vp.stencil_test, s_vp.stencil_func,
++                s_gpu.blend, s_gpu.blend_sf, s_gpu.blend_df, g_color_mask,
++                s_gpu.alpha_test, s_gpu.alpha_func, s_gpu.alpha_ref, comb_active(),
++                s_gpu.tex.valid ? s_gpu.tex.offset : 0, s_gpu.tex.color, s_gpu.tex.width, s_gpu.tex.height);
++    }
++
++    /* Constants. */
++    memset(&c, 0, sizeof c);
++    for (i = 0; i < 8; i++) {
++        c.stage[i][0] = s_comb.color_icw[i]; c.stage[i][1] = s_comb.color_ocw[i];
++        c.stage[i][2] = s_comb.alpha_icw[i]; c.stage[i][3] = s_comb.alpha_ocw[i];
++        comb_unpack(s_comb.factor0[i], c.f0[i]);
++        comb_unpack(s_comb.factor1[i], c.f1[i]);
++    }
++    c.misc[0] = s_comb.control; c.misc[1] = s_comb.stage_prog;
++    c.misc[2] = s_comb.final0; c.misc[3] = s_comb.final1;
++    comb_unpack(s_comb.specfog[0], c.specfog0);
++    comb_unpack(s_comb.specfog[1], c.specfog1);
++    c.alpha[0] = s_gpu.alpha_test; c.alpha[1] = s_gpu.alpha_func;
++    c.alpha[2] = s_gpu.alpha_ref; c.alpha[3] = !flat2d && comb_active() ? 1u : 0u;
++    for (st = 0; st < 4; st++) {
++        const Texture *t = st == 0 ? &s_gpu.tex : &s_stage[st];
++        int want = flat2d ? st == 0 && t->valid
++                 : t->valid && t->enabled && (st == 0 || ((s_comb.stage_prog >> (st * 5)) & 0x1F));
++        srv[st] = want ? gpu_texture(st) : NULL;
++        c.texon[st] = srv[st] ? 1u : 0u;
++        if (!srv[st]) srv[st] = s_gpu11.white_srv;
++        smp[st] = gpu_sampler(st);
++    }
++    if (SUCCEEDED(ID3D11DeviceContext_Map(s_gpu11.ctx, (ID3D11Resource *)s_gpu11.cb, 0, D3D11_MAP_WRITE_DISCARD, 0, &m))) {
++        memcpy(m.pData, &c, sizeof c);
++        ID3D11DeviceContext_Unmap(s_gpu11.ctx, (ID3D11Resource *)s_gpu11.cb, 0);
++    }
++    if (SUCCEEDED(ID3D11DeviceContext_Map(s_gpu11.ctx, (ID3D11Resource *)s_gpu11.vb, 0, D3D11_MAP_WRITE_DISCARD, 0, &m))) {
++        memcpy(m.pData, s_gpu11.verts, sizeof(GpuVertex) * nv);
++        ID3D11DeviceContext_Unmap(s_gpu11.ctx, (ID3D11Resource *)s_gpu11.vb, 0);
++    }
++
++    /* Pipeline. */
++    {
++        UINT stride = sizeof(GpuVertex), off = 0;
++        D3D11_VIEWPORT vp = { 0, 0, (float)rw, (float)rh, 0.0f, 1.0f };
++        D3D11_RECT sc;
++        float bf[4];
++        comb_unpack(s_gpu.blend_color, bf);
++        sc.left = (LONG)s_gpu.clip_x; sc.top = (LONG)s_gpu.clip_y;
++        sc.right = (LONG)(s_gpu.clip_x + s_gpu.clip_w); sc.bottom = (LONG)(s_gpu.clip_y + s_gpu.clip_h);
++        ID3D11DeviceContext_IASetInputLayout(s_gpu11.ctx, s_gpu11.layout);
++        ID3D11DeviceContext_IASetPrimitiveTopology(s_gpu11.ctx, D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
++        ID3D11DeviceContext_IASetVertexBuffers(s_gpu11.ctx, 0, 1, &s_gpu11.vb, &stride, &off);
++        ID3D11DeviceContext_VSSetShader(s_gpu11.ctx, s_gpu11.vs, NULL, 0);
++        ID3D11DeviceContext_PSSetShader(s_gpu11.ctx, s_gpu11.ps, NULL, 0);
++        ID3D11DeviceContext_PSSetConstantBuffers(s_gpu11.ctx, 0, 1, &s_gpu11.cb);
++        ID3D11DeviceContext_PSSetShaderResources(s_gpu11.ctx, 0, 4, srv);
++        ID3D11DeviceContext_PSSetSamplers(s_gpu11.ctx, 0, 4, smp);
++        ID3D11DeviceContext_RSSetState(s_gpu11.ctx, s_gpu11.rs);
++        ID3D11DeviceContext_RSSetViewports(s_gpu11.ctx, 1, &vp);
++        ID3D11DeviceContext_RSSetScissorRects(s_gpu11.ctx, 1, &sc);
++        ID3D11DeviceContext_OMSetRenderTargets(s_gpu11.ctx, 1, &surf->rtv, surf->dsv);
++        ID3D11DeviceContext_OMSetBlendState(s_gpu11.ctx, gpu_blend_state(), bf, 0xFFFFFFFFu);
++        ID3D11DeviceContext_OMSetDepthStencilState(s_gpu11.ctx, flat2d ? gpu_no_depth() : gpu_depth_state(),
++                                                   s_vp.stencil_ref);
++        ID3D11DeviceContext_Draw(s_gpu11.ctx, nv, 0);
++    }
++    surf->dirty = 1;
++    s_gpu11.draws++;
++    s_gpu11.tris += nv / 3;
++    s_vp.drawn += nv / 3;
++    s_gpu.tris_drawn += nv / 3;
++    s_gpu.drawn_offset = s_gpu.color_offset;
++    return 1;
++}
++
++/* CLEAR_SURFACE on the GPU. Returns 0 to fall back to software. */
++static int gpu_clear(uint32_t param)
++{
++    int si;
++    GpuSurface *s;
++    if (!gpu_enabled() || !gpu_init())
++        return 0;
++    si = gpu_bind_surface();
++    if (si < 0)
++        return 0;
++    s = &s_gpu11.surf[si];
++    if (env_cached("RECOMP_GPU_TRACE") && (s_gpu11.frame % 300) == 0)
++        fprintf(stderr, "  [GPUTRACE] f%u clear %02X surf=%08X color=%08X zclear=%08X rect=%08X/%08X\n",
++                s_gpu11.frame, param, s->guest, s_gpu.clear_color, s_vp.zclear, g_clear_rx, g_clear_ry);
++    if (param & 0xF0u) {
++        float col[4];
++        uint32_t x0 = g_clear_rx & 0xFFF, x1 = ((g_clear_rx >> 16) & 0xFFF) + 1;
++        uint32_t y0 = g_clear_ry & 0xFFF, y1 = ((g_clear_ry >> 16) & 0xFFF) + 1;
++        comb_unpack(s_gpu.clear_color, col);
++        if ((param & 0xF0u) == 0xF0u && x0 == 0 && y0 == 0 && x1 >= s->w && y1 >= s->h) {
++            ID3D11DeviceContext_ClearRenderTargetView(s_gpu11.ctx, s->rtv, col);
++        } else {
++            /* Partial rectangle or channel subset (ClearView needs D3D11.1):
++             * clear the pixels in guest RAM and send them back up. */
++            gpu_readback(s);
++            clear_surface(param);
++            ID3D11DeviceContext_UpdateSubresource(s_gpu11.ctx, (ID3D11Resource *)s->tex, 0, NULL,
++                (const uint8_t *)xbox_GetMemoryOffset() + s->guest, s->pitch, 0);
++        }
++    }
++    if (param & 3u) {
++        UINT flags = ((param & 1u) ? D3D11_CLEAR_DEPTH : 0) | ((param & 2u) ? D3D11_CLEAR_STENCIL : 0);
++        float zmin = s_vp.clip_min, zmax = s_vp.clip_max > zmin ? s_vp.clip_max : 16777215.0f;
++        float z = ((float)(s_vp.zclear >> 8) - zmin) / (zmax - zmin);
++        if (z < 0.0f) z = 0.0f;
++        if (z > 1.0f) z = 1.0f;
++        ID3D11DeviceContext_ClearDepthStencilView(s_gpu11.ctx, s->dsv, flags, z, (UINT8)(s_vp.zclear & 0xFF));
++    }
++    s->dirty = 1;
++    return 1;
++}
++
++/* A frame is finished: bring the surface back to guest RAM for the window. */
++static void gpu_flip(void)
++{
++    int i;
++    if (!s_gpu11.ok)
++        return;
++    for (i = 0; i < GPU_MAX_SURFACES; i++)
++        if (s_gpu11.surf[i].tex && s_gpu11.surf[i].dirty)
++            gpu_readback(&s_gpu11.surf[i]);
++    if (env_cached("RECOMP_GPU_TRACE") && (s_gpu11.frame % 300) == 0)
++        fprintf(stderr, "  [GPUTRACE] f%u flip shows %08X\n", s_gpu11.frame, dma_resolve(s_gpu.color_offset));
++    s_gpu11.frame++;
++    if ((s_gpu11.frame % 600) == 0)
++        fprintf(stderr, "  [GPU11] frames %u draws %u tris %u texture uploads %u readbacks %u\n",
++                s_gpu11.frame, s_gpu11.draws, s_gpu11.tris, s_gpu11.tex_uploads, s_gpu11.readbacks);
++}
 diff --git a/src/kernel/nv2a_pb_exec.c b/src/kernel/nv2a_pb_exec.c
-index b3dcbf7..612c191 100644
+index b3dcbf7..4d25c7b 100644
 --- a/src/kernel/nv2a_pb_exec.c
 +++ b/src/kernel/nv2a_pb_exec.c
 @@ -24,8 +24,10 @@
@@ -2466,7 +3439,7 @@ index b3dcbf7..612c191 100644
      default:
          break;                             /* points and lines: not yet */
      }
-@@ -1242,6 +1496,1116 @@ static void raster_batch(void)
+@@ -1242,6 +1496,1126 @@ static void raster_batch(void)
   * question is what space attribute 0 arrives in: a title running a vertex
   * program hands over object-space positions that mean nothing without running
   * it, while pre-transformed screen-space coordinates can be drawn directly. */
@@ -2824,6 +3797,7 @@ index b3dcbf7..612c191 100644
 +    uint32_t op_fail, op_zfail, op_zpass;
 +    uint32_t color_mask;                  /* NV097_SET_COLOR_MASK */
 +    uint32_t clear_rx, clear_ry;          /* SET_CLEAR_RECT_HORIZONTAL/VERTICAL */
++    float    clip_min, clip_max;          /* SET_CLIP_MIN/MAX: depth range oPos.z is in */
 +    uint32_t batches, verts;              /* counters for the report */
 +    uint32_t rej_bad, rej_area, rej_cull, rej_clip, drawn;
 +} s_vp = { .depth_func = 0x0201, .depth_mask = 1, .cull_face = 0x0405,
@@ -2884,6 +3858,8 @@ index b3dcbf7..612c191 100644
 +    case 0x0370: s_vp.op_fail       = param; return 1;
 +    case 0x0374: s_vp.op_zfail      = param; return 1;
 +    case 0x0378: s_vp.op_zpass      = param; return 1;
++    case 0x0394: s_vp.clip_min = f; return 1;   /* SET_CLIP_MIN */
++    case 0x0398: s_vp.clip_max = f; return 1;   /* SET_CLIP_MAX */
 +    case 0x1D98: s_vp.clear_rx = g_clear_rx = param; return 1;   /* SET_CLEAR_RECT_HORIZONTAL */
 +    case 0x1D9C: s_vp.clear_ry = g_clear_ry = param; return 1;   /* SET_CLEAR_RECT_VERTICAL */
 +    default: return 0;
@@ -3535,12 +4511,19 @@ index b3dcbf7..612c191 100644
 +        raster_triangle_xf(&out[0], &out[i], &out[i + 1]);
 +}
 +
++#include "nv2a_gpu_d3d11.inc.c"
++
 +/* Draw the current batch through the vertex program. */
 +static void raster_batch_xf(void)
 +{
 +    uint32_t i, n = s_gpu.idx_count;
 +    const uint16_t *ix = s_gpu.idx;
 +
++    if (gpu_enabled()) {
++        if (gpu_draw_batch(0))
++            return;
++        gpu_cpu_access();
++    }
 +    vp_begin_batch();
 +    s_vp.batches++;
 +    if (s_gpu.tex.valid)
@@ -3583,7 +4566,7 @@ index b3dcbf7..612c191 100644
  static void draw_primitive(void)
  {
      float v[4];
-@@ -1270,7 +2634,24 @@ static void draw_primitive(void)
+@@ -1270,7 +2644,27 @@ static void draw_primitive(void)
          }
      }
  
@@ -3598,8 +4581,11 @@ index b3dcbf7..612c191 100644
 +    __try {
 +        if (vp_active())
 +            raster_batch_xf();
-+        else
++        else if (!(gpu_enabled() && gpu_draw_batch(1))) {
++            if (gpu_enabled())
++                gpu_cpu_access();
 +            raster_batch();
++        }
 +    } __except (EXCEPTION_EXECUTE_HANDLER) {
 +        static unsigned faults;
 +        if (faults++ < 8)
@@ -3609,7 +4595,7 @@ index b3dcbf7..612c191 100644
  
      if (getenv("RECOMP_PB_EXEC_VERBOSE")) {
          static int shown;
-@@ -1390,6 +2771,12 @@ static void draw_inline_array(void)
+@@ -1390,6 +2784,12 @@ static void draw_inline_array(void)
          case 0:  bytes = 4;                        break;  /* D3DCOLOR   */
          case 2:  bytes = 4 * s_gpu.attr[a].size;   break;  /* float      */
          case 4:  bytes = s_gpu.attr[a].size;       break;  /* ubyte norm */
@@ -3622,7 +4608,7 @@ index b3dcbf7..612c191 100644
          default: bytes = 4 * s_gpu.attr[a].size;   break;
          }
          s_gpu.attr[a].offset = off;
-@@ -1570,7 +2957,22 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1570,7 +2970,22 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
          note_unhandled(method, param);
          return;
      }
@@ -3645,7 +4631,7 @@ index b3dcbf7..612c191 100644
      case NV097_SET_SURFACE_CLIP_HORIZONTAL:
          s_gpu.clip_x = param & 0xFFFF;
          s_gpu.clip_w = (param >> 16) & 0xFFFF;
-@@ -1586,6 +2988,13 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1586,16 +3001,32 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
          s_gpu.pitch = param & 0xFFFF;      /* colour pitch; zeta is the top half */
          break;
      case NV097_SET_SURFACE_COLOR_OFFSET:
@@ -3659,9 +4645,13 @@ index b3dcbf7..612c191 100644
          s_gpu.color_offset = param;
          break;
      case NV097_SET_COLOR_CLEAR_VALUE:
-@@ -1593,9 +3002,14 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+         s_gpu.clear_color = param;
          break;
      case NV097_CLEAR_SURFACE:
++        if (gpu_enabled() && gpu_clear(param))
++            break;
++        if (gpu_enabled())
++            gpu_cpu_access();
          clear_surface(param);
 +        if (param & 3u)                    /* NV097_CLEAR_SURFACE_Z / _STENCIL */
 +            zbuf_clear_bits(param);
@@ -3674,7 +4664,7 @@ index b3dcbf7..612c191 100644
          if (param) {
              s_gpu.prim = param;
              s_gpu.idx_count = 0;
-@@ -1620,8 +3034,15 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1620,8 +3051,15 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
      case NV097_INLINE_ARRAY:
          /* Vertex data, not a pointer to it. Buffered rather than decoded here
           * because the format is only fully known at END. */
@@ -3691,7 +4681,7 @@ index b3dcbf7..612c191 100644
          break;
  
      case NV097_DRAW_ARRAYS: {
-@@ -1644,6 +3065,13 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1644,6 +3082,13 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
          break;
      }
  
@@ -3705,7 +4695,7 @@ index b3dcbf7..612c191 100644
      case NV097_ARRAY_ELEMENT16:
          /* Two 16-bit indices per parameter word. */
          if (s_gpu.prim && s_gpu.idx_count + 2 <= NV_MAX_INDICES) {
-@@ -1659,6 +3087,23 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1659,6 +3104,23 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
          record_tex_reg(method, param);
          break;
  
@@ -3729,17 +4719,19 @@ index b3dcbf7..612c191 100644
      case NV097_SET_FLIP_READ:
          s_gpu.flip_read = param;
          return;
-@@ -1682,6 +3127,9 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1682,6 +3144,11 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
          /* The stall ends when the buffer being read is the one just finished.
           * There is no scanout here to wait for, so that is now. */
          s_gpu.flip_read = s_gpu.flip_write;
 +        /* The surface drawn into up to here is a finished frame: show it. */
++        if (gpu_enabled())
++            gpu_flip();
 +        xbox_FramebufferWindowSet(dma_resolve(s_gpu.color_offset), s_gpu.pitch);
 +        xbox_FramebufferWindowSize(s_gpu.clip_x + s_gpu.clip_w, s_gpu.clip_y + s_gpu.clip_h);
          /* And this is a completed swap, which is what a title's own swap
           * counter counts -- see xbox_Nv2aFrameCounterFlip. */
          xbox_Nv2aFrameCounterFlip();
-@@ -1696,6 +3144,11 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1696,6 +3163,11 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
          return;
  
      case NV097_SET_TEXTURE_FORMAT:
@@ -3751,7 +4743,7 @@ index b3dcbf7..612c191 100644
          s_gpu.tex.color = (param >> 8) & 0xFF;
          /* A swizzled texture carries its own dimensions here, as log2 in
           * BASE_SIZE_U/V (nv2a_regs.h: 0x00F00000 / 0x0F000000). It has to:
-@@ -1729,6 +3182,9 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1729,6 +3201,9 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
      case NV097_SET_TEXTURE_IMAGE_RECT:
          s_gpu.tex.width  = param >> 16;
          s_gpu.tex.height = param & 0xFFFF;
@@ -3761,7 +4753,7 @@ index b3dcbf7..612c191 100644
          record_tex_reg(method, param);
          break;
  
-@@ -1948,9 +3404,12 @@ void nv2a_pb_exec_report(void)
+@@ -1948,9 +3423,12 @@ void nv2a_pb_exec_report(void)
              dma_resolve(s_gpu.drawn_offset), s_gpu.color_offset,
              dma_resolve(s_gpu.color_offset));
      fprintf(stderr, "[GPU] rasterised %u triangles; %u batches skipped as not"
