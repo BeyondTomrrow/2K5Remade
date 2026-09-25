@@ -2196,3 +2196,9 @@ Reached natively (user-verified): intro movies, legal/SEGA screens, title, main 
 - `RECOMP_GPU=1` is now the default (double-clicking the exe uses the GPU); `RECOMP_GPU=0` for software.
 - User reports (open): Franchise returns to the configure screen after confirming; Team Rosters player list empty; Create Player 3D model missing. One scripted run crashed in `sub_0048E89F` after garbage task-pump icalls from 0x38CFD (not reproduced).
 - **Audio is the match-loading blocker.** Speech items only advance from the APU voice position. Fixed the APU emulator reading physical addresses from low memory instead of the 0x80000000 window (`apu_phys()` in apu_shim.h); speech position still 0 afterwards -- next check VOICE_ON methods / VP frame gating / CBO write-back. Added `[APU] method` trace. Full chain in docs/HANDOFF-CHATGPT.md.
+
+## 2026-09-24 (late): host input and ultrawide presentation build check
+
+- Added an optional mouse-to-Xbox-controller adapter in `src/nfl2k5_input_hle.c`: left/right/middle mouse buttons map to A/B/START; holding Shift maps cursor displacement from the framebuffer-window centre to the left stick. It preserves the title's existing controller-only UI model, so a click confirms the focused control rather than guessing menu hitboxes. `NFL2K5_MOUSE=0` disables it.
+- Added `RECOMP_ULTRAWIDE=1` in the host framebuffer presenter. It opens a borderless display-sized window and scales the game's native surface with correct aspect ratio and centred black bars. It deliberately does not change guest projection, game assets, HUD layout, or field of view.
+- `tools\build.ps1 -Game` completed successfully and linked `build\Release\NFL2K5.exe`; a short launch reached Xbox memory setup, XAudio2/APU initialization, Direct3D 11 initialization, and the framebuffer window without a new startup crash. A manual visible-menu check remains needed for mouse interaction and host ultrawide presentation.

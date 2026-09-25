@@ -15,6 +15,12 @@
  * (xbox_InputGetState) plus the keyboard while the game window has focus,
  *   Enter START  Backspace BACK  arrows D-pad  Z/Space A  X B  C X  V Y
  *   Q/E triggers  W/A/S/D left stick
+ * Mouse input is also controller input while the game window has focus:
+ *   left click=A, right click=B, middle click=START; Shift + movement drives
+ *   the left stick relative to the client-area centre. Set NFL2K5_MOUSE=0 to
+ *   turn that mapping off. Xbox menus do not expose pointer hit-testing, so
+ *   a click confirms the currently focused control rather than selecting a
+ *   screen coordinate directly.
  * and NFL2K5_AUTO_PRESS="start@20,a@35" holds buttons for 300 ms at those
  * seconds after the first poll, for unattended runs (the bring-up harness runs
  * the window hidden). Other device types (memory units, headsets) still go to
@@ -102,6 +108,54 @@ static int window_focused(void)
     return pid == GetCurrentProcessId();
 }
 
+/* The title receives only an XInput-style gamepad, never host mouse events.
+ * Translate mouse movement to its left stick at this boundary rather than
+ * trying to guess the layout of each individual Xbox UI screen. Stick motion
+ * is held behind Shift so a parked cursor cannot make menus drift. */
+static int mouse_hle_on(void)
+{
+    static int on = -1;
+    if (on < 0) {
+        const char *v = getenv("NFL2K5_MOUSE");
+        on = !v || (*v && *v != '0');
+    }
+    return on;
+}
+
+static void host_mouse_gamepad(XBOX_GAMEPAD *g)
+{
+    HWND hwnd = GetForegroundWindow();
+    POINT pt;
+    RECT rc;
+    LONG cx, cy, dx, dy;
+
+    if (!mouse_hle_on() || !hwnd || !window_focused())
+        return;
+
+    if (GetAsyncKeyState(VK_LBUTTON) & 0x8000)
+        g->bAnalogButtons[0] = 255;                 /* A / confirm */
+    if (GetAsyncKeyState(VK_RBUTTON) & 0x8000)
+        g->bAnalogButtons[1] = 255;                 /* B / back */
+    if (GetAsyncKeyState(VK_MBUTTON) & 0x8000)
+        g->wButtons |= 0x10;                         /* START */
+
+    if (!(GetAsyncKeyState(VK_SHIFT) & 0x8000)
+            || !GetCursorPos(&pt) || !ScreenToClient(hwnd, &pt)
+            || !GetClientRect(hwnd, &rc))
+        return;
+    cx = (rc.right - rc.left) / 2;
+    cy = (rc.bottom - rc.top) / 2;
+    if (cx <= 0 || cy <= 0)
+        return;
+    dx = pt.x - cx;
+    dy = cy - pt.y;                                  /* Xbox Y is up */
+    /* Keep the centre 15% quiet, then scale the remaining range to a stick. */
+    if (labs(dx) > cx * 15 / 100)
+        g->sThumbLX = (SHORT)((dx * 32767L) / cx);
+    if (labs(dy) > cy * 15 / 100)
+        g->sThumbLY = (SHORT)((dy * 32767L) / cy);
+}
+
 static void host_gamepad(XBOX_GAMEPAD *g)
 {
     XBOX_INPUT_STATE pad;
@@ -127,6 +181,7 @@ static void host_gamepad(XBOX_GAMEPAD *g)
         if (KEY('W')) g->sThumbLY = 32767;
         if (KEY('S')) g->sThumbLY = -32767;
 #undef KEY
+        host_mouse_gamepad(g);
     }
     g->wButtons |= auto_press(g->bAnalogButtons);
 }
