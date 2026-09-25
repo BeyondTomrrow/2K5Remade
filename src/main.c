@@ -412,6 +412,7 @@ static void exec_watch_add(uint32_t guest_va, const char *name)
  * PROJECT_STATUS.md / the grep for RECOMP_ABI_CALL(0x00028F70u. */
 volatile long nfl2k5_28f70_site_hits[17];
 static void nfl2k5_peek_fsms(void);
+static void nfl2k5_peek_icall_hist(void);
 static const uint32_t nfl2k5_28f70_site_retaddrs[17] = {
     0x000745A0u, 0x0007481Bu, 0x000F504Bu, 0x000F5D7Cu, 0x000F5D9Du,
     0x000F5DBCu, 0x000F5F7Bu, 0x0011B27Bu, 0x0012DF5Du, 0x0014E2BBu,
@@ -591,6 +592,7 @@ void nfl2k5_execwatch_print(void)
                 NFL2K5_PEEK32(0xA84B18u + 8u), NFL2K5_PEEK32(0xA84B18u + 16u),
                 NFL2K5_PEEK32(0xA84B18u + 24u), NFL2K5_PEEK32(0xA84B18u + 32u));
         nfl2k5_peek_fsms();
+        nfl2k5_peek_icall_hist();
         fprintf(stderr, "  [CHUNKREG]");
         {
             uint32_t n = NFL2K5_PEEK32(0xB0957Cu);
@@ -712,6 +714,63 @@ void recomp_flags_fallback_hit(uint32_t address)
             return;
         }
     }
+}
+
+/* RECOMP_ICALL_HIST=1: how often each indirect-call target ran in the last
+ * 30 s -- C++ virtual calls, so the handlers a scene runs every frame show
+ * up by name (address) even when the stack samples land in rendering.
+ * Printed by nfl2k5_peek_icall_hist from the periodic peek. */
+#define ICALL_HIST_SIZE 8192
+static volatile LONG g_ih_va[ICALL_HIST_SIZE], g_ih_n[ICALL_HIST_SIZE];
+static int g_ih_on = -1;
+void recomp_icall_hist(uint32_t va)
+{
+    uint32_t h, k;
+    if (g_ih_on < 0)
+        g_ih_on = getenv("RECOMP_ICALL_HIST") != NULL;
+    if (!g_ih_on)
+        return;
+    h = (va * 2654435761u) >> 19;
+    for (k = 0; k < 32; k++) {
+        uint32_t slot = (h + k) & (ICALL_HIST_SIZE - 1);
+        LONG cur = g_ih_va[slot];
+        if (cur == (LONG)va || (cur == 0 && InterlockedCompareExchange(&g_ih_va[slot], (LONG)va, 0) == 0)) {
+            InterlockedIncrement(&g_ih_n[slot]);
+            return;
+        }
+        if (g_ih_va[slot] == (LONG)va) {
+            InterlockedIncrement(&g_ih_n[slot]);
+            return;
+        }
+    }
+}
+
+static void nfl2k5_peek_icall_hist(void)
+{
+    static DWORD last;
+    DWORD now = GetTickCount();
+    uint32_t top_va[40] = {0};
+    LONG top_n[40] = {0};
+    int i, j;
+    if (g_ih_on <= 0 || now - last < 30000)
+        return;
+    last = now;
+    for (i = 0; i < ICALL_HIST_SIZE; i++) {
+        LONG n = InterlockedExchange(&g_ih_n[i], 0);
+        if (!n) continue;
+        for (j = 0; j < 40; j++) {
+            if (n > top_n[j]) {
+                memmove(&top_n[j + 1], &top_n[j], sizeof(LONG) * (39 - j));
+                memmove(&top_va[j + 1], &top_va[j], sizeof(uint32_t) * (39 - j));
+                top_n[j] = n; top_va[j] = (uint32_t)g_ih_va[i];
+                break;
+            }
+        }
+    }
+    fprintf(stderr, "  [ICALLHIST] last 30 s:");
+    for (j = 0; j < 40 && top_n[j]; j++)
+        fprintf(stderr, " %08X:%ld", top_va[j], top_n[j]);
+    fprintf(stderr, "\n");
 }
 
 /* An instruction the lifter left unimplemented ran; it was skipped, which is
@@ -1882,6 +1941,112 @@ static DWORD WINAPI sample_native_startup(LPVOID thread)
     return 0;
 }
 
+/* RECOMP_PROFILE=<seconds>: a sampling profiler. After RECOMP_PROFILE_DELAY
+ * seconds (default 60) every thread of the process is sampled about once a
+ * millisecond for <seconds>, and the functions they were in are printed per
+ * thread, busiest first ([PROF]). The PDB names generated and runtime code
+ * alike, so this answers "what is the frame spending its time on" without
+ * an elevated ETW session. */
+#define PROF_SLOTS 65536
+typedef struct { DWORD64 rip; DWORD tid; unsigned n; } ProfSlot;
+static ProfSlot g_prof[PROF_SLOTS];
+
+static DWORD WINAPI profile_thread(LPVOID arg)
+{
+    DWORD secs = (DWORD)(uintptr_t)arg, self = GetCurrentThreadId(), pid = GetCurrentProcessId();
+    const char *dt = getenv("RECOMP_PROFILE_DELAY");
+    DWORD delay = dt ? (DWORD)strtoul(dt, NULL, 10) : 60;
+    DWORD tids[64];
+    HANDLE hs[64];
+    unsigned nt = 0, total = 0, t;
+    ULONGLONG end;
+    Sleep(delay * 1000);
+    {
+        HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+        THREADENTRY32 te;
+        te.dwSize = sizeof te;
+        if (snap != INVALID_HANDLE_VALUE && Thread32First(snap, &te)) {
+            do {
+                if (te.th32OwnerProcessID != pid || te.th32ThreadID == self || nt >= 64) continue;
+                hs[nt] = OpenThread(THREAD_GET_CONTEXT | THREAD_SUSPEND_RESUME, FALSE, te.th32ThreadID);
+                if (hs[nt]) tids[nt++] = te.th32ThreadID;
+            } while (Thread32Next(snap, &te));
+        }
+        if (snap != INVALID_HANDLE_VALUE) CloseHandle(snap);
+    }
+    fprintf(stderr, "  [PROF] sampling %u threads for %lu s\n", nt, (unsigned long)secs);
+    timeBeginPeriod(1);
+    end = GetTickCount64() + (ULONGLONG)secs * 1000;
+    while (GetTickCount64() < end) {
+        for (t = 0; t < nt; t++) {
+            CONTEXT c;
+            memset(&c, 0, sizeof c);
+            c.ContextFlags = CONTEXT_CONTROL;
+            if (SuspendThread(hs[t]) == (DWORD)-1) continue;
+            if (GetThreadContext(hs[t], &c)) {
+                DWORD64 key = (c.Rip >> 4) ^ ((DWORD64)tids[t] * 0x9E3779B1u);
+                unsigned i = (unsigned)(key % PROF_SLOTS), probe;
+                for (probe = 0; probe < 64; probe++, i = (i + 1) % PROF_SLOTS) {
+                    if (g_prof[i].n == 0) { g_prof[i].rip = c.Rip; g_prof[i].tid = tids[t]; }
+                    if (g_prof[i].rip == c.Rip && g_prof[i].tid == tids[t]) { g_prof[i].n++; total++; break; }
+                }
+            }
+            ResumeThread(hs[t]);
+        }
+        Sleep(1);
+    }
+    timeEndPeriod(1);
+    /* Fold addresses into functions, per thread. */
+    {
+        typedef struct { DWORD tid; char name[96]; unsigned n; } Fn;
+        static Fn fns[8192];
+        unsigned nf = 0, i, j;
+        char buf[sizeof(SYMBOL_INFO) + 256];
+        SYMBOL_INFO *sym = (SYMBOL_INFO *)buf;
+        for (i = 0; i < PROF_SLOTS; i++) {
+            char name[96];
+            DWORD64 disp = 0;
+            if (!g_prof[i].n) continue;
+            memset(buf, 0, sizeof buf);
+            sym->SizeOfStruct = sizeof(SYMBOL_INFO);
+            sym->MaxNameLen = 255;
+            if (SymFromAddr(GetCurrentProcess(), g_prof[i].rip, &disp, sym))
+                snprintf(name, sizeof name, "%s", sym->Name);
+            else {
+                HMODULE mod = NULL;
+                char mn[MAX_PATH] = "?";
+                if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                                       (LPCSTR)(uintptr_t)g_prof[i].rip, &mod) && mod) {
+                    GetModuleFileNameA(mod, mn, sizeof mn);
+                    snprintf(name, sizeof name, "[%s]", strrchr(mn, '\\') ? strrchr(mn, '\\') + 1 : mn);
+                } else
+                    snprintf(name, sizeof name, "[unknown]");
+            }
+            for (j = 0; j < nf; j++)
+                if (fns[j].tid == g_prof[i].tid && strcmp(fns[j].name, name) == 0) break;
+            if (j == nf && nf < 8192) { fns[nf].tid = g_prof[i].tid; strcpy(fns[nf].name, name); fns[nf].n = 0; nf++; }
+            if (j < nf) fns[j].n += g_prof[i].n;
+        }
+        for (t = 0; t < nt; t++) {
+            unsigned tt = 0, shown;
+            for (j = 0; j < nf; j++) if (fns[j].tid == tids[t]) tt += fns[j].n;
+            if (tt < total / 50) continue;
+            fprintf(stderr, "  [PROF] thread %lu: %u samples (%.1f%% of all)\n", (unsigned long)tids[t], tt,
+                    total ? 100.0 * tt / total : 0.0);
+            for (shown = 0; shown < 40; shown++) {
+                unsigned best = nf;
+                for (j = 0; j < nf; j++)
+                    if (fns[j].tid == tids[t] && fns[j].n && (best == nf || fns[j].n > fns[best].n)) best = j;
+                if (best == nf || fns[best].n * 200 < tt) break;
+                fprintf(stderr, "  [PROF]   %5.1f%%  %s\n", 100.0 * fns[best].n / tt, fns[best].name);
+                fns[best].n = 0;
+            }
+        }
+    }
+    for (t = 0; t < nt; t++) CloseHandle(hs[t]);
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     /* A retail disc extraction has the XBE and its split vc_53450030 archive
@@ -1941,6 +2106,11 @@ int main(int argc, char **argv)
     SetUnhandledExceptionFilter(crash_report);
     SymSetOptions(SYMOPT_DEFERRED_LOADS | SYMOPT_UNDNAME);
     SymInitialize(GetCurrentProcess(), NULL, TRUE);
+    if (getenv("RECOMP_PROFILE")) {
+        HANDLE ph = CreateThread(NULL, 0, profile_thread,
+                                 (LPVOID)(uintptr_t)strtoul(getenv("RECOMP_PROFILE"), NULL, 10), 0, NULL);
+        if (ph) CloseHandle(ph);
+    }
     printf("ESPN NFL 2K5 native development build - gameplay bring-up in progress\n");
     printf("[BOOT] Mounted game disc root: %s\n", game_dir);
     FILE *file = fopen(xbe_path, "rb");

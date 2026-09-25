@@ -2557,10 +2557,10 @@ index 0000000..c13d083
 +}
 diff --git a/src/kernel/nv2a_gpu_d3d11.inc.c b/src/kernel/nv2a_gpu_d3d11.inc.c
 new file mode 100644
-index 0000000..1e335a0
+index 0000000..55f9504
 --- /dev/null
 +++ b/src/kernel/nv2a_gpu_d3d11.inc.c
-@@ -0,0 +1,1191 @@
+@@ -0,0 +1,1207 @@
 +/* ── Hardware rendering (Direct3D 11) ─────────────────────────────────────
 + *
 + * Included into nv2a_pb_exec.c (it reads that file's state directly), after
@@ -3328,6 +3328,8 @@ index 0000000..1e335a0
 +
 +/* ---- drawing ---------------------------------------------------------- */
 +
++#include "nv2a_gpu_vp.inc.c"
++
 +static void gpu_vertex(GpuVertex *o, const XfVert *x, uint32_t rw, uint32_t rh)
 +{
 +    /* oPos is in screen space, already divided by w; undo the divide so the
@@ -3399,6 +3401,8 @@ index 0000000..1e335a0
 +    ID3D11ShaderResourceView *srv[4], *cubes[4];
 +    ID3D11SamplerState *smp[4];
 +    const XfVert *(*get)(uint32_t);
++    ID3D11VertexShader *vpvs = NULL;     /* the program on the GPU (RECOMP_GPU_VP) */
++    uint32_t vp_nverts = 0;
 +
 +    if (!gpu_enabled() || !gpu_init())
 +        return 0;
@@ -3427,8 +3431,13 @@ index 0000000..1e335a0
 +        get = vp_vertex;
 +        vp_begin_batch();
 +        s_vp.batches++;
++        if (gpu_vp_enabled())
++            vpvs = gpu_vp_shader();
 +    }
-+    switch (s_gpu.prim) {
++    if (vpvs) {
++        nv = gpu_vp_build(&vp_nverts);
++        s_vp.verts += vp_nverts;
++    } else switch (s_gpu.prim) {
 +    case NV_PRIM_TRIANGLES:
 +        for (i = 0; i + 2 < n; i += 3) GPU_TRI(i, i + 1, i + 2);
 +        break;
@@ -3456,7 +3465,7 @@ index 0000000..1e335a0
 +
 +    /* RECOMP_GPU_TRACE=1: every draw of one frame in 300, with where its
 +     * first vertex lands and the state that decides whether it shows. */
-+    if (env_cached("RECOMP_GPU_TRACE") && (s_gpu11.frame % 300) == 0) {
++    if (!vpvs && env_cached("RECOMP_GPU_TRACE") && (s_gpu11.frame % 300) == 0) {
 +        const GpuVertex *v = &s_gpu11.verts[0];
 +        float mnx = 1e30f, mxx = -1e30f, mny = 1e30f, mxy = -1e30f;
 +        for (i = 0; i < nv; i++) {
@@ -3592,7 +3601,7 @@ index 0000000..1e335a0
 +        memcpy(m.pData, &c, sizeof c);
 +        ID3D11DeviceContext_Unmap(s_gpu11.ctx, (ID3D11Resource *)s_gpu11.cb, 0);
 +    }
-+    if (SUCCEEDED(ID3D11DeviceContext_Map(s_gpu11.ctx, (ID3D11Resource *)s_gpu11.vb, 0, D3D11_MAP_WRITE_DISCARD, 0, &m))) {
++    if (!vpvs && SUCCEEDED(ID3D11DeviceContext_Map(s_gpu11.ctx, (ID3D11Resource *)s_gpu11.vb, 0, D3D11_MAP_WRITE_DISCARD, 0, &m))) {
 +        memcpy(m.pData, s_gpu11.verts, sizeof(GpuVertex) * nv);
 +        ID3D11DeviceContext_Unmap(s_gpu11.ctx, (ID3D11Resource *)s_gpu11.vb, 0);
 +    }
@@ -3606,10 +3615,14 @@ index 0000000..1e335a0
 +        comb_unpack(s_gpu.blend_color, bf);
 +        sc.left = (LONG)s_gpu.clip_x; sc.top = (LONG)s_gpu.clip_y;
 +        sc.right = (LONG)(s_gpu.clip_x + s_gpu.clip_w); sc.bottom = (LONG)(s_gpu.clip_y + s_gpu.clip_h);
-+        ID3D11DeviceContext_IASetInputLayout(s_gpu11.ctx, s_gpu11.layout);
 +        ID3D11DeviceContext_IASetPrimitiveTopology(s_gpu11.ctx, D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-+        ID3D11DeviceContext_IASetVertexBuffers(s_gpu11.ctx, 0, 1, &s_gpu11.vb, &stride, &off);
-+        ID3D11DeviceContext_VSSetShader(s_gpu11.ctx, s_gpu11.vs, NULL, 0);
++        if (vpvs && !gpu_vp_bind(vp_nverts, nv, rw, rh, vpvs))
++            vpvs = NULL, nv = 0;
++        if (!vpvs) {
++            ID3D11DeviceContext_IASetInputLayout(s_gpu11.ctx, s_gpu11.layout);
++            ID3D11DeviceContext_IASetVertexBuffers(s_gpu11.ctx, 0, 1, &s_gpu11.vb, &stride, &off);
++            ID3D11DeviceContext_VSSetShader(s_gpu11.ctx, s_gpu11.vs, NULL, 0);
++        }
 +        ID3D11DeviceContext_PSSetShader(s_gpu11.ctx, s_gpu11.ps, NULL, 0);
 +        ID3D11DeviceContext_PSSetConstantBuffers(s_gpu11.ctx, 0, 1, &s_gpu11.cb);
 +        ID3D11DeviceContext_PSSetShaderResources(s_gpu11.ctx, 0, 4, srv);
@@ -3622,7 +3635,10 @@ index 0000000..1e335a0
 +        ID3D11DeviceContext_OMSetBlendState(s_gpu11.ctx, gpu_blend_state(), bf, 0xFFFFFFFFu);
 +        ID3D11DeviceContext_OMSetDepthStencilState(s_gpu11.ctx, flat2d ? gpu_no_depth() : gpu_depth_state(),
 +                                                   s_vp.stencil_ref);
-+        ID3D11DeviceContext_Draw(s_gpu11.ctx, nv, 0);
++        if (vpvs)
++            ID3D11DeviceContext_DrawIndexed(s_gpu11.ctx, nv, 0, 0);
++        else
++            ID3D11DeviceContext_Draw(s_gpu11.ctx, nv, 0);
 +        gpu_debug_drain(flat2d ? "draw2d" : "draw");
 +    }
 +    for (st = 0; st < 4; st++) {
@@ -4050,6 +4066,425 @@ index 0000000..0c01e22
 +    "    }\n"
 +    "    return o;\n"
 +    "}\n";
+diff --git a/src/kernel/nv2a_gpu_vp.inc.c b/src/kernel/nv2a_gpu_vp.inc.c
+new file mode 100644
+index 0000000..bf5478b
+--- /dev/null
++++ b/src/kernel/nv2a_gpu_vp.inc.c
+@@ -0,0 +1,413 @@
++/* ── NV2A vertex programs on the GPU ─────────────────────────────────────
++ *
++ * Included into nv2a_gpu_d3d11.inc.c. Opt-in with RECOMP_GPU_VP=1 while it is
++ * checked against the interpreter.
++ *
++ * vp_run interprets every program for every vertex, and in the stadium that
++ * was the largest single cost of a frame (~88,000 triangles a frame, ~23 of
++ * 60 vblanks a second, 2026-09-25). Here each program is translated once
++ * into an HLSL vertex shader -- instruction for instruction with vp_run's
++ * decode, as xemu's glsl/vsh-prog.c does for GLSL -- compiled, and cached by
++ * a hash of its words. The CPU still assembles the inputs (fetch_attr per
++ * unique vertex, which knows every attribute format and the inline values);
++ * the GPU runs the program and the screen-to-clip conversion gpu_vertex did.
++ *
++ * Not translated (the batch falls back to the interpreter): programs that
++ * write constants (o-register writes with the constant bit clear).
++ */
++
++#include <stdarg.h>
++
++typedef struct {
++    uint32_t key, start, len;
++    ID3D11VertexShader *vs;
++    int bad;
++} GpuVpProg;
++
++#define GPU_VP_CACHE 512
++static GpuVpProg s_vpc[GPU_VP_CACHE];
++static ID3D11InputLayout *s_vp_layout;
++static ID3D11Buffer *s_vp_vb, *s_vp_ib, *s_vp_cb;
++static float s_vp_in[GPU_MAX_VERTS][16][4];
++static uint32_t s_vp_ix[GPU_MAX_VERTS];
++static uint32_t s_vp_map[65536], s_vp_map_gen[65536], s_vp_gen;
++
++typedef struct {
++    float c[VP_CONSTS][4];
++    float info[4];                       /* surface width, height, zmax */
++    float clip[4];                       /* clip min, max, 1 when set */
++} GpuVpConsts;
++
++static uint32_t gpu_vp_vertex(uint32_t index, uint32_t *nv);
++
++static int gpu_vp_enabled(void)
++{
++    static int on = -1;
++    if (on < 0) {
++        const char *v = env_cached("RECOMP_GPU_VP");
++        on = v && *v && *v != '0';
++    }
++    return on;
++}
++
++static const char *k_vp_prelude =
++    "cbuffer VC : register(b1) { float4 c[192]; float4 info; float4 clipr; };\n"
++    "struct VSIn {\n"
++    "  float4 a0:V0; float4 a1:V1; float4 a2:V2; float4 a3:V3; float4 a4:V4; float4 a5:V5; float4 a6:V6; float4 a7:V7;\n"
++    "  float4 a8:V8; float4 a9:V9; float4 a10:V10; float4 a11:V11; float4 a12:V12; float4 a13:V13; float4 a14:V14; float4 a15:V15; };\n"
++    "struct PIn { float4 pos:SV_Position; float4 d0:COLOR0; float4 d1:COLOR1;\n"
++    "  float4 t0:TEXCOORD0; float4 t1:TEXCOORD1; float4 t2:TEXCOORD2; float4 t3:TEXCOORD3; float4 wz:TEXCOORD4; };\n"
++    "float vrcp(float x) { return x == 1.0 ? 1.0 : 1.0 / x; }\n"
++    "float vrcc(float x) { float r = x == 0.0 ? 1.8446743e19 : 1.0 / x;\n"
++    "  if (r > 0) r = clamp(r, 5.42101e-20, 1.8446743e19); else r = clamp(r, -1.8446743e19, -5.42101e-20); return r; }\n"
++    "float vrsq(float x) { x = abs(x); return x == 1.0 ? 1.0 : rsqrt(x); }\n"
++    "float4 vexp(float x) { float f = floor(x); return float4(exp2(f), x - f, exp2(x), 1.0); }\n"
++    "float4 vlog(float x) { x = abs(x); if (x == 0.0) return float4(-asfloat(0x7F800000u), 1.0, -asfloat(0x7F800000u), 1.0);\n"
++    "  float e = floor(log2(x)); return float4(e, x / exp2(e), log2(x), 1.0); }\n"
++    "float4 vlit(float4 s) { float sx = max(s.x, 0.0), sy = max(s.y, 0.0), sw = clamp(s.w, -127.996, 127.996);\n"
++    "  return float4(1.0, sx, sx > 0 ? exp2(sw * log2(sy)) : 0.0, 1.0); }\n"
++    "PIn vs_main(VSIn i) {\n"
++    "  float4 v[16] = { i.a0, i.a1, i.a2, i.a3, i.a4, i.a5, i.a6, i.a7, i.a8, i.a9, i.a10, i.a11, i.a12, i.a13, i.a14, i.a15 };\n"
++    "  float4 R[13]; float4 O[16]; int a0 = 0; int k;\n"
++    "  [unroll] for (k = 0; k < 13; k++) R[k] = float4(0, 0, 0, 0);\n"
++    "  [unroll] for (k = 0; k < 16; k++) O[k] = float4(0, 0, 0, 1);\n";
++
++static const char *k_vp_epilogue =
++    "  PIn o;\n"
++    "  float4 P = O[0];\n"
++    "  float w = P.w;\n"
++    "  if (!(w > 1e-6 || w < -1e-6)) w = 1e-6;\n"
++    "  float nx = P.x / info.x * 2.0 - 1.0, ny = 1.0 - P.y / info.y * 2.0;\n"
++    "  float zc = P.z;\n"
++    "  if (clipr.z != 0.0) zc = clamp(zc, clipr.x, clipr.y);\n"
++    "  float nz = saturate(zc / info.z);\n"
++    "  o.pos = float4(nx * w, ny * w, nz * w, w);\n"
++    "  if (isnan(P.x) || isnan(P.y) || abs(P.x) >= 1e6 || abs(P.y) >= 1e6) o.pos = asfloat(0x7FC00000u).xxxx;\n"
++    "  float4 d0 = O[3], d1 = O[4];\n"
++    "  [unroll] for (k = 0; k < 4; k++) { if (isnan(d0[k])) d0[k] = 1.0; if (isnan(d1[k])) d1[k] = 1.0; }\n"
++    "  o.d0 = saturate(d0); o.d1 = saturate(d1);\n"
++    "  o.t0 = O[9]; o.t1 = O[10]; o.t2 = O[11]; o.t3 = O[12];\n"
++    "  o.wz = float4(w, 0, 0, 1);\n"
++    "  return o;\n"
++    "}\n";
++
++typedef struct { char *p; size_t n, cap; } VpBuf;
++
++static void vpb(VpBuf *b, const char *fmt, ...)
++{
++    va_list ap;
++    int len;
++    if (b->cap - b->n < 512) {
++        size_t nc = b->cap ? b->cap * 2 : 65536;
++        char *np = (char *)realloc(b->p, nc);
++        if (!np) return;
++        b->p = np; b->cap = nc;
++    }
++    va_start(ap, fmt);
++    len = vsnprintf(b->p + b->n, b->cap - b->n, fmt, ap);
++    va_end(ap);
++    if (len > 0) b->n += (size_t)len;
++}
++
++static void vp_src_expr(char *out, size_t n, const uint32_t *t, int mux, int reg, int neg,
++                        const int swz[4], int scalar)
++{
++    char base[64];
++    static const char comp[] = "xyzw";
++    switch (mux) {
++    case 1:  snprintf(base, sizeof base, reg == 12 ? "O[0]" : "R[%d]", reg < 13 ? reg : 0); break;
++    case 2:  snprintf(base, sizeof base, "v[%u]", vp_field(t, 1, 9, 4)); break;
++    case 3: {
++        int ci = (int)vp_field(t, 1, 13, 8);
++        if (vp_field(t, 3, 1, 1))
++            snprintf(base, sizeof base, "c[clamp(%d + a0, 0, %d)]", ci, VP_CONSTS - 1);
++        else
++            snprintf(base, sizeof base, "c[%d]", ci < VP_CONSTS ? ci : VP_CONSTS - 1);
++        break;
++    }
++    default: snprintf(base, sizeof base, "R[0]"); break;
++    }
++    snprintf(out, n, "%s%s.%c%c%c%c%s", neg ? "(-" : "", base,
++             comp[scalar ? swz[0] : swz[0]], comp[scalar ? swz[0] : swz[1]],
++             comp[scalar ? swz[0] : swz[2]], comp[scalar ? swz[0] : swz[3]], neg ? ")" : "");
++}
++
++static void vp_mask(char *out, uint32_t mask)
++{
++    int k = 0;
++    out[k++] = '.';
++    if (mask & 8) out[k++] = 'x';
++    if (mask & 4) out[k++] = 'y';
++    if (mask & 2) out[k++] = 'z';
++    if (mask & 1) out[k++] = 'w';
++    out[k] = 0;
++}
++
++/* HLSL for the program at start, or NULL when it cannot be translated.
++ * *len_out: slots up to and including the final instruction. */
++static char *gpu_vp_translate(uint32_t start, uint32_t *len_out)
++{
++    VpBuf b = { 0 };
++    uint32_t slot;
++    vpb(&b, "%s", k_vp_prelude);
++    for (slot = start; slot < VP_PROG_LEN; slot++) {
++        const uint32_t *t = s_vp.prog[slot];
++        uint32_t ilu = vp_field(t, 1, 25, 3), mac = vp_field(t, 1, 21, 4);
++        int mux_a = (int)vp_field(t, 2, 26, 2), mux_b = (int)vp_field(t, 2, 11, 2);
++        int mux_c = (int)vp_field(t, 3, 28, 2);
++        int reg_a = (int)vp_field(t, 2, 28, 4), reg_b = (int)vp_field(t, 2, 13, 4);
++        int reg_c = (int)((vp_field(t, 2, 0, 2) << 2) | vp_field(t, 3, 30, 2));
++        uint32_t mac_mask = vp_field(t, 3, 24, 4), ilu_mask = vp_field(t, 3, 16, 4);
++        uint32_t o_mask = vp_field(t, 3, 12, 4), out_r = vp_field(t, 3, 20, 4);
++        uint32_t orb = vp_field(t, 3, 11, 1), out_addr = vp_field(t, 3, 3, 8);
++        uint32_t out_mux = vp_field(t, 3, 2, 1);
++        int sa[4], sb[4], sc[4];
++        char A[96], B[96], C[96], mk[8];
++        char dst[16];
++
++        sa[0] = (int)vp_field(t, 1, 6, 2); sa[1] = (int)vp_field(t, 1, 4, 2);
++        sa[2] = (int)vp_field(t, 1, 2, 2); sa[3] = (int)vp_field(t, 1, 0, 2);
++        sb[0] = (int)vp_field(t, 2, 23, 2); sb[1] = (int)vp_field(t, 2, 21, 2);
++        sb[2] = (int)vp_field(t, 2, 19, 2); sb[3] = (int)vp_field(t, 2, 17, 2);
++        sc[0] = (int)vp_field(t, 2, 8, 2); sc[1] = (int)vp_field(t, 2, 6, 2);
++        sc[2] = (int)vp_field(t, 2, 4, 2); sc[3] = (int)vp_field(t, 2, 2, 2);
++        vp_src_expr(A, sizeof A, t, mux_a, reg_a, (int)vp_field(t, 1, 8, 1), sa, 0);
++        vp_src_expr(B, sizeof B, t, mux_b, reg_b, (int)vp_field(t, 2, 25, 1), sb, 0);
++        vp_src_expr(C, sizeof C, t, mux_c, reg_c, (int)vp_field(t, 2, 10, 1), sc, ilu >= 2 && ilu <= 6);
++
++        /* A constant write needs the program to change its own constants
++         * between vertices: leave those to the interpreter. */
++        if (o_mask && !orb && ((out_mux == 0 && mac && mac != 13) || (out_mux == 1 && ilu))) {
++            free(b.p);
++            return NULL;
++        }
++
++        vpb(&b, "  { float4 A = %s, B = %s, C = %s; float4 m = float4(0,0,0,0), il = float4(0,0,0,0); int na0 = a0;\n",
++            A, B, C);
++        switch (mac) {
++        case 1:  vpb(&b, "    m = A;\n"); break;
++        case 2:  vpb(&b, "    m = A * B;\n"); break;
++        case 3:  vpb(&b, "    m = A + C;\n"); break;
++        case 4:  vpb(&b, "    m = A * B + C;\n"); break;
++        case 5:  vpb(&b, "    m = dot(A.xyz, B.xyz).xxxx;\n"); break;
++        case 6:  vpb(&b, "    m = (dot(A.xyz, B.xyz) + B.w).xxxx;\n"); break;
++        case 7:  vpb(&b, "    m = dot(A, B).xxxx;\n"); break;
++        case 8:  vpb(&b, "    m = float4(1.0, A.y * B.y, A.z, B.w);\n"); break;
++        case 9:  vpb(&b, "    m = min(A, B);\n"); break;
++        case 10: vpb(&b, "    m = max(A, B);\n"); break;
++        case 11: vpb(&b, "    m = (float4)(A < B);\n"); break;
++        case 12: vpb(&b, "    m = (float4)(A >= B);\n"); break;
++        case 13: vpb(&b, "    na0 = (int)floor(A.x + 0.001);\n"); break;
++        default: break;
++        }
++        switch (ilu) {
++        case 1: vpb(&b, "    il = C;\n"); break;
++        case 2: vpb(&b, "    il = vrcp(C.x).xxxx;\n"); break;
++        case 3: vpb(&b, "    il = vrcc(C.x).xxxx;\n"); break;
++        case 4: vpb(&b, "    il = vrsq(C.x).xxxx;\n"); break;
++        case 5: vpb(&b, "    il = vexp(C.x);\n"); break;
++        case 6: vpb(&b, "    il = vlog(C.x);\n"); break;
++        case 7: vpb(&b, "    il = vlit(C);\n"); break;
++        default: break;
++        }
++        if (out_r == 12) snprintf(dst, sizeof dst, "O[0]");
++        else snprintf(dst, sizeof dst, "R[%u]", out_r < 13 ? out_r : 0);
++        if (mac && mac != 13 && mac_mask && !(ilu && out_r == 1)) {
++            vp_mask(mk, mac_mask);
++            vpb(&b, "    %s%s = m%s;\n", dst, mk, mk);
++        }
++        if (ilu && ilu_mask) {
++            vp_mask(mk, ilu_mask);
++            vpb(&b, "    %s%s = il%s;\n", mac ? "R[1]" : dst, mk, mk);
++        }
++        if (o_mask && orb && ((out_mux == 0 && mac && mac != 13) || (out_mux == 1 && ilu))) {
++            vp_mask(mk, o_mask);
++            vpb(&b, "    O[%u]%s = %s%s;\n", out_addr & 15u, mk, out_mux ? "il" : "m", mk);
++        }
++        if (mac == 13)
++            vpb(&b, "    a0 = na0;\n");
++        vpb(&b, "  }\n");
++        if (vp_field(t, 3, 0, 1))
++            break;
++    }
++    vpb(&b, "%s", k_vp_epilogue);
++    if (len_out)
++        *len_out = (slot < VP_PROG_LEN ? slot + 1 : VP_PROG_LEN) - start;
++    return b.p;
++}
++
++static uint32_t gpu_vp_hash(uint32_t start)
++{
++    uint32_t h = 2166136261u ^ start, slot, k;
++    for (slot = start; slot < VP_PROG_LEN; slot++) {
++        for (k = 0; k < 4; k++)
++            h = (h ^ s_vp.prog[slot][k]) * 16777619u;
++        if (vp_field(s_vp.prog[slot], 3, 0, 1))
++            break;
++    }
++    return h;
++}
++
++/* The vertex shader for the current program, or NULL for the interpreter. */
++static ID3D11VertexShader *gpu_vp_shader(void)
++{
++    uint32_t key = gpu_vp_hash(s_vp.start), i, base = key & (GPU_VP_CACHE - 1);
++    GpuVpProg *e = NULL;
++    for (i = 0; i < 16; i++) {
++        GpuVpProg *c = &s_vpc[(base + i) & (GPU_VP_CACHE - 1)];
++        if ((c->vs || c->bad) && c->key == key && c->start == s_vp.start)
++            return c->bad ? NULL : c->vs;
++        if (!c->vs && !c->bad) { e = c; break; }
++    }
++    if (!e) e = &s_vpc[base];                     /* evict */
++    if (e->vs) { ID3D11VertexShader_Release(e->vs); e->vs = NULL; }
++    e->key = key; e->start = s_vp.start; e->bad = 1;
++    {
++        uint32_t len = 0;
++        char *src = gpu_vp_translate(s_vp.start, &len);
++        ID3DBlob *blob = NULL, *err = NULL;
++        HRESULT hr;
++        static unsigned compiled, failed;
++        if (!src) {
++            return NULL;
++        }
++        hr = D3DCompile(src, strlen(src), "nv2a_vp", NULL, NULL, "vs_main", "vs_4_0",
++                        D3DCOMPILE_OPTIMIZATION_LEVEL1 | D3DCOMPILE_IEEE_STRICTNESS, 0, &blob, &err);
++        if (FAILED(hr)) {
++            if (failed++ < 5)
++                fprintf(stderr, "  [GPUVP] program at %u failed to compile: %s\n", s_vp.start,
++                        err ? (const char *)ID3D10Blob_GetBufferPointer(err) : "?");
++            if (env_cached("RECOMP_GPU_VP_DUMP")) fprintf(stderr, "%s\n", src);
++            free(src);
++            if (err) ID3D10Blob_Release(err);
++            return NULL;
++        }
++        free(src);
++        if (FAILED(ID3D11Device_CreateVertexShader(s_gpu11.dev, ID3D10Blob_GetBufferPointer(blob),
++                                                   ID3D10Blob_GetBufferSize(blob), NULL, &e->vs))) {
++            ID3D10Blob_Release(blob);
++            return NULL;
++        }
++        if (!s_vp_layout) {
++            D3D11_INPUT_ELEMENT_DESC el[16];
++            int k;
++            for (k = 0; k < 16; k++) {
++                el[k].SemanticName = "V"; el[k].SemanticIndex = (UINT)k;
++                el[k].Format = DXGI_FORMAT_R32G32B32A32_FLOAT; el[k].InputSlot = 0;
++                el[k].AlignedByteOffset = (UINT)(k * 16);
++                el[k].InputSlotClass = D3D11_INPUT_PER_VERTEX_DATA; el[k].InstanceDataStepRate = 0;
++            }
++            ID3D11Device_CreateInputLayout(s_gpu11.dev, el, 16, ID3D10Blob_GetBufferPointer(blob),
++                                           ID3D10Blob_GetBufferSize(blob), &s_vp_layout);
++        }
++        ID3D10Blob_Release(blob);
++        e->bad = 0;
++        if (compiled++ < 5 || (compiled % 50) == 0)
++            fprintf(stderr, "  [GPUVP] compiled program at %u (%u slots), %u so far\n", s_vp.start, len, compiled);
++        return e->vs;
++    }
++}
++
++/* Inputs for the batch's unique vertices and a triangle-list index buffer.
++ * Returns the index count, 0 when there is nothing to draw. */
++static uint32_t gpu_vp_build(uint32_t *nverts_out)
++{
++    const uint16_t *ix = s_gpu.idx;
++    uint32_t n = s_gpu.idx_count, i, nv = 0, ni = 0;
++    if (++s_vp_gen == 0) {
++        memset(s_vp_map_gen, 0, sizeof s_vp_map_gen);
++        s_vp_gen = 1;
++    }
++#define VPU(k_) gpu_vp_vertex(ix[k_], &nv)
++#define VPT(a_, b_, c_) do { if (ni + 3 <= GPU_MAX_VERTS) { \
++        uint32_t A_ = VPU(a_), B_ = VPU(b_), C_ = VPU(c_); \
++        if (A_ != 0xFFFFFFFFu && B_ != 0xFFFFFFFFu && C_ != 0xFFFFFFFFu) { \
++            s_vp_ix[ni++] = A_; s_vp_ix[ni++] = B_; s_vp_ix[ni++] = C_; } } } while (0)
++    switch (s_gpu.prim) {
++    case NV_PRIM_TRIANGLES:
++        for (i = 0; i + 2 < n; i += 3) VPT(i, i + 1, i + 2);
++        break;
++    case NV_PRIM_TRIANGLE_STRIP:
++        for (i = 0; i + 2 < n; i++) { if (i & 1) VPT(i + 1, i, i + 2); else VPT(i, i + 1, i + 2); }
++        break;
++    case NV_PRIM_TRIANGLE_FAN:
++    case NV_PRIM_POLYGON:
++        for (i = 1; i + 1 < n; i++) VPT(0, i, i + 1);
++        break;
++    case NV_PRIM_QUADS:
++        for (i = 0; i + 3 < n; i += 4) { VPT(i, i + 1, i + 2); VPT(i, i + 2, i + 3); }
++        break;
++    case NV_PRIM_QUAD_STRIP:
++        for (i = 0; i + 3 < n; i += 2) { VPT(i, i + 1, i + 3); VPT(i, i + 3, i + 2); }
++        break;
++    default:
++        break;
++    }
++#undef VPT
++#undef VPU
++    *nverts_out = nv;
++    return ni;
++}
++
++/* Local index of guest vertex `index`, fetching its 16 inputs the first time
++ * it appears in the batch. */
++static uint32_t gpu_vp_vertex(uint32_t index, uint32_t *nv)
++{
++    uint32_t a;
++    index &= 0xFFFF;
++    if (s_vp_map_gen[index] == s_vp_gen)
++        return s_vp_map[index];
++    if (*nv >= GPU_MAX_VERTS)
++        return 0xFFFFFFFFu;
++    for (a = 0; a < NV_VERTEX_ATTRS; a++)
++        fetch_attr(&s_gpu.attr[a], index, s_vp_in[*nv][a]);
++    s_vp_map_gen[index] = s_vp_gen;
++    s_vp_map[index] = *nv;
++    return (*nv)++;
++}
++
++/* Upload the batch and set the input assembler and vertex stage. */
++static int gpu_vp_bind(uint32_t nverts, uint32_t nidx, uint32_t rw, uint32_t rh, ID3D11VertexShader *vs)
++{
++    D3D11_MAPPED_SUBRESOURCE m;
++    if (!s_vp_vb) {
++        D3D11_BUFFER_DESC bd;
++        memset(&bd, 0, sizeof bd);
++        bd.Usage = D3D11_USAGE_DYNAMIC; bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
++        bd.ByteWidth = sizeof s_vp_in; bd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
++        ID3D11Device_CreateBuffer(s_gpu11.dev, &bd, NULL, &s_vp_vb);
++        bd.ByteWidth = sizeof s_vp_ix; bd.BindFlags = D3D11_BIND_INDEX_BUFFER;
++        ID3D11Device_CreateBuffer(s_gpu11.dev, &bd, NULL, &s_vp_ib);
++        bd.ByteWidth = (sizeof(GpuVpConsts) + 15) & ~15u; bd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
++        ID3D11Device_CreateBuffer(s_gpu11.dev, &bd, NULL, &s_vp_cb);
++    }
++    if (!s_vp_vb || !s_vp_ib || !s_vp_cb || !s_vp_layout)
++        return 0;
++    if (FAILED(ID3D11DeviceContext_Map(s_gpu11.ctx, (ID3D11Resource *)s_vp_vb, 0, D3D11_MAP_WRITE_DISCARD, 0, &m)))
++        return 0;
++    memcpy(m.pData, s_vp_in, (size_t)nverts * sizeof s_vp_in[0]);
++    ID3D11DeviceContext_Unmap(s_gpu11.ctx, (ID3D11Resource *)s_vp_vb, 0);
++    if (FAILED(ID3D11DeviceContext_Map(s_gpu11.ctx, (ID3D11Resource *)s_vp_ib, 0, D3D11_MAP_WRITE_DISCARD, 0, &m)))
++        return 0;
++    memcpy(m.pData, s_vp_ix, (size_t)nidx * 4);
++    ID3D11DeviceContext_Unmap(s_gpu11.ctx, (ID3D11Resource *)s_vp_ib, 0);
++    if (FAILED(ID3D11DeviceContext_Map(s_gpu11.ctx, (ID3D11Resource *)s_vp_cb, 0, D3D11_MAP_WRITE_DISCARD, 0, &m)))
++        return 0;
++    {
++        GpuVpConsts *k = (GpuVpConsts *)m.pData;
++        memcpy(k->c, s_vp.c, sizeof k->c);
++        k->info[0] = (float)rw; k->info[1] = (float)rh; k->info[2] = gpu_zmax(); k->info[3] = 0.0f;
++        k->clip[0] = s_vp.clip_min; k->clip[1] = s_vp.clip_max;
++        k->clip[2] = s_vp.clip_max > s_vp.clip_min ? 1.0f : 0.0f; k->clip[3] = 0.0f;
++    }
++    ID3D11DeviceContext_Unmap(s_gpu11.ctx, (ID3D11Resource *)s_vp_cb, 0);
++    {
++        UINT stride = sizeof s_vp_in[0], off = 0;
++        ID3D11DeviceContext_IASetInputLayout(s_gpu11.ctx, s_vp_layout);
++        ID3D11DeviceContext_IASetVertexBuffers(s_gpu11.ctx, 0, 1, &s_vp_vb, &stride, &off);
++        ID3D11DeviceContext_IASetIndexBuffer(s_gpu11.ctx, s_vp_ib, DXGI_FORMAT_R32_UINT, 0);
++        ID3D11DeviceContext_VSSetShader(s_gpu11.ctx, vs, NULL, 0);
++        ID3D11DeviceContext_VSSetConstantBuffers(s_gpu11.ctx, 1, 1, &s_vp_cb);
++    }
++    return 1;
++}
 diff --git a/src/kernel/nv2a_pb_exec.c b/src/kernel/nv2a_pb_exec.c
 index b3dcbf7..b9e2c46 100644
 --- a/src/kernel/nv2a_pb_exec.c
@@ -7461,10 +7896,19 @@ index 69ced11..0651a5b 100644
 +void xbox_FramebufferWindowForceStart(void) {}
  #endif
 diff --git a/templates/runtime/recomp_types.h b/templates/runtime/recomp_types.h
-index dc1dae0..85180b2 100644
+index dc1dae0..6c31cbe 100644
 --- a/templates/runtime/recomp_types.h
 +++ b/templates/runtime/recomp_types.h
-@@ -559,6 +559,14 @@ static inline RecompXmm XMM_UNPACK_HIGH(RecompXmm a, RecompXmm b) {
+@@ -298,6 +298,8 @@ static inline int64_t recomp_fist(double value, uint16_t control, unsigned bits)
+ 
+ /** Ring buffer of recent indirect call target VAs. */
+ extern volatile uint32_t g_icall_trace[ICALL_TRACE_SIZE];
++/* RECOMP_ICALL_HIST=1: count indirect-call targets (src/main.c). */
++void recomp_icall_hist(uint32_t va);
+ 
+ /** Current write index into the ring buffer. */
+ extern volatile uint32_t g_icall_trace_idx;
+@@ -559,6 +561,14 @@ static inline RecompXmm XMM_UNPACK_HIGH(RecompXmm a, RecompXmm b) {
   * ================================================================ */
  
  /* Unsigned comparison conditions (from CMP a, b -> a - b) */
@@ -7479,6 +7923,22 @@ index dc1dae0..85180b2 100644
  #define CMP_EQ(a, b)  ((uint32_t)(a) == (uint32_t)(b))
  #define CMP_NE(a, b)  ((uint32_t)(a) != (uint32_t)(b))
  #define CMP_B(a, b)   ((uint32_t)(a) <  (uint32_t)(b))   /* below (CF=1) */
+@@ -864,6 +874,7 @@ void recomp_abi_violation_log(uint32_t va, uint32_t ebx0, uint32_t esi0,
+     g_icall_trace[g_icall_trace_idx & (ICALL_TRACE_SIZE-1)] = _va; \
+     g_icall_trace_idx++; \
+     g_icall_count++; \
++    recomp_icall_hist(_va); \
+     /* Skip garbage VAs outside code section + kernel thunk range */ \
+     if (!RECOMP_ICALL_IS_CODE(_va)) { \
+         recomp_icall_not_code_log(_va); \
+@@ -891,6 +902,7 @@ void recomp_abi_violation_log(uint32_t va, uint32_t ebx0, uint32_t esi0,
+     g_icall_trace[g_icall_trace_idx & (ICALL_TRACE_SIZE-1)] = _va; \
+     g_icall_trace_idx++; \
+     g_icall_count++; \
++    recomp_icall_hist(_va); \
+     if (!RECOMP_ICALL_IS_CODE(_va)) { \
+         recomp_icall_not_code_log(_va); \
+         g_esp = (saved_esp); eax = 0; break; \
 diff --git a/tools/disasm/config.py b/tools/disasm/config.py
 index 07f74bb..6ef3b7e 100644
 --- a/tools/disasm/config.py

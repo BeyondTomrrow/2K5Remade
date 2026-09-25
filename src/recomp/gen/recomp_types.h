@@ -298,6 +298,8 @@ static inline int64_t recomp_fist(double value, uint16_t control, unsigned bits)
 
 /** Ring buffer of recent indirect call target VAs. */
 extern volatile uint32_t g_icall_trace[ICALL_TRACE_SIZE];
+/* RECOMP_ICALL_HIST=1: count indirect-call targets (src/main.c). */
+void recomp_icall_hist(uint32_t va);
 
 /** Current write index into the ring buffer. */
 extern volatile uint32_t g_icall_trace_idx;
@@ -872,6 +874,7 @@ void recomp_abi_violation_log(uint32_t va, uint32_t ebx0, uint32_t esi0,
     g_icall_trace[g_icall_trace_idx & (ICALL_TRACE_SIZE-1)] = _va; \
     g_icall_trace_idx++; \
     g_icall_count++; \
+    recomp_icall_hist(_va); \
     /* Skip garbage VAs outside code section + kernel thunk range */ \
     if (!RECOMP_ICALL_IS_CODE(_va)) { \
         recomp_icall_not_code_log(_va); \
@@ -899,6 +902,7 @@ void recomp_abi_violation_log(uint32_t va, uint32_t ebx0, uint32_t esi0,
     g_icall_trace[g_icall_trace_idx & (ICALL_TRACE_SIZE-1)] = _va; \
     g_icall_trace_idx++; \
     g_icall_count++; \
+    recomp_icall_hist(_va); \
     if (!RECOMP_ICALL_IS_CODE(_va)) { \
         recomp_icall_not_code_log(_va); \
         g_esp = (saved_esp); eax = 0; break; \
