@@ -2259,12 +2259,280 @@ index 17cb31f..172d860 100644
  
      if (PreviousSuspendCount)
          *PreviousSuspendCount = (ULONG)prev;
+diff --git a/src/kernel/nv2a_gpu_d3d11.hlsl b/src/kernel/nv2a_gpu_d3d11.hlsl
+new file mode 100644
+index 0000000..554f231
+--- /dev/null
++++ b/src/kernel/nv2a_gpu_d3d11.hlsl
+@@ -0,0 +1,262 @@
++// NV2A pixel pipeline for the Direct3D 11 renderer (nv2a_gpu_d3d11.inc.c).
++//
++// Edit this file, then run tools/gen-gpu-hlsl.py to regenerate
++// nv2a_gpu_d3d11_hlsl.inc (the C string the renderer compiles at startup).
++//
++// Texture stages follow xemu's pgraph/glsl/psh.c: each stage has a mode from
++// SET_SHADER_STAGE_PROGRAM and may read an earlier stage (dot-product and
++// dependent modes). The register combiners follow comb_eval in
++// nv2a_pb_exec.c.
++
++struct VIn {
++    float4 pos : POSITION; float4 d0 : COLOR0; float4 d1 : COLOR1;
++    float4 t0 : TEXCOORD0; float4 t1 : TEXCOORD1; float4 t2 : TEXCOORD2; float4 t3 : TEXCOORD3;
++};
++struct PIn {
++    float4 pos : SV_Position; float4 d0 : COLOR0; float4 d1 : COLOR1;
++    float4 t0 : TEXCOORD0; float4 t1 : TEXCOORD1; float4 t2 : TEXCOORD2; float4 t3 : TEXCOORD3;
++};
++
++PIn vs_main(VIn v)
++{
++    PIn o;
++    o.pos = v.pos; o.d0 = v.d0; o.d1 = v.d1;
++    o.t0 = v.t0; o.t1 = v.t1; o.t2 = v.t2; o.t3 = v.t3;
++    return o;
++}
++
++cbuffer C : register(b0) {
++    uint4  stg[8];        // combiner stages: color icw, ocw, alpha icw, ocw
++    float4 f0[8];
++    float4 f1[8];
++    uint4  misc;          // control, stage_prog, final0, final1
++    float4 sf0;
++    float4 sf1;
++    uint4  alpha;         // test enable, func, ref, combiner active
++    uint4  texon;         // 1 when a texture is bound for the stage
++    uint4  mode;          // texture stage mode per stage (PS_TEXTUREMODES_*)
++    uint4  dotmap;        // dot mapping per stage (SET_DOT_RGBMAPPING)
++    uint4  input;         // input stage per stage (SET_SHADER_OTHER_STAGE_INPUT)
++    uint4  cube;          // 1 when the stage's texture is a cube map
++    uint4  rect;          // 1 when the stage's coordinates are in texels
++    float4 tsize[4];      // texture width, height per stage
++};
++
++Texture2D   T0 : register(t0); Texture2D   T1 : register(t1);
++Texture2D   T2 : register(t2); Texture2D   T3 : register(t3);
++TextureCube Q0 : register(t4); TextureCube Q1 : register(t5);
++TextureCube Q2 : register(t6); TextureCube Q3 : register(t7);
++SamplerState S0 : register(s0); SamplerState S1 : register(s1);
++SamplerState S2 : register(s2); SamplerState S3 : register(s3);
++
++float4 tex2d(uint s, float2 uv)
++{
++    if (s == 0u) return T0.Sample(S0, uv);
++    if (s == 1u) return T1.Sample(S1, uv);
++    if (s == 2u) return T2.Sample(S2, uv);
++    return T3.Sample(S3, uv);
++}
++
++float4 texcube(uint s, float3 d)
++{
++    if (s == 0u) return Q0.Sample(S0, d);
++    if (s == 1u) return Q1.Sample(S1, d);
++    if (s == 2u) return Q2.Sample(S2, d);
++    return Q3.Sample(S3, d);
++}
++
++// A 2D lookup at coordinates given in the stage's convention: texels for a
++// linear (rect) texture, normalised otherwise.
++float4 tex2dc(uint s, float2 uv)
++{
++    if (rect[s] != 0u) uv /= tsize[s].xy;
++    return tex2d(s, uv);
++}
++
++// Direction lookup: a cube map, or face-remapped 2D when the stage's texture
++// is not one (xemu remapCubeTo2D).
++float4 texdir(uint s, float3 d)
++{
++    if (cube[s] != 0u) return texcube(s, d);
++    float3 a = max(abs(d), 1e-8);
++    float2 uv;
++    if (a.x > a.y && a.x > a.z) uv = (d.x > 0 ? float2(-d.z, d.y) : float2(d.z, d.y)) / a.x;
++    else if (a.y > a.x && a.y > a.z) uv = (d.y > 0 ? float2(d.x, -d.z) : float2(d.x, d.z)) / a.y;
++    else uv = (d.z > 0 ? float2(d.x, d.y) : float2(-d.x, d.y)) / a.z;
++    return tex2d(s, uv * 0.5 + 0.5);
++}
++
++float sign1(float x) { x *= 255.0; return (x - 128.0) / 127.0; }
++float sign2(float x) { x *= 255.0; return x >= 128.0 ? (x - 255.5) / 127.5 : (x + 0.5) / 127.5; }
++float sign3(float x) { x *= 255.0; return x >= 128.0 ? (x - 256.0) / 127.0 : x / 127.0; }
++
++float3 dotmapf(uint m, float4 c)
++{
++    if (m == 1u) return float3(sign1(c.r), sign1(c.g), sign1(c.b));
++    if (m == 2u) return float3(sign2(c.r), sign2(c.g), sign2(c.b));
++    if (m == 3u) return float3(sign3(c.r), sign3(c.g), sign3(c.b));
++    return c.rgb;       // 0: zero to one; the HILO modes are unimplemented, as in xemu
++}
++
++float mapin(float x, uint m)
++{
++    float p = max(x, 0.0);
++    if (m == 0x00) return p;
++    if (m == 0x20) return 1.0 - min(p, 1.0);
++    if (m == 0x40) return 2.0 * p - 1.0;
++    if (m == 0x60) return -2.0 * p + 1.0;
++    if (m == 0x80) return p - 0.5;
++    if (m == 0xA0) return -p + 0.5;
++    if (m == 0xC0) return x;
++    return -x;
++}
++
++float mapout(float x, uint m)
++{
++    if (m == 0x08) x -= 0.5;
++    else if (m == 0x10) x *= 2.0;
++    else if (m == 0x18) x = (x - 0.5) * 2.0;
++    else if (m == 0x20) x *= 4.0;
++    else if (m == 0x30) x *= 0.5;
++    return clamp(x, -1.0, 1.0);
++}
++
++float3 inrgb(float4 R[16], uint b)
++{
++    uint r = b & 15u; bool a = (b & 0x10u) != 0u; uint m = b & 0xE0u;
++    float3 x = a ? R[r].aaa : R[r].rgb;
++    return float3(mapin(x.r, m), mapin(x.g, m), mapin(x.b, m));
++}
++
++float ina(float4 R[16], uint b)
++{
++    uint r = b & 15u; bool a = (b & 0x10u) != 0u;
++    return mapin(a ? R[r].a : R[r].b, b & 0xE0u);
++}
++
++float4 ps_main(PIn i) : SV_Target
++{
++    float4 T[4] = { i.t0, i.t1, i.t2, i.t3 };
++    float4 t[4] = { float4(0, 0, 0, 1), float4(0, 0, 0, 1), float4(0, 0, 0, 1), float4(0, 0, 0, 1) };
++    float dt[4] = { 0, 0, 0, 0 };
++    [unroll] for (uint s = 0; s < 4; s++) {
++        uint m = mode[s];
++        float4 pt = T[s];
++        uint src = input[s];
++        float4 prev = t[min(src, 3u)];
++        if (s == 0u && m != 0u && texon[0] == 0u) m = 0xFFu;      // untextured stage 0
++        if (m == 0u)                        t[s] = float4(0, 0, 0, 1);         // NONE
++        else if (m == 0xFFu)                t[s] = float4(1, 1, 1, 1);
++        else if (m == 1u || m == 2u || m == 6u || m == 7u) {               // PROJECT2D/3D, BUMPENVMAP (unimplemented: plain)
++            float w = (m == 1u || m == 2u) && pt.w != 0.0 ? pt.w : 1.0;
++            t[s] = texon[s] ? (cube[s] ? texcube(s, pt.xyz) : tex2dc(s, pt.xy / w)) : float4(1, 1, 1, 1);
++        }
++        else if (m == 3u)                   t[s] = texon[s] ? texdir(s, pt.xyz) : float4(1, 1, 1, 1);   // CUBEMAP
++        else if (m == 4u)                   t[s] = pt;                          // PASSTHRU
++        else if (m == 0x11u) {                                                   // DOTPRODUCT
++            dt[s] = dot(pt.xyz, dotmapf(dotmap[s], prev));
++            t[s] = float4(0, 0, 0, 0);
++        }
++        else if (m == 0x09u) {                                                   // DOT_ST
++            dt[s] = dot(pt.xyz, dotmapf(dotmap[s], prev));
++            t[s] = tex2dc(s, float2(dt[s - 1], dt[s]));
++        }
++        else if (m == 0x0Bu) {                                                   // DOT_RFLCT_DIFF (stage 2)
++            dt[s] = dot(pt.xyz, dotmapf(dotmap[s], prev));
++            float dn = dot(T[3].xyz, dotmapf(dotmap[3], t[min(input[3], 3u)]));
++            t[s] = texdir(s, float3(dt[s - 1], dt[s], dn));
++        }
++        else if (m == 0x0Cu) {                                                   // DOT_RFLCT_SPEC (stage 3)
++            dt[s] = dot(pt.xyz, dotmapf(dotmap[s], prev));
++            float3 n = float3(dt[1], dt[2], dt[3]);
++            float3 e = float3(T[1].w, T[2].w, T[3].w);
++            float3 r = 2.0 * n * dot(n, e) / max(dot(n, n), 1e-8) - e;
++            t[s] = texdir(s, r);
++        }
++        else if (m == 0x0Du || m == 0x0Eu) {                                     // DOT_STR_3D / CUBE
++            dt[s] = dot(pt.xyz, dotmapf(dotmap[s], prev));
++            t[s] = texdir(s, float3(dt[1], dt[2], dt[3]));
++        }
++        else if (m == 0x0Fu)                t[s] = tex2d(s, prev.ar);           // DEPENDENT_AR
++        else if (m == 0x10u)                t[s] = tex2d(s, prev.gb);           // DEPENDENT_GB
++        else                                t[s] = float4(0, 0, 0, 1);          // unimplemented
++    }
++
++    float4 d0 = saturate(i.d0), d1 = saturate(i.d1);
++    float4 o;
++    if (alpha.w == 0u) {
++        o = (mode[0] != 0u && texon[0] != 0u) ? t[0] * d0 : d0;
++    } else {
++        float4 R[16];
++        [unroll] for (int k = 0; k < 16; k++) R[k] = float4(0, 0, 0, 0);
++        R[4] = d0; R[5] = d1;
++        R[8] = t[0]; R[9] = t[1]; R[10] = t[2]; R[11] = t[3];
++        R[12].a = mode[0] != 0u ? t[0].a : 1.0;
++        uint ns = min(misc.x & 255u, 8u);
++        for (uint cs = 0; cs < ns; cs++) {
++            uint c0 = (misc.x & 0x1000u) ? cs : 0u;
++            uint c1 = (misc.x & 0x10000u) ? cs : 0u;
++            R[1] = f0[c0]; R[2] = f1[c1];
++            float4 N[16];
++            [unroll] for (int q = 0; q < 16; q++) N[q] = R[q];
++            bool muxcd = (misc.x & 0x100u) ? (R[12].a >= 0.5)
++                                           : ((uint(R[12].a * 255.0 + 0.5) & 1u) != 0u);
++            {
++                uint icw = stg[cs].x, ocw = stg[cs].y, fl = ocw >> 12, mp = fl & 0x38u;
++                float3 A = inrgb(R, (icw >> 24) & 255u), B = inrgb(R, (icw >> 16) & 255u);
++                float3 Cc = inrgb(R, (icw >> 8) & 255u), D = inrgb(R, icw & 255u);
++                float3 ab = (fl & 2u) ? dot(A, B).xxx : A * B;
++                float3 cd = (fl & 1u) ? dot(Cc, D).xxx : Cc * D;
++                float3 ms = (fl & 4u) ? (muxcd ? cd : ab) : ab + cd;
++                ab = float3(mapout(ab.x, mp), mapout(ab.y, mp), mapout(ab.z, mp));
++                cd = float3(mapout(cd.x, mp), mapout(cd.y, mp), mapout(cd.z, mp));
++                ms = float3(mapout(ms.x, mp), mapout(ms.y, mp), mapout(ms.z, mp));
++                uint abd = (ocw >> 4) & 15u, cdd = ocw & 15u, msd = (ocw >> 8) & 15u;
++                if (abd) { N[abd].rgb = ab; if (fl & 0x80u) N[abd].a = ab.b; }
++                if (cdd) { N[cdd].rgb = cd; if (fl & 0x40u) N[cdd].a = cd.b; }
++                if (msd) N[msd].rgb = ms;
++            }
++            {
++                uint icw = stg[cs].z, ocw = stg[cs].w, fl = ocw >> 12, mp = fl & 0x38u;
++                float A = ina(R, (icw >> 24) & 255u), B = ina(R, (icw >> 16) & 255u);
++                float Cc = ina(R, (icw >> 8) & 255u), D = ina(R, icw & 255u);
++                float ab = A * B, cd = Cc * D, ms = (fl & 4u) ? (muxcd ? cd : ab) : ab + cd;
++                uint abd = (ocw >> 4) & 15u, cdd = ocw & 15u, msd = (ocw >> 8) & 15u;
++                if (abd) N[abd].a = mapout(ab, mp);
++                if (cdd) N[cdd].a = mapout(cd, mp);
++                if (msd) N[msd].a = mapout(ms, mp);
++            }
++            [unroll] for (int q2 = 0; q2 < 16; q2++) R[q2] = N[q2];
++        }
++        if (misc.z != 0u || misc.w != 0u) {
++            uint fl = misc.w & 255u;
++            R[1] = sf0; R[2] = sf1;
++            float3 E = inrgb(R, (misc.w >> 24) & 255u), F = inrgb(R, (misc.w >> 16) & 255u);
++            float3 v1 = (fl & 0x40u) ? 1.0 - R[5].rgb : R[5].rgb;
++            float3 r0 = (fl & 0x20u) ? 1.0 - R[12].rgb : R[12].rgb;
++            float3 sum = v1 + r0;
++            if (fl & 0x80u) sum = saturate(sum);
++            R[14] = float4(sum, 0); R[15] = float4(E * F, 0);
++            float3 A = inrgb(R, (misc.z >> 24) & 255u), B = inrgb(R, (misc.z >> 16) & 255u);
++            float3 Cc = inrgb(R, (misc.z >> 8) & 255u), D = inrgb(R, misc.z & 255u);
++            float G = ina(R, (misc.w >> 8) & 255u);
++            o = float4(D + Cc * (1.0 - A) + B * A, G);
++        } else {
++            o = R[12];
++        }
++        o = saturate(o);
++    }
++    if (alpha.x != 0u) {
++        uint a8 = (uint)(saturate(o.a) * 255.0 + 0.5), ref = alpha.z;
++        bool ok = true;
++        if (alpha.y == 0x200u) ok = false;
++        else if (alpha.y == 0x201u) ok = a8 < ref;
++        else if (alpha.y == 0x202u) ok = a8 == ref;
++        else if (alpha.y == 0x203u) ok = a8 <= ref;
++        else if (alpha.y == 0x204u) ok = a8 > ref;
++        else if (alpha.y == 0x205u) ok = a8 != ref;
++        else if (alpha.y == 0x206u) ok = a8 >= ref;
++        if (!ok) discard;
++    }
++    return o;
++}
 diff --git a/src/kernel/nv2a_gpu_d3d11.inc.c b/src/kernel/nv2a_gpu_d3d11.inc.c
 new file mode 100644
-index 0000000..2bd5492
+index 0000000..0f4e573
 --- /dev/null
 +++ b/src/kernel/nv2a_gpu_d3d11.inc.c
-@@ -0,0 +1,1057 @@
+@@ -0,0 +1,1121 @@
 +/* ── Hardware rendering (Direct3D 11) ─────────────────────────────────────
 + *
 + * Included into nv2a_pb_exec.c (it reads that file's state directly), after
@@ -2304,7 +2572,7 @@ index 0000000..2bd5492
 +    float pos[4];
 +    float d0[4];
 +    float d1[4];
-+    float t[4][2];
++    float t[4][4];                       /* oT0..oT3 as written */
 +} GpuVertex;
 +
 +typedef struct {
@@ -2321,13 +2589,16 @@ index 0000000..2bd5492
 +
 +typedef struct {
 +    uint32_t addr, fmt, w, h, pitch, palette, hash;
++    uint32_t cube;                       /* a TextureCube (6 faces) */
 +    ID3D11Texture2D *tex;
 +    ID3D11ShaderResourceView *srv;
 +    uint32_t last_use;
++    uint32_t checked;                    /* frame+1 the contents were last hashed */
 +} GpuTexture;
 +
 +#define GPU_MAX_SURFACES 8
-+#define GPU_MAX_TEXTURES 256
++#define GPU_MAX_TEXTURES 4096          /* power of two: hashed, probed */
++#define GPU_TEX_PROBE    16
 +#define GPU_MAX_VERTS    (NV_MAX_INDICES * 3)
 +
 +static struct {
@@ -2341,6 +2612,8 @@ index 0000000..2bd5492
 +    ID3D11RasterizerState *rs;
 +    ID3D11Texture2D *white;
 +    ID3D11ShaderResourceView *white_srv;
++    ID3D11Texture2D *white_cube;
++    ID3D11ShaderResourceView *white_cube_srv;
 +    GpuSurface surf[GPU_MAX_SURFACES];
 +    int cur;                             /* index into surf, -1 none */
 +    GpuTexture texs[GPU_MAX_TEXTURES];
@@ -2357,116 +2630,15 @@ index 0000000..2bd5492
 +    float    specfog0[4], specfog1[4];
 +    uint32_t alpha[4];                   /* test enable, func, ref, combiner active */
 +    uint32_t texon[4];                   /* per stage: 1 when a texture is bound */
++    uint32_t mode[4];                    /* texture stage modes (PS_TEXTUREMODES_*) */
++    uint32_t dotmap[4];                  /* SET_DOT_RGBMAPPING per stage */
++    uint32_t input[4];                   /* SET_SHADER_OTHER_STAGE_INPUT per stage */
++    uint32_t cube[4];                    /* stage texture is a cube map */
++    uint32_t rect[4];                    /* stage coordinates are in texels */
++    float    tsize[4][4];                /* stage texture width, height */
 +} GpuConsts;
 +
-+static const char *k_gpu_hlsl =
-+"struct VIn { float4 pos:POSITION; float4 d0:COLOR0; float4 d1:COLOR1;\n"
-+"             float2 t0:TEXCOORD0; float2 t1:TEXCOORD1; float2 t2:TEXCOORD2; float2 t3:TEXCOORD3; };\n"
-+"struct PIn { float4 pos:SV_Position; float4 d0:COLOR0; float4 d1:COLOR1;\n"
-+"             float2 t0:TEXCOORD0; float2 t1:TEXCOORD1; float2 t2:TEXCOORD2; float2 t3:TEXCOORD3; };\n"
-+"PIn vs_main(VIn v) { PIn o; o.pos=v.pos; o.d0=v.d0; o.d1=v.d1; o.t0=v.t0; o.t1=v.t1; o.t2=v.t2; o.t3=v.t3; return o; }\n"
-+"cbuffer C : register(b0) {\n"
-+"  uint4 stg[8]; float4 f0[8]; float4 f1[8]; uint4 misc; float4 sf0; float4 sf1; uint4 alpha; uint4 texon; };\n"
-+"Texture2D T0:register(t0); Texture2D T1:register(t1); Texture2D T2:register(t2); Texture2D T3:register(t3);\n"
-+"SamplerState S0:register(s0); SamplerState S1:register(s1); SamplerState S2:register(s2); SamplerState S3:register(s3);\n"
-+"float mapin(float x, uint m) {\n"
-+"  float p = max(x, 0.0);\n"
-+"  if (m == 0x00) return p;\n"
-+"  if (m == 0x20) return 1.0 - min(p, 1.0);\n"
-+"  if (m == 0x40) return 2.0 * p - 1.0;\n"
-+"  if (m == 0x60) return -2.0 * p + 1.0;\n"
-+"  if (m == 0x80) return p - 0.5;\n"
-+"  if (m == 0xA0) return -p + 0.5;\n"
-+"  if (m == 0xC0) return x;\n"
-+"  return -x; }\n"
-+"float mapout(float x, uint m) {\n"
-+"  if (m == 0x08) x -= 0.5; else if (m == 0x10) x *= 2.0; else if (m == 0x18) x = (x - 0.5) * 2.0;\n"
-+"  else if (m == 0x20) x *= 4.0; else if (m == 0x30) x *= 0.5;\n"
-+"  return clamp(x, -1.0, 1.0); }\n"
-+"float3 inrgb(float4 R[16], uint b) { uint r = b & 15u; bool a = (b & 0x10u) != 0u; uint m = b & 0xE0u;\n"
-+"  float3 x = a ? R[r].aaa : R[r].rgb; return float3(mapin(x.r, m), mapin(x.g, m), mapin(x.b, m)); }\n"
-+"float ina(float4 R[16], uint b) { uint r = b & 15u; bool a = (b & 0x10u) != 0u;\n"
-+"  return mapin(a ? R[r].a : R[r].b, b & 0xE0u); }\n"
-+"float4 ps_main(PIn i) : SV_Target {\n"
-+"  float4 t[4];\n"
-+"  t[0] = texon.x ? T0.Sample(S0, i.t0) : float4(1,1,1,1);\n"
-+"  t[1] = texon.y ? T1.Sample(S1, i.t1) : float4(1,1,1,1);\n"
-+"  t[2] = texon.z ? T2.Sample(S2, i.t2) : float4(1,1,1,1);\n"
-+"  t[3] = texon.w ? T3.Sample(S3, i.t3) : float4(1,1,1,1);\n"
-+"  float4 d0 = saturate(i.d0), d1 = saturate(i.d1);\n"
-+"  float4 o;\n"
-+"  if (alpha.w == 0u) {\n"
-+"    o = texon.x ? t[0] * d0 : d0;\n"
-+"  } else {\n"
-+"    float4 R[16];\n"
-+"    [unroll] for (int k = 0; k < 16; k++) R[k] = float4(0,0,0,0);\n"
-+"    R[4] = d0; R[5] = d1;\n"
-+"    uint sp = misc.y;\n"
-+"    R[8] = t[0];\n"
-+"    R[9]  = ((sp >> 5)  & 31u) ? t[1] : float4(0,0,0,0);\n"
-+"    R[10] = ((sp >> 10) & 31u) ? t[2] : float4(0,0,0,0);\n"
-+"    R[11] = ((sp >> 15) & 31u) ? t[3] : float4(0,0,0,0);\n"
-+"    R[12].a = (sp & 31u) ? t[0].a : 1.0;\n"
-+"    uint ns = min(misc.x & 255u, 8u);\n"
-+"    for (uint s = 0; s < ns; s++) {\n"
-+"      uint c0 = (misc.x & 0x1000u) ? s : 0u; uint c1 = (misc.x & 0x10000u) ? s : 0u;\n"
-+"      R[1] = f0[c0]; R[2] = f1[c1];\n"
-+"      float4 N[16]; [unroll] for (int q = 0; q < 16; q++) N[q] = R[q];\n"
-+"      bool muxcd = (misc.x & 0x100u) ? (R[12].a >= 0.5) : ((uint(R[12].a * 255.0 + 0.5) & 1u) != 0u);\n"
-+"      {\n"
-+"        uint icw = stg[s].x, ocw = stg[s].y, fl = ocw >> 12, mp = fl & 0x38u;\n"
-+"        float3 A = inrgb(R, (icw >> 24) & 255u), B = inrgb(R, (icw >> 16) & 255u);\n"
-+"        float3 Cc = inrgb(R, (icw >> 8) & 255u), D = inrgb(R, icw & 255u);\n"
-+"        float3 ab = (fl & 2u) ? dot(A, B).xxx : A * B;\n"
-+"        float3 cd = (fl & 1u) ? dot(Cc, D).xxx : Cc * D;\n"
-+"        float3 ms = (fl & 4u) ? (muxcd ? cd : ab) : ab + cd;\n"
-+"        ab = float3(mapout(ab.x, mp), mapout(ab.y, mp), mapout(ab.z, mp));\n"
-+"        cd = float3(mapout(cd.x, mp), mapout(cd.y, mp), mapout(cd.z, mp));\n"
-+"        ms = float3(mapout(ms.x, mp), mapout(ms.y, mp), mapout(ms.z, mp));\n"
-+"        uint abd = (ocw >> 4) & 15u, cdd = ocw & 15u, msd = (ocw >> 8) & 15u;\n"
-+"        if (abd) { N[abd].rgb = ab; if (fl & 0x80u) N[abd].a = ab.b; }\n"
-+"        if (cdd) { N[cdd].rgb = cd; if (fl & 0x40u) N[cdd].a = cd.b; }\n"
-+"        if (msd) N[msd].rgb = ms;\n"
-+"      }\n"
-+"      {\n"
-+"        uint icw = stg[s].z, ocw = stg[s].w, fl = ocw >> 12, mp = fl & 0x38u;\n"
-+"        float A = ina(R, (icw >> 24) & 255u), B = ina(R, (icw >> 16) & 255u);\n"
-+"        float Cc = ina(R, (icw >> 8) & 255u), D = ina(R, icw & 255u);\n"
-+"        float ab = A * B, cd = Cc * D, ms = (fl & 4u) ? (muxcd ? cd : ab) : ab + cd;\n"
-+"        uint abd = (ocw >> 4) & 15u, cdd = ocw & 15u, msd = (ocw >> 8) & 15u;\n"
-+"        if (abd) N[abd].a = mapout(ab, mp);\n"
-+"        if (cdd) N[cdd].a = mapout(cd, mp);\n"
-+"        if (msd) N[msd].a = mapout(ms, mp);\n"
-+"      }\n"
-+"      [unroll] for (int q2 = 0; q2 < 16; q2++) R[q2] = N[q2];\n"
-+"    }\n"
-+"    if (misc.z != 0u || misc.w != 0u) {\n"
-+"      uint fl = misc.w & 255u;\n"
-+"      R[1] = sf0; R[2] = sf1;\n"
-+"      float3 E = inrgb(R, (misc.w >> 24) & 255u), F = inrgb(R, (misc.w >> 16) & 255u);\n"
-+"      float3 v1 = (fl & 0x40u) ? 1.0 - R[5].rgb : R[5].rgb;\n"
-+"      float3 r0 = (fl & 0x20u) ? 1.0 - R[12].rgb : R[12].rgb;\n"
-+"      float3 sum = v1 + r0; if (fl & 0x80u) sum = saturate(sum);\n"
-+"      R[14] = float4(sum, 0); R[15] = float4(E * F, 0);\n"
-+"      float3 A = inrgb(R, (misc.z >> 24) & 255u), B = inrgb(R, (misc.z >> 16) & 255u);\n"
-+"      float3 Cc = inrgb(R, (misc.z >> 8) & 255u), D = inrgb(R, misc.z & 255u);\n"
-+"      float G = ina(R, (misc.w >> 8) & 255u);\n"
-+"      o = float4(D + Cc * (1.0 - A) + B * A, G);\n"
-+"    } else {\n"
-+"      o = R[12];\n"
-+"    }\n"
-+"    o = saturate(o);\n"
-+"  }\n"
-+"  if (alpha.x != 0u) {\n"
-+"    uint a8 = (uint)(saturate(o.a) * 255.0 + 0.5), ref = alpha.z; bool ok = true;\n"
-+"    if (alpha.y == 0x200u) ok = false; else if (alpha.y == 0x201u) ok = a8 < ref;\n"
-+"    else if (alpha.y == 0x202u) ok = a8 == ref; else if (alpha.y == 0x203u) ok = a8 <= ref;\n"
-+"    else if (alpha.y == 0x204u) ok = a8 > ref; else if (alpha.y == 0x205u) ok = a8 != ref;\n"
-+"    else if (alpha.y == 0x206u) ok = a8 >= ref;\n"
-+"    if (!ok) discard;\n"
-+"  }\n"
-+"  return o;\n"
-+"}\n";
++#include "nv2a_gpu_d3d11_hlsl.inc"   /* k_gpu_hlsl, from nv2a_gpu_d3d11.hlsl */
 +
 +static int gpu_enabled(void)
 +{
@@ -2544,10 +2716,10 @@ index 0000000..2bd5492
 +            { "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, (UINT)offsetof(GpuVertex, pos), D3D11_INPUT_PER_VERTEX_DATA, 0 },
 +            { "COLOR",    0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, (UINT)offsetof(GpuVertex, d0), D3D11_INPUT_PER_VERTEX_DATA, 0 },
 +            { "COLOR",    1, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, (UINT)offsetof(GpuVertex, d1), D3D11_INPUT_PER_VERTEX_DATA, 0 },
-+            { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, (UINT)offsetof(GpuVertex, t[0]), D3D11_INPUT_PER_VERTEX_DATA, 0 },
-+            { "TEXCOORD", 1, DXGI_FORMAT_R32G32_FLOAT, 0, (UINT)offsetof(GpuVertex, t[1]), D3D11_INPUT_PER_VERTEX_DATA, 0 },
-+            { "TEXCOORD", 2, DXGI_FORMAT_R32G32_FLOAT, 0, (UINT)offsetof(GpuVertex, t[2]), D3D11_INPUT_PER_VERTEX_DATA, 0 },
-+            { "TEXCOORD", 3, DXGI_FORMAT_R32G32_FLOAT, 0, (UINT)offsetof(GpuVertex, t[3]), D3D11_INPUT_PER_VERTEX_DATA, 0 },
++            { "TEXCOORD", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, (UINT)offsetof(GpuVertex, t[0]), D3D11_INPUT_PER_VERTEX_DATA, 0 },
++            { "TEXCOORD", 1, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, (UINT)offsetof(GpuVertex, t[1]), D3D11_INPUT_PER_VERTEX_DATA, 0 },
++            { "TEXCOORD", 2, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, (UINT)offsetof(GpuVertex, t[2]), D3D11_INPUT_PER_VERTEX_DATA, 0 },
++            { "TEXCOORD", 3, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, (UINT)offsetof(GpuVertex, t[3]), D3D11_INPUT_PER_VERTEX_DATA, 0 },
 +        };
 +        ID3D11Device_CreateInputLayout(s_gpu11.dev, el, 7, ID3D10Blob_GetBufferPointer(vsb),
 +                                       ID3D10Blob_GetBufferSize(vsb), &s_gpu11.layout);
@@ -2583,6 +2755,16 @@ index 0000000..2bd5492
 +        td.Usage = D3D11_USAGE_IMMUTABLE; td.BindFlags = D3D11_BIND_SHADER_RESOURCE;
 +        ID3D11Device_CreateTexture2D(s_gpu11.dev, &td, &sd, &s_gpu11.white);
 +        ID3D11Device_CreateShaderResourceView(s_gpu11.dev, (ID3D11Resource *)s_gpu11.white, NULL, &s_gpu11.white_srv);
++        {
++            D3D11_SUBRESOURCE_DATA faces[6];
++            int f;
++            for (f = 0; f < 6; f++) { faces[f].pSysMem = &white; faces[f].SysMemPitch = 4; faces[f].SysMemSlicePitch = 4; }
++            td.ArraySize = 6;
++            td.MiscFlags = D3D11_RESOURCE_MISC_TEXTURECUBE;
++            ID3D11Device_CreateTexture2D(s_gpu11.dev, &td, faces, &s_gpu11.white_cube);
++            ID3D11Device_CreateShaderResourceView(s_gpu11.dev, (ID3D11Resource *)s_gpu11.white_cube, NULL,
++                                                  &s_gpu11.white_cube_srv);
++        }
 +    }
 +    s_gpu11.ok = s_gpu11.vs && s_gpu11.ps && s_gpu11.layout && s_gpu11.vb && s_gpu11.cb;
 +    fprintf(stderr, "  [GPU11] Direct3D 11 renderer %s (feature level 0x%X)\n",
@@ -2739,11 +2921,48 @@ index 0000000..2bd5492
 +    return h;
 +}
 +
++/* SET_TEXTURE_FORMAT of a stage says it is a cube map (bit 2). */
++static int gpu_stage_is_cube(int st)
++{
++    return (s_tex_reg[(0x1B04 + 0x40u * (uint32_t)st - NV_TEX_FIRST) / 4] >> 2) & 1;
++}
++
++/* Bytes per texel of an NV097 colour format, for the size of a cube face's
++ * mip chain (xemu kelvin_color_format_info). DXT formats are handled apart. */
++static uint32_t gpu_fmt_bpp(uint32_t fmt)
++{
++    switch (fmt) {
++    case 0x00: case 0x01: case 0x0B: case 0x13: case 0x19: case 0x1B: return 1;
++    case 0x02: case 0x03: case 0x04: case 0x05: case 0x10: case 0x11: case 0x1A:
++    case 0x1C: case 0x1D: case 0x25: case 0x27: case 0x28: case 0x30: case 0x31: return 2;
++    default: return 4;
++    }
++}
++
++/* Offset from one cube face to the next: the face's whole mip chain, rounded
++ * up to NV2A_CUBEMAP_FACE_ALIGNMENT (128), as xemu's pgraph texture length. */
++static uint32_t gpu_cube_face_bytes(int st, const Texture *t)
++{
++    uint32_t fmtreg = s_tex_reg[(0x1B04 + 0x40u * (uint32_t)st - NV_TEX_FIRST) / 4];
++    uint32_t levels = (fmtreg >> 16) & 0xF, w = t->width, h = t->height, len = 0, l;
++    uint32_t block = d3d8_format_dxt_block_bytes(t->color);
++    if (!levels) levels = 1;
++    for (l = 0; l < levels; l++) {
++        if (w < 1) w = 1;
++        if (h < 1) h = 1;
++        len += block ? ((w + 3) / 4) * ((h + 3) / 4) * block : w * h * gpu_fmt_bpp(t->color);
++        w /= 2; h /= 2;
++    }
++    return (len + 127u) & ~127u;
++}
++
 +/* SRV for texture stage st, decoding it through the software sampler the
-+ * first time (and whenever its contents change). */
-+static ID3D11ShaderResourceView *gpu_texture(int st)
++ * first time (and whenever its contents change). A cube map decodes all six
++ * faces into a TextureCube. */
++static ID3D11ShaderResourceView *gpu_texture(int st, int cube)
 +{
 +    Texture *t = st == 0 ? &s_gpu.tex : &s_stage[st];
++    uint32_t faces = cube ? 6u : 1u, face_bytes = cube ? gpu_cube_face_bytes(st, t) : 0u, f;
 +    uint32_t hash, i, n, oldest = 0, oldest_use = 0xFFFFFFFFu;
 +    uint32_t *pix;
 +    GpuTexture *e = NULL;
@@ -2751,58 +2970,89 @@ index 0000000..2bd5492
 +    if (!t->valid || t->width > 4096 || t->height > 4096)
 +        return NULL;
 +    gpu_flush_range(t->offset, gpu_tex_bytes(t));     /* render-to-texture */
-+    hash = gpu_tex_hash(t);
-+    for (i = 0; i < GPU_MAX_TEXTURES; i++) {
-+        GpuTexture *c = &s_gpu11.texs[i];
-+        if (c->srv && c->addr == t->offset && c->fmt == t->color && c->w == t->width
-+                && c->h == t->height && c->pitch == t->pitch && c->palette == t->palette) {
-+            if (c->hash == hash) {
-+                c->last_use = s_gpu11.frame;
-+                return c->srv;
++    /* Hashed by identity, probed over a short run; the oldest slot of the run
++     * is the victim. In-game NFL 2K5 binds far more than the old 256-entry
++     * linear cache held, and thrashing it re-decoded ~4 textures a frame on
++     * the CPU. Contents are re-hashed once per frame, not per draw. */
++    {
++        uint32_t key = t->offset * 2654435761u ^ t->color * 40503u ^ (t->width << 16 | t->height)
++                     ^ t->pitch * 97u ^ t->palette * 31u ^ (uint32_t)cube * 0x9E3779B9u;
++        uint32_t base = (key ^ (key >> 15)) & (GPU_MAX_TEXTURES - 1), k;
++        hash = 0;
++        for (k = 0; k < GPU_TEX_PROBE; k++) {
++            GpuTexture *c = &s_gpu11.texs[(base + k) & (GPU_MAX_TEXTURES - 1)];
++            if (c->srv && c->addr == t->offset && c->fmt == t->color && c->w == t->width
++                    && c->h == t->height && c->pitch == t->pitch && c->palette == t->palette
++                    && c->cube == (uint32_t)cube) {
++                if (c->checked == s_gpu11.frame + 1) {
++                    c->last_use = s_gpu11.frame;
++                    return c->srv;
++                }
++                hash = gpu_tex_hash(t);
++                if (c->hash == hash) {
++                    c->last_use = s_gpu11.frame;
++                    c->checked = s_gpu11.frame + 1;
++                    return c->srv;
++                }
++                e = c;                           /* same texture, new contents */
++                break;
 +            }
-+            e = c;                               /* same texture, new contents */
-+            break;
++            if (!c->srv) { e = c; break; }       /* free slot */
++            if (c->last_use < oldest_use) { oldest_use = c->last_use; oldest = (base + k) & (GPU_MAX_TEXTURES - 1); }
 +        }
-+        if (c->last_use < oldest_use) { oldest_use = c->last_use; oldest = i; }
-+    }
-+    if (!e) {
-+        e = &s_gpu11.texs[oldest];
++        if (!e)
++            e = &s_gpu11.texs[oldest];
++        if (!hash)
++            hash = gpu_tex_hash(t);
 +    }
 +    if (e->srv) { ID3D11ShaderResourceView_Release(e->srv); e->srv = NULL; }
 +    if (e->tex) { ID3D11Texture2D_Release(e->tex); e->tex = NULL; }
 +    n = t->width * t->height;
-+    pix = (uint32_t *)malloc((size_t)n * 4);
++    pix = (uint32_t *)malloc((size_t)n * 4 * faces);
 +    if (!pix)
 +        return NULL;
 +    {
-+        uint32_t u, v;
++        uint32_t u, v, base = t->offset;
 +        int ok = 1;
 +        __try {
-+            for (v = 0; v < t->height; v++)
-+                for (u = 0; u < t->width; u++) {
-+                    uint32_t c = 0;
-+                    sample_stage(st, u, v, &c);
-+                    pix[(size_t)v * t->width + u] = c;
-+                }
++            for (f = 0; f < faces; f++) {
++                t->offset = base + f * face_bytes;       /* sample_stage reads the stage's Texture */
++                for (v = 0; v < t->height; v++)
++                    for (u = 0; u < t->width; u++) {
++                        uint32_t c = 0;
++                        sample_stage(st, u, v, &c);
++                        pix[(size_t)f * n + (size_t)v * t->width + u] = c;
++                    }
++            }
 +        } __except (EXCEPTION_EXECUTE_HANDLER) {
 +            ok = 0;
 +        }
++        t->offset = base;
 +        if (!ok) { free(pix); return NULL; }
 +    }
 +    {
 +        D3D11_TEXTURE2D_DESC td;
-+        D3D11_SUBRESOURCE_DATA sd;
++        D3D11_SUBRESOURCE_DATA sd[6];
 +        memset(&td, 0, sizeof td);
-+        td.Width = t->width; td.Height = t->height; td.MipLevels = td.ArraySize = 1;
++        td.Width = t->width; td.Height = t->height; td.MipLevels = 1; td.ArraySize = faces;
 +        td.Format = DXGI_FORMAT_B8G8R8A8_UNORM; td.SampleDesc.Count = 1;
 +        td.Usage = D3D11_USAGE_IMMUTABLE; td.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-+        sd.pSysMem = pix; sd.SysMemPitch = t->width * 4; sd.SysMemSlicePitch = 0;
-+        if (SUCCEEDED(ID3D11Device_CreateTexture2D(s_gpu11.dev, &td, &sd, &e->tex)))
++        td.MiscFlags = cube ? D3D11_RESOURCE_MISC_TEXTURECUBE : 0;
++        for (f = 0; f < faces; f++) {
++            sd[f].pSysMem = pix + (size_t)f * n; sd[f].SysMemPitch = t->width * 4; sd[f].SysMemSlicePitch = n * 4;
++        }
++        if (cube && t->width != t->height) {
++            free(pix);
++            return NULL;                                 /* a cube face must be square */
++        }
++        if (SUCCEEDED(ID3D11Device_CreateTexture2D(s_gpu11.dev, &td, sd, &e->tex)))
 +            ID3D11Device_CreateShaderResourceView(s_gpu11.dev, (ID3D11Resource *)e->tex, NULL, &e->srv);
 +    }
 +    free(pix);
 +    e->addr = t->offset; e->fmt = t->color; e->w = t->width; e->h = t->height;
 +    e->pitch = t->pitch; e->palette = t->palette; e->hash = hash; e->last_use = s_gpu11.frame;
++    e->checked = s_gpu11.frame + 1;
++    e->cube = (uint32_t)cube;
 +    s_gpu11.tex_uploads++;
 +    return e->srv;
 +}
@@ -3018,14 +3268,11 @@ index 0000000..2bd5492
 +    o->pos[0] = nx * w; o->pos[1] = ny * w; o->pos[2] = nz * w; o->pos[3] = w;
 +    memcpy(o->d0, x->col, sizeof o->d0);
 +    memcpy(o->d1, x->spec, sizeof o->d1);
-+    /* XfVert holds texture coordinates in texels; the GPU samples [0,1). */
-+    o->t[0][0] = s_gpu.tex.width  ? x->uv[0] / (float)s_gpu.tex.width  : 0.0f;
-+    o->t[0][1] = s_gpu.tex.height ? x->uv[1] / (float)s_gpu.tex.height : 0.0f;
-+    for (k = 0; k < 3; k++) {
-+        const Texture *st = &s_stage[k + 1];
-+        o->t[k + 1][0] = st->width  ? x->uvn[k][0] / (float)st->width  : 0.0f;
-+        o->t[k + 1][1] = st->height ? x->uvn[k][1] / (float)st->height : 0.0f;
-+    }
++    /* As the program wrote them; the shader applies each stage's convention. */
++    memcpy(o->t, x->tc, sizeof o->t);
++    if (env_cached("RECOMP_GPU_NOPROJ"))
++        for (k = 0; k < 4; k++)
++            o->t[k][3] = 1.0f;
 +}
 +
 +/* A pre-transformed (fixed-function mode) vertex, read the way the software
@@ -3045,6 +3292,13 @@ index 0000000..2bd5492
 +        x->col[0] = x->col[1] = x->col[2] = x->col[3] = 1.0f;
 +    if (!fetch_texcoord(index, x->uv))
 +        x->uv[0] = x->uv[1] = 0.0f;
++    {
++        float t[4];
++        if (fetch_attr(texcoord_attr(), index, t)) {
++            x->tc[0][0] = t[0]; x->tc[0][1] = t[1];
++        }
++        x->tc[0][3] = 1.0f;
++    }
 +    return x;
 +}
 +
@@ -3060,7 +3314,7 @@ index 0000000..2bd5492
 +    GpuSurface *surf;
 +    D3D11_MAPPED_SUBRESOURCE m;
 +    GpuConsts c;
-+    ID3D11ShaderResourceView *srv[4];
++    ID3D11ShaderResourceView *srv[4], *cubes[4];
 +    ID3D11SamplerState *smp[4];
 +    const XfVert *(*get)(uint32_t);
 +
@@ -3141,6 +3395,57 @@ index 0000000..2bd5492
 +                s_gpu.blend, s_gpu.blend_sf, s_gpu.blend_df, g_color_mask,
 +                s_gpu.alpha_test, s_gpu.alpha_func, s_gpu.alpha_ref, comb_active(),
 +                s_gpu.tex.valid ? s_gpu.tex.offset : 0, s_gpu.tex.color, s_gpu.tex.width, s_gpu.tex.height);
++        /* The inputs of the batch's first vertex: which attributes are
++         * arrays (type/size/stride) and what they hold. Tells a colour read
++         * wrongly from a colour the program computes wrongly. */
++        if (!flat2d && nv >= 3 && s_gpu.idx_count) {
++            uint32_t a;
++            fprintf(stderr, "  [GPUTRACE]   in:");
++            for (a = 0; a < NV_VERTEX_ATTRS; a++) {
++                float in[4];
++                int arr = fetch_attr(&s_gpu.attr[a], s_gpu.idx[0], in);
++                if (arr || in[0] != 0 || in[1] != 0 || in[2] != 0 || in[3] != 1)
++                    fprintf(stderr, " v%u%s(t%u s%u)=%.3g,%.3g,%.3g,%.3g", a, arr ? "" : "i",
++                            s_gpu.attr[a].type, s_gpu.attr[a].size, in[0], in[1], in[2], in[3]);
++            }
++            fprintf(stderr, " mode=%u start=%u\n", s_vp.mode, s_vp.start);
++            {
++                int st2;
++                fprintf(stderr, "  [GPUTRACE]   stageprog=%08X ctl=%08X final=%08X/%08X",
++                        s_comb.stage_prog, s_comb.control, s_comb.final0, s_comb.final1);
++                for (st2 = 0; st2 < (int)(s_comb.control & 0xFF) && st2 < 8; st2++)
++                    fprintf(stderr, " s%d[%08X %08X %08X %08X]", st2, s_comb.color_icw[st2],
++                            s_comb.color_ocw[st2], s_comb.alpha_icw[st2], s_comb.alpha_ocw[st2]);
++                for (st2 = 0; st2 < 4; st2++) {
++                    const Texture *tx = st2 == 0 ? &s_gpu.tex : &s_stage[st2];
++                    fprintf(stderr, " t%d=%08X/%02X/%ux%u/%s", st2, tx->offset, tx->color, tx->width,
++                            tx->height, tx->valid ? (tx->enabled ? "on" : "off") : "-");
++                }
++                fprintf(stderr, "\n");
++            }
++            /* A lit batch whose diffuse came out black: trace its program
++             * once per program start (first four). */
++            if (s_gpu11.verts[0].d0[0] == 0 && s_gpu11.verts[0].d0[1] == 0 && s_gpu11.verts[0].d0[2] == 0
++                    && nv / 3 >= 500) {
++                static uint32_t traced[4];
++                static int ntraced;
++                int k, seen = 0;
++                for (k = 0; k < ntraced; k++)
++                    seen |= traced[k] == s_vp.start + 1;
++                if (!seen && ntraced < 4) {
++                    float V[16][4], O[16][4];
++                    traced[ntraced++] = s_vp.start + 1;
++                    for (a = 0; a < NV_VERTEX_ATTRS; a++)
++                        fetch_attr(&s_gpu.attr[a], s_gpu.idx[0], V[a]);
++                    fprintf(stderr, "  [VPI] program start=%u, vertex %u:\n", s_vp.start, s_gpu.idx[0]);
++                    s_vp_trace_next = 1;
++                    vp_run(V, O);
++                    s_vp_trace_next = 0;
++                    fprintf(stderr, "  [VPI] oD0=%g,%g,%g,%g oD1=%g,%g,%g,%g\n",
++                            O[3][0], O[3][1], O[3][2], O[3][3], O[4][0], O[4][1], O[4][2], O[4][3]);
++                }
++            }
++        }
 +    }
 +
 +    /* Constants. */
@@ -3157,18 +3462,42 @@ index 0000000..2bd5492
 +    comb_unpack(s_comb.specfog[1], c.specfog1);
 +    c.alpha[0] = s_gpu.alpha_test; c.alpha[1] = s_gpu.alpha_func;
 +    c.alpha[2] = s_gpu.alpha_ref; c.alpha[3] = !flat2d && comb_active() ? 1u : 0u;
++    /* Texture stage modes (SET_SHADER_STAGE_PROGRAM, 5 bits a stage), the dot
++     * mappings and stage inputs (NV_PGRAPH_SHADERCTL), as xemu's psh.c reads
++     * them. The field and player models use cube maps and the dot-product
++     * reflection modes; treated as plain 2D they lit to black (2026-09-25). */
++    {
++        uint32_t sp = s_comb.stage_prog, ctl = s_comb.shaderctl;
++        for (st = 0; st < 4; st++)
++            c.mode[st] = (sp >> (st * 5)) & 0x1F;
++        if (flat2d) {
++            c.mode[0] = 1; c.mode[1] = c.mode[2] = c.mode[3] = 0;
++        } else if (!comb_active() && !c.mode[0]) {
++            c.mode[0] = 1;                       /* texture x diffuse, as before */
++        }
++        c.dotmap[0] = 0; c.dotmap[1] = ctl & 0xF; c.dotmap[2] = (ctl >> 4) & 0xF; c.dotmap[3] = (ctl >> 8) & 0xF;
++        c.input[0] = 0; c.input[1] = 0; c.input[2] = (ctl >> 16) & 0xF; c.input[3] = (ctl >> 20) & 0xF;
++    }
 +    for (st = 0; st < 4; st++) {
 +        const Texture *t = st == 0 ? &s_gpu.tex : &s_stage[st];
-+        int want = flat2d ? st == 0 && t->valid
-+                 : t->valid && t->enabled && (st == 0 || ((s_comb.stage_prog >> (st * 5)) & 0x1F));
-+        srv[st] = want ? gpu_texture(st) : NULL;
-+        c.texon[st] = srv[st] ? 1u : 0u;
-+        if (!srv[st]) srv[st] = s_gpu11.white_srv;
-+        /* Hold it until the draw is issued: fetching a later stage can evict
-+         * this stage's cache entry and release its view, and the driver then
-+         * read a freed view (debug layer: "PSSetShaderResources ... array
++        uint32_t md = c.mode[st];
++        int want = t->valid && (flat2d ? st == 0
++                                       : t->enabled && md != 0 && md != 4 && md != 0x11);
++        ID3D11ShaderResourceView *view;
++        c.cube[st] = !flat2d && gpu_stage_is_cube(st);
++        c.rect[st] = !tex_size_from_format(t->color);
++        c.tsize[st][0] = t->width ? (float)t->width : 1.0f;
++        c.tsize[st][1] = t->height ? (float)t->height : 1.0f;
++        view = want ? gpu_texture(st, c.cube[st]) : NULL;
++        c.texon[st] = view ? 1u : 0u;
++        srv[st] = (view && !c.cube[st]) ? view : s_gpu11.white_srv;
++        cubes[st] = (view && c.cube[st]) ? view : s_gpu11.white_cube_srv;
++        /* Hold them until the draw is issued: fetching a later stage can
++         * evict this stage's cache entry and release its view, and the driver
++         * then read a freed view (debug layer: "PSSetShaderResources ... array
 +         * index 0 corrupt"; NVIDIA crashed at kickoff, 2026-09-25). */
 +        ID3D11ShaderResourceView_AddRef(srv[st]);
++        ID3D11ShaderResourceView_AddRef(cubes[st]);
 +        smp[st] = gpu_sampler(st);
 +    }
 +    if (SUCCEEDED(ID3D11DeviceContext_Map(s_gpu11.ctx, (ID3D11Resource *)s_gpu11.cb, 0, D3D11_MAP_WRITE_DISCARD, 0, &m))) {
@@ -3196,6 +3525,7 @@ index 0000000..2bd5492
 +        ID3D11DeviceContext_PSSetShader(s_gpu11.ctx, s_gpu11.ps, NULL, 0);
 +        ID3D11DeviceContext_PSSetConstantBuffers(s_gpu11.ctx, 0, 1, &s_gpu11.cb);
 +        ID3D11DeviceContext_PSSetShaderResources(s_gpu11.ctx, 0, 4, srv);
++        ID3D11DeviceContext_PSSetShaderResources(s_gpu11.ctx, 4, 4, cubes);
 +        ID3D11DeviceContext_PSSetSamplers(s_gpu11.ctx, 0, 4, smp);
 +        ID3D11DeviceContext_RSSetState(s_gpu11.ctx, s_gpu11.rs);
 +        ID3D11DeviceContext_RSSetViewports(s_gpu11.ctx, 1, &vp);
@@ -3207,8 +3537,10 @@ index 0000000..2bd5492
 +        ID3D11DeviceContext_Draw(s_gpu11.ctx, nv, 0);
 +        gpu_debug_drain(flat2d ? "draw2d" : "draw");
 +    }
-+    for (st = 0; st < 4; st++)
++    for (st = 0; st < 4; st++) {
 +        ID3D11ShaderResourceView_Release(srv[st]);
++        ID3D11ShaderResourceView_Release(cubes[st]);
++    }
 +    surf->dirty = 1;
 +    s_gpu11.draws++;
 +    s_gpu11.tris += nv / 3;
@@ -3322,8 +3654,278 @@ index 0000000..2bd5492
 +{
 +    gpu_lock(); gpu_flip_unlocked(); LeaveCriticalSection(&s_gpu_lock);
 +}
+diff --git a/src/kernel/nv2a_gpu_d3d11_hlsl.inc b/src/kernel/nv2a_gpu_d3d11_hlsl.inc
+new file mode 100644
+index 0000000..f93ea00
+--- /dev/null
++++ b/src/kernel/nv2a_gpu_d3d11_hlsl.inc
+@@ -0,0 +1,264 @@
++/* Generated from nv2a_gpu_d3d11.hlsl by tools/gen-gpu-hlsl.py -- do not edit. */
++static const char k_gpu_hlsl[] =
++    "// NV2A pixel pipeline for the Direct3D 11 renderer (nv2a_gpu_d3d11.inc.c).\n"
++    "//\n"
++    "// Edit this file, then run tools/gen-gpu-hlsl.py to regenerate\n"
++    "// nv2a_gpu_d3d11_hlsl.inc (the C string the renderer compiles at startup).\n"
++    "//\n"
++    "// Texture stages follow xemu's pgraph/glsl/psh.c: each stage has a mode from\n"
++    "// SET_SHADER_STAGE_PROGRAM and may read an earlier stage (dot-product and\n"
++    "// dependent modes). The register combiners follow comb_eval in\n"
++    "// nv2a_pb_exec.c.\n"
++    "\n"
++    "struct VIn {\n"
++    "    float4 pos : POSITION; float4 d0 : COLOR0; float4 d1 : COLOR1;\n"
++    "    float4 t0 : TEXCOORD0; float4 t1 : TEXCOORD1; float4 t2 : TEXCOORD2; float4 t3 : TEXCOORD3;\n"
++    "};\n"
++    "struct PIn {\n"
++    "    float4 pos : SV_Position; float4 d0 : COLOR0; float4 d1 : COLOR1;\n"
++    "    float4 t0 : TEXCOORD0; float4 t1 : TEXCOORD1; float4 t2 : TEXCOORD2; float4 t3 : TEXCOORD3;\n"
++    "};\n"
++    "\n"
++    "PIn vs_main(VIn v)\n"
++    "{\n"
++    "    PIn o;\n"
++    "    o.pos = v.pos; o.d0 = v.d0; o.d1 = v.d1;\n"
++    "    o.t0 = v.t0; o.t1 = v.t1; o.t2 = v.t2; o.t3 = v.t3;\n"
++    "    return o;\n"
++    "}\n"
++    "\n"
++    "cbuffer C : register(b0) {\n"
++    "    uint4  stg[8];        // combiner stages: color icw, ocw, alpha icw, ocw\n"
++    "    float4 f0[8];\n"
++    "    float4 f1[8];\n"
++    "    uint4  misc;          // control, stage_prog, final0, final1\n"
++    "    float4 sf0;\n"
++    "    float4 sf1;\n"
++    "    uint4  alpha;         // test enable, func, ref, combiner active\n"
++    "    uint4  texon;         // 1 when a texture is bound for the stage\n"
++    "    uint4  mode;          // texture stage mode per stage (PS_TEXTUREMODES_*)\n"
++    "    uint4  dotmap;        // dot mapping per stage (SET_DOT_RGBMAPPING)\n"
++    "    uint4  input;         // input stage per stage (SET_SHADER_OTHER_STAGE_INPUT)\n"
++    "    uint4  cube;          // 1 when the stage's texture is a cube map\n"
++    "    uint4  rect;          // 1 when the stage's coordinates are in texels\n"
++    "    float4 tsize[4];      // texture width, height per stage\n"
++    "};\n"
++    "\n"
++    "Texture2D   T0 : register(t0); Texture2D   T1 : register(t1);\n"
++    "Texture2D   T2 : register(t2); Texture2D   T3 : register(t3);\n"
++    "TextureCube Q0 : register(t4); TextureCube Q1 : register(t5);\n"
++    "TextureCube Q2 : register(t6); TextureCube Q3 : register(t7);\n"
++    "SamplerState S0 : register(s0); SamplerState S1 : register(s1);\n"
++    "SamplerState S2 : register(s2); SamplerState S3 : register(s3);\n"
++    "\n"
++    "float4 tex2d(uint s, float2 uv)\n"
++    "{\n"
++    "    if (s == 0u) return T0.Sample(S0, uv);\n"
++    "    if (s == 1u) return T1.Sample(S1, uv);\n"
++    "    if (s == 2u) return T2.Sample(S2, uv);\n"
++    "    return T3.Sample(S3, uv);\n"
++    "}\n"
++    "\n"
++    "float4 texcube(uint s, float3 d)\n"
++    "{\n"
++    "    if (s == 0u) return Q0.Sample(S0, d);\n"
++    "    if (s == 1u) return Q1.Sample(S1, d);\n"
++    "    if (s == 2u) return Q2.Sample(S2, d);\n"
++    "    return Q3.Sample(S3, d);\n"
++    "}\n"
++    "\n"
++    "// A 2D lookup at coordinates given in the stage's convention: texels for a\n"
++    "// linear (rect) texture, normalised otherwise.\n"
++    "float4 tex2dc(uint s, float2 uv)\n"
++    "{\n"
++    "    if (rect[s] != 0u) uv /= tsize[s].xy;\n"
++    "    return tex2d(s, uv);\n"
++    "}\n"
++    "\n"
++    "// Direction lookup: a cube map, or face-remapped 2D when the stage's texture\n"
++    "// is not one (xemu remapCubeTo2D).\n"
++    "float4 texdir(uint s, float3 d)\n"
++    "{\n"
++    "    if (cube[s] != 0u) return texcube(s, d);\n"
++    "    float3 a = max(abs(d), 1e-8);\n"
++    "    float2 uv;\n"
++    "    if (a.x > a.y && a.x > a.z) uv = (d.x > 0 ? float2(-d.z, d.y) : float2(d.z, d.y)) / a.x;\n"
++    "    else if (a.y > a.x && a.y > a.z) uv = (d.y > 0 ? float2(d.x, -d.z) : float2(d.x, d.z)) / a.y;\n"
++    "    else uv = (d.z > 0 ? float2(d.x, d.y) : float2(-d.x, d.y)) / a.z;\n"
++    "    return tex2d(s, uv * 0.5 + 0.5);\n"
++    "}\n"
++    "\n"
++    "float sign1(float x) { x *= 255.0; return (x - 128.0) / 127.0; }\n"
++    "float sign2(float x) { x *= 255.0; return x >= 128.0 ? (x - 255.5) / 127.5 : (x + 0.5) / 127.5; }\n"
++    "float sign3(float x) { x *= 255.0; return x >= 128.0 ? (x - 256.0) / 127.0 : x / 127.0; }\n"
++    "\n"
++    "float3 dotmapf(uint m, float4 c)\n"
++    "{\n"
++    "    if (m == 1u) return float3(sign1(c.r), sign1(c.g), sign1(c.b));\n"
++    "    if (m == 2u) return float3(sign2(c.r), sign2(c.g), sign2(c.b));\n"
++    "    if (m == 3u) return float3(sign3(c.r), sign3(c.g), sign3(c.b));\n"
++    "    return c.rgb;       // 0: zero to one; the HILO modes are unimplemented, as in xemu\n"
++    "}\n"
++    "\n"
++    "float mapin(float x, uint m)\n"
++    "{\n"
++    "    float p = max(x, 0.0);\n"
++    "    if (m == 0x00) return p;\n"
++    "    if (m == 0x20) return 1.0 - min(p, 1.0);\n"
++    "    if (m == 0x40) return 2.0 * p - 1.0;\n"
++    "    if (m == 0x60) return -2.0 * p + 1.0;\n"
++    "    if (m == 0x80) return p - 0.5;\n"
++    "    if (m == 0xA0) return -p + 0.5;\n"
++    "    if (m == 0xC0) return x;\n"
++    "    return -x;\n"
++    "}\n"
++    "\n"
++    "float mapout(float x, uint m)\n"
++    "{\n"
++    "    if (m == 0x08) x -= 0.5;\n"
++    "    else if (m == 0x10) x *= 2.0;\n"
++    "    else if (m == 0x18) x = (x - 0.5) * 2.0;\n"
++    "    else if (m == 0x20) x *= 4.0;\n"
++    "    else if (m == 0x30) x *= 0.5;\n"
++    "    return clamp(x, -1.0, 1.0);\n"
++    "}\n"
++    "\n"
++    "float3 inrgb(float4 R[16], uint b)\n"
++    "{\n"
++    "    uint r = b & 15u; bool a = (b & 0x10u) != 0u; uint m = b & 0xE0u;\n"
++    "    float3 x = a ? R[r].aaa : R[r].rgb;\n"
++    "    return float3(mapin(x.r, m), mapin(x.g, m), mapin(x.b, m));\n"
++    "}\n"
++    "\n"
++    "float ina(float4 R[16], uint b)\n"
++    "{\n"
++    "    uint r = b & 15u; bool a = (b & 0x10u) != 0u;\n"
++    "    return mapin(a ? R[r].a : R[r].b, b & 0xE0u);\n"
++    "}\n"
++    "\n"
++    "float4 ps_main(PIn i) : SV_Target\n"
++    "{\n"
++    "    float4 T[4] = { i.t0, i.t1, i.t2, i.t3 };\n"
++    "    float4 t[4] = { float4(0, 0, 0, 1), float4(0, 0, 0, 1), float4(0, 0, 0, 1), float4(0, 0, 0, 1) };\n"
++    "    float dt[4] = { 0, 0, 0, 0 };\n"
++    "    [unroll] for (uint s = 0; s < 4; s++) {\n"
++    "        uint m = mode[s];\n"
++    "        float4 pt = T[s];\n"
++    "        uint src = input[s];\n"
++    "        float4 prev = t[min(src, 3u)];\n"
++    "        if (s == 0u && m != 0u && texon[0] == 0u) m = 0xFFu;      // untextured stage 0\n"
++    "        if (m == 0u)                        t[s] = float4(0, 0, 0, 1);         // NONE\n"
++    "        else if (m == 0xFFu)                t[s] = float4(1, 1, 1, 1);\n"
++    "        else if (m == 1u || m == 2u || m == 6u || m == 7u) {               // PROJECT2D/3D, BUMPENVMAP (unimplemented: plain)\n"
++    "            float w = (m == 1u || m == 2u) && pt.w != 0.0 ? pt.w : 1.0;\n"
++    "            t[s] = texon[s] ? (cube[s] ? texcube(s, pt.xyz) : tex2dc(s, pt.xy / w)) : float4(1, 1, 1, 1);\n"
++    "        }\n"
++    "        else if (m == 3u)                   t[s] = texon[s] ? texdir(s, pt.xyz) : float4(1, 1, 1, 1);   // CUBEMAP\n"
++    "        else if (m == 4u)                   t[s] = pt;                          // PASSTHRU\n"
++    "        else if (m == 0x11u) {                                                   // DOTPRODUCT\n"
++    "            dt[s] = dot(pt.xyz, dotmapf(dotmap[s], prev));\n"
++    "            t[s] = float4(0, 0, 0, 0);\n"
++    "        }\n"
++    "        else if (m == 0x09u) {                                                   // DOT_ST\n"
++    "            dt[s] = dot(pt.xyz, dotmapf(dotmap[s], prev));\n"
++    "            t[s] = tex2dc(s, float2(dt[s - 1], dt[s]));\n"
++    "        }\n"
++    "        else if (m == 0x0Bu) {                                                   // DOT_RFLCT_DIFF (stage 2)\n"
++    "            dt[s] = dot(pt.xyz, dotmapf(dotmap[s], prev));\n"
++    "            float dn = dot(T[3].xyz, dotmapf(dotmap[3], t[min(input[3], 3u)]));\n"
++    "            t[s] = texdir(s, float3(dt[s - 1], dt[s], dn));\n"
++    "        }\n"
++    "        else if (m == 0x0Cu) {                                                   // DOT_RFLCT_SPEC (stage 3)\n"
++    "            dt[s] = dot(pt.xyz, dotmapf(dotmap[s], prev));\n"
++    "            float3 n = float3(dt[1], dt[2], dt[3]);\n"
++    "            float3 e = float3(T[1].w, T[2].w, T[3].w);\n"
++    "            float3 r = 2.0 * n * dot(n, e) / max(dot(n, n), 1e-8) - e;\n"
++    "            t[s] = texdir(s, r);\n"
++    "        }\n"
++    "        else if (m == 0x0Du || m == 0x0Eu) {                                     // DOT_STR_3D / CUBE\n"
++    "            dt[s] = dot(pt.xyz, dotmapf(dotmap[s], prev));\n"
++    "            t[s] = texdir(s, float3(dt[1], dt[2], dt[3]));\n"
++    "        }\n"
++    "        else if (m == 0x0Fu)                t[s] = tex2d(s, prev.ar);           // DEPENDENT_AR\n"
++    "        else if (m == 0x10u)                t[s] = tex2d(s, prev.gb);           // DEPENDENT_GB\n"
++    "        else                                t[s] = float4(0, 0, 0, 1);          // unimplemented\n"
++    "    }\n"
++    "\n"
++    "    float4 d0 = saturate(i.d0), d1 = saturate(i.d1);\n"
++    "    float4 o;\n"
++    "    if (alpha.w == 0u) {\n"
++    "        o = (mode[0] != 0u && texon[0] != 0u) ? t[0] * d0 : d0;\n"
++    "    } else {\n"
++    "        float4 R[16];\n"
++    "        [unroll] for (int k = 0; k < 16; k++) R[k] = float4(0, 0, 0, 0);\n"
++    "        R[4] = d0; R[5] = d1;\n"
++    "        R[8] = t[0]; R[9] = t[1]; R[10] = t[2]; R[11] = t[3];\n"
++    "        R[12].a = mode[0] != 0u ? t[0].a : 1.0;\n"
++    "        uint ns = min(misc.x & 255u, 8u);\n"
++    "        for (uint cs = 0; cs < ns; cs++) {\n"
++    "            uint c0 = (misc.x & 0x1000u) ? cs : 0u;\n"
++    "            uint c1 = (misc.x & 0x10000u) ? cs : 0u;\n"
++    "            R[1] = f0[c0]; R[2] = f1[c1];\n"
++    "            float4 N[16];\n"
++    "            [unroll] for (int q = 0; q < 16; q++) N[q] = R[q];\n"
++    "            bool muxcd = (misc.x & 0x100u) ? (R[12].a >= 0.5)\n"
++    "                                           : ((uint(R[12].a * 255.0 + 0.5) & 1u) != 0u);\n"
++    "            {\n"
++    "                uint icw = stg[cs].x, ocw = stg[cs].y, fl = ocw >> 12, mp = fl & 0x38u;\n"
++    "                float3 A = inrgb(R, (icw >> 24) & 255u), B = inrgb(R, (icw >> 16) & 255u);\n"
++    "                float3 Cc = inrgb(R, (icw >> 8) & 255u), D = inrgb(R, icw & 255u);\n"
++    "                float3 ab = (fl & 2u) ? dot(A, B).xxx : A * B;\n"
++    "                float3 cd = (fl & 1u) ? dot(Cc, D).xxx : Cc * D;\n"
++    "                float3 ms = (fl & 4u) ? (muxcd ? cd : ab) : ab + cd;\n"
++    "                ab = float3(mapout(ab.x, mp), mapout(ab.y, mp), mapout(ab.z, mp));\n"
++    "                cd = float3(mapout(cd.x, mp), mapout(cd.y, mp), mapout(cd.z, mp));\n"
++    "                ms = float3(mapout(ms.x, mp), mapout(ms.y, mp), mapout(ms.z, mp));\n"
++    "                uint abd = (ocw >> 4) & 15u, cdd = ocw & 15u, msd = (ocw >> 8) & 15u;\n"
++    "                if (abd) { N[abd].rgb = ab; if (fl & 0x80u) N[abd].a = ab.b; }\n"
++    "                if (cdd) { N[cdd].rgb = cd; if (fl & 0x40u) N[cdd].a = cd.b; }\n"
++    "                if (msd) N[msd].rgb = ms;\n"
++    "            }\n"
++    "            {\n"
++    "                uint icw = stg[cs].z, ocw = stg[cs].w, fl = ocw >> 12, mp = fl & 0x38u;\n"
++    "                float A = ina(R, (icw >> 24) & 255u), B = ina(R, (icw >> 16) & 255u);\n"
++    "                float Cc = ina(R, (icw >> 8) & 255u), D = ina(R, icw & 255u);\n"
++    "                float ab = A * B, cd = Cc * D, ms = (fl & 4u) ? (muxcd ? cd : ab) : ab + cd;\n"
++    "                uint abd = (ocw >> 4) & 15u, cdd = ocw & 15u, msd = (ocw >> 8) & 15u;\n"
++    "                if (abd) N[abd].a = mapout(ab, mp);\n"
++    "                if (cdd) N[cdd].a = mapout(cd, mp);\n"
++    "                if (msd) N[msd].a = mapout(ms, mp);\n"
++    "            }\n"
++    "            [unroll] for (int q2 = 0; q2 < 16; q2++) R[q2] = N[q2];\n"
++    "        }\n"
++    "        if (misc.z != 0u || misc.w != 0u) {\n"
++    "            uint fl = misc.w & 255u;\n"
++    "            R[1] = sf0; R[2] = sf1;\n"
++    "            float3 E = inrgb(R, (misc.w >> 24) & 255u), F = inrgb(R, (misc.w >> 16) & 255u);\n"
++    "            float3 v1 = (fl & 0x40u) ? 1.0 - R[5].rgb : R[5].rgb;\n"
++    "            float3 r0 = (fl & 0x20u) ? 1.0 - R[12].rgb : R[12].rgb;\n"
++    "            float3 sum = v1 + r0;\n"
++    "            if (fl & 0x80u) sum = saturate(sum);\n"
++    "            R[14] = float4(sum, 0); R[15] = float4(E * F, 0);\n"
++    "            float3 A = inrgb(R, (misc.z >> 24) & 255u), B = inrgb(R, (misc.z >> 16) & 255u);\n"
++    "            float3 Cc = inrgb(R, (misc.z >> 8) & 255u), D = inrgb(R, misc.z & 255u);\n"
++    "            float G = ina(R, (misc.w >> 8) & 255u);\n"
++    "            o = float4(D + Cc * (1.0 - A) + B * A, G);\n"
++    "        } else {\n"
++    "            o = R[12];\n"
++    "        }\n"
++    "        o = saturate(o);\n"
++    "    }\n"
++    "    if (alpha.x != 0u) {\n"
++    "        uint a8 = (uint)(saturate(o.a) * 255.0 + 0.5), ref = alpha.z;\n"
++    "        bool ok = true;\n"
++    "        if (alpha.y == 0x200u) ok = false;\n"
++    "        else if (alpha.y == 0x201u) ok = a8 < ref;\n"
++    "        else if (alpha.y == 0x202u) ok = a8 == ref;\n"
++    "        else if (alpha.y == 0x203u) ok = a8 <= ref;\n"
++    "        else if (alpha.y == 0x204u) ok = a8 > ref;\n"
++    "        else if (alpha.y == 0x205u) ok = a8 != ref;\n"
++    "        else if (alpha.y == 0x206u) ok = a8 >= ref;\n"
++    "        if (!ok) discard;\n"
++    "    }\n"
++    "    return o;\n"
++    "}\n";
 diff --git a/src/kernel/nv2a_pb_exec.c b/src/kernel/nv2a_pb_exec.c
-index b3dcbf7..f791b47 100644
+index b3dcbf7..68ce05e 100644
 --- a/src/kernel/nv2a_pb_exec.c
 +++ b/src/kernel/nv2a_pb_exec.c
 @@ -24,8 +24,10 @@
@@ -3781,7 +4383,7 @@ index b3dcbf7..f791b47 100644
      default:
          break;                             /* points and lines: not yet */
      }
-@@ -1242,6 +1512,1126 @@ static void raster_batch(void)
+@@ -1242,6 +1512,1143 @@ static void raster_batch(void)
   * question is what space attribute 0 arrives in: a title running a vertex
   * program hands over object-space positions that mean nothing without running
   * it, while pre-transformed screen-space coordinates can be drawn directly. */
@@ -3869,7 +4471,7 @@ index b3dcbf7..f791b47 100644
 +static struct {
 +    uint32_t color_icw[8], color_ocw[8], alpha_icw[8], alpha_ocw[8];
 +    uint32_t factor0[8], factor1[8], specfog[2];
-+    uint32_t final0, final1, control, stage_prog;
++    uint32_t final0, final1, control, stage_prog, shaderctl;
 +    int      set;
 +} s_comb;
 +
@@ -3902,6 +4504,10 @@ index b3dcbf7..f791b47 100644
 +    case NV097_SET_SPECULAR_FOG_FACTOR + 4:   s_comb.specfog[1] = param; return 1;
 +    case NV097_SET_COMBINER_CONTROL:          s_comb.control = param; s_comb.set = 1; return 1;
 +    case NV097_SET_SHADER_STAGE_PROGRAM:      s_comb.stage_prog = param; return 1;
++    /* NV_PGRAPH_SHADERCTL: dot mappings (bits 0-11) and each stage's input
++     * stage (bits 16-27), for the dot-product texture modes (xemu). */
++    case 0x1E74: s_comb.shaderctl = (s_comb.shaderctl & ~0xFFFu) | (param & 0xFFFu); return 1;
++    case 0x1E78: s_comb.shaderctl = (s_comb.shaderctl & ~0xFFFF000u) | (param & 0xFFFF000u); return 1;
 +    default: return 0;
 +    }
 +}
@@ -4260,6 +4866,9 @@ index b3dcbf7..f791b47 100644
 +
 +/* Run the loaded program for one vertex. V: inputs v0..v15.
 + * O: outputs (0 oPos, 3 oD0, 4 oD1, 5 oFog, 6 oPts, 7/8 oB0/oB1, 9..12 oT0..3). */
++/* Set to trace every instruction of the next vp_run (RECOMP_GPU_TRACE). */
++static int s_vp_trace_next;
++
 +static void vp_run(const float V[16][4], float O[16][4])
 +{
 +    float R[13][4];
@@ -4370,6 +4979,14 @@ index b3dcbf7..f791b47 100644
 +                }
 +            }
 +        }
++        if (s_vp_trace_next)
++            fprintf(stderr, "  [VPI] %3d mac=%2u ilu=%u A(m%d r%d)=%.4g,%.4g,%.4g,%.4g B(m%d r%d)=%.4g,%.4g,%.4g,%.4g"
++                    " C(m%d r%d)=%.4g,%.4g,%.4g,%.4g -> mres=%.4g,%.4g,%.4g,%.4g ires=%.4g"
++                    " r%u m%X i%X o%s%u m%X cidx=%u\n", slot, mac, ilu,
++                    mux_a, reg_a, A[0], A[1], A[2], A[3], mux_b, reg_b, B[0], B[1], B[2], B[3],
++                    mux_c, reg_c, C[0], C[1], C[2], C[3], mres[0], mres[1], mres[2], mres[3], ires[0],
++                    out_r, mac_mask, ilu_mask, orb ? "O" : "c", out_addr, o_mask,
++                    vp_field(t, 1, 13, 8));
 +        if (a0_written)
 +            a0 = new_a0;
 +        if (vp_field(t, 3, 0, 1))
@@ -4384,6 +5001,7 @@ index b3dcbf7..f791b47 100644
 +    float spec[4];          /* oD1, 0..1 RGBA -- where 3D lighting lands */
 +    float uv[2];            /* oT0 in texels (scaled like fetch_texcoord) */
 +    float uvn[3][2];        /* oT1..oT3, scaled for stages 1..3 */
++    float tc[4][4];         /* oT0..oT3 as the program wrote them (GPU renderer) */
 +    int   ok;
 +} XfVert;
 +
@@ -4446,6 +5064,7 @@ index b3dcbf7..f791b47 100644
 +        if (c != c) c = 1.0f;
 +        x->spec[k] = c < 0 ? 0 : (c > 1 ? 1 : c);
 +    }
++    memcpy(x->tc, O[9], sizeof x->tc);
 +    x->uv[0] = O[9][0];
 +    x->uv[1] = O[9][1];
 +    if (tex_size_from_format(s_gpu.tex.color)) {
@@ -4908,7 +5527,7 @@ index b3dcbf7..f791b47 100644
  static void draw_primitive(void)
  {
      float v[4];
-@@ -1270,7 +2660,44 @@ static void draw_primitive(void)
+@@ -1270,7 +2677,44 @@ static void draw_primitive(void)
          }
      }
  
@@ -4954,7 +5573,7 @@ index b3dcbf7..f791b47 100644
  
      if (getenv("RECOMP_PB_EXEC_VERBOSE")) {
          static int shown;
-@@ -1390,6 +2817,12 @@ static void draw_inline_array(void)
+@@ -1390,6 +2834,12 @@ static void draw_inline_array(void)
          case 0:  bytes = 4;                        break;  /* D3DCOLOR   */
          case 2:  bytes = 4 * s_gpu.attr[a].size;   break;  /* float      */
          case 4:  bytes = s_gpu.attr[a].size;       break;  /* ubyte norm */
@@ -4967,7 +5586,7 @@ index b3dcbf7..f791b47 100644
          default: bytes = 4 * s_gpu.attr[a].size;   break;
          }
          s_gpu.attr[a].offset = off;
-@@ -1493,6 +2926,37 @@ static int imm_vertex_method(uint32_t method, uint32_t param)
+@@ -1493,6 +2943,37 @@ static int imm_vertex_method(uint32_t method, uint32_t param)
      union { uint32_t u; float f; } v;
      v.u = param;
  
@@ -5005,7 +5624,7 @@ index b3dcbf7..f791b47 100644
      if (method >= NV097_SET_VERTEX4F && method < NV097_SET_VERTEX4F + 16) {
          uint32_t c = (method - NV097_SET_VERTEX4F) / 4;
          s_gpu.imm_pos[c] = v.f;
-@@ -1570,7 +3034,22 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1570,7 +3051,22 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
          note_unhandled(method, param);
          return;
      }
@@ -5028,7 +5647,7 @@ index b3dcbf7..f791b47 100644
      case NV097_SET_SURFACE_CLIP_HORIZONTAL:
          s_gpu.clip_x = param & 0xFFFF;
          s_gpu.clip_w = (param >> 16) & 0xFFFF;
-@@ -1586,16 +3065,32 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1586,16 +3082,32 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
          s_gpu.pitch = param & 0xFFFF;      /* colour pitch; zeta is the top half */
          break;
      case NV097_SET_SURFACE_COLOR_OFFSET:
@@ -5061,7 +5680,7 @@ index b3dcbf7..f791b47 100644
          if (param) {
              s_gpu.prim = param;
              s_gpu.idx_count = 0;
-@@ -1620,8 +3115,15 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1620,8 +3132,15 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
      case NV097_INLINE_ARRAY:
          /* Vertex data, not a pointer to it. Buffered rather than decoded here
           * because the format is only fully known at END. */
@@ -5078,7 +5697,7 @@ index b3dcbf7..f791b47 100644
          break;
  
      case NV097_DRAW_ARRAYS: {
-@@ -1644,6 +3146,13 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1644,6 +3163,13 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
          break;
      }
  
@@ -5092,7 +5711,7 @@ index b3dcbf7..f791b47 100644
      case NV097_ARRAY_ELEMENT16:
          /* Two 16-bit indices per parameter word. */
          if (s_gpu.prim && s_gpu.idx_count + 2 <= NV_MAX_INDICES) {
-@@ -1659,6 +3168,23 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1659,6 +3185,23 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
          record_tex_reg(method, param);
          break;
  
@@ -5116,19 +5735,55 @@ index b3dcbf7..f791b47 100644
      case NV097_SET_FLIP_READ:
          s_gpu.flip_read = param;
          return;
-@@ -1682,6 +3208,11 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1682,6 +3225,47 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
          /* The stall ends when the buffer being read is the one just finished.
           * There is no scanout here to wait for, so that is now. */
          s_gpu.flip_read = s_gpu.flip_write;
 +        /* The surface drawn into up to here is a finished frame: show it. */
 +        if (gpu_enabled())
 +            gpu_flip();
++        /* RECOMP_SHOT_PREFIX=<path prefix>: every RECOMP_SHOT_SECONDS (default
++         * 30) write the finished frame as <prefix>-<n>.bmp, straight from the
++         * surface -- works when the window is minimised or the screen is
++         * locked, which window capture does not (2026-09-25). */
++        if (getenv("RECOMP_SHOT_PREFIX")) {
++            static DWORD next_shot;
++            static unsigned shot_n;
++            DWORD now = GetTickCount();
++            if (!next_shot)
++                next_shot = now;
++            if (now >= next_shot && surface_bpp() == 4) {
++                const char *secs = getenv("RECOMP_SHOT_SECONDS");
++                const uint8_t *mem = (const uint8_t *)xbox_GetMemoryOffset();
++                uint32_t base = dma_resolve(s_gpu.color_offset);
++                uint32_t w = s_gpu.clip_x + s_gpu.clip_w, h = s_gpu.clip_y + s_gpu.clip_h, y;
++                char path[512];
++                FILE *f;
++                next_shot = now + 1000u * (secs ? (unsigned)atoi(secs) : 30u);
++                snprintf(path, sizeof path, "%s-%03u.bmp", getenv("RECOMP_SHOT_PREFIX"), shot_n++);
++                f = fopen(path, "wb");
++                if (f && w && h && w <= 4096 && h <= 4096) {
++                    uint32_t size = 54 + w * h * 4;
++                    uint8_t hdr[54] = { 'B', 'M' };
++                    memcpy(hdr + 2, &size, 4);
++                    hdr[10] = 54; hdr[14] = 40;
++                    memcpy(hdr + 18, &w, 4);
++                    { int32_t nh = -(int32_t)h; memcpy(hdr + 22, &nh, 4); }   /* top-down */
++                    hdr[26] = 1; hdr[28] = 32;
++                    fwrite(hdr, 1, 54, f);
++                    for (y = 0; y < h; y++)
++                        fwrite(mem + base + (size_t)y * s_gpu.pitch, 4, w, f);
++                }
++                if (f)
++                    fclose(f);
++            }
++        }
 +        xbox_FramebufferWindowSet(dma_resolve(s_gpu.color_offset), s_gpu.pitch);
 +        xbox_FramebufferWindowSize(s_gpu.clip_x + s_gpu.clip_w, s_gpu.clip_y + s_gpu.clip_h);
          /* And this is a completed swap, which is what a title's own swap
           * counter counts -- see xbox_Nv2aFrameCounterFlip. */
          xbox_Nv2aFrameCounterFlip();
-@@ -1696,6 +3227,11 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1696,6 +3280,11 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
          return;
  
      case NV097_SET_TEXTURE_FORMAT:
@@ -5140,7 +5795,7 @@ index b3dcbf7..f791b47 100644
          s_gpu.tex.color = (param >> 8) & 0xFF;
          /* A swizzled texture carries its own dimensions here, as log2 in
           * BASE_SIZE_U/V (nv2a_regs.h: 0x00F00000 / 0x0F000000). It has to:
-@@ -1729,6 +3265,9 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1729,6 +3318,9 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
      case NV097_SET_TEXTURE_IMAGE_RECT:
          s_gpu.tex.width  = param >> 16;
          s_gpu.tex.height = param & 0xFFFF;
@@ -5150,7 +5805,7 @@ index b3dcbf7..f791b47 100644
          record_tex_reg(method, param);
          break;
  
-@@ -1948,9 +3487,12 @@ void nv2a_pb_exec_report(void)
+@@ -1948,9 +3540,12 @@ void nv2a_pb_exec_report(void)
              dma_resolve(s_gpu.drawn_offset), s_gpu.color_offset,
              dma_resolve(s_gpu.color_offset));
      fprintf(stderr, "[GPU] rasterised %u triangles; %u batches skipped as not"
