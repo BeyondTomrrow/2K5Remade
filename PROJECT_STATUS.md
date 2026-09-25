@@ -2195,3 +2195,4 @@ Reached natively (user-verified): intro movies, legal/SEGA screens, title, main 
 - `NFL2K5_SKIP_INTRO` now skips only the first boot-intro call of `sub_00178150`; every movie call logs `[MOVIE]` with its caller.
 - `RECOMP_GPU=1` is now the default (double-clicking the exe uses the GPU); `RECOMP_GPU=0` for software.
 - User reports (open): Franchise returns to the configure screen after confirming; Team Rosters player list empty; Create Player 3D model missing. One scripted run crashed in `sub_0048E89F` after garbage task-pump icalls from 0x38CFD (not reproduced).
+- **Audio is the match-loading blocker.** Speech items only advance from the APU voice position. Fixed the APU emulator reading physical addresses from low memory instead of the 0x80000000 window (`apu_phys()` in apu_shim.h); speech position still 0 afterwards -- next check VOICE_ON methods / VP frame gating / CBO write-back. Added `[APU] method` trace. Full chain in docs/HANDOFF-CHATGPT.md.

@@ -22,6 +22,95 @@ index 2742fa2..b3c9305 100644
  #include <stdbool.h>
  #include <stdint.h>
  
+diff --git a/src/apu/apu_shim.h b/src/apu/apu_shim.h
+index dd6bec1..a7cd974 100644
+--- a/src/apu/apu_shim.h
++++ b/src/apu/apu_shim.h
+@@ -95,32 +95,50 @@ static inline void qemu_thread_join(QemuThread *t) {
+ 
+ extern uint8_t *g_apu_ram_ptr; /* Set at init to point at Xbox 64MB RAM */
+ 
++/* Host pointer for an APU physical address.
++ *
++ * The runtime keeps the Xbox physical window (0x80000000 + P) as storage
++ * separate from low memory, where the XBE image lives (xbox_memory_layout.c),
++ * and MmGetPhysicalAddress returns va - 0x80000000 for contiguous memory.
++ * DirectSound allocates its voice tables, notifiers and sample buffers there,
++ * so reading P from low memory fed the voice processor the title's own code:
++ * no voice ever played or finished, and NFL 2K5 waited forever on speech
++ * (2026-09-24). Same rule as the GPU's dma_resolve: an offset below the
++ * contiguous allocator's high-water mark is in the window. */
++extern uint32_t xbox_ContiguousAllocatedBytes(void);
++static inline uint8_t *apu_phys(hwaddr addr) {
++    uint32_t a = (uint32_t)addr & 0x03FFFFFF;
++    if (a < xbox_ContiguousAllocatedBytes())
++        return g_apu_ram_ptr + 0x80000000u + a;
++    return g_apu_ram_ptr + a;
++}
++
+ /* Little-endian physical memory reads */
+ static inline uint32_t ldl_le_phys(void *as, hwaddr addr) {
+     (void)as;
+-    return *(uint32_t *)(g_apu_ram_ptr + (addr & 0x03FFFFFF));
++    return *(uint32_t *)apu_phys(addr);
+ }
+ static inline uint16_t lduw_le_phys(void *as, hwaddr addr) {
+     (void)as;
+-    return *(uint16_t *)(g_apu_ram_ptr + (addr & 0x03FFFFFF));
++    return *(uint16_t *)apu_phys(addr);
+ }
+ static inline uint8_t ldub_phys(void *as, hwaddr addr) {
+     (void)as;
+-    return *(uint8_t *)(g_apu_ram_ptr + (addr & 0x03FFFFFF));
++    return *(uint8_t *)apu_phys(addr);
+ }
+ 
+ /* Little-endian physical memory writes */
+ static inline void stl_le_phys(void *as, hwaddr addr, uint32_t val) {
+     (void)as;
+-    *(uint32_t *)(g_apu_ram_ptr + (addr & 0x03FFFFFF)) = val;
++    *(uint32_t *)apu_phys(addr) = val;
+ }
+ static inline void stw_le_phys(void *as, hwaddr addr, uint16_t val) {
+     (void)as;
+-    *(uint16_t *)(g_apu_ram_ptr + (addr & 0x03FFFFFF)) = val;
++    *(uint16_t *)apu_phys(addr) = val;
+ }
+ static inline void stb_phys(void *as, hwaddr addr, uint8_t val) {
+     (void)as;
+-    *(uint8_t *)(g_apu_ram_ptr + (addr & 0x03FFFFFF)) = val;
++    *(uint8_t *)apu_phys(addr) = val;
+ }
+ 
+ /* Stub address space - just passed to ldl_le_phys etc. (ignored) */
+diff --git a/src/apu/apu_vp.c b/src/apu/apu_vp.c
+index b9f429e..d7b61b2 100644
+--- a/src/apu/apu_vp.c
++++ b/src/apu/apu_vp.c
+@@ -185,6 +185,14 @@ static void fe_method(MCPXAPUState *d, uint32_t method, uint32_t argument)
+     d->regs[NV_PAPU_FEDECMETH] = method;
+     d->regs[NV_PAPU_FEDECPARAM] = argument;
+     unsigned int selected_handle, list;
++    {
++        /* What the title asks of the voice processor: the first few methods,
++         * then a running count (2026-09-24, NFL 2K5 speech never finishing). */
++        static unsigned long n;
++        n++;
++        if (n <= 40 || (n % 5000) == 0)
++            fprintf(stderr, "[APU] method #%lu %04X arg %08X\n", n, method, argument);
++    }
+ 
+     switch (method) {
+     case NV1BA0_PIO_VOICE_LOCK:
+@@ -843,7 +851,7 @@ static int voice_get_samples(MCPXAPUState *d, uint32_t v, float samples[][2],
+                 uint32_t linear_addr = block_index * (uint32_t)block_size;
+                 if (stream) {
+                     hwaddr addr = segment_offset + linear_addr;
+-                    memcpy(adpcm_block, &d->ram_ptr[addr & 0x03FFFFFF],
++                    memcpy(adpcm_block, apu_phys(addr),
+                            block_size);
+                 } else {
+                     linear_addr += ba;
 diff --git a/src/input/xinput_device.c b/src/input/xinput_device.c
 index 1a662a8..c9f5989 100644
 --- a/src/input/xinput_device.c
