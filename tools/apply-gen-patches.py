@@ -142,6 +142,25 @@ PATCHES = [
     ("NV2A_KICK_4261C0", "sub_004261C0", "MEM32(ecx + 0x40) = esi;", "after", """\
     { extern void xbox_Nv2aKick(void); xbox_Nv2aKick(); }
 """),
+    ("STOPWAIT_3CAF0", "sub_0003CAF0", "loc_0003CB1E: ;", "after", """\
+#ifdef NFL2K5_FORCE_UNBLOCK_AUDIO_LOCK
+    /* EXPERIMENTAL, 2026-09-24: sub_0003CAF0 stops a DirectSound buffer and
+     * spins on GetStatus until its PLAYING bit clears. Only the APU finishing
+     * the voice-off clears it (voice+0x12 state), and the APU is a stub, so
+     * after Start Game the audio task spun here forever and loading stopped
+     * (task 3E910 permanently BUSY, no disc reads). Same root cause as
+     * AUDIO_LOCK below. */
+    {
+        static volatile long spins;
+        if (!(MEM8(esp + 4) & 1))
+            spins = 0;
+        else if (++spins > 100) {
+            spins = 0;
+            goto loc_0003CB24;
+        }
+    }
+#endif
+"""),
     ("AUDIO_LOCK", "sub_0044BB44", "loc_0044BCAB: ;", "before", """\
 #ifdef NFL2K5_FORCE_UNBLOCK_AUDIO_LOCK
     /* EXPERIMENTAL, 2026-09-21: the busy-wait at loc_0044BCAB spins on a
