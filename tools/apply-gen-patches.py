@@ -158,6 +158,23 @@ PATCHES = [
     ("DIAG_FSMPUSH", "sub_0006E390", "loc_0006E3E6: ;", "after", """\
     { extern void nfl2k5_diag_fsm(uint32_t obj, uint32_t desc, int push); nfl2k5_diag_fsm(esi, edi, 1); }
 """),
+    # Popups (2026-09-25, coin toss): show copies the popup at ecx into its
+    # slot (sub_0008ACF0); sub_0008A340(slot) closes it, and on the second
+    # call (fade done) runs the slot's callback at +0xF14.
+    ("DIAG_POPUPSHOW", "sub_0008ACF0", "loc_0008ACF0: ;", "after", """\
+    { extern void nfl2k5_diag_popup(uint32_t obj, int what); nfl2k5_diag_popup(ecx, 0); }
+"""),
+    ("DIAG_POPUPCLOSE", "sub_0008A340", "loc_0008A340: ;", "after", """\
+    { extern void nfl2k5_diag_popup(uint32_t obj, int what); nfl2k5_diag_popup(ecx, 1); }
+"""),
+    ("DIAG_POPUPCB", "sub_0008A340", "loc_0008A3E1: ;", "after", """\
+    { extern void nfl2k5_diag_popup(uint32_t obj, int what); nfl2k5_diag_popup(esi, 2); }
+"""),
+    # Presentation script interpreter (2026-09-25): opcode byte in eax, script
+    # context in esi, [esp+0x24] nonzero = start the command, 0 = poll it.
+    ("DIAG_SCRIPTOP", "sub_000DBC10", "loc_000DBC20: ;", "after", """\
+    { extern void nfl2k5_diag_script(uint32_t ctx, uint32_t op, uint32_t start); nfl2k5_diag_script(esi, eax & 0xFF, MEM32(esp + 0x24)); }
+"""),
     ("DIAG_FSMPOP", "sub_0006E400", "loc_0006E439: ;", "after", """\
     { extern void nfl2k5_diag_fsm(uint32_t obj, uint32_t desc, int push); nfl2k5_diag_fsm(esi, 0, 0); }
 """),

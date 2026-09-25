@@ -2557,10 +2557,10 @@ index 0000000..c13d083
 +}
 diff --git a/src/kernel/nv2a_gpu_d3d11.inc.c b/src/kernel/nv2a_gpu_d3d11.inc.c
 new file mode 100644
-index 0000000..55f9504
+index 0000000..2a84b8a
 --- /dev/null
 +++ b/src/kernel/nv2a_gpu_d3d11.inc.c
-@@ -0,0 +1,1207 @@
+@@ -0,0 +1,1210 @@
 +/* ── Hardware rendering (Direct3D 11) ─────────────────────────────────────
 + *
 + * Included into nv2a_pb_exec.c (it reads that file's state directly), after
@@ -3478,14 +3478,17 @@ index 0000000..55f9504
 +        fprintf(stderr, "  [GPUTRACE] f%u %s surf=%08X %ux%u tris=%u ndc x[%.2f,%.2f] y[%.2f,%.2f] "
 +                "v0 pos=(%.3g %.3g %.3g %.3g) d0=(%.2f %.2f %.2f %.2f) z=%u/%04X ztest=%u zmask=%u "
 +                "clip=[%g,%g] zclear=%08X sten=%u/%04X blend=%u %04X/%04X cmask=%08X atest=%u/%04X/%u "
-+                "comb=%u tex0=%08X fmt=%02X %ux%u\n",
++                "comb=%u tex0=%08X fmt=%02X %ux%u en=%d%d%d%d prog=%08X ctl=%08X c0=%08X/%08X fin=%08X/%08X\n",
 +                s_gpu11.frame, flat2d ? "2D" : "VP", surf->guest, rw, rh, nv / 3, mnx, mxx, mny, mxy,
 +                v->pos[0], v->pos[1], v->pos[2], v->pos[3], v->d0[0], v->d0[1], v->d0[2], v->d0[3],
 +                s_vp.depth_test, s_vp.depth_func, s_vp.depth_test, s_vp.depth_mask,
 +                s_vp.clip_min, s_vp.clip_max, s_vp.zclear, s_vp.stencil_test, s_vp.stencil_func,
 +                s_gpu.blend, s_gpu.blend_sf, s_gpu.blend_df, g_color_mask,
 +                s_gpu.alpha_test, s_gpu.alpha_func, s_gpu.alpha_ref, comb_active(),
-+                s_gpu.tex.valid ? s_gpu.tex.offset : 0, s_gpu.tex.color, s_gpu.tex.width, s_gpu.tex.height);
++                s_gpu.tex.valid ? s_gpu.tex.offset : 0, s_gpu.tex.color, s_gpu.tex.width, s_gpu.tex.height,
++                s_gpu.tex.enabled, s_stage[1].enabled, s_stage[2].enabled, s_stage[3].enabled,
++                s_comb.stage_prog, s_comb.control, s_comb.color_icw[0], s_comb.color_ocw[0],
++                s_comb.final0, s_comb.final1);
 +        /* The inputs of the batch's first vertex: which attributes are
 +         * arrays (type/size/stride) and what they hold. Tells a colour read
 +         * wrongly from a colour the program computes wrongly. */
@@ -7896,7 +7899,7 @@ index 69ced11..0651a5b 100644
 +void xbox_FramebufferWindowForceStart(void) {}
  #endif
 diff --git a/templates/runtime/recomp_types.h b/templates/runtime/recomp_types.h
-index dc1dae0..6c31cbe 100644
+index dc1dae0..398a525 100644
 --- a/templates/runtime/recomp_types.h
 +++ b/templates/runtime/recomp_types.h
 @@ -298,6 +298,8 @@ static inline int64_t recomp_fist(double value, uint16_t control, unsigned bits)
@@ -7908,7 +7911,7 @@ index dc1dae0..6c31cbe 100644
  
  /** Current write index into the ring buffer. */
  extern volatile uint32_t g_icall_trace_idx;
-@@ -559,6 +561,14 @@ static inline RecompXmm XMM_UNPACK_HIGH(RecompXmm a, RecompXmm b) {
+@@ -559,6 +561,18 @@ static inline RecompXmm XMM_UNPACK_HIGH(RecompXmm a, RecompXmm b) {
   * ================================================================ */
  
  /* Unsigned comparison conditions (from CMP a, b -> a - b) */
@@ -7919,11 +7922,15 @@ index dc1dae0..6c31cbe 100644
 +/* An instruction the lifter does not implement ran (it is skipped). */
 +void recomp_todo_hit(uint32_t address);
 +#define RECOMP_TODO(addr) recomp_todo_hit(addr)
++/* A call target the analysis did not detect as a function ran; its stub
++ * does nothing (recomp_stubs_unresolved.c). */
++void recomp_unresolved_hit(uint32_t address);
++#define RECOMP_UNRESOLVED(addr) recomp_unresolved_hit(addr)
 +#define RECOMP_FLAGS_FALLBACK(addr, f) (recomp_flags_fallback_hit(addr), (f))
  #define CMP_EQ(a, b)  ((uint32_t)(a) == (uint32_t)(b))
  #define CMP_NE(a, b)  ((uint32_t)(a) != (uint32_t)(b))
  #define CMP_B(a, b)   ((uint32_t)(a) <  (uint32_t)(b))   /* below (CF=1) */
-@@ -864,6 +874,7 @@ void recomp_abi_violation_log(uint32_t va, uint32_t ebx0, uint32_t esi0,
+@@ -864,6 +878,7 @@ void recomp_abi_violation_log(uint32_t va, uint32_t ebx0, uint32_t esi0,
      g_icall_trace[g_icall_trace_idx & (ICALL_TRACE_SIZE-1)] = _va; \
      g_icall_trace_idx++; \
      g_icall_count++; \
@@ -7931,7 +7938,7 @@ index dc1dae0..6c31cbe 100644
      /* Skip garbage VAs outside code section + kernel thunk range */ \
      if (!RECOMP_ICALL_IS_CODE(_va)) { \
          recomp_icall_not_code_log(_va); \
-@@ -891,6 +902,7 @@ void recomp_abi_violation_log(uint32_t va, uint32_t ebx0, uint32_t esi0,
+@@ -891,6 +906,7 @@ void recomp_abi_violation_log(uint32_t va, uint32_t ebx0, uint32_t esi0,
      g_icall_trace[g_icall_trace_idx & (ICALL_TRACE_SIZE-1)] = _va; \
      g_icall_trace_idx++; \
      g_icall_count++; \
@@ -8440,7 +8447,7 @@ index 78665f4..f128a73 100644
  
  if __name__ == "__main__":
 diff --git a/tools/recomp/translator.py b/tools/recomp/translator.py
-index 4c840a1..ae47126 100644
+index 4c840a1..c9fd389 100644
 --- a/tools/recomp/translator.py
 +++ b/tools/recomp/translator.py
 @@ -32,8 +32,16 @@ def _merge_flag_states(states):
@@ -8495,3 +8502,18 @@ index 4c840a1..ae47126 100644
                  return True
              cc = None
              if m.startswith("j") and len(m) > 1:
+@@ -1736,9 +1750,12 @@ class BatchTranslator:
+             for addr in sorted(unresolved):
+                 popped = self.translator._stub_ret_bytes(addr)
+                 note = (f"ret {popped}" if popped else "not detected")
++                # RECOMP_UNRESOLVED reports the first run of each stub: code
++                # the analysis missed does nothing here, and a missed function
++                # silently doing nothing stalled the coin toss (0x25E780).
+                 stub_lines.append(
+-                    f"void {unresolved[addr]}(void) {{ g_esp += {4 + popped}; "
+-                    f"/* 0x{addr:08X}: {note} */ }}"
++                    f"void {unresolved[addr]}(void) {{ RECOMP_UNRESOLVED(0x{addr:08X}u); "
++                    f"g_esp += {4 + popped}; /* 0x{addr:08X}: {note} */ }}"
+                 )
+             stub_lines.append("")
+ 

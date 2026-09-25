@@ -19,6 +19,23 @@ you, same diagnosis.
 / `down` ... Set `NFL2K5_NO_HOST_PAD=1`, otherwise a connected controller injects
 stray d-pad presses.
 
+## 0. NEW (2026-09-25 morning): undetected functions ran as empty stubs
+
+The coin-toss stall was `sub_0025E780` ("It is heads." + what comes next): a
+tail-jump target the analysis never detected, so `recomp_stubs_unresolved.c`
+had an empty stub for it and the match script waited forever. 176 such stubs
+were outside every detected function; Claude seeded 166 of them
+(`analysis/seed_functions.json`) and is regenerating. The other **372 stubs
+are mid-function entry points** (a call or jump into the middle of a detected
+function). Every stub now logs `[UNRESOLVED] undetected function X ran as an
+empty stub (return Y)` the first time it runs. Task: run the game through
+menus / Quick Game / Franchise with the new build, collect every
+`[UNRESOLVED]` line, and for each decide: real function start the analysis
+merged into a neighbour (seed it), or a mid-function entry the translator
+should emit as its own entry function (propose a translator change:
+`external/xboxrecomp/tools/recomp/translator.py`, search "not detected").
+**This may also explain Franchise / Rosters / Create Player.**
+
 ## 1. Audit the remaining table-driven indirect tail jumps (translator)
 
 `grep -n "RECOMP_ITAIL(MEM32(e[a-z]x \* 4 + 0x" src/recomp/gen/*.c` lists 44 (12 of

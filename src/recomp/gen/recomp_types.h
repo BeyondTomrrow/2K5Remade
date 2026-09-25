@@ -568,6 +568,10 @@ void recomp_flags_fallback_hit(uint32_t address);
 /* An instruction the lifter does not implement ran (it is skipped). */
 void recomp_todo_hit(uint32_t address);
 #define RECOMP_TODO(addr) recomp_todo_hit(addr)
+/* A call target the analysis did not detect as a function ran; its stub
+ * does nothing (recomp_stubs_unresolved.c). */
+void recomp_unresolved_hit(uint32_t address);
+#define RECOMP_UNRESOLVED(addr) recomp_unresolved_hit(addr)
 #define RECOMP_FLAGS_FALLBACK(addr, f) (recomp_flags_fallback_hit(addr), (f))
 #define CMP_EQ(a, b)  ((uint32_t)(a) == (uint32_t)(b))
 #define CMP_NE(a, b)  ((uint32_t)(a) != (uint32_t)(b))

@@ -755,6 +755,28 @@ static void nfl2k5_peek_icall_hist(void)
     if (g_ih_on <= 0 || now - last < 30000)
         return;
     last = now;
+    /* RECOMP_ICALL_WATCH=hex,hex,...: those targets' counts, even when they
+     * are nowhere near the top 40 (or zero). */
+    {
+        const char *w = getenv("RECOMP_ICALL_WATCH");
+        if (w && *w) {
+            fprintf(stderr, "  [ICALLWATCH]");
+            while (*w) {
+                char *e;
+                uint32_t va = (uint32_t)strtoul(w, &e, 16), h = (va * 2654435761u) >> 19, k;
+                LONG n = 0;
+                if (e == w) break;
+                for (k = 0; k < 32; k++) {
+                    uint32_t slot = (h + k) & (ICALL_HIST_SIZE - 1);
+                    if (g_ih_va[slot] == (LONG)va) { n = g_ih_n[slot]; break; }
+                    if (!g_ih_va[slot]) break;
+                }
+                fprintf(stderr, " %08X:%ld", va, n);
+                w = *e == ',' ? e + 1 : e;
+            }
+            fprintf(stderr, "\n");
+        }
+    }
     for (i = 0; i < ICALL_HIST_SIZE; i++) {
         LONG n = InterlockedExchange(&g_ih_n[i], 0);
         if (!n) continue;
@@ -771,6 +793,26 @@ static void nfl2k5_peek_icall_hist(void)
     for (j = 0; j < 40 && top_n[j]; j++)
         fprintf(stderr, " %08X:%ld", top_va[j], top_n[j]);
     fprintf(stderr, "\n");
+}
+
+/* A call target the analysis did not detect as a function ran: its stub in
+ * recomp_stubs_unresolved.c only returns. Once per address, with the caller.
+ * Seed real functions in analysis/seed_functions.json. */
+void recomp_unresolved_hit(uint32_t address)
+{
+    static volatile LONG seen[1024];
+    uint32_t h = (address * 2654435761u) >> 22, k;
+    for (k = 0; k < 16; k++) {
+        uint32_t slot = (h + k) & 1023u;
+        LONG cur = seen[slot];
+        if (cur == (LONG)address)
+            return;
+        if (cur == 0 && InterlockedCompareExchange(&seen[slot], (LONG)address, 0) == 0) {
+            fprintf(stderr, "  [UNRESOLVED] undetected function %08X ran as an empty stub (return %08X)\n",
+                    address, *(const uint32_t *)((const uint8_t *)xbox_GetMemoryOffset() + g_esp));
+            return;
+        }
+    }
 }
 
 /* An instruction the lifter left unimplemented ran; it was skipped, which is
@@ -810,6 +852,57 @@ void nfl2k5_diag_fsm(uint32_t obj, uint32_t desc, int push)
             break;
 }
 
+/* 2026-09-25: presentation script commands (DIAG_SCRIPTOP). Prints each
+ * command a script context starts, and the first poll of a command, with the
+ * {type, start, poll} entry at 0xA8F7B8 + op*12. */
+void nfl2k5_diag_script(uint32_t ctx, uint32_t op, uint32_t start)
+{
+    static uint32_t ctxs[16], last[16];
+    static volatile LONG printed;
+    const uint8_t *m = (const uint8_t *)xbox_GetMemoryOffset();
+    uint32_t key = op | (start ? 0x100u : 0u), e = 0xA8F7B8u + op * 12u;
+    int i;
+    for (i = 0; i < 16 && ctxs[i] && ctxs[i] != ctx; i++) {}
+    if (i == 16) i = 15;
+    if (ctxs[i] == ctx && last[i] == key && !start)
+        return;
+    ctxs[i] = ctx;
+    last[i] = key;
+    if (InterlockedIncrement(&printed) > 20000)
+        return;
+    fprintf(stderr, "  [SCRIPT] ctx=%08X op=%3u %s type=%u start=%08X poll=%08X\n", ctx, op,
+            start ? "start" : "poll ", *(const uint32_t *)(m + e), *(const uint32_t *)(m + e + 4u),
+            *(const uint32_t *)(m + e + 8u));
+}
+
+/* 2026-09-25: popups (tools/apply-gen-patches.py DIAG_POPUP*). what 0: shown
+ * (obj = the popup being copied into its slot: +0 slot, +8 timeout, +0x4C
+ * title, +0xCC message, UTF-16); 1: close(slot); 2: close callback. */
+void nfl2k5_diag_popup(uint32_t obj, int what)
+{
+    const uint8_t *m = (const uint8_t *)xbox_GetMemoryOffset();
+    if (what == 0) {
+        char title[64], msg[128];
+        int i;
+        for (i = 0; i < 63 && *(const uint16_t *)(m + obj + 0x4Cu + i * 2u); i++)
+            title[i] = (char)*(const uint16_t *)(m + obj + 0x4Cu + i * 2u);
+        title[i] = 0;
+        for (i = 0; i < 127 && *(const uint16_t *)(m + obj + 0xCCu + i * 2u); i++)
+            msg[i] = (char)*(const uint16_t *)(m + obj + 0xCCu + i * 2u);
+        msg[i] = 0;
+        fprintf(stderr, "  [POPUPOP] show obj=%08X slot=%d t=%g '%s' '%s' ret=%08X\n", obj,
+                (int)*(const uint32_t *)(m + obj), *(const float *)(m + obj + 8u), title, msg,
+                *(const uint32_t *)(m + g_esp));
+    } else if (what == 1) {
+        uint32_t sl = 0xB61B50u + obj * 0xF20u;
+        fprintf(stderr, "  [POPUPOP] close slot=%d active=%u closing=%u cb=%08X ret=%08X\n", (int)obj,
+                obj < 2 ? *(const uint32_t *)(m + sl + 4u) : 0, obj < 2 ? *(const uint32_t *)(m + sl + 0xCu) : 0,
+                obj < 2 ? *(const uint32_t *)(m + sl + 0xF14u) : 0, *(const uint32_t *)(m + g_esp));
+    } else {
+        fprintf(stderr, "  [POPUPOP] callback %08X\n", obj);
+    }
+}
+
 static void nfl2k5_peek_fsms(void)
 {
     const uint8_t *m = (const uint8_t *)xbox_GetMemoryOffset();
@@ -823,6 +916,18 @@ static void nfl2k5_peek_fsms(void)
     /* Match loading (state 0x4F6708, tick sub_000F50A0): sub_000F48E0 reports
      * "done" into A92888, switching on the mode at A9288C and the phase at
      * A92880. */
+    /* Coin-toss popup: built at 0xC38268 (sub_0025DFE0/sub_0025E0C0), shown
+     * by copying it into slot *(0xC38268) of the array at 0xB61B50 (0xF20
+     * each, sub_0008ACF0); sub_0008A840 runs the slots every frame. +4
+     * active, +8 timeout in seconds (FLT_MAX = wait for a choice), +0xC
+     * and +0xF08 must be 0 for the timeout to count down. */
+    for (int k = 0; k < 2; k++) {
+        uint32_t sl = 0xB61B50u + (uint32_t)k * 0xF20u;
+        fprintf(stderr, "  [POPUP] B38C30=%08X slot%d idx=%08X active=%08X t=%g +C=%08X +F00=%g +F04=%08X +F08=%08X\n", *(const uint32_t *)(m + 0xB38C30u), k,
+                *(const uint32_t *)(m + sl), *(const uint32_t *)(m + sl + 4u), *(const float *)(m + sl + 8u),
+                *(const uint32_t *)(m + sl + 0xCu), *(const float *)(m + sl + 0xF00u),
+                *(const uint32_t *)(m + sl + 0xF04u), *(const uint32_t *)(m + sl + 0xF08u));
+    }
     fprintf(stderr, "  [MATCHPEEK] done=%08X mode=%08X phase=%08X E20=%08X E24=%08X obj890=%08X\n",
             *(const uint32_t *)(m + 0xA92888u), *(const uint32_t *)(m + 0xA9288Cu),
             *(const uint32_t *)(m + 0xA92880u), *(const uint32_t *)(m + 0xA94E20u),

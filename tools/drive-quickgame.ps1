@@ -1,4 +1,4 @@
-﻿param([string]$Side = '', [string]$Tag = 'qd', [int]$PlaySeconds = 300, [int]$ShotEvery = 30, [string]$Exe = 'build\Release\NFL2K5.exe')
+﻿param([string]$Side = '', [string]$Tag = 'qd', [int]$PlaySeconds = 300, [int]$ShotEvery = 30, [string]$Exe = 'build\Release\NFL2K5.exe', [int]$TapEvery = 0)
 # Drive a CPU-vs-CPU Quick Game: title -> main menu -> Quick Game -> Team
 # Select (controller left in the middle) -> Coach Matchup -> Start Game ->
 # skip the pregame. Presses go through NFL2K5_PRESS_FILE (tools\press.ps1),
@@ -25,11 +25,17 @@ Press a 30          # Start Game -> loading -> pregame
 Press a 5           # skip pregame
 $t0 = Get-Date
 $next = 0
+$nextTap = $TapEvery
 while (-not $p.HasExited -and ((Get-Date) - $t0).TotalSeconds -lt $PlaySeconds) {
     $s = [int]((Get-Date) - $t0).TotalSeconds
     if ($s -ge $next) {
         & "$PSScriptRoot\capwin.ps1" -At 0 -Prefix "$Tag-$s" | Out-Null
         $next += $ShotEvery
+    }
+    # -TapEvery N: press A every N seconds of play (skips pregame segments).
+    if ($TapEvery -gt 0 -and $s -ge $nextTap) {
+        & "$PSScriptRoot\press.ps1" a
+        $nextTap += $TapEvery
     }
     Start-Sleep 2
 }

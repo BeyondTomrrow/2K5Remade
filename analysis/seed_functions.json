@@ -866,5 +866,669 @@
   {
     "start": "0x00320FD0",
     "note": "Referenced from a data table, preceded by padding, not translated; verified function-like start with capstone (2026-09-24 scan)."
+  },
+  {
+    "start": "0x000116F0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00011760",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0001488A",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0001488E",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x000156F9",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00015707",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00015855",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0001585A",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0001587E",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00015880",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0003EB40",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x000429C0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x000599F0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00059B30",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0005A490",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00063C80",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00064B10",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00072C00",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00073C80",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00077540",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0008A300",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0008A320",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x000A1660",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x000A20D0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x000BD7E0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x000CD720",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x000DAE98",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x000DE630",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x000E6713",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0010C4E0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0010D0B0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00112334",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0011233A",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00116380",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00117310",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00117430",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0011BEB0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0011C0E0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0011C0F0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0011D580",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x001207B0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00125700",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x001286E0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0012B7D0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00130010",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00137C90",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00137CF0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0013D410",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0013DB50",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x001425C0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0014F4F0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0015E8DC",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0015F790",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0016CAA0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00191EB0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x001B68F0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x001BDB30",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x001C17E0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x001F74C6",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x001F74CA",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x001F74CE",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0021E85A",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0024C3A0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0024E545",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0024E588",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00251050",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00251180",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x002511F0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00251390",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x002514C0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00251710",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x002517B0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0025E780",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00262C7C",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00262CB4",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00262CDC",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0026AE20",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0026AE40",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0026AEC0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0026AF50",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0026AF80",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0026B040",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0026B0E0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0027B570",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0027C8C0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0027CA80",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0027F3A0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00285F50",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00285FE0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00286110",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00286A90",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00286C30",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00286E20",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00287030",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x002871A0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00288DE0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0028FD60",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0029B7A0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x002A6000",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x002A6750",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x002AA4F0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x002B1340",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x002B1FC0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x002B33E0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x002C10F0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x002C4460",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x002C5340",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x002C5470",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x002C55F0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x002D13A0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00303FE9",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0031F9A0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00343310",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00353860",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00355DD0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00357370",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0035C670",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0035F200",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00361C70",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00361D40",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00364E80",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0036A0A0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0036A0C0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0036A6B0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0036D820",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0036D970",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0036E010",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0036E0A0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0036E0E0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00372BB0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00375F82",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00377FE4",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00377FFC",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x003AE43C",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x003D2215",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0041B35B",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0041B390",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0041B392",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0041D9D5",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0041D9E3",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0041DAD8",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0041DAE6",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0041E0E6",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x004457BB",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x004767A2",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00478DE8",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0047F071",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00484CB2",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x004861EA",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0048637B",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x004A6ACF",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x004A6AFA",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x004A6B1C",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x004A6B61",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x004AD0A1",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x004AF34C",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x004AF364",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x004B34C8",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x004BA64B",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x004BAEE7",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x004BB0BD",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x004BB0FD",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x004BB49B",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x004BB6CA",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x004E3B02",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x004E3B12",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
   }
 ]
