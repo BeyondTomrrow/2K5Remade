@@ -1,0 +1,3 @@
+sxd -c2 ".echo SECONDCHANCE; .lastevent; r; kc 40; lm o; .dump /ma E:\NFL2K5-PC\logs\crash.dmp; q" av
+sxd -c2 ".echo SECONDCHANCE; .lastevent; kc 40; q" c0000409
+g

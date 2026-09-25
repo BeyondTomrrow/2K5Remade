@@ -87935,8 +87935,11 @@ loc_000CB281: ;
 
 loc_000CB286: ;
     edx = ZX8(MEM8(ecx + 0xCB2C0));
-    g_seh_ebp = ebp; RECOMP_ITAIL(MEM32(edx * 4 + 0xCB2BC)); return; /* indirect tail jmp */
+    { uint32_t _jt = MEM32(edx * 4 + 0xCB2BC); /* switch: 1 entries, 1 targets */
+    if (_jt == 0x000CB294u) goto loc_000CB294;
+    g_seh_ebp = ebp; RECOMP_ITAIL(_jt); return; }
 
+loc_000CB294: ;
     PUSH32(esp, ebx);
     PUSH32(esp, 0x000CB29Au); RECOMP_ABI_CALL(0x000CA470u, sub_000CA470); /* call 0x000CA470 */
 
@@ -88041,8 +88044,11 @@ loc_000CB30B: ;
 
 loc_000CB310: ;
     edx = ZX8(MEM8(ecx + 0xCB34C));
-    g_seh_ebp = ebp; RECOMP_ITAIL(MEM32(edx * 4 + 0xCB348)); return; /* indirect tail jmp */
+    { uint32_t _jt = MEM32(edx * 4 + 0xCB348); /* switch: 1 entries, 1 targets */
+    if (_jt == 0x000CB31Eu) goto loc_000CB31E;
+    g_seh_ebp = ebp; RECOMP_ITAIL(_jt); return; }
 
+loc_000CB31E: ;
     PUSH32(esp, esi);
     PUSH32(esp, 0x000CB324u); RECOMP_ABI_CALL(0x000CB080u, sub_000CB080); /* call 0x000CB080 */
 

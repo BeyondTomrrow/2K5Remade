@@ -1336,6 +1336,20 @@ static LONG CALLBACK crash_report(EXCEPTION_POINTERS *ep)
     fflush(stderr);   /* what was logged before the fault, in order */
     fprintf(stderr, "[CRASH] exception=0x%08lX host=0x%llX\n", code,
             (unsigned long long)ep->ContextRecord->Rip);
+    {
+        /* Which module and thread: a crash outside the generated code (a
+         * system DLL, the audio backend) otherwise shows only a raw address
+         * and all-zero guest registers. */
+        HMODULE mod = NULL;
+        char name[MAX_PATH] = "?";
+        if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                               GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                               (LPCSTR)(uintptr_t)ep->ContextRecord->Rip, &mod) && mod)
+            GetModuleFileNameA(mod, name, sizeof name);
+        fprintf(stderr, "[CRASH] module=%s+0x%llX thread=%lu\n", name,
+                (unsigned long long)(ep->ContextRecord->Rip - (uintptr_t)mod),
+                GetCurrentThreadId());
+    }
     if (code == EXCEPTION_ACCESS_VIOLATION)
         fprintf(stderr, "[CRASH] operation=%llu address=0x%llX\n",
                 (unsigned long long)ep->ExceptionRecord->ExceptionInformation[0],
@@ -1973,6 +1987,8 @@ int main(int argc, char **argv)
     xbox_kernel_bridge_init();
     if (!validate_only && getenv("RECOMP_AC97_READY")) {
         g_apu_state = mcpx_apu_init_standalone((uint8_t *)(uintptr_t)xbox_GetMemoryOffset());
+        { extern int (*g_xbox_apu_irq_line)(void); extern int mcpx_apu_irq_line(void);
+          g_xbox_apu_irq_line = mcpx_apu_irq_line; }   /* deliver APU interrupts */
         if (!g_apu_state || !AddVectoredExceptionHandler(1, audio_mmio)) {
             fprintf(stderr, "[BOOT] Failed to initialize APU compatibility.\n");
             return 3;

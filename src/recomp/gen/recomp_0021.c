@@ -75597,8 +75597,11 @@ loc_003067E0: ;
 
 loc_003067E8: ;
     eax = ZX8(MEM8(eax + 0x306828));
-    g_seh_ebp = ebp; RECOMP_ITAIL(MEM32(eax * 4 + 0x306824)); return; /* indirect tail jmp */
+    { uint32_t _jt = MEM32(eax * 4 + 0x306824); /* switch: 1 entries, 1 targets */
+    if (_jt == 0x003067F6u) goto loc_003067F6;
+    g_seh_ebp = ebp; RECOMP_ITAIL(_jt); return; }
 
+loc_003067F6: ;
     eax = 0; /* xor self */
     _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* xor result */
     _fa = (uint32_t)(ecx) & 0xFFFFFFFFu; _fb = (uint32_t)(ecx) & 0xFFFFFFFFu;
@@ -75680,8 +75683,11 @@ loc_00306830: ;
 
 loc_00306845: ;
     ecx = ZX8(MEM8(eax + 0x306978));
-    g_seh_ebp = ebp; RECOMP_ITAIL(MEM32(ecx * 4 + 0x306974)); return; /* indirect tail jmp */
+    { uint32_t _jt = MEM32(ecx * 4 + 0x306974); /* switch: 1 entries, 1 targets */
+    if (_jt == 0x00306853u) goto loc_00306853;
+    g_seh_ebp = ebp; RECOMP_ITAIL(_jt); return; }
 
+loc_00306853: ;
     edx = eax * 8 + 0xAD74E8;
     eax = 0; /* xor self */
     _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* xor result */

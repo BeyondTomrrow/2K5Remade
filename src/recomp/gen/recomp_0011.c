@@ -90688,8 +90688,11 @@ loc_00181663: ;
 
 loc_00181668: ;
     eax = ZX8(MEM8(eax + 0x18192C));
-    g_seh_ebp = ebp; RECOMP_ITAIL(MEM32(eax * 4 + 0x181928)); return; /* indirect tail jmp */
+    { uint32_t _jt = MEM32(eax * 4 + 0x181928); /* switch: 1 entries, 1 targets */
+    if (_jt == 0x00181676u) goto loc_00181676;
+    g_seh_ebp = ebp; RECOMP_ITAIL(_jt); return; }
 
+loc_00181676: ;
     PUSH32(esp, 0x43986666);
     edx = 2;
     ecx = edi;

@@ -147,7 +147,9 @@ loc_0018EBEF: ;
 
 loc_0018EC00: ;
     eax = ZX8(MEM8(eax + 0x18EC20));
-    g_seh_ebp = ebp; RECOMP_ITAIL(MEM32(eax * 4 + 0x18EC1C)); return; /* indirect tail jmp */
+    { uint32_t _jt = MEM32(eax * 4 + 0x18EC1C); /* switch: 1 entries, 1 targets */
+    if (_jt == 0x0018EC0Eu) goto loc_0018EC0E;
+    g_seh_ebp = ebp; RECOMP_ITAIL(_jt); return; }
 
 loc_0018EC0E: ;
     eax = 0; /* xor self */

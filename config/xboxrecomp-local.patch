@@ -10,6 +10,60 @@ index e4cd232..d97f7c9 100644
  )
  
  # Option to build examples
+diff --git a/src/apu/apu_core.c b/src/apu/apu_core.c
+index 459be77..7da0972 100644
+--- a/src/apu/apu_core.c
++++ b/src/apu/apu_core.c
+@@ -58,6 +58,16 @@ void mcpx_debug_end_frame(void) {}
+  * IRQ handling (stubbed - no PCI bus in standalone)
+  * ============================================================ */
+ 
++/* The APU's interrupt line, as the kernel sees it (kernel_bridge.c raises
++ * the title's connected ISR while it is set). The title's DirectSound ISR
++ * reads NV_PAPU_ISTS and acknowledges by writing it, which comes back through
++ * the register write path to update_irq and drops the line. Before this the
++ * line went nowhere, so DirectSound never learned that a voice had stopped or
++ * a stream packet had played -- NFL 2K5 waited forever on pregame speech
++ * (2026-09-24). */
++static volatile LONG g_apu_irq_line;
++int mcpx_apu_irq_line(void) { return g_apu_irq_line != 0; }
++
+ static void update_irq(MCPXAPUState *d)
+ {
+     if (d->regs[NV_PAPU_FECTL] & NV_PAPU_FECTL_FEMETHMODE_TRAPPED) {
+@@ -69,10 +79,10 @@ static void update_irq(MCPXAPUState *d)
+         qatomic_or(&d->regs[NV_PAPU_ISTS], NV_PAPU_ISTS_GINTSTS);
+         /* In standalone mode we don't raise a PCI IRQ; the game's kernel
+          * stub will poll ISTS directly or we'll signal via a flag. */
+-        pci_irq_assert(PCI_DEVICE(d));
++        InterlockedExchange(&g_apu_irq_line, 1);
+     } else {
+         qatomic_and(&d->regs[NV_PAPU_ISTS], ~NV_PAPU_ISTS_GINTSTS);
+-        pci_irq_deassert(PCI_DEVICE(d));
++        InterlockedExchange(&g_apu_irq_line, 0);
+     }
+ }
+ 
+@@ -461,7 +471,19 @@ static void *mcpx_apu_frame_thread(void *arg)
+         if (apu_active && !g_test_tone.active) {
+             /* Full pipeline: VP voices → DSP → monitor → waveOut */
+             se_frame(d);
++            /* As xemu's frame loop: a frame that raised a notifier or trapped
++             * the front end updates the interrupt line. */
++            if (d->set_irq) {
++                update_irq(d);
++                d->set_irq = false;
++            }
+         } else {
++            /* A trapped or halted front end is waiting for the title's ISR
++             * (xemu sets set_irq here). */
++            if (fectl & (NV_PAPU_FECTL_FEMETHMODE_TRAPPED | NV_PAPU_FECTL_FEMETHMODE_HALTED)) {
++                update_irq(d);
++                d->set_irq = false;
++            }
+             /* Lightweight: just monitor frame (test tone + software mixer) */
+             mcpx_apu_monitor_frame(d);
+             d->ep_frame_div++;
 diff --git a/src/apu/apu_mmio_hook.c b/src/apu/apu_mmio_hook.c
 index 2742fa2..b3c9305 100644
 --- a/src/apu/apu_mmio_hook.c
@@ -84,7 +138,7 @@ index dd6bec1..a7cd974 100644
  
  /* Stub address space - just passed to ldl_le_phys etc. (ignored) */
 diff --git a/src/apu/apu_vp.c b/src/apu/apu_vp.c
-index b9f429e..5af33d8 100644
+index b9f429e..b6581d7 100644
 --- a/src/apu/apu_vp.c
 +++ b/src/apu/apu_vp.c
 @@ -185,6 +185,20 @@ static void fe_method(MCPXAPUState *d, uint32_t method, uint32_t argument)
@@ -117,7 +171,7 @@ index b9f429e..5af33d8 100644
                             block_size);
                  } else {
                      linear_addr += ba;
-@@ -1173,6 +1187,33 @@ void mcpx_apu_vp_frame(MCPXAPUState *d,
+@@ -1173,6 +1187,36 @@ void mcpx_apu_vp_frame(MCPXAPUState *d,
                          float mixbins[NUM_MIXBINS][NUM_SAMPLES_PER_FRAME])
  {
      memset(d->vp.sample_buf, 0, sizeof(d->vp.sample_buf));
@@ -127,8 +181,11 @@ index b9f429e..5af33d8 100644
 +        unsigned long now = GetTickCount();
 +        if (now - last_ms >= 5000) {
 +            extern uint32_t xbox_ContiguousAllocatedBytes(void);
-+            fprintf(stderr, "[APU] vp frames=%lu voices processed=%lu idle=%lu tops=%04X/%04X/%04X"
++            fprintf(stderr, "[APU] vp frames=%lu voices processed=%lu idle=%lu ISTS=%08X IEN=%08X"
++                    " FECTL=%08X FENADDR=%08X tops=%04X/%04X/%04X"
 +                    " VPVADDR=%08X contig_hw=%08X\n", frames, processed, idle,
++                    (unsigned)d->regs[NV_PAPU_ISTS], (unsigned)d->regs[NV_PAPU_IEN],
++                    (unsigned)d->regs[NV_PAPU_FECTL], (unsigned)d->regs[NV_PAPU_FENADDR],
 +                    (unsigned)d->regs[voice_list_regs[0].top], (unsigned)d->regs[voice_list_regs[1].top],
 +                    (unsigned)d->regs[voice_list_regs[2].top], (unsigned)d->regs[NV_PAPU_VPVADDR],
 +                    xbox_ContiguousAllocatedBytes());
@@ -151,7 +208,7 @@ index b9f429e..5af33d8 100644
  
      for (int list = 0; list < 3; list++) {
          hwaddr top, current, next;
-@@ -1194,9 +1235,11 @@ void mcpx_apu_vp_frame(MCPXAPUState *d,
+@@ -1194,9 +1238,11 @@ void mcpx_apu_vp_frame(MCPXAPUState *d,
  
              if (!voice_get_mask(d, v, NV_PAVS_VOICE_PAR_STATE,
                                  NV_PAVS_VOICE_PAR_STATE_ACTIVE_VOICE)) {
@@ -300,7 +357,7 @@ index e515377..7e97cd3 100644
 +
  #endif /* XBOX_KERNEL_H */
 diff --git a/src/kernel/kernel_bridge.c b/src/kernel/kernel_bridge.c
-index 5b56513..c484b7f 100644
+index 5b56513..b2f8264 100644
 --- a/src/kernel/kernel_bridge.c
 +++ b/src/kernel/kernel_bridge.c
 @@ -49,6 +49,7 @@
@@ -1160,7 +1217,17 @@ index 5b56513..c484b7f 100644
  /* Call a connected interrupt service routine.
   *
   * BOOLEAN ServiceRoutine(PKINTERRUPT, PVOID ServiceContext), __stdcall: its
-@@ -1992,31 +2454,33 @@ static void kernel_vblank_tick(void)
+@@ -1923,6 +2385,9 @@ static void bridge_KeInsertQueueDpc(void)
+  */
+ uint32_t xbox_GetConnectedInterrupt(uint32_t vector);   /* defined below */
+ 
++/* Set by the host (src/main.c) when an emulated APU is present. */
++int (*g_xbox_apu_irq_line)(void);
++
+ static int kernel_raise_interrupt(uint32_t vector)
+ {
+     uint32_t kint = xbox_GetConnectedInterrupt(vector);
+@@ -1992,31 +2457,33 @@ static void kernel_vblank_tick(void)
      if (!xbox_GetConnectedInterrupt(NV2A_VECTOR))
          return;
  
@@ -1210,7 +1277,7 @@ index 5b56513..c484b7f 100644
  
  /* ── KeInitializeDpc (ordinal 107) ────────────────────────
   * VOID KeInitializeDpc(PKDPC Dpc, PKDEFERRED_ROUTINE DeferredRoutine,
-@@ -2084,6 +2548,13 @@ static void bridge_KeInitializeInterrupt(void)
+@@ -2084,6 +2551,13 @@ static void bridge_KeInitializeInterrupt(void)
      BRIDGE_MEM32(interrupt_va + 0)  = routine;
      BRIDGE_MEM32(interrupt_va + 4)  = context;
      BRIDGE_MEM32(interrupt_va + 8)  = vector;
@@ -1224,7 +1291,7 @@ index 5b56513..c484b7f 100644
      g_eax = 0;
  }
  
-@@ -2225,17 +2696,6 @@ static void bridge_KeInitializeTimerEx(void)
+@@ -2225,17 +2699,6 @@ static void bridge_KeInitializeTimerEx(void)
   * audio off a timer. A title that needs better wants the host's timer queue,
   * not a smaller sleep.
   */
@@ -1242,7 +1309,7 @@ index 5b56513..c484b7f 100644
  static DWORD WINAPI kernel_timer_thread(LPVOID unused)
  {
      int slot = xbox_worker_stack_alloc();
-@@ -2263,114 +2723,86 @@ static DWORD WINAPI kernel_timer_thread(LPVOID unused)
+@@ -2263,114 +2726,99 @@ static DWORD WINAPI kernel_timer_thread(LPVOID unused)
          g_fs_base = tib;
      }
  
@@ -1305,8 +1372,19 @@ index 5b56513..c484b7f 100644
 -                    SetEvent(ev);
 -                    BRIDGE_MEM32(fired_va + 4) = 1;   /* SignalState */
 -                }
--            }
--        }
++        {
++            /* The APU's interrupt (vector 5: DirectSound's ISR, NFL 2K5
++             * 0x44CB6E). Raised while the emulated APU holds its line; the ISR
++             * acknowledges through NV_PAPU_ISTS, which drops it. */
++            extern int (*g_xbox_apu_irq_line)(void);
++            static unsigned n;
++            if (g_xbox_apu_irq_line && g_xbox_apu_irq_line()) {
++                int r = kernel_raise_interrupt(5);
++                if (n++ < 5 || n % 1000 == 0)
++                    fprintf(stderr, "  [APU] interrupt #%u -> ISR %s\n", n,
++                            r < 0 ? "not callable" : r ? "claimed it" : "declined it");
+             }
+         }
 +        xbox_bridge_drain_guest_dpcs();
 +        xbox_ggl_leave();
      }
@@ -1422,7 +1500,7 @@ index 5b56513..c484b7f 100644
  }
  
  /* ── ExQueryPoolBlockSize (ordinal 24) ────────────────────
-@@ -2792,13 +3224,17 @@ static void bridge_NtCreateFile(void)
+@@ -2792,13 +3240,17 @@ static void bridge_NtCreateFile(void)
      {
          extern uint32_t xbox_LastFileError(void);
          uint32_t _e = g_eax ? xbox_LastFileError() : 0u;
@@ -1442,7 +1520,7 @@ index 5b56513..c484b7f 100644
              fprintf(stderr, "  [FILE] -> 0x%08X\n", g_eax);
      }
      fflush(stderr);
-@@ -2846,16 +3282,34 @@ static void deliver_one_apc(uint32_t apc_routine, uint32_t apc_context,
+@@ -2846,16 +3298,34 @@ static void deliver_one_apc(uint32_t apc_routine, uint32_t apc_context,
       * dispatch correctly fails to find it and the kernel fallback is the one
       * that matters. Checking only recomp_lookup left it undelivered. */
      recomp_func_t fn = recomp_lookup(apc_routine);
@@ -1480,7 +1558,7 @@ index 5b56513..c484b7f 100644
      } else {
          uint32_t ord = 0;
          if (apc_routine >= KERNEL_VA_BASE && apc_routine < KERNEL_VA_END) {
-@@ -3041,6 +3495,21 @@ static void bridge_NtReadFile(void)
+@@ -3041,6 +3511,21 @@ static void bridge_NtReadFile(void)
          off.HighPart = (LONG)BRIDGE_MEM32(offset_va + 4);
          poff = &off;
      }
@@ -1502,7 +1580,7 @@ index 5b56513..c484b7f 100644
      g_eax = (uint32_t)xbox_NtReadFile(handle, NULL, NULL, NULL, &ios,
                  XBOX_TO_NATIVE(buffer_va), length, poff);
  
-@@ -3515,6 +3984,12 @@ static void bridge_IoCreateSymbolicLink(void)
+@@ -3515,6 +4000,12 @@ static void bridge_IoCreateSymbolicLink(void)
  }
  
  /* ── ObReferenceObjectByHandle (ordinal 246) ─────────────── */
@@ -1515,7 +1593,7 @@ index 5b56513..c484b7f 100644
  static void bridge_ObReferenceObjectByHandle(void)
  {
      /* Xbox: NTSTATUS ObReferenceObjectByHandle(HANDLE Handle, PVOID ObjectType, PVOID* Object)
-@@ -3524,6 +3999,12 @@ static void bridge_ObReferenceObjectByHandle(void)
+@@ -3524,6 +4015,12 @@ static void bridge_ObReferenceObjectByHandle(void)
      uint32_t object_ptr = STACK_ARG(2);
      if (object_ptr) BRIDGE_MEM32(object_ptr) = 0;
      g_eax = 0;  /* STATUS_SUCCESS */
@@ -1528,7 +1606,7 @@ index 5b56513..c484b7f 100644
  }
  
  /* ── RtlRaiseException (ordinal 302) ─────────────────────
-@@ -3736,6 +4217,20 @@ static void bridge_KeQueryBasePriorityThread(void)
+@@ -3736,6 +4233,20 @@ static void bridge_KeQueryBasePriorityThread(void)
  
  static void bridge_KeSetBasePriorityThread(void)
  {
@@ -1549,7 +1627,7 @@ index 5b56513..c484b7f 100644
      g_eax = (uint32_t)xbox_KeSetBasePriorityThread(
          XBOX_TO_NATIVE(STACK_ARG(0)), (LONG)STACK_ARG(1));
  }
-@@ -3766,7 +4261,8 @@ static void bridge_MmLockUnlockBufferPages(void)
+@@ -3766,7 +4277,8 @@ static void bridge_MmLockUnlockBufferPages(void)
   */
  static void bridge_MmQueryAllocationSize(void)
  {
@@ -1559,7 +1637,7 @@ index 5b56513..c484b7f 100644
  }
  
  /* ── NtCreateMutant (ordinal 192, 3 args) */
-@@ -3825,18 +4321,33 @@ static void bridge_NtReleaseMutant(void)
+@@ -3825,18 +4337,33 @@ static void bridge_NtReleaseMutant(void)
  static void bridge_NtSuspendThread(void)
  {
      uint32_t count_va = STACK_ARG(1);
@@ -1596,7 +1674,7 @@ index 5b56513..c484b7f 100644
  }
  
  /* ── ObfDereferenceObject (ordinal 250, fastcall: object in ecx)
-@@ -4034,6 +4545,7 @@ static void bridge_KeAlertThread(void)
+@@ -4034,6 +4561,7 @@ static void bridge_KeAlertThread(void)
  
  static void bridge_KeWaitForMultipleObjects(void)
  {
@@ -1604,7 +1682,7 @@ index 5b56513..c484b7f 100644
      uint32_t count      = STACK_ARG(0);
      uint32_t objects_va = STACK_ARG(1);
      uint32_t wait_type  = STACK_ARG(2);
-@@ -4042,6 +4554,8 @@ static void bridge_KeWaitForMultipleObjects(void)
+@@ -4042,6 +4570,8 @@ static void bridge_KeWaitForMultipleObjects(void)
      HANDLE handles[BRIDGE_MAXIMUM_WAIT_OBJECTS];
      uint32_t i;
  
@@ -1613,7 +1691,7 @@ index 5b56513..c484b7f 100644
      if (count == 0) {
          g_eax = (uint32_t)STATUS_INVALID_PARAMETER;
          return;
-@@ -4052,11 +4566,23 @@ static void bridge_KeWaitForMultipleObjects(void)
+@@ -4052,11 +4582,23 @@ static void bridge_KeWaitForMultipleObjects(void)
          handles[i] = bridge_resolve_handle(
              objects_va ? BRIDGE_MEM32(objects_va + i * 4) : 0);
  
@@ -1642,7 +1720,7 @@ index 5b56513..c484b7f 100644
  }
  
  #undef BRIDGE_MAXIMUM_WAIT_OBJECTS
-@@ -8816,6 +9342,7 @@ static void kernel_thunk_dispatch(void)
+@@ -8816,6 +9358,7 @@ static void kernel_thunk_dispatch(void)
      int slot = g_kernel_dispatch_slot;
      bridge_func_t bridge;
      ULONG ordinal;
@@ -1650,7 +1728,7 @@ index 5b56513..c484b7f 100644
  
      if (slot < 0 || slot >= XBOX_KERNEL_THUNK_TABLE_SIZE) {
          fprintf(stderr, "  [KERNEL] bad slot %d\n", slot);
-@@ -8824,8 +9351,14 @@ static void kernel_thunk_dispatch(void)
+@@ -8824,8 +9367,14 @@ static void kernel_thunk_dispatch(void)
          return;
      }
  
@@ -1665,7 +1743,7 @@ index 5b56513..c484b7f 100644
  
      g_kernel_call_count++;
      if (ordinal < XBOX_KERNEL_THUNK_TABLE_SIZE)
-@@ -8848,8 +9381,14 @@ static void kernel_thunk_dispatch(void)
+@@ -8848,8 +9397,14 @@ static void kernel_thunk_dispatch(void)
          DWORD now = GetTickCount();
          if (last_summary_tick == 0) last_summary_tick = now;
          if (now - last_summary_tick >= 2000 && g_kernel_call_count > 200) {
@@ -1682,7 +1760,7 @@ index 5b56513..c484b7f 100644
              /* And which ones, ranked. "Latest" names whatever the sample
               * happened to land on; the question behind this line is what a
               * title sitting still is actually asking the kernel for, and
-@@ -8872,8 +9411,124 @@ static void kernel_thunk_dispatch(void)
+@@ -8872,8 +9427,124 @@ static void kernel_thunk_dispatch(void)
                              (unsigned long long)g_ordinal_calls[best]);
                  }
              }
@@ -1808,7 +1886,7 @@ index 5b56513..c484b7f 100644
          }
      }
  
-@@ -8951,8 +9606,58 @@ static void kernel_thunk_dispatch(void)
+@@ -8951,8 +9622,58 @@ static void kernel_thunk_dispatch(void)
       * On real x86, stdcall callee does "ret N" to pop the return address
       * and N bytes of arguments. We already popped the dummy return address
       * above; now pop the args. */
@@ -1867,7 +1945,7 @@ index 5b56513..c484b7f 100644
      if (g_kernel_watch_va) {
          uint32_t _after = BRIDGE_MEM32(g_kernel_watch_va);
          if (_after != _watch_before) {
-@@ -8988,6 +9693,35 @@ recomp_func_t recomp_lookup_kernel(uint32_t xbox_va)
+@@ -8988,6 +9709,35 @@ recomp_func_t recomp_lookup_kernel(uint32_t xbox_va)
      return NULL;
  }
  
@@ -1903,7 +1981,7 @@ index 5b56513..c484b7f 100644
  /* ── Initialization ─────────────────────────────────────── */
  
  /*
-@@ -9076,6 +9810,13 @@ void xbox_kernel_bridge_init(void)
+@@ -9076,6 +9826,13 @@ void xbox_kernel_bridge_init(void)
  
      /* Initialize kernel data export values first */
      kernel_data_init();
@@ -1917,7 +1995,7 @@ index 5b56513..c484b7f 100644
  
      for (i = 0; i < g_thunk_table_count; i++) {
          uint32_t va = g_thunk_table_base + i * 4;
-@@ -9192,4 +9933,33 @@ void xbox_kernel_bridge_init(void)
+@@ -9192,4 +9949,33 @@ void xbox_kernel_bridge_init(void)
      fprintf(stderr, "  Synthetic VA range: 0x%08X-0x%08X\n",
              KERNEL_VA_BASE, KERNEL_VA_BASE + (resolved - 1) * 4);
  
@@ -2183,10 +2261,10 @@ index 17cb31f..172d860 100644
          *PreviousSuspendCount = (ULONG)prev;
 diff --git a/src/kernel/nv2a_gpu_d3d11.inc.c b/src/kernel/nv2a_gpu_d3d11.inc.c
 new file mode 100644
-index 0000000..95a4aa7
+index 0000000..2bd5492
 --- /dev/null
 +++ b/src/kernel/nv2a_gpu_d3d11.inc.c
-@@ -0,0 +1,967 @@
+@@ -0,0 +1,1057 @@
 +/* ── Hardware rendering (Direct3D 11) ─────────────────────────────────────
 + *
 + * Included into nv2a_pb_exec.c (it reads that file's state directly), after
@@ -2218,6 +2296,7 @@ index 0000000..95a4aa7
 +#define COBJMACROS
 +#include <d3d11.h>
 +#include <d3dcompiler.h>
++#include <d3d11sdklayers.h>
 +#pragma comment(lib, "d3d11.lib")
 +#pragma comment(lib, "d3dcompiler.lib")
 +
@@ -2397,6 +2476,34 @@ index 0000000..95a4aa7
 +    return on;
 +}
 +
++/* RECOMP_GPU_DEBUG=1: the D3D11 debug layer, with its messages printed after
++ * each operation (first 300). Names the call a driver crash came from. */
++static ID3D11InfoQueue *s_gpu_iq;
++static void gpu_debug_drain(const char *where)
++{
++    static unsigned shown;
++    UINT64 i, n;
++    if (!s_gpu_iq)
++        return;
++    n = ID3D11InfoQueue_GetNumStoredMessages(s_gpu_iq);
++    for (i = 0; i < n && shown < 300; i++) {
++        SIZE_T len = 0;
++        D3D11_MESSAGE *msg;
++        if (FAILED(ID3D11InfoQueue_GetMessage(s_gpu_iq, i, NULL, &len)) || !len)
++            continue;
++        msg = (D3D11_MESSAGE *)malloc(len);
++        if (msg && SUCCEEDED(ID3D11InfoQueue_GetMessage(s_gpu_iq, i, msg, &len))
++                && msg->Severity <= D3D11_MESSAGE_SEVERITY_WARNING) {
++            fprintf(stderr, "  [GPU11DBG] %s: %.*s\n", where, (int)msg->DescriptionByteLength, msg->pDescription);
++            shown++;
++        }
++        free(msg);
++    }
++    ID3D11InfoQueue_ClearStoredMessages(s_gpu_iq);
++    if (shown)
++        fflush(stderr);
++}
++
 +static int gpu_init(void)
 +{
 +    HRESULT hr;
@@ -2406,6 +2513,13 @@ index 0000000..95a4aa7
 +    if (s_gpu11.tried)
 +        return s_gpu11.ok;
 +    s_gpu11.tried = 1;
++    if (env_cached("RECOMP_GPU_DEBUG")) {
++        hr = D3D11CreateDevice(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, D3D11_CREATE_DEVICE_DEBUG, NULL, 0,
++                               D3D11_SDK_VERSION, &s_gpu11.dev, &fl, &s_gpu11.ctx);
++        if (SUCCEEDED(hr))
++            ID3D11Device_QueryInterface(s_gpu11.dev, &IID_ID3D11InfoQueue, (void **)&s_gpu_iq);
++        fprintf(stderr, "  [GPU11] debug layer %s\n", s_gpu_iq ? "on" : "unavailable");
++    } else
 +    hr = D3D11CreateDevice(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, 0, NULL, 0, D3D11_SDK_VERSION,
 +                           &s_gpu11.dev, &fl, &s_gpu11.ctx);
 +    if (FAILED(hr)) {
@@ -2499,7 +2613,7 @@ index 0000000..95a4aa7
 +/* The software rasteriser is about to read or write the current surface in
 + * guest RAM: hand it the newest pixels, and take them back on the next GPU
 + * draw. */
-+static void gpu_cpu_access(void)
++static void gpu_cpu_access_unlocked(void)
 +{
 +    uint32_t guest;
 +    int i;
@@ -2938,7 +3052,7 @@ index 0000000..95a4aa7
 + * program, or (flat2d) pre-transformed screen-space vertices shaded like the
 + * software 2D path -- texture x diffuse, no combiners, depth or stencil.
 + * Returns 0 to fall back to the software rasteriser. */
-+static int gpu_draw_batch(int flat2d)
++static int gpu_draw_batch_unlocked(int flat2d)
 +{
 +    const uint16_t *ix = s_gpu.idx;
 +    uint32_t n = s_gpu.idx_count, i, nv = 0, rw, rh;
@@ -3050,6 +3164,11 @@ index 0000000..95a4aa7
 +        srv[st] = want ? gpu_texture(st) : NULL;
 +        c.texon[st] = srv[st] ? 1u : 0u;
 +        if (!srv[st]) srv[st] = s_gpu11.white_srv;
++        /* Hold it until the draw is issued: fetching a later stage can evict
++         * this stage's cache entry and release its view, and the driver then
++         * read a freed view (debug layer: "PSSetShaderResources ... array
++         * index 0 corrupt"; NVIDIA crashed at kickoff, 2026-09-25). */
++        ID3D11ShaderResourceView_AddRef(srv[st]);
 +        smp[st] = gpu_sampler(st);
 +    }
 +    if (SUCCEEDED(ID3D11DeviceContext_Map(s_gpu11.ctx, (ID3D11Resource *)s_gpu11.cb, 0, D3D11_MAP_WRITE_DISCARD, 0, &m))) {
@@ -3086,7 +3205,10 @@ index 0000000..95a4aa7
 +        ID3D11DeviceContext_OMSetDepthStencilState(s_gpu11.ctx, flat2d ? gpu_no_depth() : gpu_depth_state(),
 +                                                   s_vp.stencil_ref);
 +        ID3D11DeviceContext_Draw(s_gpu11.ctx, nv, 0);
++        gpu_debug_drain(flat2d ? "draw2d" : "draw");
 +    }
++    for (st = 0; st < 4; st++)
++        ID3D11ShaderResourceView_Release(srv[st]);
 +    surf->dirty = 1;
 +    s_gpu11.draws++;
 +    s_gpu11.tris += nv / 3;
@@ -3097,7 +3219,7 @@ index 0000000..95a4aa7
 +}
 +
 +/* CLEAR_SURFACE on the GPU. Returns 0 to fall back to software. */
-+static int gpu_clear(uint32_t param)
++static int gpu_clear_unlocked(uint32_t param)
 +{
 +    int si;
 +    GpuSurface *s;
@@ -3139,7 +3261,7 @@ index 0000000..95a4aa7
 +}
 +
 +/* A frame is finished: bring the surface back to guest RAM for the window. */
-+static void gpu_flip(void)
++static void gpu_flip_unlocked(void)
 +{
 +    int i;
 +    if (!s_gpu11.ok)
@@ -3153,6 +3275,52 @@ index 0000000..95a4aa7
 +    if ((s_gpu11.frame % 600) == 0)
 +        fprintf(stderr, "  [GPU11] frames %u draws %u tris %u texture uploads %u readbacks %u\n",
 +                s_gpu11.frame, s_gpu11.draws, s_gpu11.tris, s_gpu11.tex_uploads, s_gpu11.readbacks);
++}
++
++/* ---- serialisation ------------------------------------------------------
++ *
++ * The D3D11 immediate context is not thread-safe, and the executor can run on
++ * the game thread (synchronous KickOff) and on the fallback poller. Two
++ * threads in it at once crashed NVIDIA's driver at kickoff (2026-09-25,
++ * nvwgf2umx.dll reading 0x10). Every entry point takes this lock. */
++static CRITICAL_SECTION s_gpu_lock;
++static INIT_ONCE s_gpu_lock_once = INIT_ONCE_STATIC_INIT;
++
++static BOOL CALLBACK gpu_lock_init(PINIT_ONCE o, PVOID p, PVOID *c)
++{
++    (void)o; (void)p; (void)c;
++    InitializeCriticalSection(&s_gpu_lock);
++    return TRUE;
++}
++
++static void gpu_lock(void)
++{
++    InitOnceExecuteOnce(&s_gpu_lock_once, gpu_lock_init, NULL, NULL);
++    EnterCriticalSection(&s_gpu_lock);
++}
++
++static void gpu_cpu_access(void)
++{
++    gpu_lock(); gpu_cpu_access_unlocked(); LeaveCriticalSection(&s_gpu_lock);
++}
++
++static int gpu_draw_batch(int flat2d)
++{
++    int r;
++    gpu_lock(); r = gpu_draw_batch_unlocked(flat2d); LeaveCriticalSection(&s_gpu_lock);
++    return r;
++}
++
++static int gpu_clear(uint32_t param)
++{
++    int r;
++    gpu_lock(); r = gpu_clear_unlocked(param); LeaveCriticalSection(&s_gpu_lock);
++    return r;
++}
++
++static void gpu_flip(void)
++{
++    gpu_lock(); gpu_flip_unlocked(); LeaveCriticalSection(&s_gpu_lock);
 +}
 diff --git a/src/kernel/nv2a_pb_exec.c b/src/kernel/nv2a_pb_exec.c
 index b3dcbf7..f791b47 100644
@@ -6648,7 +6816,7 @@ index 159f56c..f11e961 100644
      "FrenchXlate", "SpanishXlate", "ItalianXlate",
  }
 diff --git a/tools/recomp/lifter.py b/tools/recomp/lifter.py
-index f0ba077..5eddf3e 100644
+index f0ba077..1d20648 100644
 --- a/tools/recomp/lifter.py
 +++ b/tools/recomp/lifter.py
 @@ -521,6 +521,12 @@ def _make_condition(jcc, flag_setter, flag_ops):
@@ -6664,6 +6832,26 @@ index f0ba077..5eddf3e 100644
      if flag_setter in ("cmp", "test", "bsf", "bsr") and len(flag_ops) >= 2:
          signed = (cmp_macro in SIGNED) or (test_macro in SIGNED)
          lhs, rhs = ("_fas", "_fbs") if signed else ("_fa", "_fb")
+@@ -2370,9 +2376,18 @@ class Lifter:
+                 break
+             inside.append(target)
+         # Two arms is the smallest thing worth calling a switch; one is more
+-        # likely a coincidence than a jump table.
++        # likely a coincidence than a jump table -- unless the jump itself is
++        # `jmp [index*4 + table]`, which is a switch whatever its table holds.
++        # MSVC emits one-entry tables behind a byte index table when every
++        # case lands on the same arm: NFL 2K5's 0x204D38 (`movzx edx, byte
++        # [eax+0x204EA8]; jmp [edx*4+0x204EA4]`, six cases -> 0x204DC8). Left
++        # unresolved it became an indirect tail jump into the middle of its
++        # own function, which cannot be dispatched, and the game died once
++        # audio started driving that path (2026-09-24).
+         if len(inside) >= 2:
+             return inside
++        if len(inside) == 1 and op.mem_index and getattr(op, "mem_scale", 1) == 4:
++            return inside
+         return []
+ 
+     def _lift_jmp(self, insn, ops):
 diff --git a/tools/recomp/test_flag_join.py b/tools/recomp/test_flag_join.py
 index 74a9e84..ebed463 100644
 --- a/tools/recomp/test_flag_join.py

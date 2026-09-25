@@ -99,6 +99,70 @@ static WORD auto_press(BYTE analog[8])
     return buttons;
 }
 
+/* Presses from a command file: NFL2K5_PRESS_FILE=<path>. Write button names
+ * ("a b x y start back up down left right", separated by spaces or commas)
+ * into it; they are pressed in order, 200 ms each with 250 ms between, and the
+ * file is deleted once read. Lets a script drive the menus without the window
+ * having focus, which a background process cannot reliably take. */
+static WORD file_press(BYTE analog[8])
+{
+    static char queue[64][8];
+    static int head, tail;
+    static DWORD next_check, step_start;
+    static int pressing;
+    const char *path = getenv("NFL2K5_PRESS_FILE");
+    DWORD now = GetTickCount();
+    WORD buttons = 0;
+
+    if (!path || !*path)
+        return 0;
+    if (now >= next_check) {
+        FILE *f;
+        next_check = now + 100;
+        f = fopen(path, "r");
+        if (f) {
+            char buf[512], *tok, *ctx = NULL;
+            size_t n = fread(buf, 1, sizeof buf - 1, f);
+            buf[n] = 0;
+            fclose(f);
+            remove(path);
+            for (tok = strtok_s(buf, " ,\r\n\t", &ctx); tok; tok = strtok_s(NULL, " ,\r\n\t", &ctx)) {
+                if (strlen(tok) < 8 && (tail + 1) % 64 != head) {
+                    strcpy(queue[tail], tok);
+                    tail = (tail + 1) % 64;
+                }
+            }
+        }
+    }
+    if (head == tail)
+        return 0;
+    if (!step_start)
+        step_start = now;
+    if (!pressing && now - step_start >= 250) {
+        pressing = 1;
+        step_start = now;
+    }
+    if (pressing) {
+        const char *name = queue[head];
+        if (!strcmp(name, "start")) buttons |= 0x10;
+        else if (!strcmp(name, "back")) buttons |= 0x20;
+        else if (!strcmp(name, "up")) buttons |= 0x01;
+        else if (!strcmp(name, "down")) buttons |= 0x02;
+        else if (!strcmp(name, "left")) buttons |= 0x04;
+        else if (!strcmp(name, "right")) buttons |= 0x08;
+        else if (!strcmp(name, "a")) analog[0] = 255;
+        else if (!strcmp(name, "b")) analog[1] = 255;
+        else if (!strcmp(name, "x")) analog[2] = 255;
+        else if (!strcmp(name, "y")) analog[3] = 255;
+        if (now - step_start >= 200) {
+            pressing = 0;
+            step_start = now;
+            head = (head + 1) % 64;
+        }
+    }
+    return buttons;
+}
+
 static int window_focused(void)
 {
     DWORD pid = 0;
@@ -160,7 +224,10 @@ static void host_gamepad(XBOX_GAMEPAD *g)
 {
     XBOX_INPUT_STATE pad;
     memset(g, 0, sizeof *g);
-    if (xbox_InputGetState(0, &pad) == 0)
+    /* NFL2K5_NO_HOST_PAD=1 ignores host controllers: scripted runs on a
+     * machine with a pad attached got stray d-pad presses that walked the
+     * menu cursor away from what the script selected (2026-09-25). */
+    if (!getenv("NFL2K5_NO_HOST_PAD") && xbox_InputGetState(0, &pad) == 0)
         *g = pad.Gamepad;
     if (window_focused()) {
 #define KEY(vk) (GetAsyncKeyState(vk) & 0x8000)
@@ -184,6 +251,7 @@ static void host_gamepad(XBOX_GAMEPAD *g)
         host_mouse_gamepad(g);
     }
     g->wButtons |= auto_press(g->bAnalogButtons);
+    g->wButtons |= file_press(g->bAnalogButtons);
 }
 
 /* An XINPUT_GAMEPAD in guest memory: 22 bytes, packed. */

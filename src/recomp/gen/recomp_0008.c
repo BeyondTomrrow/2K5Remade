@@ -34778,8 +34778,11 @@ loc_00119ABE: ;
 
 loc_00119AC3: ;
     esi = ZX8(MEM8(ebp + 0x119B00));
-    g_seh_ebp = ebp; RECOMP_ITAIL(MEM32(esi * 4 + 0x119AFC)); return; /* indirect tail jmp */
+    { uint32_t _jt = MEM32(esi * 4 + 0x119AFC); /* switch: 1 entries, 1 targets */
+    if (_jt == 0x00119AD1u) goto loc_00119AD1;
+    g_seh_ebp = ebp; RECOMP_ITAIL(_jt); return; }
 
+loc_00119AD1: ;
     MEM32(eax + 0x20) = 0x40800000;
     MEM32(eax + 0x24) = 0x40000000;
 
