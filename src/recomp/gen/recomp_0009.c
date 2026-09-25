@@ -1511,7 +1511,7 @@ void sub_00131731(void)
 
 loc_00131731: ;
     PUSH32(esp, edi);
-    if (_flags /* je: equal / zero */) goto loc_001319A6;
+    if (RECOMP_FLAGS_FALLBACK(0x00131732u, _flags) /* je: equal / zero */) goto loc_001319A6;
 
 loc_00131738: ;
     eax = MEM32(0xBB8400);
@@ -4620,7 +4620,7 @@ loc_00133125: ;
     _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp eax, MEM32(esp + 0x1C) (32-bit) */
 
 loc_00133129: ;
-    if (_flags /* jne: not equal / not zero */) goto loc_00133138;
+    if (RECOMP_FLAGS_FALLBACK(0x00133129u, _flags) /* jne: not equal / not zero */) goto loc_00133138;
 
 loc_0013312B: ;
     ecx = edi;
@@ -8192,7 +8192,7 @@ loc_00134312: ;
     _fas = (int32_t)(int32_t)(_fa); _fb = (_fa == 0x80000000u); /* inc result/SF/OF; CF unchanged */
     { uint64_t _t = (uint64_t)(eax) + (uint64_t)(MEM32(eax)) + (uint64_t)_cf; _cf = (int)((_t >> 32) & 1); eax = (uint32_t)_t; }  /* adc */
     _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* adc result */
-    if (_flags /* jno: not overflow */) (void)0; /* goto loc_0013435C - dead code, label not in function */
+    if (RECOMP_FLAGS_FALLBACK(0x00134318u, _flags) /* jno: not overflow */) (void)0; /* goto loc_0013435C - dead code, label not in function */
 
 loc_0013431A: ;
     { uint64_t _t = (uint64_t)(eax) + (uint64_t)(MEM32(eax)) + (uint64_t)_cf; _cf = (int)((_t >> 32) & 1); eax = (uint32_t)_t; }  /* adc */

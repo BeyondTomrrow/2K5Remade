@@ -23920,7 +23920,7 @@ void sub_000BCA67(void)
     #define fp_st1() fp_st(1)
 
 loc_000BCA67: ;
-    if (_flags /* je: equal / zero */) goto loc_000BCAF2;
+    if (RECOMP_FLAGS_FALLBACK(0x000BCA67u, _flags) /* je: equal / zero */) goto loc_000BCAF2;
 
 loc_000BCA6D: ;
     PUSH32(esp, 0x000BCA72u); RECOMP_ABI_CALL(0x000CD050u, sub_000CD050); /* call 0x000CD050 */
@@ -27550,7 +27550,7 @@ void sub_000BFFFA(void)
     ebp = g_seh_ebp; /* fpo_leaf: inherit caller's frame */
 
 loc_000BFFFA: ;
-    if (_flags /* jne: not equal / not zero */) goto loc_000BFFFD;
+    if (RECOMP_FLAGS_FALLBACK(0x000BFFFAu, _flags) /* jne: not equal / not zero */) goto loc_000BFFFD;
 
 loc_000BFFFC: ;
     eax++;
@@ -28123,7 +28123,7 @@ void sub_000C008F(void)
     (void)_fa; (void)_fb; (void)_fas; (void)_fbs;
 
 loc_000C008F: ;
-    if (_flags /* jle: less or equal (signed <=) */) goto loc_000C00BE;
+    if (RECOMP_FLAGS_FALLBACK(0x000C008Fu, _flags) /* jle: less or equal (signed <=) */) goto loc_000C00BE;
 
 loc_000C0091: ;
     edi = MEM32(ecx + 0x1C);
@@ -29707,7 +29707,7 @@ void sub_000C034F(void)
     (void)_fa; (void)_fb; (void)_fas; (void)_fbs;
 
 loc_000C034F: ;
-    if (_flags /* jae: above or equal (unsigned >=) */) goto loc_000C036D;
+    if (RECOMP_FLAGS_FALLBACK(0x000C034Fu, _flags) /* jae: above or equal (unsigned >=) */) goto loc_000C036D;
 
 loc_000C0351: ;
     edx = edi;
@@ -55126,7 +55126,7 @@ loc_000C7E07: ;
     g_seh_ebp = ebp; sub_00069E60(); return; /* tail jmp 0x00069E60 */
 
     /* int3: debug-trap slide byte, stepped over */
-    if (_flags /* jge: greater or equal (signed >=) */) goto loc_000C7E27;
+    if (RECOMP_FLAGS_FALLBACK(0x000C7E19u, _flags) /* jge: greater or equal (signed >=) */) goto loc_000C7E27;
 
 loc_000C7E1B: ;
     _fb = (uint32_t)(HI8(ecx)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
@@ -71740,7 +71740,7 @@ loc_000C96C0: ;
     esp += 4; return; /* ret */
 
 loc_000C970B: ;
-    if (_flags /* jge: greater or equal (signed >=) */) goto loc_000C970F;
+    if (RECOMP_FLAGS_FALLBACK(0x000C970Bu, _flags) /* jge: greater or equal (signed >=) */) goto loc_000C970F;
 
 loc_000C970D: ;
     eax = (uint32_t)(-(int32_t)eax);
@@ -71754,7 +71754,7 @@ loc_000C970F: ;
     esp += 4; return; /* ret */
 
 loc_000C971E: ;
-    if (_flags /* jge: greater or equal (signed >=) */) goto loc_000C9722;
+    if (RECOMP_FLAGS_FALLBACK(0x000C971Eu, _flags) /* jge: greater or equal (signed >=) */) goto loc_000C9722;
 
 loc_000C9720: ;
     eax = (uint32_t)(-(int32_t)eax);
@@ -71950,7 +71950,7 @@ loc_000C96E0: ;
     esp += 4; return; /* ret */
 
 loc_000C970B: ;
-    if (_flags /* jge: greater or equal (signed >=) */) goto loc_000C970F;
+    if (RECOMP_FLAGS_FALLBACK(0x000C970Bu, _flags) /* jge: greater or equal (signed >=) */) goto loc_000C970F;
 
 loc_000C970D: ;
     eax = (uint32_t)(-(int32_t)eax);
@@ -71964,7 +71964,7 @@ loc_000C970F: ;
     esp += 4; return; /* ret */
 
 loc_000C971E: ;
-    if (_flags /* jge: greater or equal (signed >=) */) goto loc_000C9722;
+    if (RECOMP_FLAGS_FALLBACK(0x000C971Eu, _flags) /* jge: greater or equal (signed >=) */) goto loc_000C9722;
 
 loc_000C9720: ;
     eax = (uint32_t)(-(int32_t)eax);
@@ -83452,7 +83452,7 @@ loc_000CA786: ;
     _cf = 0; /* logical op clears CF */
     SET_LO8(eax, LO8(eax) | 0);
     _fa = (uint32_t)(LO8(eax)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* or result */
-    if (_flags /* jnp: not parity */) { g_seh_ebp = ebp; sub_000CA735(); return; }
+    if (RECOMP_FLAGS_FALLBACK(0x000CA78Cu, _flags) /* jnp: not parity */) { g_seh_ebp = ebp; sub_000CA735(); return; }
 
 loc_000CA78E: ;
     _cf = 0; /* logical op clears CF */
@@ -83469,7 +83469,7 @@ loc_000CA792: ;
     _cf = 0; /* logical op clears CF */
     SET_LO8(eax, LO8(eax) | 0);
     _fa = (uint32_t)(LO8(eax)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* or result */
-    if (_flags /* jnp: not parity */) { g_seh_ebp = ebp; sub_000CA745(); return; }
+    if (RECOMP_FLAGS_FALLBACK(0x000CA79Cu, _flags) /* jnp: not parity */) { g_seh_ebp = ebp; sub_000CA745(); return; }
 
 loc_000CA79E: ;
     _cf = 0; /* logical op clears CF */

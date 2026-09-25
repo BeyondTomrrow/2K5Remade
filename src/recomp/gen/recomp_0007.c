@@ -73790,7 +73790,7 @@ void sub_000EFF67(void)
     ebp = g_seh_ebp; /* fpo_leaf: inherit caller's frame */
 
 loc_000EFF67: ;
-    if (_flags /* je: equal / zero */) goto loc_000F00BE;
+    if (RECOMP_FLAGS_FALLBACK(0x000EFF67u, _flags) /* je: equal / zero */) goto loc_000F00BE;
 
 loc_000EFF6D: ;
     PUSH32(esp, 6);
@@ -83788,7 +83788,7 @@ void sub_000F0321(void)
     ebp = g_seh_ebp; /* fpo_leaf: inherit caller's frame */
 
 loc_000F0321: ;
-    if (_flags /* je: equal / zero */) goto loc_000F102A;
+    if (RECOMP_FLAGS_FALLBACK(0x000F0321u, _flags) /* je: equal / zero */) goto loc_000F102A;
 
 loc_000F0327: ;
     fp_push(MEMF(ebp + 0x1C)); /* fld float */
@@ -123124,7 +123124,7 @@ void sub_00100008(void)
     (void)_fa; (void)_fb; (void)_fas; (void)_fbs;
 
 loc_00100008: ;
-    if (_flags /* jae: above or equal (unsigned >=) */) goto loc_00100017;
+    if (RECOMP_FLAGS_FALLBACK(0x00100008u, _flags) /* jae: above or equal (unsigned >=) */) goto loc_00100017;
 
 loc_0010000A: ;
     eax = MEM32(esp + 8);
@@ -123742,7 +123742,7 @@ void sub_0010028F(void)
     ebp = g_seh_ebp; /* fpo_leaf: inherit caller's frame */
 
 loc_0010028F: ;
-    if (_flags /* jl: less (signed <) */) { g_seh_ebp = ebp; sub_00100272(); return; }
+    if (RECOMP_FLAGS_FALLBACK(0x0010028Fu, _flags) /* jl: less (signed <) */) { g_seh_ebp = ebp; sub_00100272(); return; }
 
 loc_00100291: ;
     POP32(esp, edi);
@@ -138878,7 +138878,7 @@ loc_00107922: ;
     PUSH32(esp, 0x00107929u); RECOMP_ABI_CALL(0xBA10899Du, sub_BA10899D); /* call 0xBA10899D */
 
 loc_00107929: ;
-    if (_flags /* je: equal / zero */) (void)0; /* goto loc_0010793B - dead code, label not in function */
+    if (RECOMP_FLAGS_FALLBACK(0x00107929u, _flags) /* je: equal / zero */) (void)0; /* goto loc_0010793B - dead code, label not in function */
 
 loc_0010792B: ;
     _fb = (uint32_t)(LO8(edx)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
@@ -146794,7 +146794,7 @@ void sub_0010B0B8(void)
     ebp = g_seh_ebp; /* fpo_leaf: inherit caller's frame */
 
 loc_0010B0B8: ;
-    if (_flags /* jne: not equal / not zero */) goto loc_0010B0C5;
+    if (RECOMP_FLAGS_FALLBACK(0x0010B0B8u, _flags) /* jne: not equal / not zero */) goto loc_0010B0C5;
 
 loc_0010B0BA: ;
     ecx = 0xC58EE000u;
@@ -154562,7 +154562,7 @@ loc_0010D01C: ;
     ecx = MEM32(0xBA3A04);
 
 loc_0010D025: ;
-    if (_flags /* jne: not equal / not zero */) goto loc_0010D03B;
+    if (RECOMP_FLAGS_FALLBACK(0x0010D025u, _flags) /* jne: not equal / not zero */) goto loc_0010D03B;
 
 loc_0010D027: ;
     _fa = (uint32_t)(ecx) & 0xFFFFFFFFu; _fb = (uint32_t)(ecx) & 0xFFFFFFFFu;
@@ -154598,7 +154598,8 @@ loc_0010D048: ;
     /* FPU: fcmove st(0), st(7) */
     { uint64_t _t = (uint64_t)(MEM8(eax)) + (uint64_t)(LO8(eax)) + (uint64_t)_cf; _cf = (int)((_t >> 8) & 1); MEM8(eax) = (uint32_t)_t; }  /* adc */
     _fa = (uint32_t)(MEM8(eax)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* adc result */
-    if (_flags /* loope: loope */) goto loc_0010D025;
+    ecx--; /* loope */
+    if (ecx != 0 && ((_fa == 0))) goto loc_0010D025; /* loope */
 
 loc_0010D056: ;
     { uint64_t _t = (uint64_t)(MEM8(eax)) + (uint64_t)(LO8(eax)) + (uint64_t)_cf; _cf = (int)((_t >> 8) & 1); MEM8(eax) = (uint32_t)_t; }  /* adc */
@@ -154650,7 +154651,7 @@ loc_0010D015: ;
     ecx = MEM32(0xBA3A04);
 
 loc_0010D025: ;
-    if (_flags /* jne: not equal / not zero */) goto loc_0010D03B;
+    if (RECOMP_FLAGS_FALLBACK(0x0010D025u, _flags) /* jne: not equal / not zero */) goto loc_0010D03B;
 
 loc_0010D027: ;
     _fa = (uint32_t)(ecx) & 0xFFFFFFFFu; _fb = (uint32_t)(ecx) & 0xFFFFFFFFu;
@@ -154686,7 +154687,8 @@ loc_0010D048: ;
     /* FPU: fcmove st(0), st(7) */
     { uint64_t _t = (uint64_t)(MEM8(eax)) + (uint64_t)(LO8(eax)) + (uint64_t)_cf; _cf = (int)((_t >> 8) & 1); MEM8(eax) = (uint32_t)_t; }  /* adc */
     _fa = (uint32_t)(MEM8(eax)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* adc result */
-    if (_flags /* loope: loope */) goto loc_0010D025;
+    ecx--; /* loope */
+    if (ecx != 0 && ((_fa == 0))) goto loc_0010D025; /* loope */
 
 loc_0010D056: ;
     { uint64_t _t = (uint64_t)(MEM8(eax)) + (uint64_t)(LO8(eax)) + (uint64_t)_cf; _cf = (int)((_t >> 8) & 1); MEM8(eax) = (uint32_t)_t; }  /* adc */

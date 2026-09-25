@@ -44,7 +44,7 @@ Claude) from missing data.
 
 ## 4. The remaining `_flags` fallback branches (406)
 
-`grep -c "if (_flags " src/recomp/gen/*.c`. Each is a conditional branch the
+They are now emitted as `RECOMP_FLAGS_FALLBACK(0xADDR, _flags)` and log `[FLAGS] unresolved branch at ADDR reached` the first time they run -- start with the ones that are reached. `grep -c RECOMP_FLAGS_FALLBACK src/recomp/gen/*.c`. Each is a conditional branch the
 lifter compiled as never-taken because the flags at a join could not be
 merged. Classify the shapes (which setter pairs) and propose lifter fixes;
 mixed-width cmp/test joins are already handled (`_merge_flag_states`).

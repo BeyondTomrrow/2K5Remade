@@ -37644,7 +37644,7 @@ void sub_0032DA6A(void)
 
 loc_0032DA6A: ;
     ebx = 8;
-    if (_flags /* je: equal / zero */) goto loc_0032DA76;
+    if (RECOMP_FLAGS_FALLBACK(0x0032DA6Fu, _flags) /* je: equal / zero */) goto loc_0032DA76;
 
 loc_0032DA71: ;
     ebx = 7;
@@ -87906,7 +87906,7 @@ void sub_00340064(void)
     ebp = g_seh_ebp; /* fpo_leaf: inherit caller's frame */
 
 loc_00340064: ;
-    if (_flags /* je: equal / zero */) goto loc_0034007A;
+    if (RECOMP_FLAGS_FALLBACK(0x00340064u, _flags) /* je: equal / zero */) goto loc_0034007A;
 
 loc_00340066: ;
     ecx = MEM32(esp + 8);
@@ -88284,7 +88284,7 @@ void sub_00340070(void)
     ebp = g_seh_ebp; /* fpo_leaf: inherit caller's frame */
 
 loc_00340070: ;
-    if (_flags /* jge: greater or equal (signed >=) */) goto loc_0034007A;
+    if (RECOMP_FLAGS_FALLBACK(0x00340070u, _flags) /* jge: greater or equal (signed >=) */) goto loc_0034007A;
 
 loc_00340072: ;
     edx = MEM32(eax + 0x40);
@@ -90469,7 +90469,7 @@ void sub_003401B0(void)
     ebp = g_seh_ebp; /* fpo_leaf: inherit caller's frame */
 
 loc_003401B0: ;
-    if (_flags /* jne: not equal / not zero */) goto loc_00340246;
+    if (RECOMP_FLAGS_FALLBACK(0x003401B0u, _flags) /* jne: not equal / not zero */) goto loc_00340246;
 
 loc_003401B6: ;
     PUSH32(esp, 0x003401BBu); RECOMP_ABI_CALL(0x0033FC90u, sub_0033FC90); /* call 0x0033FC90 */
@@ -298513,7 +298513,7 @@ loc_0034713F: ;
     _fb = (uint32_t)(HI8(ebx)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
     MEM8(esi + -33541008) = MEM8(esi + -33541008) + HI8(ebx);
     _fa = (uint32_t)(MEM8(esi + -33541008)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* add result */
-    if (_flags /* jo: overflow */) { g_seh_ebp = ebp; sub_00347187(); return; }
+    if (RECOMP_FLAGS_FALLBACK(0x00347151u, _flags) /* jo: overflow */) { g_seh_ebp = ebp; sub_00347187(); return; }
 
 loc_00347153: ;
     _fb = (uint32_t)(LO8(edx)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
@@ -299239,7 +299239,7 @@ loc_0034713F: ;
     _fb = (uint32_t)(HI8(ebx)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
     MEM8(esi + -33541008) = MEM8(esi + -33541008) + HI8(ebx);
     _fa = (uint32_t)(MEM8(esi + -33541008)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* add result */
-    if (_flags /* jo: overflow */) { g_seh_ebp = ebp; sub_00347187(); return; }
+    if (RECOMP_FLAGS_FALLBACK(0x00347151u, _flags) /* jo: overflow */) { g_seh_ebp = ebp; sub_00347187(); return; }
 
 loc_00347153: ;
     _fb = (uint32_t)(LO8(edx)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
@@ -299912,7 +299912,7 @@ loc_0034713F: ;
     _fb = (uint32_t)(HI8(ebx)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
     MEM8(esi + -33541008) = MEM8(esi + -33541008) + HI8(ebx);
     _fa = (uint32_t)(MEM8(esi + -33541008)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* add result */
-    if (_flags /* jo: overflow */) { g_seh_ebp = ebp; sub_00347187(); return; }
+    if (RECOMP_FLAGS_FALLBACK(0x00347151u, _flags) /* jo: overflow */) { g_seh_ebp = ebp; sub_00347187(); return; }
 
 loc_00347153: ;
     _fb = (uint32_t)(LO8(edx)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
@@ -300567,7 +300567,7 @@ loc_0034713F: ;
     _fb = (uint32_t)(HI8(ebx)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
     MEM8(esi + -33541008) = MEM8(esi + -33541008) + HI8(ebx);
     _fa = (uint32_t)(MEM8(esi + -33541008)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* add result */
-    if (_flags /* jo: overflow */) { g_seh_ebp = ebp; sub_00347187(); return; }
+    if (RECOMP_FLAGS_FALLBACK(0x00347151u, _flags) /* jo: overflow */) { g_seh_ebp = ebp; sub_00347187(); return; }
 
 loc_00347153: ;
     _fb = (uint32_t)(LO8(edx)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
@@ -301094,7 +301094,7 @@ loc_0034713F: ;
     _fb = (uint32_t)(HI8(ebx)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
     MEM8(esi + -33541008) = MEM8(esi + -33541008) + HI8(ebx);
     _fa = (uint32_t)(MEM8(esi + -33541008)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* add result */
-    if (_flags /* jo: overflow */) { g_seh_ebp = ebp; sub_00347187(); return; }
+    if (RECOMP_FLAGS_FALLBACK(0x00347151u, _flags) /* jo: overflow */) { g_seh_ebp = ebp; sub_00347187(); return; }
 
 loc_00347153: ;
     _fb = (uint32_t)(LO8(edx)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
@@ -301410,7 +301410,7 @@ loc_0034713F: ;
     _fb = (uint32_t)(HI8(ebx)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
     MEM8(esi + -33541008) = MEM8(esi + -33541008) + HI8(ebx);
     _fa = (uint32_t)(MEM8(esi + -33541008)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* add result */
-    if (_flags /* jo: overflow */) { g_seh_ebp = ebp; sub_00347187(); return; }
+    if (RECOMP_FLAGS_FALLBACK(0x00347151u, _flags) /* jo: overflow */) { g_seh_ebp = ebp; sub_00347187(); return; }
 
 loc_00347153: ;
     _fb = (uint32_t)(LO8(edx)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
@@ -301683,7 +301683,7 @@ loc_0034713F: ;
     _fb = (uint32_t)(HI8(ebx)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
     MEM8(esi + -33541008) = MEM8(esi + -33541008) + HI8(ebx);
     _fa = (uint32_t)(MEM8(esi + -33541008)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* add result */
-    if (_flags /* jo: overflow */) { g_seh_ebp = ebp; sub_00347187(); return; }
+    if (RECOMP_FLAGS_FALLBACK(0x00347151u, _flags) /* jo: overflow */) { g_seh_ebp = ebp; sub_00347187(); return; }
 
 loc_00347153: ;
     _fb = (uint32_t)(LO8(edx)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
@@ -301913,7 +301913,7 @@ loc_0034713F: ;
     _fb = (uint32_t)(HI8(ebx)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
     MEM8(esi + -33541008) = MEM8(esi + -33541008) + HI8(ebx);
     _fa = (uint32_t)(MEM8(esi + -33541008)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* add result */
-    if (_flags /* jo: overflow */) { g_seh_ebp = ebp; sub_00347187(); return; }
+    if (RECOMP_FLAGS_FALLBACK(0x00347151u, _flags) /* jo: overflow */) { g_seh_ebp = ebp; sub_00347187(); return; }
 
 loc_00347153: ;
     _fb = (uint32_t)(LO8(edx)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
@@ -302037,7 +302037,7 @@ loc_0034713F: ;
     _fb = (uint32_t)(HI8(ebx)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
     MEM8(esi + -33541008) = MEM8(esi + -33541008) + HI8(ebx);
     _fa = (uint32_t)(MEM8(esi + -33541008)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* add result */
-    if (_flags /* jo: overflow */) { g_seh_ebp = ebp; sub_00347187(); return; }
+    if (RECOMP_FLAGS_FALLBACK(0x00347151u, _flags) /* jo: overflow */) { g_seh_ebp = ebp; sub_00347187(); return; }
 
 loc_00347153: ;
     _fb = (uint32_t)(LO8(edx)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
@@ -302907,7 +302907,7 @@ loc_003476CF: ;
     _cf = 0; /* logical op clears CF */
     SET_LO8(eax, LO8(eax) ^ 0);
     _fa = (uint32_t)(LO8(eax)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* xor result */
-    if (_flags /* jo: overflow */) (void)0; /* goto loc_0034774C - dead code, label not in function */
+    if (RECOMP_FLAGS_FALLBACK(0x003476D4u, _flags) /* jo: overflow */) (void)0; /* goto loc_0034774C - dead code, label not in function */
 
 loc_003476D6: ;
     _cf = 0; /* logical op clears CF */
@@ -302956,7 +302956,7 @@ loc_003476FB: ;
     _cf = (int)(_fa < _fb);
 
 loc_003476FF: ;
-    if (_flags /* jl: less (signed <) */) goto loc_00347714;
+    if (RECOMP_FLAGS_FALLBACK(0x003476FFu, _flags) /* jl: less (signed <) */) goto loc_00347714;
 
 loc_00347701: ;
     ecx = MEM32(esp + 0xC);
@@ -303910,7 +303910,7 @@ void sub_00347A4E(void)
 loc_00347A4E: ;
     edi = edi;
     edx = 0x1C003479;
-    if (_flags /* jp: parity */) { g_seh_ebp = ebp; sub_00347A8B(); return; }
+    if (RECOMP_FLAGS_FALLBACK(0x00347A55u, _flags) /* jp: parity */) { g_seh_ebp = ebp; sub_00347A8B(); return; }
 
 loc_00347A57: ;
     _fb = (uint32_t)(LO8(eax)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
@@ -307570,7 +307570,7 @@ loc_00349023: ;
 
 loc_00349026: ;
     esi = MEM32(esp + 0x18);
-    if (_flags /* jne: not equal / not zero */) goto loc_00349163;
+    if (RECOMP_FLAGS_FALLBACK(0x0034902Au, _flags) /* jne: not equal / not zero */) goto loc_00349163;
 
 loc_00349030: ;
     ecx = esp + 0x10;
@@ -307737,7 +307737,7 @@ loc_0034912C: ;
 
 loc_0034912F: ;
     esi = MEM32(esp + 0x18);
-    if (_flags /* jne: not equal / not zero */) goto loc_0034915C;
+    if (RECOMP_FLAGS_FALLBACK(0x00349133u, _flags) /* jne: not equal / not zero */) goto loc_0034915C;
 
 loc_00349135: ;
     PUSH32(esp, esi);

@@ -559,6 +559,11 @@ static inline RecompXmm XMM_UNPACK_HIGH(RecompXmm a, RecompXmm b) {
  * ================================================================ */
 
 /* Unsigned comparison conditions (from CMP a, b -> a - b) */
+/* A conditional the lifter could not resolve (flags merged from predecessors
+ * that disagree): evaluates to f, the always-0 fallback, and reports the
+ * instruction address the first time it runs (recomp_flags_fallback_hit). */
+void recomp_flags_fallback_hit(uint32_t address);
+#define RECOMP_FLAGS_FALLBACK(addr, f) (recomp_flags_fallback_hit(addr), (f))
 #define CMP_EQ(a, b)  ((uint32_t)(a) == (uint32_t)(b))
 #define CMP_NE(a, b)  ((uint32_t)(a) != (uint32_t)(b))
 #define CMP_B(a, b)   ((uint32_t)(a) <  (uint32_t)(b))   /* below (CF=1) */

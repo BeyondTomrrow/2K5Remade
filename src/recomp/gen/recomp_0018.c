@@ -5044,7 +5044,7 @@ void sub_00284892(void)
 
 loc_00284892: ;
     edi = edi;
-    if (_flags /* ja: above (unsigned >) */) { g_seh_ebp = ebp; sub_002848DC(); return; }
+    if (RECOMP_FLAGS_FALLBACK(0x00284894u, _flags) /* ja: above (unsigned >) */) { g_seh_ebp = ebp; sub_002848DC(); return; }
 
 loc_00284896: ;
     _fb = (uint32_t)(LO8(eax)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* sub source, before the write */
@@ -22593,7 +22593,7 @@ loc_0028F4B6: ;
     _fb = (uint32_t)(LO8(eax)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* sub source, before the write */
     MEM8(eax) = MEM8(eax) - LO8(eax);
     _fa = (uint32_t)(MEM8(eax)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* sub result */
-    if (_flags /* jno: not overflow */) { g_seh_ebp = ebp; sub_0028F4B1(); return; }
+    if (RECOMP_FLAGS_FALLBACK(0x0028F4BCu, _flags) /* jno: not overflow */) { g_seh_ebp = ebp; sub_0028F4B1(); return; }
 
 loc_0028F4BE: ;
     _fb = (uint32_t)(LO8(eax)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* sub source, before the write */
@@ -22604,7 +22604,7 @@ loc_0028F4BE: ;
     _fb = (uint32_t)(LO8(eax)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* sub source, before the write */
     MEM8(eax) = MEM8(eax) - LO8(eax);
     _fa = (uint32_t)(MEM8(eax)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* sub result */
-    if (_flags /* jno: not overflow */) (void)0; /* goto loc_0028F4BD - dead code, label not in function */
+    if (RECOMP_FLAGS_FALLBACK(0x0028F4C8u, _flags) /* jno: not overflow */) (void)0; /* goto loc_0028F4BD - dead code, label not in function */
 
 loc_0028F4CA: ;
     _fb = (uint32_t)(LO8(eax)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* sub source, before the write */
@@ -24629,7 +24629,7 @@ void sub_00290036(void)
     #define fp_st1() fp_st(1)
 
 loc_00290036: ;
-    if (_flags /* jl: less (signed <) */) goto loc_00290046;
+    if (RECOMP_FLAGS_FALLBACK(0x00290036u, _flags) /* jl: less (signed <) */) goto loc_00290046;
 
 loc_00290038: ;
     MEM32(esp) = 0x3F800000;
@@ -27073,7 +27073,7 @@ void sub_00290C2D(void)
     #define fp_st1() fp_st(1)
 
 loc_00290C2D: ;
-    if (_flags /* jne: not equal / not zero */) goto loc_00290C3B;
+    if (RECOMP_FLAGS_FALLBACK(0x00290C2Du, _flags) /* jne: not equal / not zero */) goto loc_00290C3B;
 
 loc_00290C2F: ;
     fp_push(MEMF(ebx + 0xE0)); /* fld float */
@@ -60809,7 +60809,7 @@ void sub_0029DD0E(void)
     ebp = g_seh_ebp; /* fpo_leaf: inherit caller's frame */
 
 loc_0029DD0E: ;
-    if (_flags /* jne: not equal / not zero */) goto loc_0029DDF6;
+    if (RECOMP_FLAGS_FALLBACK(0x0029DD0Eu, _flags) /* jne: not equal / not zero */) goto loc_0029DDF6;
 
 loc_0029DD14: ;
     _fa = (uint32_t)(ebx) & 0xFFFFFFFFu; _fb = (uint32_t)(MEM32(0xC6CE58)) & 0xFFFFFFFFu;

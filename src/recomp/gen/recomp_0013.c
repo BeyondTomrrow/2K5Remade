@@ -8574,7 +8574,7 @@ loc_001AE8C7: ;
     _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test eax, eax (32-bit) */
 
 loc_001AE8D5: ;
-    if (_flags /* je: equal / zero */) goto loc_001AE92C;
+    if (RECOMP_FLAGS_FALLBACK(0x001AE8D5u, _flags) /* je: equal / zero */) goto loc_001AE92C;
 
 loc_001AE8D7: ;
     eax = MEM32(esi + 0x18);
@@ -15276,7 +15276,7 @@ void sub_001B0107(void)
     ebp = g_seh_ebp; /* fpo_leaf: inherit caller's frame */
 
 loc_001B0107: ;
-    if (_flags /* je: equal / zero */) goto loc_001B01CB;
+    if (RECOMP_FLAGS_FALLBACK(0x001B0107u, _flags) /* je: equal / zero */) goto loc_001B01CB;
 
 loc_001B010D: ;
     fp_push(MEMF(esp + 8)); /* fld float */
@@ -22660,7 +22660,7 @@ void sub_001B0377(void)
     ebp = g_seh_ebp; /* fpo_leaf: inherit caller's frame */
 
 loc_001B0377: ;
-    if (_flags /* je: equal / zero */) goto loc_001B03FB;
+    if (RECOMP_FLAGS_FALLBACK(0x001B0377u, _flags) /* je: equal / zero */) goto loc_001B03FB;
 
 loc_001B037D: ;
     /* nop */
@@ -56687,7 +56687,7 @@ void sub_001BFFB5(void)
     ebp = g_seh_ebp; /* fpo_leaf: inherit caller's frame */
 
 loc_001BFFB5: ;
-    if (_flags /* jg: greater (signed >) */) goto loc_001BFFBA;
+    if (RECOMP_FLAGS_FALLBACK(0x001BFFB5u, _flags) /* jg: greater (signed >) */) goto loc_001BFFBA;
 
 loc_001BFFB7: ;
     eax = 0; /* xor self */
@@ -56887,7 +56887,7 @@ void sub_001BFFD8(void)
     ebp = g_seh_ebp; /* fpo_leaf: inherit caller's frame */
 
 loc_001BFFD8: ;
-    if (_flags /* jl: less (signed <) */) goto loc_001BFFDD;
+    if (RECOMP_FLAGS_FALLBACK(0x001BFFD8u, _flags) /* jl: less (signed <) */) goto loc_001BFFDD;
 
 loc_001BFFDA: ;
     eax = 0; /* xor self */
@@ -57487,7 +57487,7 @@ void sub_001C0330(void)
     (void)_fa; (void)_fb; (void)_fas; (void)_fbs;
 
 loc_001C0330: ;
-    SET_LO8(edx, _flags /* setl */);
+    SET_LO8(edx, RECOMP_FLAGS_FALLBACK(0x001C0330u, _flags) /* setl */);
     edx--;
     _fa = (uint32_t)(edx) & 0xFFFFFFFFu;
     _fas = (int32_t)(int32_t)(_fa); _fb = (_fa == 0x7FFFFFFFu); /* dec result/SF/OF; CF unchanged */
@@ -60903,7 +60903,8 @@ void sub_001C08B6(void)
 
 loc_001C08B6: ;
     edi = edi;
-    if (_flags /* loope: loope */) (void)0; /* goto loc_001C08C1 - dead code, label not in function */
+    ecx--; /* loope */
+    if (ecx != 0 && (RECOMP_FLAGS_FALLBACK(0x001C08B8u, _flags))) (void)0; /* goto loc_001C08C1 - dead code, label not in function */ /* loope */
 
 loc_001C08BA: ;
     { uint64_t _t = (uint64_t)(LO8(eax)) - (uint64_t)(0) - (uint64_t)_cf; _cf = (int)((_t >> 8) & 1); SET_LO8(eax, (uint32_t)_t); }  /* sbb */
@@ -97436,7 +97437,7 @@ void sub_001D024C(void)
     ebp = g_seh_ebp; /* fpo_leaf: inherit caller's frame */
 
 loc_001D024C: ;
-    if (_flags /* jne: not equal / not zero */) goto loc_001D025A;
+    if (RECOMP_FLAGS_FALLBACK(0x001D024Cu, _flags) /* jne: not equal / not zero */) goto loc_001D025A;
 
 loc_001D024E: ;
     edx = 1;
@@ -100392,7 +100393,7 @@ void sub_001D1528(void)
 
 loc_001D1528: ;
     ecx = 0xE86DC0;
-    if (_flags /* je: equal / zero */) goto loc_001D1534;
+    if (RECOMP_FLAGS_FALLBACK(0x001D152Du, _flags) /* je: equal / zero */) goto loc_001D1534;
 
 loc_001D152F: ;
     ecx = 0xE86E08;

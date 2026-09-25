@@ -18445,7 +18445,7 @@ void sub_000500FD(void)
 
 loc_000500FD: ;
     edx = ebp + -218;
-    if (_flags /* je: equal / zero */) goto loc_0005011C;
+    if (RECOMP_FLAGS_FALLBACK(0x00050103u, _flags) /* je: equal / zero */) goto loc_0005011C;
 
 loc_00050105: ;
     ecx = ZX16(LO16(ecx));
@@ -18614,7 +18614,7 @@ void sub_00050200(void)
     ebp = g_seh_ebp; /* fpo_leaf: inherit caller's frame */
 
 loc_00050200: ;
-    if (_flags /* ja: above (unsigned >) */) goto loc_00050202;
+    if (RECOMP_FLAGS_FALLBACK(0x00050200u, _flags) /* ja: above (unsigned >) */) goto loc_00050202;
 
 loc_00050202: ;
     _fb = (uint32_t)(0x501E500) & 0xFFFFFFFFu; _fbs = (int32_t)(int32_t)(_fb); /* add source, before the write */
@@ -19169,7 +19169,7 @@ void sub_00050332(void)
 
 loc_00050332: ;
     MEM32(esi + 0xC) = edi;
-    if (_flags /* jne: not equal / not zero */) goto loc_0005034C;
+    if (RECOMP_FLAGS_FALLBACK(0x00050335u, _flags) /* jne: not equal / not zero */) goto loc_0005034C;
 
 loc_00050337: ;
     MEM8(esp + 8) = LO8(ecx);
@@ -19617,7 +19617,7 @@ void sub_00050351(void)
     (void)_fa; (void)_fb; (void)_fas; (void)_fbs;
 
 loc_00050351: ;
-    if (_flags /* jne: not equal / not zero */) goto loc_00050359;
+    if (RECOMP_FLAGS_FALLBACK(0x00050351u, _flags) /* jne: not equal / not zero */) goto loc_00050359;
 
 loc_00050353: ;
     MEM8(esp + 8) = LO8(ecx);
@@ -41999,7 +41999,7 @@ void sub_00058C80(void)
     ebp = g_seh_ebp; /* fpo_leaf: inherit caller's frame */
 
 loc_00058C80: ;
-    if (_flags /* jp: parity */) goto loc_00058C93;
+    if (RECOMP_FLAGS_FALLBACK(0x00058C80u, _flags) /* jp: parity */) goto loc_00058C93;
 
 loc_00058C82: ;
     MEM32(esp + 4) = 0x7F800000;
@@ -46965,7 +46965,7 @@ loc_0005A068: ;
     esp += 4; return; /* ret */
 
 loc_0005A06D: ;
-    if (_flags /* jle: less or equal (signed <=) */) { g_seh_ebp = ebp; sub_0005A085(); return; }
+    if (RECOMP_FLAGS_FALLBACK(0x0005A06Du, _flags) /* jle: less or equal (signed <=) */) { g_seh_ebp = ebp; sub_0005A085(); return; }
 
 loc_0005A06F: ;
     eax = esp + 8;
@@ -47364,7 +47364,7 @@ loc_0005A068: ;
     esp += 4; return; /* ret */
 
 loc_0005A06D: ;
-    if (_flags /* jle: less or equal (signed <=) */) { g_seh_ebp = ebp; sub_0005A085(); return; }
+    if (RECOMP_FLAGS_FALLBACK(0x0005A06Du, _flags) /* jle: less or equal (signed <=) */) { g_seh_ebp = ebp; sub_0005A085(); return; }
 
 loc_0005A06F: ;
     eax = esp + 8;
@@ -47730,7 +47730,7 @@ loc_0005A068: ;
     esp += 4; return; /* ret */
 
 loc_0005A06D: ;
-    if (_flags /* jle: less or equal (signed <=) */) { g_seh_ebp = ebp; sub_0005A085(); return; }
+    if (RECOMP_FLAGS_FALLBACK(0x0005A06Du, _flags) /* jle: less or equal (signed <=) */) { g_seh_ebp = ebp; sub_0005A085(); return; }
 
 loc_0005A06F: ;
     eax = esp + 8;
@@ -48063,7 +48063,7 @@ loc_0005A068: ;
     esp += 4; return; /* ret */
 
 loc_0005A06D: ;
-    if (_flags /* jle: less or equal (signed <=) */) { g_seh_ebp = ebp; sub_0005A085(); return; }
+    if (RECOMP_FLAGS_FALLBACK(0x0005A06Du, _flags) /* jle: less or equal (signed <=) */) { g_seh_ebp = ebp; sub_0005A085(); return; }
 
 loc_0005A06F: ;
     eax = esp + 8;
@@ -48363,7 +48363,7 @@ loc_0005A068: ;
     esp += 4; return; /* ret */
 
 loc_0005A06D: ;
-    if (_flags /* jle: less or equal (signed <=) */) { g_seh_ebp = ebp; sub_0005A085(); return; }
+    if (RECOMP_FLAGS_FALLBACK(0x0005A06Du, _flags) /* jle: less or equal (signed <=) */) { g_seh_ebp = ebp; sub_0005A085(); return; }
 
 loc_0005A06F: ;
     eax = esp + 8;
@@ -48630,7 +48630,7 @@ loc_0005A068: ;
     esp += 4; return; /* ret */
 
 loc_0005A06D: ;
-    if (_flags /* jle: less or equal (signed <=) */) { g_seh_ebp = ebp; sub_0005A085(); return; }
+    if (RECOMP_FLAGS_FALLBACK(0x0005A06Du, _flags) /* jle: less or equal (signed <=) */) { g_seh_ebp = ebp; sub_0005A085(); return; }
 
 loc_0005A06F: ;
     eax = esp + 8;
@@ -48864,7 +48864,7 @@ loc_0005A068: ;
     esp += 4; return; /* ret */
 
 loc_0005A06D: ;
-    if (_flags /* jle: less or equal (signed <=) */) { g_seh_ebp = ebp; sub_0005A085(); return; }
+    if (RECOMP_FLAGS_FALLBACK(0x0005A06Du, _flags) /* jle: less or equal (signed <=) */) { g_seh_ebp = ebp; sub_0005A085(); return; }
 
 loc_0005A06F: ;
     eax = esp + 8;
@@ -49065,7 +49065,7 @@ loc_0005A068: ;
     esp += 4; return; /* ret */
 
 loc_0005A06D: ;
-    if (_flags /* jle: less or equal (signed <=) */) { g_seh_ebp = ebp; sub_0005A085(); return; }
+    if (RECOMP_FLAGS_FALLBACK(0x0005A06Du, _flags) /* jle: less or equal (signed <=) */) { g_seh_ebp = ebp; sub_0005A085(); return; }
 
 loc_0005A06F: ;
     eax = esp + 8;
@@ -49233,7 +49233,7 @@ loc_0005A068: ;
     esp += 4; return; /* ret */
 
 loc_0005A06D: ;
-    if (_flags /* jle: less or equal (signed <=) */) { g_seh_ebp = ebp; sub_0005A085(); return; }
+    if (RECOMP_FLAGS_FALLBACK(0x0005A06Du, _flags) /* jle: less or equal (signed <=) */) { g_seh_ebp = ebp; sub_0005A085(); return; }
 
 loc_0005A06F: ;
     eax = esp + 8;
@@ -49368,7 +49368,7 @@ loc_0005A068: ;
     esp += 4; return; /* ret */
 
 loc_0005A06D: ;
-    if (_flags /* jle: less or equal (signed <=) */) { g_seh_ebp = ebp; sub_0005A085(); return; }
+    if (RECOMP_FLAGS_FALLBACK(0x0005A06Du, _flags) /* jle: less or equal (signed <=) */) { g_seh_ebp = ebp; sub_0005A085(); return; }
 
 loc_0005A06F: ;
     eax = esp + 8;
@@ -49470,7 +49470,7 @@ loc_0005A068: ;
     esp += 4; return; /* ret */
 
 loc_0005A06D: ;
-    if (_flags /* jle: less or equal (signed <=) */) { g_seh_ebp = ebp; sub_0005A085(); return; }
+    if (RECOMP_FLAGS_FALLBACK(0x0005A06Du, _flags) /* jle: less or equal (signed <=) */) { g_seh_ebp = ebp; sub_0005A085(); return; }
 
 loc_0005A06F: ;
     eax = esp + 8;
@@ -49538,7 +49538,7 @@ loc_0005A068: ;
     esp += 4; return; /* ret */
 
 loc_0005A06D: ;
-    if (_flags /* jle: less or equal (signed <=) */) { g_seh_ebp = ebp; sub_0005A085(); return; }
+    if (RECOMP_FLAGS_FALLBACK(0x0005A06Du, _flags) /* jle: less or equal (signed <=) */) { g_seh_ebp = ebp; sub_0005A085(); return; }
 
 loc_0005A06F: ;
     eax = esp + 8;
@@ -52904,7 +52904,7 @@ void sub_0005BB42(void)
     (void)_fa; (void)_fb; (void)_fas; (void)_fbs;
 
 loc_0005BB42: ;
-    if (_flags /* jne: not equal / not zero */) goto loc_0005BB57;
+    if (RECOMP_FLAGS_FALLBACK(0x0005BB42u, _flags) /* jne: not equal / not zero */) goto loc_0005BB57;
 
 loc_0005BB44: ;
     eax = MEM32(esp + 4);
@@ -63984,7 +63984,7 @@ void sub_0005F9D9(void)
     ebp = g_seh_ebp; /* fpo_leaf: inherit caller's frame */
 
 loc_0005F9D9: ;
-    if (_flags /* jne: not equal / not zero */) goto loc_0005FA66;
+    if (RECOMP_FLAGS_FALLBACK(0x0005F9D9u, _flags) /* jne: not equal / not zero */) goto loc_0005FA66;
 
 loc_0005F9DF: ;
     ecx = MEM32(esp + 0x28);
@@ -65306,7 +65306,7 @@ void sub_000600EB(void)
 
 loc_000600EB: ;
     MEM32(esp + 0x1C) = ebx;
-    if (_flags /* jne: not equal / not zero */) goto loc_000600F9;
+    if (RECOMP_FLAGS_FALLBACK(0x000600EFu, _flags) /* jne: not equal / not zero */) goto loc_000600F9;
 
 loc_000600F1: ;
     MEM32(esp + 0x1C) = 0x3F800000;
@@ -65773,7 +65773,7 @@ void sub_00060246(void)
     ebp = g_seh_ebp; /* fpo_leaf: inherit caller's frame */
 
 loc_00060246: ;
-    if (_flags /* jg: greater (signed >) */) goto loc_00060265;
+    if (RECOMP_FLAGS_FALLBACK(0x00060246u, _flags) /* jg: greater (signed >) */) goto loc_00060265;
 
 loc_00060248: ;
     eax = MEM32(esi + 0xA82D24);
@@ -66016,7 +66016,7 @@ void sub_000602A8(void)
 
 loc_000602A8: ;
     edi = MEM32(edi);
-    if (_flags /* jne: not equal / not zero */) goto loc_000602BA;
+    if (RECOMP_FLAGS_FALLBACK(0x000602AAu, _flags) /* jne: not equal / not zero */) goto loc_000602BA;
 
 loc_000602AC: ;
     fp_top() = fp_top() * MEMF(ebp + 8); /* fmul dword ptr [ebp + 8] */

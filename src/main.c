@@ -693,6 +693,27 @@ void nfl2k5_execwatch_print(void)
                     g_exec_watch[i].name, g_exec_watch[i].last_return_addr);
 }
 
+/* A lifted conditional the translator could not resolve ran (see
+ * RECOMP_FLAGS_FALLBACK in recomp_types.h): it always takes the "not taken"
+ * side, which may be wrong. Reported once per address, first 400. */
+void recomp_flags_fallback_hit(uint32_t address)
+{
+    static volatile LONG seen[4096];
+    static volatile LONG reported;
+    uint32_t h = (address * 2654435761u) >> 20, k;
+    for (k = 0; k < 16; k++) {
+        uint32_t slot = (h + k) & 4095u;
+        LONG cur = seen[slot];
+        if (cur == (LONG)address)
+            return;
+        if (cur == 0 && InterlockedCompareExchange(&seen[slot], (LONG)address, 0) == 0) {
+            if (InterlockedIncrement(&reported) <= 400)
+                fprintf(stderr, "  [FLAGS] unresolved branch at %08X reached\n", address);
+            return;
+        }
+    }
+}
+
 /* 2026-09-24: game state machines (sub_0006E390 push, sub_0006E400 pop;
  * idx at +0x100, state descriptors at +idx*8). Logs each push/pop and
  * remembers the objects so the periodic peek can print every stack -- the

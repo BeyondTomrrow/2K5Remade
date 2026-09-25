@@ -25238,7 +25238,7 @@ void sub_003EFFED(void)
     (void)_fa; (void)_fb; (void)_fas; (void)_fbs;
 
 loc_003EFFED: ;
-    SET_LO8(edx, _flags /* setge */);
+    SET_LO8(edx, RECOMP_FLAGS_FALLBACK(0x003EFFEDu, _flags) /* setge */);
     eax = edx;
     _fb = (uint32_t)(0x2C) & 0xFFFFFFFFu; _fbs = (int32_t)(int32_t)(_fb); /* add source, before the write */
     esp = esp + 0x2C;
@@ -26142,7 +26142,7 @@ void sub_003F0067(void)
     ebp = g_seh_ebp; /* fpo_leaf: inherit caller's frame */
 
 loc_003F0067: ;
-    if (_flags /* jne: not equal / not zero */) goto loc_003F0128;
+    if (RECOMP_FLAGS_FALLBACK(0x003F0067u, _flags) /* jne: not equal / not zero */) goto loc_003F0128;
 
 loc_003F006D: ;
     ecx = 0xA682D0;
@@ -47751,7 +47751,7 @@ loc_003F6815: ;
     _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* sub result */
 
 loc_003F681A: ;
-    if (_flags /* je: equal / zero */) goto loc_003F682D;
+    if (RECOMP_FLAGS_FALLBACK(0x003F681Au, _flags) /* je: equal / zero */) goto loc_003F682D;
 
 loc_003F681C: ;
     PUSH32(esp, 0xA689C0);

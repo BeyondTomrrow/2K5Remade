@@ -142,6 +142,18 @@ PATCHES = [
     ("DIAG_PBBEGIN", "sub_0002C940", "loc_0002C940: ;", "after", """\
     { extern void nfl2k5_diag_pbbegin(void); nfl2k5_diag_pbbegin(); }
 """),
+    # 0x167707 `jne` is reached from `cmp ecx,[eax+4]` (fall-through) and from
+    # `test [esi+0x20],ecx` at 0x167817 (jmp); the lifter cannot merge a cmp
+    # and a test, so it compiled as never taken ([FLAGS] reported it running,
+    # 2026-09-25). Thread the jump: the test path decides its own branch before
+    # jumping, and the label keeps the cmp's condition.
+    ("JOIN_167707_TEST", "sub_001675E0", "goto loc_00167707;", "before", """\
+    if (TEST_NZ(_fa, _fb)) goto loc_00167673;
+    goto loc_0016770D;
+"""),
+    ("JOIN_167707_CMP", "sub_001675E0", "loc_00167707: ;", "after", """\
+    if (CMP_NE(_fa, _fb)) goto loc_00167673;
+"""),
     # Game state-machine pushes/pops (2026-09-24): see nfl2k5_diag_fsm in src/main.c.
     ("DIAG_FSMPUSH", "sub_0006E390", "loc_0006E3E6: ;", "after", """\
     { extern void nfl2k5_diag_fsm(uint32_t obj, uint32_t desc, int push); nfl2k5_diag_fsm(esi, edi, 1); }

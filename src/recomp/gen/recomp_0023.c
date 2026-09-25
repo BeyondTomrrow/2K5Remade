@@ -21766,7 +21766,7 @@ loc_00354426: ;
 
 loc_00354499: ;
     ecx = 0xCBD4C8;
-    if (_flags /* jle: less or equal (signed <=) */) goto loc_003544BA;
+    if (RECOMP_FLAGS_FALLBACK(0x0035449Eu, _flags) /* jle: less or equal (signed <=) */) goto loc_003544BA;
 
 loc_003544A0: ;
     edx = esp;
@@ -21928,7 +21928,7 @@ loc_00354426: ;
 
 loc_00354499: ;
     ecx = 0xCBD4C8;
-    if (_flags /* jle: less or equal (signed <=) */) goto loc_003544BA;
+    if (RECOMP_FLAGS_FALLBACK(0x0035449Eu, _flags) /* jle: less or equal (signed <=) */) goto loc_003544BA;
 
 loc_003544A0: ;
     edx = esp;
@@ -22084,7 +22084,7 @@ loc_00354426: ;
 
 loc_00354499: ;
     ecx = 0xCBD4C8;
-    if (_flags /* jle: less or equal (signed <=) */) goto loc_003544BA;
+    if (RECOMP_FLAGS_FALLBACK(0x0035449Eu, _flags) /* jle: less or equal (signed <=) */) goto loc_003544BA;
 
 loc_003544A0: ;
     edx = esp;
@@ -22227,7 +22227,7 @@ loc_00354426: ;
 
 loc_00354499: ;
     ecx = 0xCBD4C8;
-    if (_flags /* jle: less or equal (signed <=) */) goto loc_003544BA;
+    if (RECOMP_FLAGS_FALLBACK(0x0035449Eu, _flags) /* jle: less or equal (signed <=) */) goto loc_003544BA;
 
 loc_003544A0: ;
     edx = esp;
@@ -22373,7 +22373,7 @@ loc_00354426: ;
 
 loc_00354499: ;
     ecx = 0xCBD4C8;
-    if (_flags /* jle: less or equal (signed <=) */) goto loc_003544BA;
+    if (RECOMP_FLAGS_FALLBACK(0x0035449Eu, _flags) /* jle: less or equal (signed <=) */) goto loc_003544BA;
 
 loc_003544A0: ;
     edx = esp;
@@ -22485,7 +22485,7 @@ loc_00354426: ;
 
 loc_00354499: ;
     ecx = 0xCBD4C8;
-    if (_flags /* jle: less or equal (signed <=) */) goto loc_003544BA;
+    if (RECOMP_FLAGS_FALLBACK(0x0035449Eu, _flags) /* jle: less or equal (signed <=) */) goto loc_003544BA;
 
 loc_003544A0: ;
     edx = esp;
@@ -22584,7 +22584,7 @@ loc_00354426: ;
 
 loc_00354499: ;
     ecx = 0xCBD4C8;
-    if (_flags /* jle: less or equal (signed <=) */) goto loc_003544BA;
+    if (RECOMP_FLAGS_FALLBACK(0x0035449Eu, _flags) /* jle: less or equal (signed <=) */) goto loc_003544BA;
 
 loc_003544A0: ;
     edx = esp;
@@ -22666,7 +22666,7 @@ loc_00354430: ;
 
 loc_00354499: ;
     ecx = 0xCBD4C8;
-    if (_flags /* jle: less or equal (signed <=) */) goto loc_003544BA;
+    if (RECOMP_FLAGS_FALLBACK(0x0035449Eu, _flags) /* jle: less or equal (signed <=) */) goto loc_003544BA;
 
 loc_003544A0: ;
     edx = esp;
@@ -22735,7 +22735,7 @@ loc_00354440: ;
 
 loc_00354499: ;
     ecx = 0xCBD4C8;
-    if (_flags /* jle: less or equal (signed <=) */) goto loc_003544BA;
+    if (RECOMP_FLAGS_FALLBACK(0x0035449Eu, _flags) /* jle: less or equal (signed <=) */) goto loc_003544BA;
 
 loc_003544A0: ;
     edx = esp;
@@ -22804,7 +22804,7 @@ loc_00354450: ;
 
 loc_00354499: ;
     ecx = 0xCBD4C8;
-    if (_flags /* jle: less or equal (signed <=) */) goto loc_003544BA;
+    if (RECOMP_FLAGS_FALLBACK(0x0035449Eu, _flags) /* jle: less or equal (signed <=) */) goto loc_003544BA;
 
 loc_003544A0: ;
     edx = esp;
@@ -22873,7 +22873,7 @@ loc_00354460: ;
 
 loc_00354499: ;
     ecx = 0xCBD4C8;
-    if (_flags /* jle: less or equal (signed <=) */) goto loc_003544BA;
+    if (RECOMP_FLAGS_FALLBACK(0x0035449Eu, _flags) /* jle: less or equal (signed <=) */) goto loc_003544BA;
 
 loc_003544A0: ;
     edx = esp;
@@ -22942,7 +22942,7 @@ loc_00354470: ;
 
 loc_00354499: ;
     ecx = 0xCBD4C8;
-    if (_flags /* jle: less or equal (signed <=) */) goto loc_003544BA;
+    if (RECOMP_FLAGS_FALLBACK(0x0035449Eu, _flags) /* jle: less or equal (signed <=) */) goto loc_003544BA;
 
 loc_003544A0: ;
     edx = esp;
@@ -63952,7 +63952,7 @@ void sub_0035C43A(void)
 
 loc_0035C43A: ;
     edi = edi;
-    if (_flags /* jo: overflow */) { g_seh_ebp = ebp; sub_0035C401(); return; }
+    if (RECOMP_FLAGS_FALLBACK(0x0035C43Cu, _flags) /* jo: overflow */) { g_seh_ebp = ebp; sub_0035C401(); return; }
 
 loc_0035C43E: ;
     eax = eax ^ 0x35C38700;
@@ -76161,7 +76161,7 @@ void sub_0035F4B8(void)
 
 loc_0035F4B8: ;
     esi = ecx;
-    if (_flags /* jne: not equal / not zero */) goto loc_0035F4C8;
+    if (RECOMP_FLAGS_FALLBACK(0x0035F4BAu, _flags) /* jne: not equal / not zero */) goto loc_0035F4C8;
 
 loc_0035F4BC: ;
     PUSH32(esp, 0);
@@ -80502,7 +80502,7 @@ void sub_00360005(void)
     ebp = g_seh_ebp; /* fpo_leaf: inherit caller's frame */
 
 loc_00360005: ;
-    if (_flags /* jne: not equal / not zero */) goto loc_003601D3;
+    if (RECOMP_FLAGS_FALLBACK(0x00360005u, _flags) /* jne: not equal / not zero */) goto loc_003601D3;
 
 loc_0036000B: ;
     _fb = (uint32_t)(2) & 0xFFFFFFFFu; _fbs = (int32_t)(int32_t)(_fb); /* add source, before the write */
@@ -134224,55 +134224,55 @@ loc_00367B6D: ;
     _fb = (uint32_t)(LO8(edx)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
     SET_HI8(eax, HI8(eax) + LO8(edx));
     _fa = (uint32_t)(HI8(eax)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* add result */
-    if (_flags /* jp: parity */) (void)0; /* goto loc_00367BB5 - dead code, label not in function */
+    if (RECOMP_FLAGS_FALLBACK(0x00367B7Du, _flags) /* jp: parity */) (void)0; /* goto loc_00367BB5 - dead code, label not in function */
 
 loc_00367B7F: ;
     _fb = (uint32_t)(LO8(ebx)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
     SET_LO8(ebx, LO8(ebx) + LO8(ebx));
     _fa = (uint32_t)(LO8(ebx)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* add result */
-    if (_flags /* jp: parity */) goto loc_00367BB9;
+    if (RECOMP_FLAGS_FALLBACK(0x00367B81u, _flags) /* jp: parity */) goto loc_00367BB9;
 
 loc_00367B83: ;
     _fb = (uint32_t)(HI8(eax)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
     SET_HI8(eax, HI8(eax) + HI8(eax));
     _fa = (uint32_t)(HI8(eax)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* add result */
-    if (_flags /* jp: parity */) (void)0; /* goto loc_00367BBD - dead code, label not in function */
+    if (RECOMP_FLAGS_FALLBACK(0x00367B85u, _flags) /* jp: parity */) (void)0; /* goto loc_00367BBD - dead code, label not in function */
 
 loc_00367B87: ;
     _fb = (uint32_t)(HI8(edx)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
     SET_LO8(eax, LO8(eax) + HI8(edx));
     _fa = (uint32_t)(LO8(eax)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* add result */
-    if (_flags /* jp: parity */) (void)0; /* goto loc_00367BC1 - dead code, label not in function */
+    if (RECOMP_FLAGS_FALLBACK(0x00367B89u, _flags) /* jp: parity */) (void)0; /* goto loc_00367BC1 - dead code, label not in function */
 
 loc_00367B8B: ;
     _fb = (uint32_t)(HI8(ebx)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
     SET_HI8(eax, HI8(eax) + HI8(ebx));
     _fa = (uint32_t)(HI8(eax)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* add result */
-    if (_flags /* jp: parity */) goto loc_00367BC5;
+    if (RECOMP_FLAGS_FALLBACK(0x00367B8Du, _flags) /* jp: parity */) goto loc_00367BC5;
 
 loc_00367B8F: ;
     _fb = (uint32_t)(LO8(eax)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
     MEM8(ebx) = MEM8(ebx) + LO8(eax);
     _fa = (uint32_t)(MEM8(ebx)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* add result */
-    if (_flags /* jnp: not parity */) goto loc_00367BC9;
+    if (RECOMP_FLAGS_FALLBACK(0x00367B91u, _flags) /* jnp: not parity */) goto loc_00367BC9;
 
 loc_00367B93: ;
     _fb = (uint32_t)(LO8(ecx)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
     MEM8(edx) = MEM8(edx) + LO8(ecx);
     _fa = (uint32_t)(MEM8(edx)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* add result */
-    if (_flags /* jnp: not parity */) goto loc_00367BCD;
+    if (RECOMP_FLAGS_FALLBACK(0x00367B95u, _flags) /* jnp: not parity */) goto loc_00367BCD;
 
 loc_00367B97: ;
     _fb = (uint32_t)(LO8(edx)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
     MEM8(ecx) = MEM8(ecx) + LO8(edx);
     _fa = (uint32_t)(MEM8(ecx)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* add result */
-    if (_flags /* jnp: not parity */) (void)0; /* goto loc_00367BD1 - dead code, label not in function */
+    if (RECOMP_FLAGS_FALLBACK(0x00367B99u, _flags) /* jnp: not parity */) (void)0; /* goto loc_00367BD1 - dead code, label not in function */
 
 loc_00367B9B: ;
     _fb = (uint32_t)(LO8(ebx)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
     MEM8(0x2900367B) = MEM8(0x2900367B) + LO8(ebx);
     _fa = (uint32_t)(MEM8(0x2900367B)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* add result */
-    if (_flags /* jnp: not parity */) goto loc_00367BD9;
+    if (RECOMP_FLAGS_FALLBACK(0x00367BA1u, _flags) /* jnp: not parity */) goto loc_00367BD9;
 
 loc_00367BA3: ;
     _fb = (uint32_t)(LO8(edx)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
@@ -134640,55 +134640,55 @@ loc_00367B6D: ;
     _fb = (uint32_t)(LO8(edx)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
     SET_HI8(eax, HI8(eax) + LO8(edx));
     _fa = (uint32_t)(HI8(eax)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* add result */
-    if (_flags /* jp: parity */) (void)0; /* goto loc_00367BB5 - dead code, label not in function */
+    if (RECOMP_FLAGS_FALLBACK(0x00367B7Du, _flags) /* jp: parity */) (void)0; /* goto loc_00367BB5 - dead code, label not in function */
 
 loc_00367B7F: ;
     _fb = (uint32_t)(LO8(ebx)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
     SET_LO8(ebx, LO8(ebx) + LO8(ebx));
     _fa = (uint32_t)(LO8(ebx)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* add result */
-    if (_flags /* jp: parity */) goto loc_00367BB9;
+    if (RECOMP_FLAGS_FALLBACK(0x00367B81u, _flags) /* jp: parity */) goto loc_00367BB9;
 
 loc_00367B83: ;
     _fb = (uint32_t)(HI8(eax)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
     SET_HI8(eax, HI8(eax) + HI8(eax));
     _fa = (uint32_t)(HI8(eax)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* add result */
-    if (_flags /* jp: parity */) (void)0; /* goto loc_00367BBD - dead code, label not in function */
+    if (RECOMP_FLAGS_FALLBACK(0x00367B85u, _flags) /* jp: parity */) (void)0; /* goto loc_00367BBD - dead code, label not in function */
 
 loc_00367B87: ;
     _fb = (uint32_t)(HI8(edx)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
     SET_LO8(eax, LO8(eax) + HI8(edx));
     _fa = (uint32_t)(LO8(eax)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* add result */
-    if (_flags /* jp: parity */) (void)0; /* goto loc_00367BC1 - dead code, label not in function */
+    if (RECOMP_FLAGS_FALLBACK(0x00367B89u, _flags) /* jp: parity */) (void)0; /* goto loc_00367BC1 - dead code, label not in function */
 
 loc_00367B8B: ;
     _fb = (uint32_t)(HI8(ebx)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
     SET_HI8(eax, HI8(eax) + HI8(ebx));
     _fa = (uint32_t)(HI8(eax)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* add result */
-    if (_flags /* jp: parity */) goto loc_00367BC5;
+    if (RECOMP_FLAGS_FALLBACK(0x00367B8Du, _flags) /* jp: parity */) goto loc_00367BC5;
 
 loc_00367B8F: ;
     _fb = (uint32_t)(LO8(eax)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
     MEM8(ebx) = MEM8(ebx) + LO8(eax);
     _fa = (uint32_t)(MEM8(ebx)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* add result */
-    if (_flags /* jnp: not parity */) goto loc_00367BC9;
+    if (RECOMP_FLAGS_FALLBACK(0x00367B91u, _flags) /* jnp: not parity */) goto loc_00367BC9;
 
 loc_00367B93: ;
     _fb = (uint32_t)(LO8(ecx)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
     MEM8(edx) = MEM8(edx) + LO8(ecx);
     _fa = (uint32_t)(MEM8(edx)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* add result */
-    if (_flags /* jnp: not parity */) goto loc_00367BCD;
+    if (RECOMP_FLAGS_FALLBACK(0x00367B95u, _flags) /* jnp: not parity */) goto loc_00367BCD;
 
 loc_00367B97: ;
     _fb = (uint32_t)(LO8(edx)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
     MEM8(ecx) = MEM8(ecx) + LO8(edx);
     _fa = (uint32_t)(MEM8(ecx)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* add result */
-    if (_flags /* jnp: not parity */) (void)0; /* goto loc_00367BD1 - dead code, label not in function */
+    if (RECOMP_FLAGS_FALLBACK(0x00367B99u, _flags) /* jnp: not parity */) (void)0; /* goto loc_00367BD1 - dead code, label not in function */
 
 loc_00367B9B: ;
     _fb = (uint32_t)(LO8(ebx)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
     MEM8(0x2900367B) = MEM8(0x2900367B) + LO8(ebx);
     _fa = (uint32_t)(MEM8(0x2900367B)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* add result */
-    if (_flags /* jnp: not parity */) goto loc_00367BD9;
+    if (RECOMP_FLAGS_FALLBACK(0x00367BA1u, _flags) /* jnp: not parity */) goto loc_00367BD9;
 
 loc_00367BA3: ;
     _fb = (uint32_t)(LO8(edx)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
@@ -135027,55 +135027,55 @@ loc_00367B6D: ;
     _fb = (uint32_t)(LO8(edx)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
     SET_HI8(eax, HI8(eax) + LO8(edx));
     _fa = (uint32_t)(HI8(eax)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* add result */
-    if (_flags /* jp: parity */) (void)0; /* goto loc_00367BB5 - dead code, label not in function */
+    if (RECOMP_FLAGS_FALLBACK(0x00367B7Du, _flags) /* jp: parity */) (void)0; /* goto loc_00367BB5 - dead code, label not in function */
 
 loc_00367B7F: ;
     _fb = (uint32_t)(LO8(ebx)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
     SET_LO8(ebx, LO8(ebx) + LO8(ebx));
     _fa = (uint32_t)(LO8(ebx)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* add result */
-    if (_flags /* jp: parity */) goto loc_00367BB9;
+    if (RECOMP_FLAGS_FALLBACK(0x00367B81u, _flags) /* jp: parity */) goto loc_00367BB9;
 
 loc_00367B83: ;
     _fb = (uint32_t)(HI8(eax)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
     SET_HI8(eax, HI8(eax) + HI8(eax));
     _fa = (uint32_t)(HI8(eax)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* add result */
-    if (_flags /* jp: parity */) (void)0; /* goto loc_00367BBD - dead code, label not in function */
+    if (RECOMP_FLAGS_FALLBACK(0x00367B85u, _flags) /* jp: parity */) (void)0; /* goto loc_00367BBD - dead code, label not in function */
 
 loc_00367B87: ;
     _fb = (uint32_t)(HI8(edx)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
     SET_LO8(eax, LO8(eax) + HI8(edx));
     _fa = (uint32_t)(LO8(eax)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* add result */
-    if (_flags /* jp: parity */) (void)0; /* goto loc_00367BC1 - dead code, label not in function */
+    if (RECOMP_FLAGS_FALLBACK(0x00367B89u, _flags) /* jp: parity */) (void)0; /* goto loc_00367BC1 - dead code, label not in function */
 
 loc_00367B8B: ;
     _fb = (uint32_t)(HI8(ebx)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
     SET_HI8(eax, HI8(eax) + HI8(ebx));
     _fa = (uint32_t)(HI8(eax)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* add result */
-    if (_flags /* jp: parity */) goto loc_00367BC5;
+    if (RECOMP_FLAGS_FALLBACK(0x00367B8Du, _flags) /* jp: parity */) goto loc_00367BC5;
 
 loc_00367B8F: ;
     _fb = (uint32_t)(LO8(eax)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
     MEM8(ebx) = MEM8(ebx) + LO8(eax);
     _fa = (uint32_t)(MEM8(ebx)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* add result */
-    if (_flags /* jnp: not parity */) goto loc_00367BC9;
+    if (RECOMP_FLAGS_FALLBACK(0x00367B91u, _flags) /* jnp: not parity */) goto loc_00367BC9;
 
 loc_00367B93: ;
     _fb = (uint32_t)(LO8(ecx)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
     MEM8(edx) = MEM8(edx) + LO8(ecx);
     _fa = (uint32_t)(MEM8(edx)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* add result */
-    if (_flags /* jnp: not parity */) goto loc_00367BCD;
+    if (RECOMP_FLAGS_FALLBACK(0x00367B95u, _flags) /* jnp: not parity */) goto loc_00367BCD;
 
 loc_00367B97: ;
     _fb = (uint32_t)(LO8(edx)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
     MEM8(ecx) = MEM8(ecx) + LO8(edx);
     _fa = (uint32_t)(MEM8(ecx)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* add result */
-    if (_flags /* jnp: not parity */) (void)0; /* goto loc_00367BD1 - dead code, label not in function */
+    if (RECOMP_FLAGS_FALLBACK(0x00367B99u, _flags) /* jnp: not parity */) (void)0; /* goto loc_00367BD1 - dead code, label not in function */
 
 loc_00367B9B: ;
     _fb = (uint32_t)(LO8(ebx)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
     MEM8(0x2900367B) = MEM8(0x2900367B) + LO8(ebx);
     _fa = (uint32_t)(MEM8(0x2900367B)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* add result */
-    if (_flags /* jnp: not parity */) goto loc_00367BD9;
+    if (RECOMP_FLAGS_FALLBACK(0x00367BA1u, _flags) /* jnp: not parity */) goto loc_00367BD9;
 
 loc_00367BA3: ;
     _fb = (uint32_t)(LO8(edx)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
@@ -142146,7 +142146,7 @@ void sub_0036876A(void)
     ebp = g_seh_ebp; /* fpo_leaf: inherit caller's frame */
 
 loc_0036876A: ;
-    if (_flags /* jge: greater or equal (signed >=) */) goto loc_00368774;
+    if (RECOMP_FLAGS_FALLBACK(0x0036876Au, _flags) /* jge: greater or equal (signed >=) */) goto loc_00368774;
 
 loc_0036876C: ;
     ecx = MEM32(esi + 0x40);
@@ -144366,7 +144366,7 @@ loc_00368C50: ;
     MEM32(esp + 0x28) = edi;
     MEM32(esp + 0x2C) = 0;
     esi = ebx;
-    if (_flags /* je: equal / zero */) goto loc_00368CA9;
+    if (RECOMP_FLAGS_FALLBACK(0x00368C61u, _flags) /* je: equal / zero */) goto loc_00368CA9;
 
 loc_00368C63: ;
     PUSH32(esp, 0);
@@ -147708,7 +147708,7 @@ void sub_00369A69(void)
     ebp = g_seh_ebp; /* fpo_leaf: inherit caller's frame */
 
 loc_00369A69: ;
-    if (_flags /* je: equal / zero */) goto loc_00369A6C;
+    if (RECOMP_FLAGS_FALLBACK(0x00369A69u, _flags) /* je: equal / zero */) goto loc_00369A6C;
 
 loc_00369A6B: ;
     edi++;

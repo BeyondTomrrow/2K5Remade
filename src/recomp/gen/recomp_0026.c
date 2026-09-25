@@ -4979,7 +4979,7 @@ loc_003D4CF5: ;
     _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp edi, eax (32-bit) */
 
 loc_003D4CFB: ;
-    if (_flags /* jne: not equal / not zero */) goto loc_003D4D01;
+    if (RECOMP_FLAGS_FALLBACK(0x003D4CFBu, _flags) /* jne: not equal / not zero */) goto loc_003D4D01;
 
 loc_003D4CFD: ;
     MEM8(esi + 1) = 3;
@@ -5246,7 +5246,7 @@ loc_003D4CF5: ;
     _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp edi, eax (32-bit) */
 
 loc_003D4CFB: ;
-    if (_flags /* jne: not equal / not zero */) goto loc_003D4D01;
+    if (RECOMP_FLAGS_FALLBACK(0x003D4CFBu, _flags) /* jne: not equal / not zero */) goto loc_003D4D01;
 
 loc_003D4CFD: ;
     MEM8(esi + 1) = 3;

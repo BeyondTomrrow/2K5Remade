@@ -37526,7 +37526,7 @@ void sub_00430AE0(void)
     ebp = g_seh_ebp; /* fpo_leaf: inherit caller's frame */
 
 loc_00430AE0: ;
-    if (_flags /* jl: less (signed <) */) goto loc_00430D78;
+    if (RECOMP_FLAGS_FALLBACK(0x00430AE0u, _flags) /* jl: less (signed <) */) goto loc_00430D78;
 
 loc_00430AE6: ;
     ebx = MEM32(esp + 0x10);

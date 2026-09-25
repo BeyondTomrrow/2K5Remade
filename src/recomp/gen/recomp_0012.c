@@ -4774,7 +4774,7 @@ void sub_0018FEB4(void)
     ebp = g_seh_ebp; /* fpo_leaf: inherit caller's frame */
 
 loc_0018FEB4: ;
-    if (_flags /* je: equal / zero */) goto loc_0018FF1C;
+    if (RECOMP_FLAGS_FALLBACK(0x0018FEB4u, _flags) /* je: equal / zero */) goto loc_0018FF1C;
 
 loc_0018FEB6: ;
     eax = esi;
@@ -10998,7 +10998,7 @@ loc_00192219: ;
     _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test eax, eax (32-bit) */
 
 loc_0019221B: ;
-    if (_flags /* jne: not equal / not zero */) goto loc_0019227B;
+    if (RECOMP_FLAGS_FALLBACK(0x0019221Bu, _flags) /* jne: not equal / not zero */) goto loc_0019227B;
 
 loc_0019221D: ;
     edx = 0x507250;
@@ -24133,7 +24133,7 @@ void sub_00195570(void)
 
 loc_00195570: ;
     edx = 0xE845AC;
-    if (_flags /* je: equal / zero */) goto loc_0019557C;
+    if (RECOMP_FLAGS_FALLBACK(0x00195575u, _flags) /* je: equal / zero */) goto loc_0019557C;
 
 loc_00195577: ;
     edx = 0xE84588;
@@ -24753,7 +24753,7 @@ void sub_00195870(void)
 
 loc_00195870: ;
     edx = 0xE845AC;
-    if (_flags /* je: equal / zero */) goto loc_0019587C;
+    if (RECOMP_FLAGS_FALLBACK(0x00195875u, _flags) /* je: equal / zero */) goto loc_0019587C;
 
 loc_00195877: ;
     edx = 0xE84588;
@@ -69307,7 +69307,8 @@ loc_001A962E: ;
     _fa = (uint32_t)(MEM32(ebx + -1830223846)) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* adc result */
     { uint64_t _t = (uint64_t)(LO8(eax)) - (uint64_t)(MEM8(eax)) - (uint64_t)_cf; _cf = (int)((_t >> 8) & 1); SET_LO8(eax, (uint32_t)_t); }  /* sbb */
     _fa = (uint32_t)(LO8(eax)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* sbb result */
-    if (_flags /* loope: loope */) { g_seh_ebp = ebp; sub_001A95D0(); return; }
+    ecx--; /* loope */
+    if (ecx != 0 && ((_fa == 0))) { g_seh_ebp = ebp; sub_001A95D0(); return; } /* loope */
 
 loc_001A963E: ;
     { uint64_t _t = (uint64_t)(LO8(eax)) - (uint64_t)(MEM8(eax)) - (uint64_t)_cf; _cf = (int)((_t >> 8) & 1); SET_LO8(eax, (uint32_t)_t); }  /* sbb */
@@ -69354,7 +69355,8 @@ loc_001A9662: ;
     eax = _tmp; }
     { uint64_t _t = (uint64_t)(LO8(eax)) - (uint64_t)(MEM8(eax)) - (uint64_t)_cf; _cf = (int)((_t >> 8) & 1); SET_LO8(eax, (uint32_t)_t); }  /* sbb */
     _fa = (uint32_t)(LO8(eax)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* sbb result */
-    if (_flags /* loope: loope */) (void)0; /* goto loc_001A960A - dead code, label not in function */
+    ecx--; /* loope */
+    if (ecx != 0 && ((_fa == 0))) (void)0; /* goto loc_001A960A - dead code, label not in function */ /* loope */
 
 loc_001A9676: ;
     { uint64_t _t = (uint64_t)(LO8(eax)) - (uint64_t)(MEM8(eax)) - (uint64_t)_cf; _cf = (int)((_t >> 8) & 1); SET_LO8(eax, (uint32_t)_t); }  /* sbb */

@@ -7512,7 +7512,7 @@ void sub_000CFFEE(void)
 loc_000CFFEE: ;
     MEM32(esp + 0x80) = edx;
     MEM32(esp + 0x88) = ecx;
-    if (_flags /* jne: not equal / not zero */) goto loc_000D0011;
+    if (RECOMP_FLAGS_FALLBACK(0x000CFFFCu, _flags) /* jne: not equal / not zero */) goto loc_000D0011;
 
 loc_000CFFFE: ;
     PUSH32(esp, 0x54);
@@ -7746,7 +7746,7 @@ void sub_000CFFF5(void)
 
 loc_000CFFF5: ;
     MEM32(esp + 0x88) = ecx;
-    if (_flags /* jne: not equal / not zero */) goto loc_000D0011;
+    if (RECOMP_FLAGS_FALLBACK(0x000CFFFCu, _flags) /* jne: not equal / not zero */) goto loc_000D0011;
 
 loc_000CFFFE: ;
     PUSH32(esp, 0x54);
@@ -187677,7 +187677,8 @@ void sub_000DAEE6(void)
 
 loc_000DAEE6: ;
     edi = edi;
-    if (_flags /* loopne: loopne */) { g_seh_ebp = ebp; sub_000DAE98(); return; }
+    ecx--; /* loopne */
+    if (ecx != 0 && !(RECOMP_FLAGS_FALLBACK(0x000DAEE8u, _flags))) { g_seh_ebp = ebp; sub_000DAE98(); return; } /* loopne */
 
 loc_000DAEEA: ;
     eax = eax | 0xDAECE00;
