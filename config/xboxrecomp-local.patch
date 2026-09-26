@@ -2261,10 +2261,10 @@ index 17cb31f..172d860 100644
          *PreviousSuspendCount = (ULONG)prev;
 diff --git a/src/kernel/nv2a_gpu_d3d11.hlsl b/src/kernel/nv2a_gpu_d3d11.hlsl
 new file mode 100644
-index 0000000..c13d083
+index 0000000..740ebd8
 --- /dev/null
 +++ b/src/kernel/nv2a_gpu_d3d11.hlsl
-@@ -0,0 +1,290 @@
+@@ -0,0 +1,296 @@
 +// NV2A pixel pipeline for the Direct3D 11 renderer (nv2a_gpu_d3d11.inc.c).
 +//
 +// Edit this file, then run tools/gen-gpu-hlsl.py to regenerate
@@ -2418,9 +2418,15 @@ index 0000000..c13d083
 +POut ps_main(PIn i)
 +{
 +    POut r;
++    // Depth in depth-buffer units: w with Z perspective, else z.
++    float zd = depthp.x != 0.0 ? i.wz.x : i.pos.z * depthp.y;
++    // Outside the clip range: discarded, unless SET_ZMIN_MAX_CONTROL says
++    // clamp (show.y = 0). xemu psh.c "Depth clipping".
++    if (show.y != 0u && (zd < depthp.z || zd > depthp.w))
++        discard;
 +    r.c = shade(i);
 +    if (depthp.x != 0.0)
-+        r.d = clamp(i.wz.x, depthp.z, depthp.w) / depthp.y;
++        r.d = clamp(zd, depthp.z, depthp.w) / depthp.y;
 +    else
 +        r.d = i.pos.z;
 +    return r;
@@ -2557,10 +2563,10 @@ index 0000000..c13d083
 +}
 diff --git a/src/kernel/nv2a_gpu_d3d11.inc.c b/src/kernel/nv2a_gpu_d3d11.inc.c
 new file mode 100644
-index 0000000..2a84b8a
+index 0000000..c985758
 --- /dev/null
 +++ b/src/kernel/nv2a_gpu_d3d11.inc.c
-@@ -0,0 +1,1210 @@
+@@ -0,0 +1,1214 @@
 +/* ── Hardware rendering (Direct3D 11) ─────────────────────────────────────
 + *
 + * Included into nv2a_pb_exec.c (it reads that file's state directly), after
@@ -3338,10 +3344,8 @@ index 0000000..2a84b8a
 +    float nx = x->x / (float)rw * 2.0f - 1.0f;
 +    float ny = 1.0f - x->y / (float)rh * 2.0f;
 +    float nz;
-+    if (s_vp.clip_max > s_vp.clip_min) {
-+        if (zc < s_vp.clip_min) zc = s_vp.clip_min;
-+        if (zc > s_vp.clip_max) zc = s_vp.clip_max;
-+    }
++    /* No clamp to the clip range here: fragments outside it are discarded
++     * (or clamped) per pixel, see ps_main. */
 +    nz = zc / zfull;
 +    float w = x->w;
 +    int k;
@@ -3559,6 +3563,12 @@ index 0000000..2a84b8a
 +    c.depthp[1] = gpu_zmax();
 +    c.depthp[2] = s_vp.clip_max > s_vp.clip_min ? s_vp.clip_min : 0.0f;
 +    c.depthp[3] = s_vp.clip_max > s_vp.clip_min ? s_vp.clip_max : c.depthp[1];
++    /* Fragments outside [clip min, clip max] are discarded unless
++     * SET_ZMIN_MAX_CONTROL selects clamping (xemu: ZCLAMP_EN == CULL, the
++     * reset value). NFL 2K5 redraws the stadium with CLIP_MIN at half the
++     * depth range after the players; clamping squashed its near half onto
++     * the clip plane, over the players, which looked see-through. */
++    c.show[1] = ((s_vp.zminmax >> 4) & 0xF) == 0 ? 1u : 0u;
 +    if (env_cached("RECOMP_GPU_SHOW"))
 +        c.show[0] = (uint32_t)atoi(env_cached("RECOMP_GPU_SHOW"));
 +    c.alpha[2] = s_gpu.alpha_ref; c.alpha[3] = !flat2d && comb_active() ? 1u : 0u;
@@ -3773,10 +3783,10 @@ index 0000000..2a84b8a
 +}
 diff --git a/src/kernel/nv2a_gpu_d3d11_hlsl.inc b/src/kernel/nv2a_gpu_d3d11_hlsl.inc
 new file mode 100644
-index 0000000..0c01e22
+index 0000000..bf17e4d
 --- /dev/null
 +++ b/src/kernel/nv2a_gpu_d3d11_hlsl.inc
-@@ -0,0 +1,292 @@
+@@ -0,0 +1,298 @@
 +/* Generated from nv2a_gpu_d3d11.hlsl by tools/gen-gpu-hlsl.py -- do not edit. */
 +static const char k_gpu_hlsl[] =
 +    "// NV2A pixel pipeline for the Direct3D 11 renderer (nv2a_gpu_d3d11.inc.c).\n"
@@ -3932,9 +3942,15 @@ index 0000000..0c01e22
 +    "POut ps_main(PIn i)\n"
 +    "{\n"
 +    "    POut r;\n"
++    "    // Depth in depth-buffer units: w with Z perspective, else z.\n"
++    "    float zd = depthp.x != 0.0 ? i.wz.x : i.pos.z * depthp.y;\n"
++    "    // Outside the clip range: discarded, unless SET_ZMIN_MAX_CONTROL says\n"
++    "    // clamp (show.y = 0). xemu psh.c \"Depth clipping\".\n"
++    "    if (show.y != 0u && (zd < depthp.z || zd > depthp.w))\n"
++    "        discard;\n"
 +    "    r.c = shade(i);\n"
 +    "    if (depthp.x != 0.0)\n"
-+    "        r.d = clamp(i.wz.x, depthp.z, depthp.w) / depthp.y;\n"
++    "        r.d = clamp(zd, depthp.z, depthp.w) / depthp.y;\n"
 +    "    else\n"
 +    "        r.d = i.pos.z;\n"
 +    "    return r;\n"
@@ -4071,10 +4087,10 @@ index 0000000..0c01e22
 +    "}\n";
 diff --git a/src/kernel/nv2a_gpu_vp.inc.c b/src/kernel/nv2a_gpu_vp.inc.c
 new file mode 100644
-index 0000000..bf5478b
+index 0000000..2afe880
 --- /dev/null
 +++ b/src/kernel/nv2a_gpu_vp.inc.c
-@@ -0,0 +1,413 @@
+@@ -0,0 +1,412 @@
 +/* ── NV2A vertex programs on the GPU ─────────────────────────────────────
 + *
 + * Included into nv2a_gpu_d3d11.inc.c. Opt-in with RECOMP_GPU_VP=1 while it is
@@ -4156,7 +4172,6 @@ index 0000000..bf5478b
 +    "  if (!(w > 1e-6 || w < -1e-6)) w = 1e-6;\n"
 +    "  float nx = P.x / info.x * 2.0 - 1.0, ny = 1.0 - P.y / info.y * 2.0;\n"
 +    "  float zc = P.z;\n"
-+    "  if (clipr.z != 0.0) zc = clamp(zc, clipr.x, clipr.y);\n"
 +    "  float nz = saturate(zc / info.z);\n"
 +    "  o.pos = float4(nx * w, ny * w, nz * w, w);\n"
 +    "  if (isnan(P.x) || isnan(P.y) || abs(P.x) >= 1e6 || abs(P.y) >= 1e6) o.pos = asfloat(0x7FC00000u).xxxx;\n"
@@ -4489,7 +4504,7 @@ index 0000000..bf5478b
 +    return 1;
 +}
 diff --git a/src/kernel/nv2a_pb_exec.c b/src/kernel/nv2a_pb_exec.c
-index b3dcbf7..b9e2c46 100644
+index b3dcbf7..530119d 100644
 --- a/src/kernel/nv2a_pb_exec.c
 +++ b/src/kernel/nv2a_pb_exec.c
 @@ -24,8 +24,10 @@
@@ -4959,7 +4974,7 @@ index b3dcbf7..b9e2c46 100644
      default:
          break;                             /* points and lines: not yet */
      }
-@@ -1242,6 +1517,1145 @@ static void raster_batch(void)
+@@ -1242,6 +1517,1147 @@ static void raster_batch(void)
   * question is what space attribute 0 arrives in: a title running a vertex
   * program hands over object-space positions that mean nothing without running
   * it, while pre-transformed screen-space coordinates can be drawn directly. */
@@ -5323,6 +5338,7 @@ index b3dcbf7..b9e2c46 100644
 +    uint32_t clear_rx, clear_ry;          /* SET_CLEAR_RECT_HORIZONTAL/VERTICAL */
 +    float    clip_min, clip_max;          /* SET_CLIP_MIN/MAX: depth range oPos.z is in */
 +    uint32_t control0;                    /* SET_CONTROL0: bit 16 Z perspective (w-buffer), bit 12 float Z */
++    uint32_t zminmax;                     /* SET_ZMIN_MAX_CONTROL: bits 4-7 ZCLAMP_EN (0 cull, 1 clamp) */
 +    uint32_t batches, verts;              /* counters for the report */
 +    uint32_t rej_bad, rej_area, rej_cull, rej_clip, drawn;
 +} s_vp = { .depth_func = 0x0201, .depth_mask = 1, .cull_face = 0x0405,
@@ -5386,6 +5402,7 @@ index b3dcbf7..b9e2c46 100644
 +    case 0x0290: s_vp.control0 = param; return 1;  /* SET_CONTROL0 */
 +    case 0x0394: s_vp.clip_min = f; return 1;   /* SET_CLIP_MIN */
 +    case 0x0398: s_vp.clip_max = f; return 1;   /* SET_CLIP_MAX */
++    case 0x1D78: s_vp.zminmax = param; return 1; /* SET_ZMIN_MAX_CONTROL */
 +    case 0x1D98: s_vp.clear_rx = g_clear_rx = param; return 1;   /* SET_CLEAR_RECT_HORIZONTAL */
 +    case 0x1D9C: s_vp.clear_ry = g_clear_ry = param; return 1;   /* SET_CLEAR_RECT_VERTICAL */
 +    default: return 0;
@@ -6105,7 +6122,7 @@ index b3dcbf7..b9e2c46 100644
  static void draw_primitive(void)
  {
      float v[4];
-@@ -1270,7 +2684,44 @@ static void draw_primitive(void)
+@@ -1270,7 +2686,44 @@ static void draw_primitive(void)
          }
      }
  
@@ -6151,7 +6168,7 @@ index b3dcbf7..b9e2c46 100644
  
      if (getenv("RECOMP_PB_EXEC_VERBOSE")) {
          static int shown;
-@@ -1390,6 +2841,12 @@ static void draw_inline_array(void)
+@@ -1390,6 +2843,12 @@ static void draw_inline_array(void)
          case 0:  bytes = 4;                        break;  /* D3DCOLOR   */
          case 2:  bytes = 4 * s_gpu.attr[a].size;   break;  /* float      */
          case 4:  bytes = s_gpu.attr[a].size;       break;  /* ubyte norm */
@@ -6164,7 +6181,7 @@ index b3dcbf7..b9e2c46 100644
          default: bytes = 4 * s_gpu.attr[a].size;   break;
          }
          s_gpu.attr[a].offset = off;
-@@ -1493,6 +2950,37 @@ static int imm_vertex_method(uint32_t method, uint32_t param)
+@@ -1493,6 +2952,37 @@ static int imm_vertex_method(uint32_t method, uint32_t param)
      union { uint32_t u; float f; } v;
      v.u = param;
  
@@ -6202,7 +6219,7 @@ index b3dcbf7..b9e2c46 100644
      if (method >= NV097_SET_VERTEX4F && method < NV097_SET_VERTEX4F + 16) {
          uint32_t c = (method - NV097_SET_VERTEX4F) / 4;
          s_gpu.imm_pos[c] = v.f;
-@@ -1570,7 +3058,22 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1570,7 +3060,22 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
          note_unhandled(method, param);
          return;
      }
@@ -6225,7 +6242,7 @@ index b3dcbf7..b9e2c46 100644
      case NV097_SET_SURFACE_CLIP_HORIZONTAL:
          s_gpu.clip_x = param & 0xFFFF;
          s_gpu.clip_w = (param >> 16) & 0xFFFF;
-@@ -1586,16 +3089,32 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1586,16 +3091,32 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
          s_gpu.pitch = param & 0xFFFF;      /* colour pitch; zeta is the top half */
          break;
      case NV097_SET_SURFACE_COLOR_OFFSET:
@@ -6258,7 +6275,7 @@ index b3dcbf7..b9e2c46 100644
          if (param) {
              s_gpu.prim = param;
              s_gpu.idx_count = 0;
-@@ -1620,8 +3139,15 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1620,8 +3141,15 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
      case NV097_INLINE_ARRAY:
          /* Vertex data, not a pointer to it. Buffered rather than decoded here
           * because the format is only fully known at END. */
@@ -6275,7 +6292,7 @@ index b3dcbf7..b9e2c46 100644
          break;
  
      case NV097_DRAW_ARRAYS: {
-@@ -1644,6 +3170,13 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1644,6 +3172,13 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
          break;
      }
  
@@ -6289,7 +6306,7 @@ index b3dcbf7..b9e2c46 100644
      case NV097_ARRAY_ELEMENT16:
          /* Two 16-bit indices per parameter word. */
          if (s_gpu.prim && s_gpu.idx_count + 2 <= NV_MAX_INDICES) {
-@@ -1659,6 +3192,23 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1659,6 +3194,23 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
          record_tex_reg(method, param);
          break;
  
@@ -6313,7 +6330,7 @@ index b3dcbf7..b9e2c46 100644
      case NV097_SET_FLIP_READ:
          s_gpu.flip_read = param;
          return;
-@@ -1682,6 +3232,47 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1682,6 +3234,47 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
          /* The stall ends when the buffer being read is the one just finished.
           * There is no scanout here to wait for, so that is now. */
          s_gpu.flip_read = s_gpu.flip_write;
@@ -6361,7 +6378,7 @@ index b3dcbf7..b9e2c46 100644
          /* And this is a completed swap, which is what a title's own swap
           * counter counts -- see xbox_Nv2aFrameCounterFlip. */
          xbox_Nv2aFrameCounterFlip();
-@@ -1696,6 +3287,11 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1696,6 +3289,11 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
          return;
  
      case NV097_SET_TEXTURE_FORMAT:
@@ -6373,7 +6390,7 @@ index b3dcbf7..b9e2c46 100644
          s_gpu.tex.color = (param >> 8) & 0xFF;
          /* A swizzled texture carries its own dimensions here, as log2 in
           * BASE_SIZE_U/V (nv2a_regs.h: 0x00F00000 / 0x0F000000). It has to:
-@@ -1729,6 +3325,9 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1729,6 +3327,9 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
      case NV097_SET_TEXTURE_IMAGE_RECT:
          s_gpu.tex.width  = param >> 16;
          s_gpu.tex.height = param & 0xFFFF;
@@ -6383,7 +6400,7 @@ index b3dcbf7..b9e2c46 100644
          record_tex_reg(method, param);
          break;
  
-@@ -1948,9 +3547,12 @@ void nv2a_pb_exec_report(void)
+@@ -1948,9 +3549,12 @@ void nv2a_pb_exec_report(void)
              dma_resolve(s_gpu.drawn_offset), s_gpu.color_offset,
              dma_resolve(s_gpu.color_offset));
      fprintf(stderr, "[GPU] rasterised %u triangles; %u batches skipped as not"
@@ -7994,7 +8011,7 @@ index cfe279f..1ef47b7 100644
          """Code pointers held by a resynced jump table, or [] if unknown."""
          end = self.jump_tables.get(tbl)
 diff --git a/tools/disasm/functions.py b/tools/disasm/functions.py
-index 6ebef06..e920259 100644
+index 6ebef06..51b5f96 100644
 --- a/tools/disasm/functions.py
 +++ b/tools/disasm/functions.py
 @@ -200,6 +200,17 @@ class FunctionDetector:
@@ -8024,7 +8041,24 @@ index 6ebef06..e920259 100644
              section = self.image.get_section_at_va(nxt)
              if section is None or not section.executable:
                  continue
-@@ -1042,6 +1055,21 @@ class FunctionDetector:
+@@ -1011,6 +1024,16 @@ class FunctionDetector:
+                 continue
+ 
+             insn = self.engine.get_instruction(addr)
++            if insn is None and addr <= max_target:
++                # An address that must be inside the function (a branch
++                # target or switch arm lies at or beyond it) that the sweep
++                # stepped over out of phase. NFL 2K5's sub_001EC830 is a lone
++                # `jmp [edx*4+0x1EC8BC]` whose 13 setter arms follow it; the
++                # sweep had decoded 0x1EC831.. instead, so the function ended
++                # on its dispatch and every arm was an unresolved ITAIL --
++                # the game died on the first kick return. Decode here.
++                self.engine.decode_at(addr)
++                insn = self.engine.get_instruction(addr)
+             if insn is None:
+                 break
+ 
+@@ -1042,6 +1065,21 @@ class FunctionDetector:
              # dispatch itself, dropping every case and the shared epilogue --
              # MSVC's memcpy loses its "pop edi / pop esi", so every caller is
              # left with those registers clobbered.
@@ -8046,7 +8080,7 @@ index 6ebef06..e920259 100644
              if insn.jump_table is not None:
                  for target in self.engine.jump_table_entries(insn.jump_table):
                      if start <= target < upper and target > max_target:
-@@ -1081,6 +1109,23 @@ class FunctionDetector:
+@@ -1081,6 +1119,23 @@ class FunctionDetector:
  
          return max_addr
  

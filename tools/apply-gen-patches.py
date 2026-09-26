@@ -154,6 +154,24 @@ PATCHES = [
     ("JOIN_167707_CMP", "sub_001675E0", "loc_00167707: ;", "after", """\
     if (CMP_NE(_fa, _fb)) goto loc_00167673;
 """),
+    # Flag joins reached during the kickoff (2026-09-25): a je where one path
+    # arrives from a cmp and the other from a test, which the lifter cannot
+    # merge (RECOMP_FLAGS_FALLBACK, never taken). Resolve each path before the
+    # join, like JOIN_167707.
+    ("JOIN_221ABB_CMP", "sub_00221A30", "goto loc_00221ABB;", "before", """\
+    if (CMP_EQ(_fa, _fb)) goto loc_00221ACD;
+    goto loc_00221ABD;
+"""),
+    ("JOIN_221ABB_TEST", "sub_00221A30", "loc_00221ABB: ;", "after", """\
+    if (TEST_Z(_fa, _fb)) goto loc_00221ACD;
+"""),
+    ("JOIN_2F7CA4_TEST", "sub_002F7C50", "goto loc_002F7CA4;", "before", """\
+    if (TEST_Z(_fa, _fb)) goto loc_002F7CE3;
+    goto loc_002F7CA6;
+"""),
+    ("JOIN_2F7CA4_CMP", "sub_002F7C50", "loc_002F7CA4: ;", "after", """\
+    if (CMP_EQ(_fa, _fb)) goto loc_002F7CE3;
+"""),
     # Game state-machine pushes/pops (2026-09-24): see nfl2k5_diag_fsm in src/main.c.
     ("DIAG_FSMPUSH", "sub_0006E390", "loc_0006E3E6: ;", "after", """\
     { extern void nfl2k5_diag_fsm(uint32_t obj, uint32_t desc, int push); nfl2k5_diag_fsm(esi, edi, 1); }

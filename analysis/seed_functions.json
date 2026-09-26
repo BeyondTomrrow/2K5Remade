@@ -800,14 +800,6 @@
     "note": "Referenced from a data table, preceded by padding, not translated; verified function-like start with capstone (2026-09-24 scan)."
   },
   {
-    "start": "0x00204800",
-    "note": "Referenced from a data table, preceded by padding, not translated; verified function-like start with capstone (2026-09-24 scan)."
-  },
-  {
-    "start": "0x00205900",
-    "note": "Referenced from a data table, preceded by padding, not translated; verified function-like start with capstone (2026-09-24 scan)."
-  },
-  {
     "start": "0x0020CE00",
     "note": "Referenced from a data table, preceded by padding, not translated; verified function-like start with capstone (2026-09-24 scan)."
   },
@@ -876,42 +868,6 @@
     "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
   },
   {
-    "start": "0x0001488A",
-    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
-  },
-  {
-    "start": "0x0001488E",
-    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
-  },
-  {
-    "start": "0x000156F9",
-    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
-  },
-  {
-    "start": "0x00015707",
-    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
-  },
-  {
-    "start": "0x00015855",
-    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
-  },
-  {
-    "start": "0x0001585A",
-    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
-  },
-  {
-    "start": "0x0001587E",
-    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
-  },
-  {
-    "start": "0x00015880",
-    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
-  },
-  {
-    "start": "0x0003EB40",
-    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
-  },
-  {
     "start": "0x000429C0",
     "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
   },
@@ -972,10 +928,6 @@
     "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
   },
   {
-    "start": "0x000DAE98",
-    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
-  },
-  {
     "start": "0x000DE630",
     "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
   },
@@ -989,14 +941,6 @@
   },
   {
     "start": "0x0010D0B0",
-    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
-  },
-  {
-    "start": "0x00112334",
-    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
-  },
-  {
-    "start": "0x0011233A",
     "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
   },
   {
@@ -1072,10 +1016,6 @@
     "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
   },
   {
-    "start": "0x0015E8DC",
-    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
-  },
-  {
     "start": "0x0015F790",
     "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
   },
@@ -1097,18 +1037,6 @@
   },
   {
     "start": "0x001C17E0",
-    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
-  },
-  {
-    "start": "0x001F74C6",
-    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
-  },
-  {
-    "start": "0x001F74CA",
-    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
-  },
-  {
-    "start": "0x001F74CE",
     "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
   },
   {
@@ -1308,10 +1236,6 @@
     "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
   },
   {
-    "start": "0x00303FE9",
-    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
-  },
-  {
     "start": "0x0031F9A0",
     "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
   },
@@ -1388,71 +1312,7 @@
     "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
   },
   {
-    "start": "0x00375F82",
-    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
-  },
-  {
-    "start": "0x00377FE4",
-    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
-  },
-  {
-    "start": "0x00377FFC",
-    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
-  },
-  {
-    "start": "0x003AE43C",
-    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
-  },
-  {
-    "start": "0x003D2215",
-    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
-  },
-  {
-    "start": "0x0041B35B",
-    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
-  },
-  {
-    "start": "0x0041B390",
-    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
-  },
-  {
-    "start": "0x0041B392",
-    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
-  },
-  {
-    "start": "0x0041D9D5",
-    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
-  },
-  {
-    "start": "0x0041D9E3",
-    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
-  },
-  {
-    "start": "0x0041DAD8",
-    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
-  },
-  {
-    "start": "0x0041DAE6",
-    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
-  },
-  {
-    "start": "0x0041E0E6",
-    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
-  },
-  {
     "start": "0x004457BB",
-    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
-  },
-  {
-    "start": "0x004767A2",
-    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
-  },
-  {
-    "start": "0x00478DE8",
-    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
-  },
-  {
-    "start": "0x0047F071",
     "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
   },
   {
@@ -1524,11 +1384,395 @@
     "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
   },
   {
+    "start": "0x0006ECE0",
+    "note": "2026-09-25: call/jump target right after a ret + padding that the analysis merged into the preceding function (empty stub; 0x1398E0 and 0x261F90 ran during the coin toss)."
+  },
+  {
+    "start": "0x0006ED00",
+    "note": "2026-09-25: call/jump target right after a ret + padding that the analysis merged into the preceding function (empty stub; 0x1398E0 and 0x261F90 ran during the coin toss)."
+  },
+  {
+    "start": "0x00073680",
+    "note": "2026-09-25: call/jump target right after a ret + padding that the analysis merged into the preceding function (empty stub; 0x1398E0 and 0x261F90 ran during the coin toss)."
+  },
+  {
+    "start": "0x000DD290",
+    "note": "2026-09-25: call/jump target right after a ret + padding that the analysis merged into the preceding function (empty stub; 0x1398E0 and 0x261F90 ran during the coin toss)."
+  },
+  {
+    "start": "0x000EC330",
+    "note": "2026-09-25: call/jump target right after a ret + padding that the analysis merged into the preceding function (empty stub; 0x1398E0 and 0x261F90 ran during the coin toss)."
+  },
+  {
+    "start": "0x001398E0",
+    "note": "2026-09-25: call/jump target right after a ret + padding that the analysis merged into the preceding function (empty stub; 0x1398E0 and 0x261F90 ran during the coin toss)."
+  },
+  {
+    "start": "0x00146250",
+    "note": "2026-09-25: call/jump target right after a ret + padding that the analysis merged into the preceding function (empty stub; 0x1398E0 and 0x261F90 ran during the coin toss)."
+  },
+  {
+    "start": "0x00261F90",
+    "note": "2026-09-25: call/jump target right after a ret + padding that the analysis merged into the preceding function (empty stub; 0x1398E0 and 0x261F90 ran during the coin toss)."
+  },
+  {
+    "start": "0x002A05E0",
+    "note": "2026-09-25: call/jump target right after a ret + padding that the analysis merged into the preceding function (empty stub; 0x1398E0 and 0x261F90 ran during the coin toss)."
+  },
+  {
+    "start": "0x002B3640",
+    "note": "2026-09-25: call/jump target right after a ret + padding that the analysis merged into the preceding function (empty stub; 0x1398E0 and 0x261F90 ran during the coin toss)."
+  },
+  {
+    "start": "0x002B3670",
+    "note": "2026-09-25: call/jump target right after a ret + padding that the analysis merged into the preceding function (empty stub; 0x1398E0 and 0x261F90 ran during the coin toss)."
+  },
+  {
+    "start": "0x003636B0",
+    "note": "2026-09-25: call/jump target right after a ret + padding that the analysis merged into the preceding function (empty stub; 0x1398E0 and 0x261F90 ran during the coin toss)."
+  },
+  {
+    "start": "0x0036D5A0",
+    "note": "2026-09-25: call/jump target right after a ret + padding that the analysis merged into the preceding function (empty stub; 0x1398E0 and 0x261F90 ran during the coin toss)."
+  },
+  {
+    "start": "0x0036F450",
+    "note": "2026-09-25: call/jump target right after a ret + padding that the analysis merged into the preceding function (empty stub; 0x1398E0 and 0x261F90 ran during the coin toss)."
+  },
+  {
+    "start": "0x0046C290",
+    "note": "2026-09-25: call/jump target right after a ret + padding that the analysis merged into the preceding function (empty stub; 0x1398E0 and 0x261F90 ran during the coin toss)."
+  },
+  {
+    "start": "0x004B3190",
+    "note": "2026-09-25: call/jump target right after a ret + padding that the analysis merged into the preceding function (empty stub; 0x1398E0 and 0x261F90 ran during the coin toss)."
+  },
+  {
+    "start": "0x00046000",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x0004A480",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x0004E860",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x000AED90",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x000AEED0",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x000AF0B0",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x0013F1B0",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x00152B80",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x00153720",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x0015ED70",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x0015EDD0",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x0015EDF0",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x0016F8A0",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x00173350",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x001734D0",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x00173660",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x00173790",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x00183CD0",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x001A4DA0",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x00210C70",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x00212920",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x00219B40",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x0021C090",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x0021CB00",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x0021DC60",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x0021DC80",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x0025A0A0",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x0025A0C0",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x0025A0D0",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x00284C10",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x00284C60",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x00284CA0",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x00284CB0",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x00284CC0",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x00284CD0",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x00284CE0",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x00284CF0",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x00284D00",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x00284D10",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x00284D20",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x00284D30",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x00284D40",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x00284D50",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x00284D60",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x00284D70",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x002D3E80",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x002E3F70",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x002E7930",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x002EB5C0",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x002EDFB0",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x002EE000",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x002EE040",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x002FD930",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x002FE120",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x002FE130",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x0036F1C0",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x002E3650",
+    "note": "2026-09-25: per-object update callback called indirectly during the kick return; sits after a byte table inside sub_002E2DA0's old range (verified prologue)."
+  },
+  {
+    "start": "0x0006ED10",
+    "note": "2026-09-25 evening: 16-aligned call/jump/icall target after padding or ret that was still an empty stub (0x6ED10 thunk, 0x2E3650 per-object update callback ran during the kick return)."
+  },
+  {
+    "start": "0x0025D2A0",
+    "note": "2026-09-25 evening: 16-aligned call/jump/icall target after padding or ret that was still an empty stub (0x6ED10 thunk, 0x2E3650 per-object update callback ran during the kick return)."
+  },
+  {
+    "start": "0x0034BE40",
+    "note": "2026-09-25 evening: 16-aligned call/jump/icall target after padding or ret that was still an empty stub (0x6ED10 thunk, 0x2E3650 per-object update callback ran during the kick return)."
+  },
+  {
+    "start": "0x0001488A",
+    "note": "2026-09-25 evening: restored -- not reached by fall-through from the preceding code (after ret/jmp, padding such as lea esp,[esp], or data)."
+  },
+  {
+    "start": "0x0001488E",
+    "note": "2026-09-25 evening: restored -- not reached by fall-through from the preceding code (after ret/jmp, padding such as lea esp,[esp], or data)."
+  },
+  {
+    "start": "0x000DAE98",
+    "note": "2026-09-25 evening: restored -- not reached by fall-through from the preceding code (after ret/jmp, padding such as lea esp,[esp], or data)."
+  },
+  {
+    "start": "0x0015E8DC",
+    "note": "2026-09-25 evening: restored -- not reached by fall-through from the preceding code (after ret/jmp, padding such as lea esp,[esp], or data)."
+  },
+  {
+    "start": "0x001F74C6",
+    "note": "2026-09-25 evening: restored -- not reached by fall-through from the preceding code (after ret/jmp, padding such as lea esp,[esp], or data)."
+  },
+  {
+    "start": "0x001F74CA",
+    "note": "2026-09-25 evening: restored -- not reached by fall-through from the preceding code (after ret/jmp, padding such as lea esp,[esp], or data)."
+  },
+  {
+    "start": "0x001F74CE",
+    "note": "2026-09-25 evening: restored -- not reached by fall-through from the preceding code (after ret/jmp, padding such as lea esp,[esp], or data)."
+  },
+  {
+    "start": "0x00303FE9",
+    "note": "2026-09-25 evening: restored -- not reached by fall-through from the preceding code (after ret/jmp, padding such as lea esp,[esp], or data)."
+  },
+  {
+    "start": "0x003D2215",
+    "note": "2026-09-25 evening: restored -- not reached by fall-through from the preceding code (after ret/jmp, padding such as lea esp,[esp], or data)."
+  },
+  {
+    "start": "0x0041E0E6",
+    "note": "2026-09-25 evening: restored -- not reached by fall-through from the preceding code (after ret/jmp, padding such as lea esp,[esp], or data)."
+  },
+  {
+    "start": "0x004767A2",
+    "note": "2026-09-25 evening: restored -- not reached by fall-through from the preceding code (after ret/jmp, padding such as lea esp,[esp], or data)."
+  },
+  {
+    "start": "0x00478DE8",
+    "note": "2026-09-25 evening: restored -- not reached by fall-through from the preceding code (after ret/jmp, padding such as lea esp,[esp], or data)."
+  },
+  {
+    "start": "0x0047F071",
+    "note": "2026-09-25 evening: restored -- not reached by fall-through from the preceding code (after ret/jmp, padding such as lea esp,[esp], or data)."
+  },
+  {
     "start": "0x004E3B02",
-    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+    "note": "2026-09-25 evening: restored -- not reached by fall-through from the preceding code (after ret/jmp, padding such as lea esp,[esp], or data)."
   },
   {
     "start": "0x004E3B12",
-    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+    "note": "2026-09-25 evening: restored -- not reached by fall-through from the preceding code (after ret/jmp, padding such as lea esp,[esp], or data)."
+  },
+  {
+    "start": "0x00041808",
+    "note": "2026-09-25 evening: restored -- not reached by fall-through from the preceding code (after ret/jmp, padding such as lea esp,[esp], or data)."
+  },
+  {
+    "start": "0x00081D8C",
+    "note": "2026-09-25 evening: restored -- not reached by fall-through from the preceding code (after ret/jmp, padding such as lea esp,[esp], or data)."
+  },
+  {
+    "start": "0x002190A0",
+    "note": "2026-09-25 evening: restored -- not reached by fall-through from the preceding code (after ret/jmp, padding such as lea esp,[esp], or data)."
+  },
+  {
+    "start": "0x00228AE0",
+    "note": "2026-09-25 evening: restored -- not reached by fall-through from the preceding code (after ret/jmp, padding such as lea esp,[esp], or data)."
+  },
+  {
+    "start": "0x0010D070",
+    "note": "2026-09-25 evening: restored -- not reached by fall-through from the preceding code (after ret/jmp, padding such as lea esp,[esp], or data)."
+  },
+  {
+    "start": "0x000A14B0",
+    "note": "2026-09-25 evening: 'call 0x1CF480; jmp 0x88650' after a byte table; called by the script interpreter (0xDBCCE). As an empty stub it corrupted the stack and crashed the kickoff in sub_000DEE30."
+  },
+  {
+    "start": "0x0042FE90",
+    "note": "2026-09-25 evening: restored -- not reached by fall-through from the preceding code (after ret/jmp, padding such as lea esp,[esp], or data)."
   }
 ]
