@@ -924,6 +924,21 @@ void nfl2k5_diag_script(uint32_t ctx, uint32_t op, uint32_t start)
             *(const uint32_t *)(m + e + 8u));
 }
 
+/* 2026-09-26: the music streamer's ring copy (sub_0003F860, gen patch
+ * DIAG_MUSICSTREAM): ebx = destination, edx = source, edi = length, eax,
+ * [esp+4] = second length. Logged with RECOMP_STREAM_LOG=1, and the first
+ * 8 bytes of the source so garbage is recognisable. */
+void nfl2k5_diag_stream(uint32_t dst, uint32_t src, uint32_t len, uint32_t eax_, uint32_t arg)
+{
+    static int on = -1;
+    const uint8_t *m = (const uint8_t *)xbox_GetMemoryOffset();
+    if (on < 0) on = getenv("RECOMP_STREAM_LOG") != NULL;
+    if (!on) return;
+    fprintf(stderr, "  [STREAM] dst=%08X src=%08X len=%X eax=%08X arg=%X src8=%02X%02X%02X%02X %02X%02X%02X%02X t=%lu\n",
+            dst, src, len, eax_, arg, m[src], m[src + 1], m[src + 2], m[src + 3],
+            m[src + 4], m[src + 5], m[src + 6], m[src + 7], GetTickCount());
+}
+
 /* 2026-09-25: popups (tools/apply-gen-patches.py DIAG_POPUP*). what 0: shown
  * (obj = the popup being copied into its slot: +0 slot, +8 timeout, +0x4C
  * title, +0xCC message, UTF-16); 1: close(slot); 2: close callback. */
@@ -942,6 +957,11 @@ void nfl2k5_diag_popup(uint32_t obj, int what)
         fprintf(stderr, "  [POPUPOP] show obj=%08X slot=%d t=%g '%s' '%s' ret=%08X\n", obj,
                 (int)*(const uint32_t *)(m + obj), *(const float *)(m + obj + 8u), title, msg,
                 *(const uint32_t *)(m + g_esp));
+        {
+            /* The broadcast theme stops at the coin toss (nfl2k5_presentation.cpp). */
+            extern void nfl2k5_presentation_popup(const char *title);
+            nfl2k5_presentation_popup(title);
+        }
     } else if (what == 1) {
         uint32_t sl = 0xB61B50u + obj * 0xF20u;
         fprintf(stderr, "  [POPUPOP] close slot=%d active=%u closing=%u cb=%08X ret=%08X\n", (int)obj,
@@ -1384,15 +1404,24 @@ static LONG CALLBACK hw_watch_handler(EXCEPTION_POINTERS *ep)
     LONG n = InterlockedIncrement(&g_hw_watch_hits);
     {
         /* Each code location once: a read watch fires every frame. */
+        /* Keyed by rip and the guest stack words: a shared copy routine is one
+         * rip but many callers, and the caller is what matters. */
         static DWORD64 seen_rip[512];
+        static uint32_t seen_ret[512];
         static int nseen;
+        const uint8_t *m = (const uint8_t *)xbox_GetMemoryOffset();
+        uint32_t ret = *(const uint32_t *)(m + g_esp + 8u) ^ *(const uint32_t *)(m + g_esp);
         int k;
         for (k = 0; k < nseen; k++)
-            if (seen_rip[k] == ep->ContextRecord->Rip) {
+            if (seen_rip[k] == ep->ContextRecord->Rip && seen_ret[k] == ret) {
                 ep->ContextRecord->Dr6 = 0;
                 return EXCEPTION_CONTINUE_EXECUTION;
             }
-        if (nseen < 512) seen_rip[nseen++] = ep->ContextRecord->Rip;
+        if (nseen < 512) { seen_rip[nseen] = ep->ContextRecord->Rip; seen_ret[nseen++] = ret; }
+        fprintf(stderr, "  [HWWATCH] guest stack %08X %08X %08X %08X %08X %08X (t=%lu)\n",
+                *(const uint32_t *)(m + g_esp), *(const uint32_t *)(m + g_esp + 4u),
+                *(const uint32_t *)(m + g_esp + 8u), *(const uint32_t *)(m + g_esp + 12u),
+                *(const uint32_t *)(m + g_esp + 16u), *(const uint32_t *)(m + g_esp + 20u), GetTickCount());
     }
     fprintf(stderr, "  [HWWATCH] hit #%ld guest_va=0x%08X rip=0x%llX\n",
             n, g_hw_watch_guest_va, (unsigned long long)ep->ContextRecord->Rip);

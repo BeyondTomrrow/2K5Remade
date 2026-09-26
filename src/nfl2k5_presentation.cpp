@@ -59,6 +59,7 @@ typedef struct { const void *pixels; int w, h, stride, x, y, changed; } XboxHudI
 typedef int (*XboxHudCallback)(const XboxHudFrame *f, XboxHudImage *img);
 void xbox_PresentSetHudCallback(XboxHudCallback cb);
 void xbox_AudioSetGameGain(float gain);
+float xbox_AudioGameLevel(void);
 void xbox_AudioSetCaptureMix(void (*mix)(int16_t *stereo, int frames));
 }
 
@@ -503,6 +504,9 @@ struct Music {
     std::atomic<int> generation{ 0 };
     float volume = 0.9f, fade_time = 2.5f, duck = 1.0f;
     float cur_vol = 0;              /* volume now, for the recording tap */
+    float talk_duck = 0.35f;        /* theme level while the game is loud (announcers) */
+    float talk_level = 0.02f;       /* game RMS counted as "talking" */
+    float duck_now = 1.0f;
     size_t cap_pos = 0;             /* recording tap cursor into pcm */
     double fade_start = 0;
 } s_music;
@@ -636,6 +640,18 @@ static void music_tick()
         xbox_AudioSetGameGain(1.0f);
         return;
     }
+    {
+        /* Broadcast bed: the theme dips under the announcers. Game level
+         * above talk_level pulls it down to talk_duck (fast), and it comes
+         * back up over about a second in the pauses. */
+        float lvl = xbox_AudioGameLevel();
+        float want = lvl > s_music.talk_level ? s_music.talk_duck : 1.0f;
+        s_music.duck_now += (want - s_music.duck_now) * (want < s_music.duck_now ? 0.25f : 0.03f);
+    }
+    if (st == 2) {
+        s_music.cur_vol = s_music.volume * s_music.duck_now;
+        s_music.voice->SetVolume(s_music.cur_vol);
+    }
     if (st == 3) {
         float k = (float)((now_s() - s_music.fade_start) / std::max(0.05f, s_music.fade_time));
         if (k >= 1.0f) {
@@ -645,8 +661,8 @@ static void music_tick()
             xbox_AudioSetGameGain(1.0f);
             return;
         }
-        s_music.voice->SetVolume(s_music.volume * (1.0f - k));
-        s_music.cur_vol = s_music.volume * (1.0f - k);
+        s_music.cur_vol = s_music.volume * s_music.duck_now * (1.0f - k);
+        s_music.voice->SetVolume(s_music.cur_vol);
         xbox_AudioSetGameGain(s_music.duck + (1.0f - s_music.duck) * k);
     }
 }
@@ -1084,8 +1100,43 @@ extern "C" void nfl2k5_scorebug_native_hook(void)
     s_native_tick = GetTickCount();
 }
 
-/* SCOREBUG_NATIVE_HIDE: the ESPN bug's root is pushed off screen. */
-extern "C" int nfl2k5_scorebug_native_hidden(void) { return custom_active(); }
+/* SCOREBUG_NATIVE_HIDE2: with a custom package on, the ESPN bug's root
+ * matrix (4x4 floats, translation at +0x30) is rewritten after the game
+ * places it. NFL2K5_HIDE_MODE: 1 off screen, 2 zero scale, 3 both. */
+static void gwritef(uint32_t va, float f)
+{
+    if (va < 0x10000u || va > 0x0FFFFFF0u) return;
+    __try { *(volatile float *)((uintptr_t)va + g_xbox_mem_offset) = f; }
+    __except (EXCEPTION_EXECUTE_HANDLER) {}
+}
+
+extern "C" void nfl2k5_scorebug_native_place(uint32_t m)
+{
+    static int mode = -1;
+    if (mode < 0) { const char *e = getenv("NFL2K5_HIDE_MODE"); mode = e ? atoi(e) : 3; }
+    if (!custom_active() || !m) return;
+    if (mode & 2) { gwritef(m + 0x00, 0.0f); gwritef(m + 0x14, 0.0f); gwritef(m + 0x28, 0.0f); }
+    if (mode & 1) { gwritef(m + 0x30, -20000.0f); gwritef(m + 0x34, -20000.0f); }
+}
+
+extern "C" int nfl2k5_scorebug_native_hidden(void)
+{
+    static unsigned long calls;
+    static DWORD last;
+    calls++;
+    if (s_log && GetTickCount() - last > 5000) {
+        last = GetTickCount();
+        fprintf(stderr, "[PRES] native bug placement calls %lu, hidden %d\n", calls, (int)custom_active());
+    }
+    return custom_active();
+}
+
+/* Popups the game shows (src/main.c): the intro theme ends at the coin toss. */
+static std::atomic<int> s_coin_toss{ 0 };
+extern "C" void nfl2k5_presentation_popup(const char *title)
+{
+    if (title && !_strnicmp(title, "Coin Toss", 9)) s_coin_toss = 1;
+}
 
 static void music_logic(const GameState &g, bool native_on)
 {
@@ -1102,12 +1153,17 @@ static void music_logic(const GameState &g, bool native_on)
     s_invalid_since = 0;
     float vol = s_sel_vol / 10.0f;
     const JVal *m = pkg ? pkg->root.get("music") : nullptr;
-    float duck = m ? (float)m->num("duck_game_audio", 0.3) : 1.0f;
+    float duck = m ? (float)m->num("duck_game_audio", 1.0) : 1.0f;
+    if (m) {
+        s_music.talk_duck = (float)m->num("duck_under_announcers", 0.35);
+        s_music.talk_level = (float)m->num("announcer_level", 0.02);
+    }
     float fade = m ? (float)m->num("fade_out", 2.5) : 2.5f;
     bool fresh = g.period <= 1 && g.t[0].score == 0 && g.t[1].score == 0 && g.phase <= 2 &&
                  g.clock >= g.period_len - 0.5f;
     if (!s_game_started && fresh) {
         s_game_started = true;
+        s_coin_toss = 0;
         s_outro_played = false;
         int i = s_sel_intro;
         if (pkg && i >= 1 && i <= (int)pkg->intro.size()) {
@@ -1115,9 +1171,9 @@ static void music_logic(const GameState &g, bool native_on)
             s_intro_active = true;
         }
     }
-    /* The intro plays over the pregame show and fades when the game itself
-     * starts: the scorebug comes up, or the clock starts running. */
-    if (s_intro_active && (native_on || g.clock < g.period_len - 1.0f)) {
+    /* The intro plays over the pregame show and fades at the coin toss (or
+     * when play starts, if there was none). */
+    if (s_intro_active && (s_coin_toss || native_on || g.clock < g.period_len - 1.0f)) {
         music_fade();
         s_intro_active = false;
     }

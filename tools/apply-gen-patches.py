@@ -232,7 +232,7 @@ PATCHES = [
     { extern void xbox_Nv2aKick(void); xbox_Nv2aKick(); }
 """),
     ("STOPWAIT_3CAF0", "sub_0003CAF0", "loc_0003CB1E: ;", "after", """\
-#ifdef NFL2K5_FORCE_UNBLOCK_AUDIO_LOCK
+#ifdef NFL2K5_FORCE_UNBLOCK_STOPWAIT
     /* EXPERIMENTAL, 2026-09-24: sub_0003CAF0 stops a DirectSound buffer and
      * spins on GetStatus until its PLAYING bit clears. Only the APU finishing
      * the voice-off clears it (voice+0x12 state), and the APU is a stub, so
@@ -252,15 +252,36 @@ PATCHES = [
 """),
     ("AUDIO_LOCK", "sub_0044BB44", "loc_0044BCAB: ;", "before", """\
 #ifdef NFL2K5_FORCE_UNBLOCK_AUDIO_LOCK
-    /* EXPERIMENTAL, 2026-09-21: the busy-wait at loc_0044BCAB spins on a
-     * DirectSound-buffer completion counter the stubbed APU never
-     * acknowledges. Clear it immediately. See PROJECT_STATUS.md. */
-    MEM32(ebx) = 0;
+    /* The busy-wait at loc_0044BCAB spins until the APU's interrupt path (a
+     * DPC) counts a DirectSound operation down to zero. On the console the
+     * interrupt preempts this loop; here DPCs only run where the kernel
+     * drains them, so the loop spun forever. Until 2026-09-26 the counter was
+     * simply cleared -- DirectSound then freed buffers the APU was still
+     * playing, the title reused the memory, and the menu music played
+     * garbage (static). Now: wait for the real completion, draining DPCs as
+     * the interrupt would; clear it only after 2 s as a last resort. */
+    {
+        extern void xbox_bridge_drain_guest_dpcs(void);
+        extern unsigned long __stdcall GetTickCount(void);
+        extern void __stdcall Sleep(unsigned long);
+        unsigned long t0 = GetTickCount();
+        while (MEM32(ebx) != 0 && GetTickCount() - t0 < 2000u) {
+            xbox_bridge_drain_guest_dpcs();
+            Sleep(0);
+        }
+        if (MEM32(ebx) != 0) {
+            static volatile long timeouts;
+            timeouts++;
+            MEM32(ebx) = 0;
+        }
+    }
 #endif
 """),
-    ("SCOREBUG_NATIVE_HIDE", "sub_000FCE70", "fp_top() = fp_top() + MEMF(0x4F0F1C); /* fadd dword ptr [0x4f0f1c] */", "after", """    /* The scorebug root's y (+65, 0xFD15E): a custom broadcast package
-     * (src/nfl2k5_presentation.cpp) moves the ESPN bug far below the screen. */
-    { extern int nfl2k5_scorebug_native_hidden(void); if (nfl2k5_scorebug_native_hidden()) fp_top() = fp_top() + 4000.0; }
+    ("DIAG_MUSICSTREAM", "sub_0003F860", "loc_0003F860: ;", "after", """    { extern void nfl2k5_diag_stream(uint32_t dst, uint32_t src, uint32_t len, uint32_t eax_, uint32_t arg); nfl2k5_diag_stream(ebx, edx, edi, eax, MEM32(esp + 4)); }
+"""),
+    ("SCOREBUG_NATIVE_HIDE2", "sub_000FCE70", "loc_000FD178: ;", "before", """    /* Custom broadcast presentations (src/nfl2k5_presentation.cpp): hide the
+     * ESPN bug by rewriting its root matrix (esi) after the game places it. */
+    { extern void nfl2k5_scorebug_native_place(uint32_t matrix); nfl2k5_scorebug_native_place(esi); }
 """),
     ("SCOREBUG_NATIVE_HOOK", "sub_000FCE70", "loc_000FCFA7: ;", "after", """    /* Custom broadcast presentations (src/nfl2k5_presentation.cpp): note
      * whether the game shows its scorebug this frame, and hide the ESPN one

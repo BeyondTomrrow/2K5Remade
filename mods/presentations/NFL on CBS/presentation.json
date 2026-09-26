@@ -215,9 +215,11 @@
   },
 
   "music": {
-    "volume": 0.9,
+    "volume": 0.06,
     "fade_out": 2.5,
-    "duck_game_audio": 0.3,
+    "duck_game_audio": 1.0,
+    "duck_under_announcers": 0.35,
+    "announcer_level": 0.02,
     "intro": [
       { "title": "NFL on CBS Theme (2023)", "file": "music/NFL on CBS Theme 2023.mp3" }
     ],

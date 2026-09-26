@@ -37,7 +37,7 @@ public class DW {
 "@
 [DW]::SetProcessDPIAware() | Out-Null
 $h = [IntPtr]::Zero
-for ($i = 0; $i -lt 60 -and $h -eq [IntPtr]::Zero; $i++) { Start-Sleep 1; $h = [DW]::FindWindow('ESPN NFL 2K5', $null) }
+for ($i = 0; $i -lt 60 -and $h -eq [IntPtr]::Zero; $i++) { Start-Sleep 1; $h = [DW]::FindWindow('ESPN NFL 2K5', [NullString]::Value) }
 if ($h -eq [IntPtr]::Zero) { 'no game window'; exit 1 }
 Start-Sleep 2
 [DW]::SetForegroundWindow($h) | Out-Null

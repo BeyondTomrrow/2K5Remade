@@ -11,7 +11,7 @@ index e4cd232..d97f7c9 100644
  
  # Option to build examples
 diff --git a/src/apu/apu_core.c b/src/apu/apu_core.c
-index 459be77..a677ef3 100644
+index 459be77..a6fa4ca 100644
 --- a/src/apu/apu_core.c
 +++ b/src/apu/apu_core.c
 @@ -58,6 +58,16 @@ void mcpx_debug_end_frame(void) {}
@@ -44,13 +44,17 @@ index 459be77..a677ef3 100644
      }
  }
  
-@@ -268,43 +278,61 @@ void mcpx_apu_monitor_finalize(MCPXAPUState *d)
+@@ -268,43 +278,76 @@ void mcpx_apu_monitor_finalize(MCPXAPUState *d)
              g_waveout.frames_written);
  }
  
 +/* Game audio gain, 0..1 (xbox_AudioSetGameGain): lets a broadcast theme
 + * play over a ducked game mix (src/nfl2k5_presentation.cpp). */
 +static volatile float g_game_gain = 1.0f;
++/* Smoothed level (RMS, 0..1 of full scale) of what the game plays, so a
++ * broadcast theme can dip under the announcers (xbox_AudioGameLevel). */
++static volatile float g_game_level;
++float xbox_AudioGameLevel(void) { return g_game_level; }
 +void xbox_AudioSetGameGain(float gain)
 +{
 +    g_game_gain = gain < 0.0f ? 0.0f : gain > 1.0f ? 1.0f : gain;
@@ -107,13 +111,12 @@ index 459be77..a677ef3 100644
 -                    if (g_test_tone.phase >= 2.0 * M_PI)
 -                        g_test_tone.phase -= 2.0 * M_PI;
 -                }
-+        for (i = 0; i < MIXER_FRAME_SAMPLES; i++) {
-+            float gain = g_game_gain;
-+            acc[acc_n][0] = (int16_t)(d->monitor.frame_buf[i][0] * gain);
-+            acc[acc_n][1] = (int16_t)(d->monitor.frame_buf[i][1] * gain);
-+            if (++acc_n == buf_size) {
-+                xa2_submit_samples((const int16_t *)acc, buf_size);
-+                acc_n = 0;
++        {
++            double e = 0;
++            float rms, a;
++            for (i = 0; i < MIXER_FRAME_SAMPLES; i++) {
++                double l = d->monitor.frame_buf[i][0], r = d->monitor.frame_buf[i][1];
++                e += l * l + r * r;
              }
 -
 -            if (!g_audio_muted)
@@ -122,16 +125,28 @@ index 459be77..a677ef3 100644
 -            memcpy(xa2_tmp + out_offset, d->monitor.frame_buf, chunk * 2 * sizeof(int16_t));
 -            out_offset += chunk;
 -            remaining -= chunk;
++            rms = (float)(sqrt(e / (2.0 * MIXER_FRAME_SAMPLES)) / 32768.0);
++            a = rms > g_game_level ? 0.5f : 0.02f;     /* fast attack, slow release */
++            g_game_level += (rms - g_game_level) * a;
          }
 -
 -        xa2_submit_samples((const int16_t *)xa2_tmp, buf_size);
++        for (i = 0; i < MIXER_FRAME_SAMPLES; i++) {
++            float gain = g_game_gain;
++            acc[acc_n][0] = (int16_t)(d->monitor.frame_buf[i][0] * gain);
++            acc[acc_n][1] = (int16_t)(d->monitor.frame_buf[i][1] * gain);
++            if (++acc_n == buf_size) {
++                xa2_submit_samples((const int16_t *)acc, buf_size);
++                acc_n = 0;
++            }
++        }
 +        /* The next frame starts silent: the EP writes all 256 samples when
 +         * the pipeline runs, and an idle APU contributes nothing. */
 +        memset(d->monitor.frame_buf, 0, sizeof(d->monitor.frame_buf));
          return;
      }
  
-@@ -461,7 +489,19 @@ static void *mcpx_apu_frame_thread(void *arg)
+@@ -461,7 +504,19 @@ static void *mcpx_apu_frame_thread(void *arg)
          if (apu_active && !g_test_tone.active) {
              /* Full pipeline: VP voices → DSP → monitor → waveOut */
              se_frame(d);
@@ -251,24 +266,28 @@ index dd6bec1..a7cd974 100644
  
  /* Stub address space - just passed to ldl_le_phys etc. (ignored) */
 diff --git a/src/apu/apu_vp.c b/src/apu/apu_vp.c
-index b9f429e..d26d8eb 100644
+index b9f429e..4866113 100644
 --- a/src/apu/apu_vp.c
 +++ b/src/apu/apu_vp.c
-@@ -66,11 +66,13 @@ static void set_notify_status(MCPXAPUState *d, uint32_t v, int notifier,
+@@ -66,11 +66,17 @@ static void set_notify_status(MCPXAPUState *d, uint32_t v, int notifier,
   * Filter helpers
   * ============================================================ */
  
 +static void voice_resampler_reset(uint16_t v);
++static uint8_t s_adpcm_cbo_valid[MCPX_HW_MAX_VOICES];   /* defined with voice_get_samples */
++static uint8_t s_adpcm_shift[MCPX_HW_MAX_VOICES];
  static void voice_reset_filters(MCPXAPUState *d, uint16_t v)
  {
      assert(v < MCPX_HW_MAX_VOICES);
      memset(&d->vp.filters[v].svf, 0, sizeof(d->vp.filters[v].svf));
      hrtf_filter_clear_history(&d->vp.filters[v].hrtf);
 +    voice_resampler_reset(v);
++    s_adpcm_cbo_valid[v] = 0;
++    s_adpcm_shift[v] = 0;
      if (d->vp.filters[v].resampler) {
          src_reset(d->vp.filters[v].resampler);
      }
-@@ -185,6 +187,20 @@ static void fe_method(MCPXAPUState *d, uint32_t method, uint32_t argument)
+@@ -185,6 +191,20 @@ static void fe_method(MCPXAPUState *d, uint32_t method, uint32_t argument)
      d->regs[NV_PAPU_FEDECMETH] = method;
      d->regs[NV_PAPU_FEDECPARAM] = argument;
      unsigned int selected_handle, list;
@@ -289,8 +308,108 @@ index b9f429e..d26d8eb 100644
  
      switch (method) {
      case NV1BA0_PIO_VOICE_LOCK:
-@@ -843,7 +859,7 @@ static int voice_get_samples(MCPXAPUState *d, uint32_t v, float samples[][2],
+@@ -312,6 +332,11 @@ static void fe_method(MCPXAPUState *d, uint32_t method, uint32_t argument)
+         break;
+ 
+     case NV1BA0_PIO_VOICE_PAUSE:
++        if (getenv("RECOMP_APU_VOICE_LOG"))
++            fprintf(stderr, "[VOICE] %03X %s at cbo %06X (t=%lu)\n", argument & NV1BA0_PIO_VOICE_PAUSE_HANDLE,
++                    (argument & NV1BA0_PIO_VOICE_PAUSE_ACTION) ? "pause" : "resume",
++                    voice_get_mask(d, (uint16_t)(argument & NV1BA0_PIO_VOICE_PAUSE_HANDLE), NV_PAVS_VOICE_PAR_OFFSET,
++                                   NV_PAVS_VOICE_PAR_OFFSET_CBO), GetTickCount());
+         voice_set_mask(d, (uint16_t)(argument & NV1BA0_PIO_VOICE_PAUSE_HANDLE),
+                        NV_PAVS_VOICE_PAR_STATE, NV_PAVS_VOICE_PAR_STATE_PAUSED,
+                        (argument & NV1BA0_PIO_VOICE_PAUSE_ACTION) != 0);
+@@ -412,6 +437,10 @@ static void fe_method(MCPXAPUState *d, uint32_t method, uint32_t argument)
+                        NV_PAVS_VOICE_CUR_PSH_SAMPLE_LBO, argument);
+         break;
+     case NV1BA0_PIO_SET_VOICE_BUF_CBO:
++        if (getenv("RECOMP_APU_VOICE_LOG"))
++            fprintf(stderr, "[VOICE] %03X set cbo %06X (was %06X, t=%lu)\n", (unsigned)d->regs[NV_PAPU_FECV], argument,
++                    voice_get_mask(d, (uint16_t)d->regs[NV_PAPU_FECV], NV_PAVS_VOICE_PAR_OFFSET, NV_PAVS_VOICE_PAR_OFFSET_CBO),
++                    GetTickCount());
+         voice_set_mask(d, (uint16_t)d->regs[NV_PAPU_FECV],
+                        NV_PAVS_VOICE_PAR_OFFSET,
+                        NV_PAVS_VOICE_PAR_OFFSET_CBO, argument);
+@@ -727,6 +756,60 @@ static float voice_step_envelope(MCPXAPUState *d, uint16_t v, uint32_t reg_0,
+  * Sample fetching from voice buffers
+  * ============================================================ */
+ 
++/* ADPCM play position as the title sees it. DirectSound turns CBO into a
++ * byte offset and NFL 2K5's music streamer writes the next chunk there; the
++ * voice processor decodes whole 36-byte / 64-sample blocks, so on the
++ * console that offset lands on a block. Stepping CBO sample by sample left
++ * it mid-block, the streamer copied data 14-22 bytes off the block grid, and
++ * the menu music decoded as static (2026-09-26). The register shows the
++ * block; the sample within it is kept here while the register still holds
++ * the value we wrote (the title can move it at any time). */
++static uint32_t s_adpcm_cbo_reg[MCPX_HW_MAX_VOICES], s_adpcm_cbo_sub[MCPX_HW_MAX_VOICES];
++static uint8_t s_adpcm_cbo_valid[MCPX_HW_MAX_VOICES];
++
++/* ADPCM buffers whose data sits off the 36-byte block grid.
++ *
++ * NFL 2K5 streams its menu music into a looping ADPCM buffer per channel.
++ * In this port the game restarts that stream more often than on the console
++ * (timing), and each restart writes the song from the current write cursor,
++ * which is usually mid-block: the whole buffer then holds valid ADPCM at a
++ * constant byte shift (8, 22, ... measured 2026-09-26), and decoding it on
++ * the grid gives static. When a block header is invalid (step index > 88 or
++ * reserved byte != 0), find the shift at which the next 8 headers are all
++ * valid and decode at that shift until the grid itself is valid again. A
++ * random 8-block match is ~1e-23, so this never fires on good data. */
++static uint8_t s_adpcm_shift[MCPX_HW_MAX_VOICES];
++
++static int adpcm_header_ok(uint32_t w)
++{
++    return ((w >> 16) & 0xFF) <= 88 && (w >> 24) == 0;
++}
++
++static uint32_t adpcm_word_at(MCPXAPUState *d, uint32_t ba, uint32_t buf_bytes, uint32_t off)
++{
++    return ldl_le_phys(address_space_memory,
++                       get_data_ptr(d->regs[NV_PAPU_VPSGEADDR], 0xFFFFFFFF, ba + off % buf_bytes));
++}
++
++static void adpcm_realign(MCPXAPUState *d, uint32_t v, uint32_t ba, uint32_t buf_bytes, uint32_t block_index)
++{
++    uint32_t base = block_index * 36u, sh, k;
++    if (adpcm_header_ok(adpcm_word_at(d, ba, buf_bytes, base + s_adpcm_shift[v])))
++        return;
++    for (sh = 0; sh < 36; sh++) {
++        for (k = 0; k < 8; k++)
++            if (!adpcm_header_ok(adpcm_word_at(d, ba, buf_bytes, base + k * 36u + sh)))
++                break;
++        if (k == 8) {
++            if (sh != s_adpcm_shift[v] && getenv("RECOMP_APU_VOICE_LOG"))
++                fprintf(stderr, "[VOICE] %03X ADPCM realigned: shift %u -> %u at block %u\n",
++                        v, s_adpcm_shift[v], sh, block_index);
++            s_adpcm_shift[v] = (uint8_t)sh;
++            return;
++        }
++    }
++}
++
+ static int voice_get_samples(MCPXAPUState *d, uint32_t v, float samples[][2],
+                        int num_samples_requested)
+ {
+@@ -825,6 +908,8 @@ static int voice_get_samples(MCPXAPUState *d, uint32_t v, float samples[][2],
+ 
+     bool adpcm =
+         (container_size_index == NV_PAVS_VOICE_CFG_FMT_CONTAINER_SIZE_ADPCM);
++    if (adpcm && s_adpcm_cbo_valid[v] && cbo == s_adpcm_cbo_reg[v])
++        cbo += s_adpcm_cbo_sub[v];
+ 
+     if (adpcm) {
+         block_size = 36;
+@@ -841,9 +926,14 @@ static int voice_get_samples(MCPXAPUState *d, uint32_t v, float samples[][2],
+             unsigned int block_position = cbo % ADPCM_SAMPLES_PER_BLOCK;
+             if (adpcm_block_index != (int)block_index) {
                  uint32_t linear_addr = block_index * (uint32_t)block_size;
++                if (!stream && samples_per_block == 1) {
++                    uint32_t buf_bytes = (ebo / ADPCM_SAMPLES_PER_BLOCK + 1) * 36u;
++                    adpcm_realign(d, v, ba, buf_bytes, block_index);
++                    linear_addr = (linear_addr + s_adpcm_shift[v]) % buf_bytes;
++                }
                  if (stream) {
                      hwaddr addr = segment_offset + linear_addr;
 -                    memcpy(adpcm_block, &d->ram_ptr[addr & 0x03FFFFFF],
@@ -298,7 +417,23 @@ index b9f429e..d26d8eb 100644
                             block_size);
                  } else {
                      linear_addr += ba;
-@@ -946,26 +962,83 @@ static int voice_get_samples(MCPXAPUState *d, uint32_t v, float samples[][2],
+@@ -934,6 +1024,15 @@ static int voice_get_samples(MCPXAPUState *d, uint32_t v, float samples[][2],
+         }
+     }
+ 
++    if (adpcm) {
++        uint32_t sub = cbo % ADPCM_SAMPLES_PER_BLOCK;
++        s_adpcm_cbo_sub[v] = sub;
++        s_adpcm_cbo_reg[v] = cbo - sub;
++        s_adpcm_cbo_valid[v] = 1;
++        cbo -= sub;
++    } else {
++        s_adpcm_cbo_valid[v] = 0;
++    }
+     voice_set_mask(d, (uint16_t)v, NV_PAVS_VOICE_PAR_OFFSET,
+                    NV_PAVS_VOICE_PAR_OFFSET_CBO, cbo);
+     return sample_count;
+@@ -946,26 +1045,83 @@ static int voice_get_samples(MCPXAPUState *d, uint32_t v, float samples[][2],
   * resample. This gives us functional audio at the cost of quality.
   * ============================================================ */
  
@@ -398,12 +533,116 @@ index b9f429e..d26d8eb 100644
  }
  
  /* ============================================================
-@@ -1173,6 +1246,36 @@ void mcpx_apu_vp_frame(MCPXAPUState *d,
+@@ -1006,6 +1162,96 @@ static void voice_process(MCPXAPUState *d,
+                                         NV_PAVS_VOICE_CFG_ENV0_EF_PITCHSCALE);
+     float rate = 1.0f / powf(2.0f, (p + ps * 32 * ef_value) / 4096.0f);
+     dbg->rate = rate;
++    {
++        /* RECOMP_APU_VOICE_LOG=1: each voice's pitch, rate and format, once
++         * per voice start and every 5 s. */
++        static int on = -1;
++        static DWORD last[MCPX_HW_MAX_VOICES];
++        static unsigned calls[MCPX_HW_MAX_VOICES];
++        extern unsigned long g_apu_vp_frames;
++        static unsigned long frames_at[MCPX_HW_MAX_VOICES];
++        if (on < 0) on = getenv("RECOMP_APU_VOICE_LOG") != NULL;
++        calls[v]++;
++        if (on && GetTickCount() - last[v] > 5000) {
++            uint32_t fmt = voice_get_mask(d, v, NV_PAVS_VOICE_CFG_FMT, 0xFFFFFFFFu);
++            last[v] = GetTickCount();
++            fprintf(stderr, "[VOICE] %03X processed %u in %lu frames; pitch %d ps %d rate %.4f fmt %08X stream %u stereo %u ssize %u csize %u spb %u cbo %06X ebo %06X\n",
++                    v, calls[v], g_apu_vp_frames - frames_at[v], p, ps, rate, fmt, (fmt >> 24) & 1, (fmt >> 27) & 1, (fmt >> 28) & 3, (fmt >> 30) & 3,
++                    ((fmt >> 16) & 0x1F) + 1,
++                    voice_get_mask(d, v, NV_PAVS_VOICE_PAR_OFFSET, NV_PAVS_VOICE_PAR_OFFSET_CBO),
++                    voice_get_mask(d, v, NV_PAVS_VOICE_PAR_NEXT, NV_PAVS_VOICE_PAR_NEXT_EBO));
++            {
++                /* Where the voice's samples live: base, first SGE page
++                 * addresses, and the contiguous high-water mark apu_phys
++                 * uses to pick low memory vs the physical window. */
++                extern uint32_t xbox_ContiguousAllocatedBytes(void);
++                uint32_t ba = voice_get_mask(d, v, NV_PAVS_VOICE_CUR_PSL_START, NV_PAVS_VOICE_CUR_PSL_START_BA);
++                uint32_t sge = d->regs[NV_PAPU_VPSGEADDR];
++                fprintf(stderr, "[VOICE] %03X ba %08X sge %08X pages %08X %08X %08X contig_hw %08X\n", v, ba, sge,
++                        ldl_le_phys(address_space_memory, sge + (ba / 4096) * 8),
++                        ldl_le_phys(address_space_memory, sge + (ba / 4096 + 1) * 8),
++                        ldl_le_phys(address_space_memory, sge + (ba / 4096 + 2) * 8),
++                        xbox_ContiguousAllocatedBytes());
++                if (((fmt >> 30) & 3) == 2) {
++                    /* ADPCM: how many of the buffer's blocks carry a valid
++                     * header (step index <= 88, reserved byte 0)? Garbage
++                     * in the buffer decodes as noise. */
++                    uint32_t ebo = voice_get_mask(d, v, NV_PAVS_VOICE_PAR_NEXT, NV_PAVS_VOICE_PAR_NEXT_EBO);
++                    uint32_t blocks = (ebo + 1) / 64, ok = 0, b;
++                    for (b = 0; b < blocks; b++) {
++                        uint32_t w = ldl_le_phys(address_space_memory, get_data_ptr(sge, 0xFFFFFFFF, ba + b * 36));
++                        if (((w >> 16) & 0xFF) <= 88 && (w >> 24) == 0) ok++;
++                    }
++                    fprintf(stderr, "[VOICE] %03X adpcm blocks valid %u / %u\n", v, ok, blocks);
++                    if (ok < blocks) {
++                        /* The first invalid blocks, and where the bad run starts and ends. */
++                        uint32_t shown = 0, run_lo = 0xFFFFFFFFu, run_hi = 0;
++                        for (b = 0; b < blocks; b++) {
++                            hwaddr pa = get_data_ptr(sge, 0xFFFFFFFF, ba + b * 36);
++                            uint32_t w = ldl_le_phys(address_space_memory, pa);
++                            if (((w >> 16) & 0xFF) <= 88 && (w >> 24) == 0) continue;
++                            if (b < run_lo) run_lo = b;
++                            run_hi = b;
++                            if (shown++ < 2) {
++                                const uint8_t *q = apu_phys(pa);
++                                fprintf(stderr, "[VOICE] %03X bad block %u pa %08X: %02X%02X%02X%02X %02X%02X%02X%02X %02X%02X%02X%02X %02X%02X%02X%02X\n",
++                                        v, b, (unsigned)pa, q[0], q[1], q[2], q[3], q[4], q[5], q[6], q[7],
++                                        q[8], q[9], q[10], q[11], q[12], q[13], q[14], q[15]);
++                            }
++                        }
++                        fprintf(stderr, "[VOICE] %03X bad blocks span %u..%u, cbo %06X\n", v, run_lo, run_hi,
++                                voice_get_mask(d, v, NV_PAVS_VOICE_PAR_OFFSET, NV_PAVS_VOICE_PAR_OFFSET_CBO));
++                        {
++                            /* Which byte shift makes the buffer valid ADPCM? */
++                            uint32_t sh, best = 0, best_ok = 0;
++                            for (sh = 0; sh < 36; sh++) {
++                                uint32_t n = 0;
++                                for (b = 0; b + 1 < blocks; b++) {
++                                    uint32_t w2 = ldl_le_phys(address_space_memory, get_data_ptr(sge, 0xFFFFFFFF, ba + b * 36 + sh));
++                                    if (((w2 >> 16) & 0xFF) <= 88 && (w2 >> 24) == 0) n++;
++                                }
++                                if (n > best_ok) { best_ok = n; best = sh; }
++                            }
++                            fprintf(stderr, "[VOICE] %03X best shift %u (%u valid)\n", v, best, best_ok);
++                        }
++                    }
++                    {
++                        /* The voice's scatter-gather pages should run on
++                         * consecutively from the first; list any that don't. */
++                        uint32_t first = ldl_le_phys(address_space_memory, sge + (ba / 4096) * 8), pg;
++                        uint32_t npages = (ba % 4096 + blocks * 36 + 4095) / 4096;
++                        for (pg = 0; pg < npages; pg++) {
++                            uint32_t e = ldl_le_phys(address_space_memory, sge + (ba / 4096 + pg) * 8);
++                            if (e != first + pg * 4096)
++                                fprintf(stderr, "[VOICE] %03X sge page %u = %08X (expected %08X)\n", v, pg, e, first + pg * 4096);
++                        }
++                    }
++                }
++            }
++            calls[v] = 0;
++            frames_at[v] = g_apu_vp_frames;
++        }
++    }
+ 
+     /* Step amplitude envelope */
+     float ea_value = voice_step_envelope(
+@@ -1169,10 +1415,43 @@ static void voice_process(MCPXAPUState *d,
+  * Simplified single-threaded version (no worker threads initially)
+  * ============================================================ */
+ 
++unsigned long g_apu_vp_frames;   /* VP frames run (RECOMP_APU_VOICE_LOG) */
++
+ void mcpx_apu_vp_frame(MCPXAPUState *d,
                          float mixbins[NUM_MIXBINS][NUM_SAMPLES_PER_FRAME])
  {
      memset(d->vp.sample_buf, 0, sizeof(d->vp.sample_buf));
 +    static unsigned long frames, processed, idle, last_ms;
 +    frames++;
++    g_apu_vp_frames++;
 +    {
 +        unsigned long now = GetTickCount();
 +        if (now - last_ms >= 5000) {
@@ -435,7 +674,7 @@ index b9f429e..d26d8eb 100644
  
      for (int list = 0; list < 3; list++) {
          hwaddr top, current, next;
-@@ -1194,9 +1297,11 @@ void mcpx_apu_vp_frame(MCPXAPUState *d,
+@@ -1194,9 +1473,11 @@ void mcpx_apu_vp_frame(MCPXAPUState *d,
  
              if (!voice_get_mask(d, v, NV_PAVS_VOICE_PAR_STATE,
                                  NV_PAVS_VOICE_PAR_STATE_ACTIVE_VOICE)) {
@@ -716,7 +955,7 @@ index e515377..7e97cd3 100644
 +
  #endif /* XBOX_KERNEL_H */
 diff --git a/src/kernel/kernel_bridge.c b/src/kernel/kernel_bridge.c
-index 5b56513..b2f8264 100644
+index 5b56513..8e31309 100644
 --- a/src/kernel/kernel_bridge.c
 +++ b/src/kernel/kernel_bridge.c
 @@ -49,6 +49,7 @@
@@ -1471,7 +1710,13 @@ index 5b56513..b2f8264 100644
 - * ISR returns, on whichever thread queued it. That ordering difference has not
 - * mattered for anything here yet; when it does, the upgrade is a real queue
 - * drained by the thread that lowered IRQL, not a second call site.
-- */
++ * 2026-09-22: this ordinal is implemented for real below (bridge_KeInsertQueueDpc,
++ * queued into g_pending_dpcs and drained via xbox_bridge_drain_guest_dpcs on
++ * the timer thread), not inline. An independent, near-duplicate inline
++ * implementation (kernel_run_dpc + its own g_dpc_queue) briefly existed here
++ * too after an upstream merge; removed in favour of the one implementation
++ * this project's recomp_manual.c already depends on.
+  */
 -/* Run a DPC's deferred routine on the calling thread.
 - *
 - * VOID DeferredRoutine(PKDPC, PVOID Context, PVOID Arg1, PVOID Arg2),
@@ -1481,13 +1726,7 @@ index 5b56513..b2f8264 100644
 - * taken a worker slice.
 - *
 - * Returns 1 if the routine was found and called.
-+ * 2026-09-22: this ordinal is implemented for real below (bridge_KeInsertQueueDpc,
-+ * queued into g_pending_dpcs and drained via xbox_bridge_drain_guest_dpcs on
-+ * the timer thread), not inline. An independent, near-duplicate inline
-+ * implementation (kernel_run_dpc + its own g_dpc_queue) briefly existed here
-+ * too after an upstream merge; removed in favour of the one implementation
-+ * this project's recomp_manual.c already depends on.
-  */
+- */
 -static int kernel_run_dpc(uint32_t dpc_va, uint32_t arg1, uint32_t arg2)
 -{
 -    uint32_t routine, context;
@@ -1762,12 +2001,6 @@ index 5b56513..b2f8264 100644
 -        InitializeCriticalSection(&g_timer_lock);
 -        g_timer_started = 1;
 -        CloseHandle(CreateThread(NULL, 0, kernel_timer_thread, NULL, 0, NULL));
--    }
--
--    EnterCriticalSection(&g_timer_lock);
--    for (i = 0; i < XBOX_MAX_TIMERS; i++) {
--        if (g_timers[i].timer_va == timer_va) { free_slot = i; was_set = 1; break; }
--        if (!g_timers[i].timer_va && free_slot < 0) free_slot = i;
 +    /* Guest KTIMER is a 40-byte Xbox record.  Do not cast its guest-memory
 +     * address to XBOX_KTIMER: that host-only type contains 64-bit handles.
 +     * The bridge-owned timer table is responsible for host scheduling. */
@@ -1779,6 +2012,12 @@ index 5b56513..b2f8264 100644
 +        BRIDGE_MEM32(timer + 0x1C) = dpc;
 +        bridge_arm_guest_timer(timer, dpc, due < 0 ? (uint64_t)-due : 0, 0);
      }
+-
+-    EnterCriticalSection(&g_timer_lock);
+-    for (i = 0; i < XBOX_MAX_TIMERS; i++) {
+-        if (g_timers[i].timer_va == timer_va) { free_slot = i; was_set = 1; break; }
+-        if (!g_timers[i].timer_va && free_slot < 0) free_slot = i;
+-    }
 -    if (free_slot >= 0) {
 -        g_timers[free_slot].timer_va  = timer_va;
 -        g_timers[free_slot].dpc_va    = dpc_va;
@@ -1917,7 +2156,7 @@ index 5b56513..b2f8264 100644
      } else {
          uint32_t ord = 0;
          if (apc_routine >= KERNEL_VA_BASE && apc_routine < KERNEL_VA_END) {
-@@ -3041,6 +3511,21 @@ static void bridge_NtReadFile(void)
+@@ -3041,6 +3511,38 @@ static void bridge_NtReadFile(void)
          off.HighPart = (LONG)BRIDGE_MEM32(offset_va + 4);
          poff = &off;
      }
@@ -1936,10 +2175,41 @@ index 5b56513..b2f8264 100644
 +        if (latency_ms > 0)
 +            Sleep((DWORD)latency_ms);
 +    }
++    /* Streaming reads (>= 64 KB) take DVD time. NFL 2K5's music streamer
++     * double-buffers 73,728-byte chunks, left and right channel in turn,
++     * through one staging buffer; a read completing instantly let its reader
++     * thread overwrite the left half before the copier had drained it, and
++     * the left channel played the wrong bytes -- static (2026-09-26). A disc
++     * delivers ~9 MB/s: 73,728 bytes take ~8 ms. Off by default: it did not
++     * turn out to be the cause (see apu_vp.c adpcm_realign).
++     * RECOMP_STREAM_READ_MS overrides (0 = off). */
++    if (length >= 0x10000u) {
++        static int stream_ms = -1;
++        if (stream_ms < 0) {
++            const char *v = getenv("RECOMP_STREAM_READ_MS");
++            stream_ms = v ? atoi(v) : 0;
++        }
++        if (stream_ms > 0)
++            Sleep((DWORD)stream_ms);
++    }
      g_eax = (uint32_t)xbox_NtReadFile(handle, NULL, NULL, NULL, &ios,
                  XBOX_TO_NATIVE(buffer_va), length, poff);
  
-@@ -3515,6 +4000,12 @@ static void bridge_IoCreateSymbolicLink(void)
+@@ -3056,11 +3558,11 @@ static void bridge_NtReadFile(void)
+          * early looks identical to one that never started -- until you can
+          * see where each one landed. */
+         if (poff)
+-            fprintf(stderr, "  [READ] @%lld want=%u got=%u st=0x%08X  %02X %02X %02X %02X\n",
++            fprintf(stderr, "  [READ] @%lld want=%u got=%u st=0x%08X  %02X %02X %02X %02X  -> %08X h=%p\n",
+                     (long long)off.QuadPart, length, got,
+                     (uint32_t)ios.Status,
+                     got > 0 ? p[0] : 0, got > 1 ? p[1] : 0,
+-                    got > 2 ? p[2] : 0, got > 3 ? p[3] : 0);
++                    got > 2 ? p[2] : 0, got > 3 ? p[3] : 0, buffer_va, (void *)handle);
+         else
+             fprintf(stderr, "  [READ] @seq want=%u got=%u st=0x%08X  %02X %02X %02X %02X\n",
+                     length, got, (uint32_t)ios.Status,
+@@ -3515,6 +4017,12 @@ static void bridge_IoCreateSymbolicLink(void)
  }
  
  /* ── ObReferenceObjectByHandle (ordinal 246) ─────────────── */
@@ -1952,7 +2222,7 @@ index 5b56513..b2f8264 100644
  static void bridge_ObReferenceObjectByHandle(void)
  {
      /* Xbox: NTSTATUS ObReferenceObjectByHandle(HANDLE Handle, PVOID ObjectType, PVOID* Object)
-@@ -3524,6 +4015,12 @@ static void bridge_ObReferenceObjectByHandle(void)
+@@ -3524,6 +4032,12 @@ static void bridge_ObReferenceObjectByHandle(void)
      uint32_t object_ptr = STACK_ARG(2);
      if (object_ptr) BRIDGE_MEM32(object_ptr) = 0;
      g_eax = 0;  /* STATUS_SUCCESS */
@@ -1965,7 +2235,7 @@ index 5b56513..b2f8264 100644
  }
  
  /* ── RtlRaiseException (ordinal 302) ─────────────────────
-@@ -3736,6 +4233,20 @@ static void bridge_KeQueryBasePriorityThread(void)
+@@ -3736,6 +4250,20 @@ static void bridge_KeQueryBasePriorityThread(void)
  
  static void bridge_KeSetBasePriorityThread(void)
  {
@@ -1986,7 +2256,7 @@ index 5b56513..b2f8264 100644
      g_eax = (uint32_t)xbox_KeSetBasePriorityThread(
          XBOX_TO_NATIVE(STACK_ARG(0)), (LONG)STACK_ARG(1));
  }
-@@ -3766,7 +4277,8 @@ static void bridge_MmLockUnlockBufferPages(void)
+@@ -3766,7 +4294,8 @@ static void bridge_MmLockUnlockBufferPages(void)
   */
  static void bridge_MmQueryAllocationSize(void)
  {
@@ -1996,7 +2266,7 @@ index 5b56513..b2f8264 100644
  }
  
  /* ── NtCreateMutant (ordinal 192, 3 args) */
-@@ -3825,18 +4337,33 @@ static void bridge_NtReleaseMutant(void)
+@@ -3825,18 +4354,33 @@ static void bridge_NtReleaseMutant(void)
  static void bridge_NtSuspendThread(void)
  {
      uint32_t count_va = STACK_ARG(1);
@@ -2033,7 +2303,7 @@ index 5b56513..b2f8264 100644
  }
  
  /* ── ObfDereferenceObject (ordinal 250, fastcall: object in ecx)
-@@ -4034,6 +4561,7 @@ static void bridge_KeAlertThread(void)
+@@ -4034,6 +4578,7 @@ static void bridge_KeAlertThread(void)
  
  static void bridge_KeWaitForMultipleObjects(void)
  {
@@ -2041,7 +2311,7 @@ index 5b56513..b2f8264 100644
      uint32_t count      = STACK_ARG(0);
      uint32_t objects_va = STACK_ARG(1);
      uint32_t wait_type  = STACK_ARG(2);
-@@ -4042,6 +4570,8 @@ static void bridge_KeWaitForMultipleObjects(void)
+@@ -4042,6 +4587,8 @@ static void bridge_KeWaitForMultipleObjects(void)
      HANDLE handles[BRIDGE_MAXIMUM_WAIT_OBJECTS];
      uint32_t i;
  
@@ -2050,7 +2320,7 @@ index 5b56513..b2f8264 100644
      if (count == 0) {
          g_eax = (uint32_t)STATUS_INVALID_PARAMETER;
          return;
-@@ -4052,11 +4582,23 @@ static void bridge_KeWaitForMultipleObjects(void)
+@@ -4052,11 +4599,23 @@ static void bridge_KeWaitForMultipleObjects(void)
          handles[i] = bridge_resolve_handle(
              objects_va ? BRIDGE_MEM32(objects_va + i * 4) : 0);
  
@@ -2079,7 +2349,7 @@ index 5b56513..b2f8264 100644
  }
  
  #undef BRIDGE_MAXIMUM_WAIT_OBJECTS
-@@ -8816,6 +9358,7 @@ static void kernel_thunk_dispatch(void)
+@@ -8816,6 +9375,7 @@ static void kernel_thunk_dispatch(void)
      int slot = g_kernel_dispatch_slot;
      bridge_func_t bridge;
      ULONG ordinal;
@@ -2087,7 +2357,7 @@ index 5b56513..b2f8264 100644
  
      if (slot < 0 || slot >= XBOX_KERNEL_THUNK_TABLE_SIZE) {
          fprintf(stderr, "  [KERNEL] bad slot %d\n", slot);
-@@ -8824,8 +9367,14 @@ static void kernel_thunk_dispatch(void)
+@@ -8824,8 +9384,14 @@ static void kernel_thunk_dispatch(void)
          return;
      }
  
@@ -2102,7 +2372,7 @@ index 5b56513..b2f8264 100644
  
      g_kernel_call_count++;
      if (ordinal < XBOX_KERNEL_THUNK_TABLE_SIZE)
-@@ -8848,8 +9397,14 @@ static void kernel_thunk_dispatch(void)
+@@ -8848,8 +9414,14 @@ static void kernel_thunk_dispatch(void)
          DWORD now = GetTickCount();
          if (last_summary_tick == 0) last_summary_tick = now;
          if (now - last_summary_tick >= 2000 && g_kernel_call_count > 200) {
@@ -2119,7 +2389,7 @@ index 5b56513..b2f8264 100644
              /* And which ones, ranked. "Latest" names whatever the sample
               * happened to land on; the question behind this line is what a
               * title sitting still is actually asking the kernel for, and
-@@ -8872,8 +9427,124 @@ static void kernel_thunk_dispatch(void)
+@@ -8872,8 +9444,124 @@ static void kernel_thunk_dispatch(void)
                              (unsigned long long)g_ordinal_calls[best]);
                  }
              }
@@ -2245,7 +2515,7 @@ index 5b56513..b2f8264 100644
          }
      }
  
-@@ -8951,8 +9622,58 @@ static void kernel_thunk_dispatch(void)
+@@ -8951,8 +9639,58 @@ static void kernel_thunk_dispatch(void)
       * On real x86, stdcall callee does "ret N" to pop the return address
       * and N bytes of arguments. We already popped the dummy return address
       * above; now pop the args. */
@@ -2304,7 +2574,7 @@ index 5b56513..b2f8264 100644
      if (g_kernel_watch_va) {
          uint32_t _after = BRIDGE_MEM32(g_kernel_watch_va);
          if (_after != _watch_before) {
-@@ -8988,6 +9709,35 @@ recomp_func_t recomp_lookup_kernel(uint32_t xbox_va)
+@@ -8988,6 +9726,35 @@ recomp_func_t recomp_lookup_kernel(uint32_t xbox_va)
      return NULL;
  }
  
@@ -2340,7 +2610,7 @@ index 5b56513..b2f8264 100644
  /* ── Initialization ─────────────────────────────────────── */
  
  /*
-@@ -9076,6 +9826,13 @@ void xbox_kernel_bridge_init(void)
+@@ -9076,6 +9843,13 @@ void xbox_kernel_bridge_init(void)
  
      /* Initialize kernel data export values first */
      kernel_data_init();
@@ -2354,7 +2624,7 @@ index 5b56513..b2f8264 100644
  
      for (i = 0; i < g_thunk_table_count; i++) {
          uint32_t va = g_thunk_table_base + i * 4;
-@@ -9192,4 +9949,33 @@ void xbox_kernel_bridge_init(void)
+@@ -9192,4 +9966,33 @@ void xbox_kernel_bridge_init(void)
      fprintf(stderr, "  Synthetic VA range: 0x%08X-0x%08X\n",
              KERNEL_VA_BASE, KERNEL_VA_BASE + (resolved - 1) * 4);
  
