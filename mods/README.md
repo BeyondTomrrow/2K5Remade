@@ -13,6 +13,10 @@ and downloads a game-ready `presentation.json`. Create a folder in
 The editor produces this existing format, so advanced creators can still edit
 the JSON later to add their own layers, images, music, video, and animations.
 
+To install a JSON package made elsewhere, double-click `Install Scorebug
+JSON.cmd` in the project root. It asks for the JSON file and creates the
+correct presentation-package folder automatically.
+
 ## teams/<ABBR>/
 
 One folder per team, named by the game's team code (SF, DAL, KC, ...).
