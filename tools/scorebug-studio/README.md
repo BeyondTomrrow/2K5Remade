@@ -6,6 +6,12 @@ Choose a CBS-style, ESPN-style, FOX-style, NBC-style, Netflix-style, or custom
 starting point. Change the colours, network label, font, placement, and size;
 drag the preview to position it; then use **Download presentation.json**.
 
+To begin with an existing package, use **Load an existing presentation.json**.
+The editor keeps the full imported JSON in its own panel. Use **Download
+imported JSON** for a lossless round trip, or edit that panel directly when a
+package contains advanced layers, images, music, video, or animations that the
+basic visual controls do not expose.
+
 Create a folder under `mods\presentations\` with your package name and put the
 downloaded file in that folder. Start the game, then choose it at **Coach Match
 Up > Presentation**.
