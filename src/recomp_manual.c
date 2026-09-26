@@ -2045,8 +2045,13 @@ static void nfl2k5_xpp_timer_init(void)
     POP32(g_esp, g_edi);
     g_esp += 8; /* ret 4 */
 }
+extern recomp_func_t nfl2k5_video_menu_lookup(uint32_t address);
+
 recomp_func_t recomp_lookup_manual(uint32_t address)
 {
+    /* Rows of the Video Settings screen (src/nfl2k5_video_menu.c). */
+    if ((address & 0xFFFF0000u) == 0xFEC00000u)
+        return nfl2k5_video_menu_lookup(address);
     switch(address) {
     case 0x0004C3C0u:
         return nfl2k5_io_completion;

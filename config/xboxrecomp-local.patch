@@ -4723,10 +4723,10 @@ index 0000000..09057ec
 +    "}\n";
 diff --git a/src/kernel/nv2a_gpu_present.inc.c b/src/kernel/nv2a_gpu_present.inc.c
 new file mode 100644
-index 0000000..f6de35b
+index 0000000..119ee9a
 --- /dev/null
 +++ b/src/kernel/nv2a_gpu_present.inc.c
-@@ -0,0 +1,789 @@
+@@ -0,0 +1,930 @@
 +/* ── Presentation and video settings (2026-09-26) ────────────────────────
 + *
 + * Included into nv2a_gpu_d3d11.inc.c.
@@ -4774,7 +4774,8 @@ index 0000000..f6de35b
 +} VideoSettings;
 +
 +static VideoSettings s_vs = { VM_WINDOWED, 1440, 1080, AR_ORIGINAL, 2, SF_SHARP, 1, 100, 100, 0, 0, 1 };
-+static volatile LONG s_vs_dirty = 1;           /* window/swap chain need (re)applying */
++static volatile LONG s_vs_dirty = 1;
++void xbox_VideoSettingsLoad(void);           /* window/swap chain need (re)applying */
 +
 +static const char *k_vs_file = "nfl2k5_video.ini";
 +
@@ -4848,7 +4849,8 @@ index 0000000..f6de35b
 +    DEVMODEA dm;
 +    DWORD i;
 +    int k, j;
-+    s_nres = 0;
++    if (s_nres)                     /* built once: the in-game menu holds indices into it */
++        return;
 +    for (k = 0; k < (int)(sizeof presets / sizeof presets[0]); k++)
 +        res_add(presets[k][0], presets[k][1]);
 +    memset(&dm, 0, sizeof dm);
@@ -4928,8 +4930,7 @@ index 0000000..f6de35b
 +    if (s_pr.tried)
 +        return s_pr.ok;
 +    s_pr.tried = 1;
-+    vs_load();
-+    res_build();
++    xbox_VideoSettingsLoad();
 +#define PR_COMPILE(entry, target, out, create) \
 +    if (FAILED(D3DCompile(k_present_hlsl, sizeof k_present_hlsl - 1, "present", NULL, NULL, entry, target, 0, 0, &b, &err))) { \
 +        fprintf(stderr, "  [PRESENT] %s: %s\n", entry, err ? (const char *)ID3D10Blob_GetBufferPointer(err) : "?"); \
@@ -5203,6 +5204,146 @@ index 0000000..f6de35b
 +        menu_change(item, 1);
 +    }
 +    s_pr.ovl_valid = 0;
++}
++
++/* ---- the in-game Video Settings screen ----------------------------------
++ * src/nfl2k5_video_menu.c adds "Video Settings" to the game's own Options
++ * menu; its rows are these settings as indexed value lists. Called from the
++ * game thread: changes mark the swap chain for re-applying on the next flip
++ * and are saved at once. */
++static const int k_vm_items[] = { MI_MODE, MI_RES, MI_ASPECT, MI_SCALE, MI_FILTER, MI_VSYNC,
++                                  MI_BRIGHT, MI_GAMMA, MI_CROP, MI_ANISO, MI_FPS };
++#define VM_COUNT ((int)(sizeof k_vm_items / sizeof k_vm_items[0]))
++static const int k_vm_aniso[] = { 1, 2, 4, 8, 16 };
++
++int xbox_VideoSettingCount(void) { return VM_COUNT; }
++
++const char *xbox_VideoSettingName(int i)
++{
++    static const char *names[] = { "Display Mode", "Resolution", "Aspect Ratio", "Render Scale",
++                                   "Upscaling Filter", "VSync", "Brightness", "Gamma",
++                                   "Overscan Crop", "Texture Filtering", "Show FPS" };
++    return (i >= 0 && i < VM_COUNT) ? names[i] : "";
++}
++
++int xbox_VideoSettingIsToggle(int i)
++{
++    return i >= 0 && i < VM_COUNT && (k_vm_items[i] == MI_VSYNC || k_vm_items[i] == MI_FPS);
++}
++
++int xbox_VideoSettingValues(int i)
++{
++    if (i < 0 || i >= VM_COUNT) return 1;
++    switch (k_vm_items[i]) {
++    case MI_MODE: case MI_FILTER: return 3;
++    case MI_RES:    res_build(); return s_nres ? s_nres : 1;
++    case MI_ASPECT: return 6;
++    case MI_SCALE:  return 9;
++    case MI_VSYNC: case MI_FPS: return 2;
++    case MI_BRIGHT: case MI_GAMMA: return 21;
++    case MI_CROP: case MI_ANISO: return 5;
++    }
++    return 1;
++}
++
++static int vm_get(const VideoSettings *vs, int item)
++{
++    int k;
++    switch (item) {
++    case MI_MODE:   return vs->mode;
++    case MI_RES:
++        res_build();
++        for (k = 0; k < s_nres; k++)
++            if (s_res[k][0] == vs->res_w && s_res[k][1] == vs->res_h) return k;
++        return 0;
++    case MI_ASPECT: return vs->aspect;
++    case MI_SCALE:  return vs->scale - 1;
++    case MI_FILTER: return vs->filter;
++    case MI_VSYNC:  return vs->vsync ? 1 : 0;
++    case MI_BRIGHT: return (vs->brightness - 50) / 5;
++    case MI_GAMMA:  return (vs->gamma - 60) / 5;
++    case MI_CROP:   return vs->crop / 8;
++    case MI_ANISO:
++        for (k = 0; k < 5; k++)
++            if (k_vm_aniso[k] == vs->aniso) return k;
++        return 0;
++    case MI_FPS:    return vs->show_fps ? 1 : 0;
++    }
++    return 0;
++}
++
++static void vm_set(VideoSettings *vs, int item, int idx)
++{
++    switch (item) {
++    case MI_MODE:   vs->mode = idx; break;
++    case MI_RES:    res_build(); if (idx < s_nres) { vs->res_w = s_res[idx][0]; vs->res_h = s_res[idx][1]; } break;
++    case MI_ASPECT: vs->aspect = idx; break;
++    case MI_SCALE:  vs->scale = idx + 1; break;
++    case MI_FILTER: vs->filter = idx; break;
++    case MI_VSYNC:  vs->vsync = idx; break;
++    case MI_BRIGHT: vs->brightness = 50 + 5 * idx; break;
++    case MI_GAMMA:  vs->gamma = 60 + 5 * idx; break;
++    case MI_CROP:   vs->crop = 8 * idx; break;
++    case MI_ANISO:  vs->aniso = k_vm_aniso[idx % 5]; break;
++    case MI_FPS:    vs->show_fps = idx; break;
++    }
++}
++
++void xbox_VideoSettingValueName(int i, int idx, char *buf, size_t n)
++{
++    static const char *modes[] = { "Windowed", "Borderless", "Fullscreen" };
++    static const char *aspects[] = { "4:3 Original", "Stretch", "16:9", "21:9 Ultrawide",
++                                     "32:9 Super Ultrawide", "Zoom to Fill" };
++    static const char *filters[] = { "Bilinear", "Sharp Bilinear", "Nearest" };
++    VideoSettings v = s_vs;
++    int item;
++    buf[0] = 0;
++    if (i < 0 || i >= VM_COUNT) return;
++    item = k_vm_items[i];
++    vm_set(&v, item, idx);
++    switch (item) {
++    case MI_MODE:   snprintf(buf, n, "%s", modes[v.mode % 3]); break;
++    case MI_RES:    snprintf(buf, n, "%d x %d", v.res_w, v.res_h); break;
++    case MI_ASPECT: snprintf(buf, n, "%s", aspects[v.aspect % 6]); break;
++    case MI_SCALE:  snprintf(buf, n, "%dx (%d x %d)", v.scale, 720 * v.scale, 480 * v.scale); break;
++    case MI_FILTER: snprintf(buf, n, "%s", filters[v.filter % 3]); break;
++    case MI_VSYNC:  snprintf(buf, n, "%s", v.vsync ? "On" : "Off"); break;
++    case MI_BRIGHT: snprintf(buf, n, "%d%%", v.brightness); break;
++    case MI_GAMMA:  snprintf(buf, n, "%d.%02d", v.gamma / 100, v.gamma % 100); break;
++    case MI_CROP:   if (v.crop) snprintf(buf, n, "%d px", v.crop); else snprintf(buf, n, "Off"); break;
++    case MI_ANISO:  if (v.aniso > 1) snprintf(buf, n, "%dx Anisotropic", v.aniso); else snprintf(buf, n, "Standard"); break;
++    case MI_FPS:    snprintf(buf, n, "%s", v.show_fps ? "On" : "Off"); break;
++    }
++}
++
++int xbox_VideoSettingGet(int i)
++{
++    return (i >= 0 && i < VM_COUNT) ? vm_get(&s_vs, k_vm_items[i]) : 0;
++}
++
++void xbox_VideoSettingSet(int i, int idx)
++{
++    int item, n;
++    if (i < 0 || i >= VM_COUNT) return;
++    n = xbox_VideoSettingValues(i);
++    if (idx < 0) idx = 0;
++    if (idx >= n) idx = n - 1;
++    item = k_vm_items[i];
++    vm_set(&s_vs, item, idx);
++    if (item == MI_MODE || item == MI_RES)
++        InterlockedExchange(&s_vs_dirty, 1);
++    s_pr.ovl_valid = 0;
++    vs_save();
++}
++
++/* The settings file is read before the game builds its menus. */
++void xbox_VideoSettingsLoad(void)
++{
++    static LONG once;
++    if (!InterlockedExchange(&once, 1)) {
++        vs_load();
++        res_build();
++    }
 +}
 +
 +static void menu_key(unsigned vk)

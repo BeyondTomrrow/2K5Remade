@@ -2906,6 +2906,11 @@ int main(int argc, char **argv)
                 hw_watch_install(0xA77E4Cu, "archive-obj-A77E38-plus14");
         }
     }
+    {
+        /* "Video Settings" in the game's Options menus. */
+        extern void nfl2k5_video_menu_install(void);
+        nfl2k5_video_menu_install();
+    }
     guest_function entry = recomp_lookup(0x00016BD1);
     if (!entry) { fprintf(stderr, "[BOOT] Recompiled entry point missing.\n"); return 4; }
     printf("[BOOT] XBE loaded; memory, kernel and recompiled entry 0x00016BD1 ready.\n");
