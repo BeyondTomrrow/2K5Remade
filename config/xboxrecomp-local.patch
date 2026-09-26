@@ -276,7 +276,7 @@ index 1a662a8..c9f5989 100644
      }
  
 diff --git a/src/kernel/CMakeLists.txt b/src/kernel/CMakeLists.txt
-index 90060bd..d756b60 100644
+index 90060bd..83256da 100644
 --- a/src/kernel/CMakeLists.txt
 +++ b/src/kernel/CMakeLists.txt
 @@ -11,6 +11,7 @@ set(KERNEL_SOURCES
@@ -287,7 +287,17 @@ index 90060bd..d756b60 100644
      kernel_sync.c
      kernel_hal.c
      kernel_xbox.c
-@@ -55,3 +56,12 @@ else()
+@@ -48,10 +49,21 @@ else()
+ endif()
+ 
+ if(MSVC)
+-    target_compile_options(xbox_kernel PRIVATE /W4 /WX- /O2 /GS- /Gy)
++    # /Zi: private symbols, so profiles and crash reports name static
++    # functions instead of the nearest public one.
++    target_compile_options(xbox_kernel PRIVATE /W4 /WX- /O2 /GS- /Gy /Zi /FS)
+     target_compile_definitions(xbox_kernel PRIVATE _CRT_SECURE_NO_WARNINGS)
+ else()
+     target_compile_options(xbox_kernel PRIVATE -Wall -Wextra -Wno-unused-parameter -O2)
  endif()
  
  target_compile_definitions(xbox_kernel PRIVATE $<$<CONFIG:Debug>:_DEBUG>)
@@ -2563,10 +2573,10 @@ index 0000000..740ebd8
 +}
 diff --git a/src/kernel/nv2a_gpu_d3d11.inc.c b/src/kernel/nv2a_gpu_d3d11.inc.c
 new file mode 100644
-index 0000000..c985758
+index 0000000..a98f0d6
 --- /dev/null
 +++ b/src/kernel/nv2a_gpu_d3d11.inc.c
-@@ -0,0 +1,1214 @@
+@@ -0,0 +1,1270 @@
 +/* ── Hardware rendering (Direct3D 11) ─────────────────────────────────────
 + *
 + * Included into nv2a_pb_exec.c (it reads that file's state directly), after
@@ -2765,7 +2775,7 @@ index 0000000..c985758
 +    {
 +        D3D11_BUFFER_DESC bd;
 +        memset(&bd, 0, sizeof bd);
-+        bd.ByteWidth = sizeof(GpuVertex) * GPU_MAX_VERTS;
++        bd.ByteWidth = sizeof(GpuVertex) * GPU_MAX_VERTS * 8;   /* ring, see gpu_draw_batch_unlocked */
 +        bd.Usage = D3D11_USAGE_DYNAMIC;
 +        bd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
 +        bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
@@ -3049,6 +3059,42 @@ index 0000000..c985758
 +    pix = (uint32_t *)malloc((size_t)n * 4 * faces);
 +    if (!pix)
 +        return NULL;
++    /* Fast paths for the formats that dominate (profile, 2026-09-25: the
++     * per-texel sampler below was ~19% of the frame): unswizzle a whole face
++     * at once, then expand. Same results as sample_stage for in-range
++     * coordinates. */
++    if ((t->color == 0x0B && t->palette) || t->color == 0x06 || t->color == 0x07) {
++        const uint8_t *mem = (const uint8_t *)xbox_GetMemoryOffset();
++        int ok = 1, w = (int)t->width, h = (int)t->height;
++        if ((w & (w - 1)) == 0 && (h & (h - 1)) == 0) {
++            __try {
++                for (f = 0; f < faces; f++) {
++                    uint32_t *dst = pix + (size_t)f * n;
++                    const uint8_t *src = mem + t->offset + f * face_bytes;
++                    if (t->color == 0x0B) {
++                        static uint8_t idx[1024 * 1024];
++                        const uint32_t *pal = (const uint32_t *)(mem + t->palette);
++                        uint32_t k2;
++                        if (n > sizeof idx) { ok = 0; break; }
++                        xbox_unswizzle_rect(idx, src, t->width, t->height, 1);
++                        for (k2 = 0; k2 < n; k2++)
++                            dst[k2] = pal[idx[k2]];
++                    } else {
++                        xbox_unswizzle_rect(dst, src, t->width, t->height, 4);
++                        if (t->color == 0x07) {
++                            uint32_t k2;
++                            for (k2 = 0; k2 < n; k2++)
++                                dst[k2] |= 0xFF000000u;
++                        }
++                    }
++                }
++            } __except (EXCEPTION_EXECUTE_HANDLER) {
++                ok = 0;
++            }
++            if (ok)
++                goto decoded;
++        }
++    }
 +    {
 +        uint32_t u, v, base = t->offset;
 +        int ok = 1;
@@ -3068,6 +3114,7 @@ index 0000000..c985758
 +        t->offset = base;
 +        if (!ok) { free(pix); return NULL; }
 +    }
++decoded:
 +    /* RECOMP_GPU_TEXDUMP=<prefix>: write what was decoded (face 0, BGRA over
 +     * mid-grey), textures of 128x128 and up, first 400. */
 +    if (env_cached("RECOMP_GPU_TEXDUMP") && n >= 128u * 128u) {
@@ -3406,6 +3453,7 @@ index 0000000..c985758
 +    ID3D11SamplerState *smp[4];
 +    const XfVert *(*get)(uint32_t);
 +    ID3D11VertexShader *vpvs = NULL;     /* the program on the GPU (RECOMP_GPU_VP) */
++    UINT first_vertex = 0;                /* where this batch sits in the vertex ring */
 +    uint32_t vp_nverts = 0;
 +
 +    if (!gpu_enabled() || !gpu_init())
@@ -3610,13 +3658,31 @@ index 0000000..c985758
 +        ID3D11ShaderResourceView_AddRef(cubes[st]);
 +        smp[st] = gpu_sampler(st);
 +    }
-+    if (SUCCEEDED(ID3D11DeviceContext_Map(s_gpu11.ctx, (ID3D11Resource *)s_gpu11.cb, 0, D3D11_MAP_WRITE_DISCARD, 0, &m))) {
-+        memcpy(m.pData, &c, sizeof c);
-+        ID3D11DeviceContext_Unmap(s_gpu11.ctx, (ID3D11Resource *)s_gpu11.cb, 0);
++    /* Constants only when they changed; vertices appended to a ring with
++     * NO_OVERWRITE (a WRITE_DISCARD per batch made the driver stall). */
++    {
++        static GpuConsts last;
++        static int last_valid;
++        if (!last_valid || memcmp(&c, &last, sizeof c) != 0) {
++            if (SUCCEEDED(ID3D11DeviceContext_Map(s_gpu11.ctx, (ID3D11Resource *)s_gpu11.cb, 0, D3D11_MAP_WRITE_DISCARD, 0, &m))) {
++                memcpy(m.pData, &c, sizeof c);
++                ID3D11DeviceContext_Unmap(s_gpu11.ctx, (ID3D11Resource *)s_gpu11.cb, 0);
++                last = c;
++                last_valid = 1;
++            }
++        }
 +    }
-+    if (!vpvs && SUCCEEDED(ID3D11DeviceContext_Map(s_gpu11.ctx, (ID3D11Resource *)s_gpu11.vb, 0, D3D11_MAP_WRITE_DISCARD, 0, &m))) {
-+        memcpy(m.pData, s_gpu11.verts, sizeof(GpuVertex) * nv);
-+        ID3D11DeviceContext_Unmap(s_gpu11.ctx, (ID3D11Resource *)s_gpu11.vb, 0);
++    if (!vpvs) {
++        static UINT ring_pos;
++        const UINT cap = GPU_MAX_VERTS * 8;
++        D3D11_MAP how = D3D11_MAP_WRITE_NO_OVERWRITE;
++        if (ring_pos + nv > cap) { ring_pos = 0; how = D3D11_MAP_WRITE_DISCARD; }
++        if (SUCCEEDED(ID3D11DeviceContext_Map(s_gpu11.ctx, (ID3D11Resource *)s_gpu11.vb, 0, how, 0, &m))) {
++            memcpy((GpuVertex *)m.pData + ring_pos, s_gpu11.verts, sizeof(GpuVertex) * nv);
++            ID3D11DeviceContext_Unmap(s_gpu11.ctx, (ID3D11Resource *)s_gpu11.vb, 0);
++            first_vertex = ring_pos;
++            ring_pos += nv;
++        }
 +    }
 +
 +    /* Pipeline. */
@@ -3651,7 +3717,7 @@ index 0000000..c985758
 +        if (vpvs)
 +            ID3D11DeviceContext_DrawIndexed(s_gpu11.ctx, nv, 0, 0);
 +        else
-+            ID3D11DeviceContext_Draw(s_gpu11.ctx, nv, 0);
++            ID3D11DeviceContext_Draw(s_gpu11.ctx, nv, first_vertex);
 +        gpu_debug_drain(flat2d ? "draw2d" : "draw");
 +    }
 +    for (st = 0; st < 4; st++) {
@@ -4087,10 +4153,10 @@ index 0000000..bf17e4d
 +    "}\n";
 diff --git a/src/kernel/nv2a_gpu_vp.inc.c b/src/kernel/nv2a_gpu_vp.inc.c
 new file mode 100644
-index 0000000..2afe880
+index 0000000..5fc196e
 --- /dev/null
 +++ b/src/kernel/nv2a_gpu_vp.inc.c
-@@ -0,0 +1,412 @@
+@@ -0,0 +1,555 @@
 +/* ── NV2A vertex programs on the GPU ─────────────────────────────────────
 + *
 + * Included into nv2a_gpu_d3d11.inc.c. Opt-in with RECOMP_GPU_VP=1 while it is
@@ -4111,13 +4177,16 @@ index 0000000..2afe880
 +
 +#include <stdarg.h>
 +
++/* state: 0 empty, 1 compiling (the batch uses the interpreter meanwhile),
++ * 2 ready, 3 cannot be translated or compiled. Written by the compile
++ * worker, read by the draw path. */
 +typedef struct {
 +    uint32_t key, start, len;
 +    ID3D11VertexShader *vs;
-+    int bad;
++    volatile LONG state;
 +} GpuVpProg;
 +
-+#define GPU_VP_CACHE 512
++#define GPU_VP_CACHE 2048
 +static GpuVpProg s_vpc[GPU_VP_CACHE];
 +static ID3D11InputLayout *s_vp_layout;
 +static ID3D11Buffer *s_vp_vb, *s_vp_ib, *s_vp_cb;
@@ -4340,64 +4409,173 @@ index 0000000..2afe880
 +    return h;
 +}
 +
-+/* The vertex shader for the current program, or NULL for the interpreter. */
++/* Compiling a program took tens of milliseconds on the draw path, and a
++ * match brings ~300 of them: nearly a third of the frame went to D3DCompile
++ * (profile, 2026-09-25). Programs now compile on a worker thread -- the
++ * batch draws through the interpreter until its shader is ready -- and the
++ * bytecode is kept in cache\vp\ so later runs skip compiling. */
++typedef struct { GpuVpProg *e; char *src; uint32_t key; } GpuVpJob;
++#define GPU_VP_JOBS 1024
++static GpuVpJob s_vpjob[GPU_VP_JOBS];
++static volatile LONG s_vpjob_head, s_vpjob_tail;
++static HANDLE s_vpjob_event;
++static SRWLOCK s_vp_layout_lock = SRWLOCK_INIT;
++
++static uint64_t gpu_vp_srchash(const char *src)
++{
++    uint64_t h = 1469598103934665603ull;
++    for (; *src; src++)
++        h = (h ^ (uint8_t)*src) * 1099511628211ull;
++    return h;
++}
++
++static void gpu_vp_make_layout(const void *code, SIZE_T size)
++{
++    AcquireSRWLockExclusive(&s_vp_layout_lock);
++    if (!s_vp_layout) {
++        D3D11_INPUT_ELEMENT_DESC el[16];
++        int k;
++        for (k = 0; k < 16; k++) {
++            el[k].SemanticName = "V"; el[k].SemanticIndex = (UINT)k;
++            el[k].Format = DXGI_FORMAT_R32G32B32A32_FLOAT; el[k].InputSlot = 0;
++            el[k].AlignedByteOffset = (UINT)(k * 16);
++            el[k].InputSlotClass = D3D11_INPUT_PER_VERTEX_DATA; el[k].InstanceDataStepRate = 0;
++        }
++        ID3D11Device_CreateInputLayout(s_gpu11.dev, el, 16, code, size, &s_vp_layout);
++    }
++    ReleaseSRWLockExclusive(&s_vp_layout_lock);
++}
++
++static void gpu_vp_compile_job(GpuVpJob *j)
++{
++    static volatile LONG compiled, loaded, failed;
++    char path[MAX_PATH];
++    uint64_t sh = gpu_vp_srchash(j->src);
++    ID3D11VertexShader *vs = NULL;
++    void *code = NULL;
++    SIZE_T size = 0;
++    ID3DBlob *blob = NULL, *err = NULL;
++    FILE *f;
++
++    snprintf(path, sizeof path, "cache\\vp\\%016llX.cso", (unsigned long long)sh);
++    f = fopen(path, "rb");
++    if (f) {
++        fseek(f, 0, SEEK_END);
++        size = (SIZE_T)ftell(f);
++        fseek(f, 0, SEEK_SET);
++        code = malloc(size ? size : 1);
++        if (!code || fread(code, 1, size, f) != size) { free(code); code = NULL; size = 0; }
++        fclose(f);
++        if (code) InterlockedIncrement(&loaded);
++    }
++    if (!code) {
++        HRESULT hr = D3DCompile(j->src, strlen(j->src), "nv2a_vp", NULL, NULL, "vs_main", "vs_4_0",
++                                D3DCOMPILE_OPTIMIZATION_LEVEL1 | D3DCOMPILE_IEEE_STRICTNESS, 0, &blob, &err);
++        if (FAILED(hr)) {
++            if (InterlockedIncrement(&failed) <= 5)
++                fprintf(stderr, "  [GPUVP] program at %u failed to compile: %s\n", j->e->start,
++                        err ? (const char *)ID3D10Blob_GetBufferPointer(err) : "?");
++            if (err) ID3D10Blob_Release(err);
++            InterlockedExchange(&j->e->state, 3);
++            return;
++        }
++        code = ID3D10Blob_GetBufferPointer(blob);
++        size = ID3D10Blob_GetBufferSize(blob);
++        CreateDirectoryA("cache", NULL);
++        CreateDirectoryA("cache\\vp", NULL);
++        f = fopen(path, "wb");
++        if (f) { fwrite(code, 1, size, f); fclose(f); }
++        {
++            LONG n = InterlockedIncrement(&compiled);
++            if (n <= 5 || (n % 50) == 0)
++                fprintf(stderr, "  [GPUVP] compiled program at %u, %ld compiled, %ld from cache\\vp\n",
++                        j->e->start, n, loaded);
++        }
++    }
++    if (FAILED(ID3D11Device_CreateVertexShader(s_gpu11.dev, code, size, NULL, &vs))) {
++        InterlockedExchange(&j->e->state, 3);
++    } else {
++        gpu_vp_make_layout(code, size);
++        j->e->vs = vs;
++        MemoryBarrier();
++        InterlockedExchange(&j->e->state, 2);
++    }
++    if (blob) ID3D10Blob_Release(blob); else free(code);
++}
++
++static DWORD WINAPI gpu_vp_worker(LPVOID arg)
++{
++    (void)arg;
++    for (;;) {
++        LONG t = s_vpjob_tail;
++        if (t == s_vpjob_head) {
++            WaitForSingleObject(s_vpjob_event, 100);
++            continue;
++        }
++        {
++            GpuVpJob job = s_vpjob[t % GPU_VP_JOBS];
++            if (InterlockedCompareExchange(&s_vpjob_tail, t + 1, t) != t)
++                continue;                              /* another worker took it */
++            gpu_vp_compile_job(&job);
++            free(job.src);
++        }
++    }
++}
++
++/* The vertex shader for the current program, or NULL for the interpreter
++ * (not translatable, or still compiling). */
 +static ID3D11VertexShader *gpu_vp_shader(void)
 +{
 +    uint32_t key = gpu_vp_hash(s_vp.start), i, base = key & (GPU_VP_CACHE - 1);
 +    GpuVpProg *e = NULL;
++    static int workers;
 +    for (i = 0; i < 16; i++) {
 +        GpuVpProg *c = &s_vpc[(base + i) & (GPU_VP_CACHE - 1)];
-+        if ((c->vs || c->bad) && c->key == key && c->start == s_vp.start)
-+            return c->bad ? NULL : c->vs;
-+        if (!c->vs && !c->bad) { e = c; break; }
++        LONG st = c->state;
++        if (st && c->key == key && c->start == s_vp.start) {
++            if (st == 2) { MemoryBarrier(); return c->vs; }
++            return NULL;
++        }
++        if (!st) { e = c; break; }
 +    }
-+    if (!e) e = &s_vpc[base];                     /* evict */
-+    if (e->vs) { ID3D11VertexShader_Release(e->vs); e->vs = NULL; }
-+    e->key = key; e->start = s_vp.start; e->bad = 1;
++    if (!e) {
++        /* Full: replace a finished entry, never one still compiling. */
++        for (i = 0; i < 16 && !e; i++) {
++            GpuVpProg *c = &s_vpc[(base + i) & (GPU_VP_CACHE - 1)];
++            if (c->state >= 2) e = c;
++        }
++        if (!e) return NULL;
++        if (e->vs) { ID3D11VertexShader_Release(e->vs); e->vs = NULL; }
++    }
++    e->key = key; e->start = s_vp.start;
++    if (s_vpjob_head - s_vpjob_tail >= GPU_VP_JOBS) {
++        e->state = 0;                                  /* queue full: retry later */
++        return NULL;
++    }
 +    {
 +        uint32_t len = 0;
 +        char *src = gpu_vp_translate(s_vp.start, &len);
-+        ID3DBlob *blob = NULL, *err = NULL;
-+        HRESULT hr;
-+        static unsigned compiled, failed;
-+        if (!src) {
-+            return NULL;
-+        }
-+        hr = D3DCompile(src, strlen(src), "nv2a_vp", NULL, NULL, "vs_main", "vs_4_0",
-+                        D3DCOMPILE_OPTIMIZATION_LEVEL1 | D3DCOMPILE_IEEE_STRICTNESS, 0, &blob, &err);
-+        if (FAILED(hr)) {
-+            if (failed++ < 5)
-+                fprintf(stderr, "  [GPUVP] program at %u failed to compile: %s\n", s_vp.start,
-+                        err ? (const char *)ID3D10Blob_GetBufferPointer(err) : "?");
-+            if (env_cached("RECOMP_GPU_VP_DUMP")) fprintf(stderr, "%s\n", src);
-+            free(src);
-+            if (err) ID3D10Blob_Release(err);
-+            return NULL;
-+        }
-+        free(src);
-+        if (FAILED(ID3D11Device_CreateVertexShader(s_gpu11.dev, ID3D10Blob_GetBufferPointer(blob),
-+                                                   ID3D10Blob_GetBufferSize(blob), NULL, &e->vs))) {
-+            ID3D10Blob_Release(blob);
-+            return NULL;
-+        }
-+        if (!s_vp_layout) {
-+            D3D11_INPUT_ELEMENT_DESC el[16];
++        if (!src) { e->state = 3; return NULL; }
++        e->len = len;
++        e->state = 1;
++        if (!workers) {
++            /* Three compilers: the game itself only ever uses one core. */
 +            int k;
-+            for (k = 0; k < 16; k++) {
-+                el[k].SemanticName = "V"; el[k].SemanticIndex = (UINT)k;
-+                el[k].Format = DXGI_FORMAT_R32G32B32A32_FLOAT; el[k].InputSlot = 0;
-+                el[k].AlignedByteOffset = (UINT)(k * 16);
-+                el[k].InputSlotClass = D3D11_INPUT_PER_VERTEX_DATA; el[k].InstanceDataStepRate = 0;
++            s_vpjob_event = CreateEventA(NULL, FALSE, FALSE, NULL);
++            for (k = 0; k < 3; k++) {
++                HANDLE h = CreateThread(NULL, 0, gpu_vp_worker, NULL, 0, NULL);
++                if (h) CloseHandle(h);
 +            }
-+            ID3D11Device_CreateInputLayout(s_gpu11.dev, el, 16, ID3D10Blob_GetBufferPointer(blob),
-+                                           ID3D10Blob_GetBufferSize(blob), &s_vp_layout);
++            workers = 1;
 +        }
-+        ID3D10Blob_Release(blob);
-+        e->bad = 0;
-+        if (compiled++ < 5 || (compiled % 50) == 0)
-+            fprintf(stderr, "  [GPUVP] compiled program at %u (%u slots), %u so far\n", s_vp.start, len, compiled);
-+        return e->vs;
++        s_vpjob[s_vpjob_head % GPU_VP_JOBS].e = e;
++        s_vpjob[s_vpjob_head % GPU_VP_JOBS].src = src;
++        s_vpjob[s_vpjob_head % GPU_VP_JOBS].key = key;
++        MemoryBarrier();
++        InterlockedIncrement(&s_vpjob_head);
++        SetEvent(s_vpjob_event);
 +    }
++    return NULL;
 +}
 +
 +/* Inputs for the batch's unique vertices and a triangle-list index buffer.
@@ -4459,45 +4637,76 @@ index 0000000..2afe880
 +}
 +
 +/* Upload the batch and set the input assembler and vertex stage. */
++/* Vertex and index data go into rings, appended with NO_OVERWRITE and
++ * discarded only on wrap. A WRITE_DISCARD map per batch renamed the whole
++ * 3 MB buffer thousands of times a frame, and the driver stalled on it
++ * (~20% of the frame, 2026-09-25). The constant buffer is re-sent only when
++ * its contents change. */
++#define GPU_VP_RING_VB (32u << 20)
++#define GPU_VP_RING_IB (4u << 20)
++static UINT s_vp_vb_pos, s_vp_ib_pos;
++static GpuVpConsts s_vp_last_consts;
++static int s_vp_consts_valid;
++
++static int gpu_vp_ring_write(ID3D11Buffer *buf, UINT cap, UINT *pos, const void *src, UINT size, UINT *at)
++{
++    D3D11_MAPPED_SUBRESOURCE m;
++    D3D11_MAP how = D3D11_MAP_WRITE_NO_OVERWRITE;
++    if (size > cap)
++        return 0;
++    if (*pos + size > cap) {
++        how = D3D11_MAP_WRITE_DISCARD;
++        *pos = 0;
++    }
++    if (FAILED(ID3D11DeviceContext_Map(s_gpu11.ctx, (ID3D11Resource *)buf, 0, how, 0, &m)))
++        return 0;
++    memcpy((uint8_t *)m.pData + *pos, src, size);
++    ID3D11DeviceContext_Unmap(s_gpu11.ctx, (ID3D11Resource *)buf, 0);
++    *at = *pos;
++    *pos += (size + 255u) & ~255u;
++    return 1;
++}
++
 +static int gpu_vp_bind(uint32_t nverts, uint32_t nidx, uint32_t rw, uint32_t rh, ID3D11VertexShader *vs)
 +{
 +    D3D11_MAPPED_SUBRESOURCE m;
++    GpuVpConsts k;
++    UINT vb_at = 0, ib_at = 0;
 +    if (!s_vp_vb) {
 +        D3D11_BUFFER_DESC bd;
 +        memset(&bd, 0, sizeof bd);
 +        bd.Usage = D3D11_USAGE_DYNAMIC; bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-+        bd.ByteWidth = sizeof s_vp_in; bd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
++        bd.ByteWidth = GPU_VP_RING_VB; bd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
 +        ID3D11Device_CreateBuffer(s_gpu11.dev, &bd, NULL, &s_vp_vb);
-+        bd.ByteWidth = sizeof s_vp_ix; bd.BindFlags = D3D11_BIND_INDEX_BUFFER;
++        bd.ByteWidth = GPU_VP_RING_IB; bd.BindFlags = D3D11_BIND_INDEX_BUFFER;
 +        ID3D11Device_CreateBuffer(s_gpu11.dev, &bd, NULL, &s_vp_ib);
 +        bd.ByteWidth = (sizeof(GpuVpConsts) + 15) & ~15u; bd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
 +        ID3D11Device_CreateBuffer(s_gpu11.dev, &bd, NULL, &s_vp_cb);
 +    }
 +    if (!s_vp_vb || !s_vp_ib || !s_vp_cb || !s_vp_layout)
 +        return 0;
-+    if (FAILED(ID3D11DeviceContext_Map(s_gpu11.ctx, (ID3D11Resource *)s_vp_vb, 0, D3D11_MAP_WRITE_DISCARD, 0, &m)))
++    if (!gpu_vp_ring_write(s_vp_vb, GPU_VP_RING_VB, &s_vp_vb_pos, s_vp_in,
++                           (UINT)(nverts * sizeof s_vp_in[0]), &vb_at))
 +        return 0;
-+    memcpy(m.pData, s_vp_in, (size_t)nverts * sizeof s_vp_in[0]);
-+    ID3D11DeviceContext_Unmap(s_gpu11.ctx, (ID3D11Resource *)s_vp_vb, 0);
-+    if (FAILED(ID3D11DeviceContext_Map(s_gpu11.ctx, (ID3D11Resource *)s_vp_ib, 0, D3D11_MAP_WRITE_DISCARD, 0, &m)))
++    if (!gpu_vp_ring_write(s_vp_ib, GPU_VP_RING_IB, &s_vp_ib_pos, s_vp_ix, (UINT)(nidx * 4), &ib_at))
 +        return 0;
-+    memcpy(m.pData, s_vp_ix, (size_t)nidx * 4);
-+    ID3D11DeviceContext_Unmap(s_gpu11.ctx, (ID3D11Resource *)s_vp_ib, 0);
-+    if (FAILED(ID3D11DeviceContext_Map(s_gpu11.ctx, (ID3D11Resource *)s_vp_cb, 0, D3D11_MAP_WRITE_DISCARD, 0, &m)))
-+        return 0;
-+    {
-+        GpuVpConsts *k = (GpuVpConsts *)m.pData;
-+        memcpy(k->c, s_vp.c, sizeof k->c);
-+        k->info[0] = (float)rw; k->info[1] = (float)rh; k->info[2] = gpu_zmax(); k->info[3] = 0.0f;
-+        k->clip[0] = s_vp.clip_min; k->clip[1] = s_vp.clip_max;
-+        k->clip[2] = s_vp.clip_max > s_vp.clip_min ? 1.0f : 0.0f; k->clip[3] = 0.0f;
++    memcpy(k.c, s_vp.c, sizeof k.c);
++    k.info[0] = (float)rw; k.info[1] = (float)rh; k.info[2] = gpu_zmax(); k.info[3] = 0.0f;
++    k.clip[0] = s_vp.clip_min; k.clip[1] = s_vp.clip_max;
++    k.clip[2] = s_vp.clip_max > s_vp.clip_min ? 1.0f : 0.0f; k.clip[3] = 0.0f;
++    if (!s_vp_consts_valid || memcmp(&k, &s_vp_last_consts, sizeof k) != 0) {
++        if (FAILED(ID3D11DeviceContext_Map(s_gpu11.ctx, (ID3D11Resource *)s_vp_cb, 0, D3D11_MAP_WRITE_DISCARD, 0, &m)))
++            return 0;
++        memcpy(m.pData, &k, sizeof k);
++        ID3D11DeviceContext_Unmap(s_gpu11.ctx, (ID3D11Resource *)s_vp_cb, 0);
++        s_vp_last_consts = k;
++        s_vp_consts_valid = 1;
 +    }
-+    ID3D11DeviceContext_Unmap(s_gpu11.ctx, (ID3D11Resource *)s_vp_cb, 0);
 +    {
-+        UINT stride = sizeof s_vp_in[0], off = 0;
++        UINT stride = sizeof s_vp_in[0], off = vb_at;
 +        ID3D11DeviceContext_IASetInputLayout(s_gpu11.ctx, s_vp_layout);
 +        ID3D11DeviceContext_IASetVertexBuffers(s_gpu11.ctx, 0, 1, &s_vp_vb, &stride, &off);
-+        ID3D11DeviceContext_IASetIndexBuffer(s_gpu11.ctx, s_vp_ib, DXGI_FORMAT_R32_UINT, 0);
++        ID3D11DeviceContext_IASetIndexBuffer(s_gpu11.ctx, s_vp_ib, DXGI_FORMAT_R32_UINT, ib_at);
 +        ID3D11DeviceContext_VSSetShader(s_gpu11.ctx, vs, NULL, 0);
 +        ID3D11DeviceContext_VSSetConstantBuffers(s_gpu11.ctx, 1, 1, &s_vp_cb);
 +    }

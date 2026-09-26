@@ -14,3 +14,4 @@
 *.exe
 *.pdb
 __pycache__/
+cache/

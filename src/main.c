@@ -2054,7 +2054,7 @@ static DWORD WINAPI sample_native_startup(LPVOID thread)
  * an elevated ETW session. */
 #define PROF_SLOTS 65536
 typedef struct { DWORD64 rip; DWORD tid; unsigned n; } ProfSlot;
-static ProfSlot g_prof[PROF_SLOTS];
+static ProfSlot g_prof[PROF_SLOTS], g_incl[PROF_SLOTS];
 
 static DWORD WINAPI profile_thread(LPVOID arg)
 {
@@ -2086,7 +2086,7 @@ static DWORD WINAPI profile_thread(LPVOID arg)
         for (t = 0; t < nt; t++) {
             CONTEXT c;
             memset(&c, 0, sizeof c);
-            c.ContextFlags = CONTEXT_CONTROL;
+            c.ContextFlags = CONTEXT_FULL;
             if (SuspendThread(hs[t]) == (DWORD)-1) continue;
             if (GetThreadContext(hs[t], &c)) {
                 DWORD64 key = (c.Rip >> 4) ^ ((DWORD64)tids[t] * 0x9E3779B1u);
@@ -2095,57 +2095,101 @@ static DWORD WINAPI profile_thread(LPVOID arg)
                     if (g_prof[i].n == 0) { g_prof[i].rip = c.Rip; g_prof[i].tid = tids[t]; }
                     if (g_prof[i].rip == c.Rip && g_prof[i].tid == tids[t]) { g_prof[i].n++; total++; break; }
                 }
+                /* Inclusive: every return address on the stack, once per
+                 * sample, so a wait shows which of our functions made it. */
+                {
+                    CONTEXT u = c;
+                    DWORD64 seen_rips[32];
+                    int depth, ns = 0;
+                    for (depth = 0; depth < 32; depth++) {
+                        DWORD64 img = 0, frame = 0;
+                        PVOID hd = NULL;
+                        PRUNTIME_FUNCTION rf = RtlLookupFunctionEntry(u.Rip, &img, NULL);
+                        int k, dup = 0;
+                        if (!rf) {
+                            if (!u.Rsp) break;
+                            u.Rip = *(DWORD64 *)u.Rsp;       /* leaf */
+                            u.Rsp += 8;
+                        } else {
+                            RtlVirtualUnwind(UNW_FLAG_NHANDLER, img, u.Rip, rf, &u, &hd, &frame, NULL);
+                        }
+                        if (!u.Rip) break;
+                        for (k = 0; k < ns; k++) if (seen_rips[k] == u.Rip) dup = 1;
+                        if (dup) continue;
+                        seen_rips[ns++] = u.Rip;
+                        key = (u.Rip >> 4) ^ ((DWORD64)tids[t] * 0x9E3779B1u) ^ 0x5555u;
+                        i = (unsigned)(key % PROF_SLOTS);
+                        for (probe = 0; probe < 64; probe++, i = (i + 1) % PROF_SLOTS) {
+                            if (g_incl[i].n == 0) { g_incl[i].rip = u.Rip; g_incl[i].tid = tids[t]; }
+                            if (g_incl[i].rip == u.Rip && g_incl[i].tid == tids[t]) { g_incl[i].n++; break; }
+                        }
+                    }
+                }
             }
             ResumeThread(hs[t]);
         }
         Sleep(1);
     }
     timeEndPeriod(1);
-    /* Fold addresses into functions, per thread. */
+    /* Fold addresses into functions, per thread: pass 0 exclusive (where
+     * the thread was), pass 1 inclusive (functions anywhere on its stack),
+     * the latter only for threads that were not simply idle. */
     {
+        static unsigned tt_of[64], idle_of[64];
+        int pass;
+        for (pass = 0; pass < 2; pass++) {
         typedef struct { DWORD tid; char name[96]; unsigned n; } Fn;
         static Fn fns[8192];
+        ProfSlot *tab = pass ? g_incl : g_prof;
         unsigned nf = 0, i, j;
         char buf[sizeof(SYMBOL_INFO) + 256];
         SYMBOL_INFO *sym = (SYMBOL_INFO *)buf;
         for (i = 0; i < PROF_SLOTS; i++) {
             char name[96];
             DWORD64 disp = 0;
-            if (!g_prof[i].n) continue;
+            if (!tab[i].n) continue;
             memset(buf, 0, sizeof buf);
             sym->SizeOfStruct = sizeof(SYMBOL_INFO);
             sym->MaxNameLen = 255;
-            if (SymFromAddr(GetCurrentProcess(), g_prof[i].rip, &disp, sym))
+            if (SymFromAddr(GetCurrentProcess(), tab[i].rip, &disp, sym))
                 snprintf(name, sizeof name, "%s", sym->Name);
             else {
                 HMODULE mod = NULL;
                 char mn[MAX_PATH] = "?";
                 if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-                                       (LPCSTR)(uintptr_t)g_prof[i].rip, &mod) && mod) {
+                                       (LPCSTR)(uintptr_t)tab[i].rip, &mod) && mod) {
                     GetModuleFileNameA(mod, mn, sizeof mn);
                     snprintf(name, sizeof name, "[%s]", strrchr(mn, '\\') ? strrchr(mn, '\\') + 1 : mn);
                 } else
                     snprintf(name, sizeof name, "[unknown]");
             }
             for (j = 0; j < nf; j++)
-                if (fns[j].tid == g_prof[i].tid && strcmp(fns[j].name, name) == 0) break;
-            if (j == nf && nf < 8192) { fns[nf].tid = g_prof[i].tid; strcpy(fns[nf].name, name); fns[nf].n = 0; nf++; }
-            if (j < nf) fns[j].n += g_prof[i].n;
+                if (fns[j].tid == tab[i].tid && strcmp(fns[j].name, name) == 0) break;
+            if (j == nf && nf < 8192) { fns[nf].tid = tab[i].tid; strcpy(fns[nf].name, name); fns[nf].n = 0; nf++; }
+            if (j < nf) fns[j].n += tab[i].n;
         }
         for (t = 0; t < nt; t++) {
             unsigned tt = 0, shown;
-            for (j = 0; j < nf; j++) if (fns[j].tid == tids[t]) tt += fns[j].n;
+            if (pass == 0) {
+                for (j = 0; j < nf; j++) if (fns[j].tid == tids[t]) tt += fns[j].n;
+                tt_of[t] = tt;
+            } else {
+                tt = tt_of[t];
+                if (idle_of[t]) continue;
+            }
             if (tt < total / 50) continue;
-            fprintf(stderr, "  [PROF] thread %lu: %u samples (%.1f%% of all)\n", (unsigned long)tids[t], tt,
-                    total ? 100.0 * tt / total : 0.0);
-            for (shown = 0; shown < 40; shown++) {
+            fprintf(stderr, "  [PROF] thread %lu: %u samples (%.1f%% of all)%s\n", (unsigned long)tids[t], tt,
+                    total ? 100.0 * tt / total : 0.0, pass ? " -- INCLUSIVE" : "");
+            for (shown = 0; shown < (pass ? 60u : 40u); shown++) {
                 unsigned best = nf;
                 for (j = 0; j < nf; j++)
                     if (fns[j].tid == tids[t] && fns[j].n && (best == nf || fns[j].n > fns[best].n)) best = j;
                 if (best == nf || fns[best].n * 200 < tt) break;
+                if (pass == 0 && shown == 0 && fns[best].n * 10 >= tt * 9) idle_of[t] = 1;
                 fprintf(stderr, "  [PROF]   %5.1f%%  %s\n", 100.0 * fns[best].n / tt, fns[best].name);
                 fns[best].n = 0;
             }
+        }
         }
     }
     for (t = 0; t < nt; t++) CloseHandle(hs[t]);
