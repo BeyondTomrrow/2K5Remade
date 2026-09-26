@@ -161661,6 +161661,9 @@ loc_000FC293: ;
     if (CMP_L(_fas, _fbs)) goto loc_000FC23D; /* jl: less (signed <) */
 
 loc_000FC2A6: ;
+    /* NFL2K5-GENPATCH:SCOREBUG_HIDE_LAYOUT1 */
+    /* Re-hide the ESPN bug after the game lays it out for a new mode. */
+    { extern void nfl2k5_scorebug_hide(void); nfl2k5_scorebug_hide(); }
     POP32(esp, edi);
     POP32(esp, esi);
     POP32(esp, ebx);
@@ -161765,6 +161768,8 @@ loc_000FC326: ;
     POP32(esp, ebx);
 
 loc_000FC329: ;
+    /* NFL2K5-GENPATCH:SCOREBUG_HIDE_LAYOUT2 */
+    { extern void nfl2k5_scorebug_hide(void); nfl2k5_scorebug_hide(); }
     esp += 4; return; /* ret */
 
 }
@@ -163607,6 +163612,8 @@ void sub_000FCE70(void)
     #define fp_st1() fp_st(1)
 
 loc_000FCE70: ;
+    /* NFL2K5-GENPATCH:SCOREBUG_HIDE_UPDATE */
+    { extern void nfl2k5_scorebug_hide(void); nfl2k5_scorebug_hide(); }
     /* NFL2K5-GENPATCH:SCOREBUG_SKIP_TEST */
     /* Experiment (NFL2K5_HIDE_SKIP=1): skip the ESPN scorebug update while a
      * custom broadcast package is on, to find out whether it drives the bar. */

@@ -55,11 +55,13 @@
 extern "C" {
 extern ptrdiff_t g_xbox_mem_offset;
 typedef struct { int bb_w, bb_h; float game_x, game_y, game_w, game_h; } XboxHudFrame;
-typedef struct { const void *pixels; int w, h, stride, x, y, changed; } XboxHudImage;
+typedef struct { const void *pixels; int w, h, stride, x, y, changed, dw, dh; } XboxHudImage;
 typedef int (*XboxHudCallback)(const XboxHudFrame *f, XboxHudImage *img);
 void xbox_PresentSetHudCallback(XboxHudCallback cb);
 void xbox_AudioSetGameGain(float gain);
 void xbox_AudioMuteGameMusic(int mute);
+void xbox_AudioSetCommentaryGain(float gain);
+void nfl2k5_input_press_a(unsigned ms);
 float xbox_AudioGameLevel(void);
 void xbox_AudioSetCaptureMix(void (*mix)(int16_t *stereo, int frames));
 }
@@ -693,6 +695,94 @@ static void capture_mix(int16_t *buf, int frames)
 }
 
 /* ======================================================================
+ * Pregame open video (presentation.json "pregame_video"): replaces the
+ * game's studio segment (Berman) with the package's own open. Decoded by
+ * Media Foundation on a thread in real time to BGRA frames; shown full screen
+ * through the HUD layer; its audio plays through the theme voice.
+ * ====================================================================== */
+static const GUID k_mf_advanced_video =
+    { 0x0f81da2c, 0xb537, 0x4672, { 0xa8, 0xb2, 0xa6, 0x81, 0xb1, 0x73, 0x07, 0xa3 } };
+
+struct Video {
+    std::mutex lock;
+    std::vector<uint8_t> frame;      /* BGRA, top-down, w*h*4 */
+    int w = 0, h = 0;
+    bool fresh = false;
+    std::atomic<int> state{ 0 };     /* 0 idle, 1 playing, 2 finished */
+    std::atomic<int> generation{ 0 };
+} s_video;
+
+static void video_thread(std::string path, int gen)
+{
+    CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    IMFAttributes *attr = nullptr;
+    IMFSourceReader *rd = nullptr;
+    MFCreateAttributes(&attr, 1);
+    attr->SetUINT32(k_mf_advanced_video, TRUE);
+    if (SUCCEEDED(MFCreateSourceReaderFromURL(widen(path).c_str(), attr, &rd))) {
+        IMFMediaType *mt = nullptr, *cur = nullptr;
+        rd->SetStreamSelection((DWORD)MF_SOURCE_READER_ALL_STREAMS, FALSE);
+        rd->SetStreamSelection((DWORD)MF_SOURCE_READER_FIRST_VIDEO_STREAM, TRUE);
+        MFCreateMediaType(&mt);
+        mt->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video);
+        mt->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_RGB32);
+        if (SUCCEEDED(rd->SetCurrentMediaType((DWORD)MF_SOURCE_READER_FIRST_VIDEO_STREAM, nullptr, mt)) &&
+            SUCCEEDED(rd->GetCurrentMediaType((DWORD)MF_SOURCE_READER_FIRST_VIDEO_STREAM, &cur))) {
+            UINT32 w = 0, h = 0;
+            INT32 stride = 0;
+            MFGetAttributeSize(cur, MF_MT_FRAME_SIZE, &w, &h);
+            if (FAILED(cur->GetUINT32(MF_MT_DEFAULT_STRIDE, (UINT32 *)&stride))) stride = (INT32)w * 4;
+            double t0 = now_s();
+            fprintf(stderr, "[PRES] pregame video %ux%u: %s\n", w, h, path.c_str());
+            while (gen == s_video.generation) {
+                DWORD flags = 0;
+                LONGLONG ts = 0;
+                IMFSample *smp = nullptr;
+                if (FAILED(rd->ReadSample((DWORD)MF_SOURCE_READER_FIRST_VIDEO_STREAM, 0, nullptr, &flags, &ts, &smp))) break;
+                if (flags & MF_SOURCE_READERF_ENDOFSTREAM) { if (smp) smp->Release(); break; }
+                if (!smp) continue;
+                double due = t0 + ts / 1e7;
+                while (now_s() < due && gen == s_video.generation) Sleep(2);
+                IMFMediaBuffer *buf = nullptr;
+                if (SUCCEEDED(smp->ConvertToContiguousBuffer(&buf))) {
+                    BYTE *data; DWORD len;
+                    if (SUCCEEDED(buf->Lock(&data, nullptr, &len))) {
+                        std::lock_guard<std::mutex> g(s_video.lock);
+                        s_video.w = (int)w; s_video.h = (int)h;
+                        s_video.frame.resize((size_t)w * h * 4);
+                        for (UINT32 y = 0; y < h; y++) {
+                            const BYTE *src = stride >= 0 ? data + (size_t)y * stride : data + (size_t)(h - 1 - y) * (size_t)(-stride);
+                            BYTE *dst = &s_video.frame[(size_t)y * w * 4];
+                            memcpy(dst, src, (size_t)w * 4);
+                            for (UINT32 x = 0; x < w; x++) dst[x * 4 + 3] = 255;
+                        }
+                        s_video.fresh = true;
+                        buf->Unlock();
+                    }
+                    buf->Release();
+                }
+                smp->Release();
+            }
+            cur->Release();
+        }
+        mt->Release();
+        rd->Release();
+    } else {
+        fprintf(stderr, "[PRES] could not open video %s\n", path.c_str());
+    }
+    attr->Release();
+    CoUninitialize();
+    if (gen == s_video.generation) s_video.state = 2;
+}
+
+static void video_play(const std::string &path)
+{
+    int gen = ++s_video.generation;
+    s_video.state = 1;
+    std::thread(video_thread, path, gen).detach();
+}
+
+/* ======================================================================
  * Events
  * ====================================================================== */
 struct Event { std::string name; int team; std::string ended_quarter; };
@@ -1123,20 +1213,8 @@ static void gwritef(uint32_t va, float f)
 static bool s_text_hidden;
 
 /* Called by the game right after its scorebug update (SCOREBUG_NATIVE_HOOK). */
-extern "C" void nfl2k5_scorebug_native_hook(void)
+extern "C" void nfl2k5_scorebug_hide(void)
 {
-    s_native_visible = rd32(0x00A95A00u) != 0;
-    s_native_tick = GetTickCount();
-    /* Hide the ESPN bar: its six elements (0x70-byte records from 0xA959C8)
-     * each carry a fade factor at +0x3C that the colour loop below this hook
-     * multiplies in; zero makes the whole bar transparent, as when the game
-     * fades it out. Recomputed by the game every frame, so zeroed every
-     * frame. */
-    /* Hide the ESPN bug with the game's own switch: the score_bug scene
-     * (pointer at 0xA95528) keeps its nodes in an array at +0x20, 0x80
-     * bytes each, count at +0x1C; bit 0 of a node's flags (+8) hides it
-     * (sub_000FC200 uses it to pick the bug's variants). Set on every node,
-     * every frame, while a custom package draws its own bug. */
     if (!custom_active() && s_text_hidden) {
         static const uint32_t k_text_colors2[] = {
             0xA95894, 0xA95898, 0xA958BC, 0xA958C0, 0xA958E4, 0xA958E8, 0xA9590C, 0xA95910,
@@ -1186,6 +1264,14 @@ extern "C" void nfl2k5_scorebug_native_hook(void)
     }
 }
 
+extern "C" void nfl2k5_scorebug_native_hook(void)
+{
+    s_native_visible = rd32(0x00A95A00u) != 0;
+    s_native_tick = GetTickCount();
+    nfl2k5_scorebug_hide();
+
+}
+
 /* SCOREBUG_NATIVE_HIDE2: with a custom package on, the ESPN bug's root
  * matrix (4x4 floats, translation at +0x30) is rewritten after the game
  * places it. NFL2K5_HIDE_MODE: 1 off screen, 2 zero scale, 3 both. */
@@ -1224,6 +1310,17 @@ extern "C" void nfl2k5_presentation_popup(const char *title)
     if (title && !_strnicmp(title, "Coin Toss", 9)) s_coin_toss = 1;
 }
 
+static bool s_video_then_theme;   /* the open video runs; the theme follows it */
+
+static void start_intro_theme(const Package *pkg, const JVal *m, float vol, float duck, float fade)
+{
+    int i = s_sel_intro;
+    if (pkg && i >= 1 && i <= (int)pkg->intro.size()) {
+        music_play(pkg->dir + "/" + pkg->intro[i - 1].file, vol * (m ? (float)m->num("volume", 0.9) : 0.9f), duck, fade);
+        s_intro_active = true;
+    }
+}
+
 static void music_logic(const GameState &g, bool native_on)
 {
     const Package *pkg = custom_active() ? &s_pkgs[s_sel_pkg] : nullptr;
@@ -1232,6 +1329,9 @@ static void music_logic(const GameState &g, bool native_on)
         if (s_invalid_since == 0) s_invalid_since = t;
         if (t - s_invalid_since > 4.0) {        /* left the match */
             if (s_game_started || s_outro_played) music_fade();
+            if (s_video.state) { ++s_video.generation; s_video.state = 0; }
+            s_video_then_theme = false;
+            xbox_AudioSetCommentaryGain(1.0f);
             s_game_started = s_outro_played = s_intro_active = false;
         }
         return;
@@ -1252,10 +1352,33 @@ static void music_logic(const GameState &g, bool native_on)
         s_game_started = true;
         s_coin_toss = 0;
         s_outro_played = false;
-        int i = s_sel_intro;
-        if (pkg && i >= 1 && i <= (int)pkg->intro.size()) {
-            music_play(pkg->dir + "/" + pkg->intro[i - 1].file, vol * (m ? (float)m->num("volume", 0.9) : 0.9f), duck, fade);
-            s_intro_active = true;
+        const JVal *pv = pkg ? pkg->root.get("pregame_video") : nullptr;
+        std::string vfile = pv ? pv->str("file") : "";
+        if (!vfile.empty() && file_exists(pkg->dir + "/" + vfile)) {
+            /* The package's own open instead of the studio segment: the
+             * game is silenced, the segment skipped (A), the video plays
+             * with its sound, and the theme follows it. */
+            std::string path = pkg->dir + "/" + vfile;
+            video_play(path);
+            music_play(path, vol * (float)pv->num("volume", 1.0), 0.0f, 0.3f);
+            xbox_AudioSetGameGain(0.0f);
+            xbox_AudioSetCommentaryGain(0.0f);
+            s_video_then_theme = true;
+        } else {
+            start_intro_theme(pkg, m, vol, duck, fade);
+        }
+    }
+    if (s_video_then_theme) {
+        static double skip_at;
+        if (s_video.state == 1 && skip_at == 0) skip_at = now_s() + 1.5;
+        if (skip_at > 0 && now_s() >= skip_at) { nfl2k5_input_press_a(250); skip_at = -1; }
+        if (s_video.state == 2) {
+            s_video.state = 0;
+            s_video_then_theme = false;
+            skip_at = 0;
+            xbox_AudioSetCommentaryGain(1.0f);
+            xbox_AudioSetGameGain(1.0f);
+            start_intro_theme(pkg, m, vol, duck, fade);
         }
     }
     /* The intro plays over the pregame show and fades at the coin toss (or
@@ -1319,6 +1442,33 @@ static int hud_callback(const XboxHudFrame *f, XboxHudImage *img)
     s_prev = g;
     s_prev_valid = g.valid;
 
+    if (s_video.state == 1) {
+        /* Full screen, letterboxed over black: the frame is placed in a
+         * black canvas with the backbuffer's aspect, drawn over the whole
+         * backbuffer. */
+        static std::vector<uint8_t> canvas;
+        static int cw, ch;
+        static bool dirty;
+        std::lock_guard<std::mutex> gl(s_video.lock);
+        if (s_video.w <= 0 || f->bb_w <= 0) return 0;
+        int W = s_video.w, H = (int)((double)s_video.w * f->bb_h / f->bb_w);
+        if (H < s_video.h) { H = s_video.h; W = (int)((double)s_video.h * f->bb_w / f->bb_h); }
+        if (W != cw || H != ch) { cw = W; ch = H; canvas.assign((size_t)W * H * 4, 0); dirty = true; }
+        if (s_video.fresh) {
+            int ox = (W - s_video.w) / 2, oy = (H - s_video.h) / 2;
+            for (int y = 0; y < s_video.h; y++)
+                memcpy(&canvas[((size_t)(y + oy) * W + ox) * 4], &s_video.frame[(size_t)y * s_video.w * 4], (size_t)s_video.w * 4);
+            for (size_t k = 3; k < canvas.size(); k += 4) canvas[k] = 255;
+            s_video.fresh = false;
+            dirty = true;
+        }
+        img->pixels = canvas.data();
+        img->w = W; img->h = H; img->stride = W * 4;
+        img->x = 0; img->y = 0; img->dw = f->bb_w; img->dh = f->bb_h;
+        img->changed = dirty;
+        dirty = false;
+        return 1;
+    }
     if (!custom_active() || !renderer_init()) return 0;
     const Package &pkg = s_pkgs[s_sel_pkg];
     const JVal *sb = pkg.root.get("scorebug");

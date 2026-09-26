@@ -163,6 +163,11 @@ static WORD file_press(BYTE analog[8])
     return buttons;
 }
 
+/* A press from inside the runtime (src/nfl2k5_presentation.cpp skips the
+ * pregame studio segment when a broadcast package plays its own open). */
+static volatile DWORD s_inject_a_until;
+void nfl2k5_input_press_a(unsigned ms) { s_inject_a_until = GetTickCount() + ms; }
+
 static int window_focused(void)
 {
     DWORD pid = 0;
@@ -256,6 +261,7 @@ static void host_gamepad(XBOX_GAMEPAD *g)
     }
     g->wButtons |= auto_press(g->bAnalogButtons);
     g->wButtons |= file_press(g->bAnalogButtons);
+    if (GetTickCount() < s_inject_a_until) g->bAnalogButtons[0] = 255;
 }
 
 /* An XINPUT_GAMEPAD in guest memory: 22 bytes, packed. */

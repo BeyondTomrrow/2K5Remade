@@ -11,7 +11,7 @@ index e4cd232..d97f7c9 100644
  
  # Option to build examples
 diff --git a/src/apu/apu_core.c b/src/apu/apu_core.c
-index 459be77..6eac713 100644
+index 459be77..97b8662 100644
 --- a/src/apu/apu_core.c
 +++ b/src/apu/apu_core.c
 @@ -58,6 +58,16 @@ void mcpx_debug_end_frame(void) {}
@@ -44,7 +44,7 @@ index 459be77..6eac713 100644
      }
  }
  
-@@ -268,43 +278,82 @@ void mcpx_apu_monitor_finalize(MCPXAPUState *d)
+@@ -268,43 +278,84 @@ void mcpx_apu_monitor_finalize(MCPXAPUState *d)
              g_waveout.frames_written);
  }
  
@@ -59,6 +59,8 @@ index 459be77..6eac713 100644
 + * the commentary's, so a theme dips only under the announcers. */
 +extern volatile float g_apu_bed_gain, g_apu_voice_level;
 +extern volatile int g_apu_mute_music;
++extern volatile float g_apu_voice_gain;
++void xbox_AudioSetCommentaryGain(float gain) { g_apu_voice_gain = gain < 0.0f ? 0.0f : gain > 1.0f ? 1.0f : gain; }
 +void xbox_AudioMuteGameMusic(int mute) { g_apu_mute_music = mute; }
 +float xbox_AudioGameLevel(void) { return g_apu_voice_level; }
 +void xbox_AudioSetGameGain(float gain)
@@ -152,7 +154,7 @@ index 459be77..6eac713 100644
          return;
      }
  
-@@ -461,7 +510,19 @@ static void *mcpx_apu_frame_thread(void *arg)
+@@ -461,7 +512,19 @@ static void *mcpx_apu_frame_thread(void *arg)
          if (apu_active && !g_test_tone.active) {
              /* Full pipeline: VP voices → DSP → monitor → waveOut */
              se_frame(d);
@@ -173,7 +175,7 @@ index 459be77..6eac713 100644
              mcpx_apu_monitor_frame(d);
              d->ep_frame_div++;
 diff --git a/src/apu/apu_dsp.c b/src/apu/apu_dsp.c
-index de14f26..39c52fa 100644
+index de14f26..9235202 100644
 --- a/src/apu/apu_dsp.c
 +++ b/src/apu/apu_dsp.c
 @@ -27,6 +27,9 @@
@@ -186,7 +188,7 @@ index de14f26..39c52fa 100644
  
  /* ── DSP command doorbell acknowledgement ────────────────────────────────
   *
-@@ -138,6 +141,12 @@ void mcpx_apu_update_dsp_preference(MCPXAPUState *d)
+@@ -138,6 +141,13 @@ void mcpx_apu_update_dsp_preference(MCPXAPUState *d)
      (void)d;
  }
  
@@ -194,12 +196,13 @@ index de14f26..39c52fa 100644
 + * apu_core.c): bed gain for everything but the commentary, and the smoothed
 + * level of the commentary (centre bin). */
 +volatile float g_apu_bed_gain = 1.0f;
++volatile float g_apu_voice_gain = 1.0f;   /* commentary (centre bin) */
 +volatile float g_apu_voice_level;
 +
  void mcpx_apu_dsp_frame(MCPXAPUState *d,
                           float mixbins[NUM_MIXBINS][NUM_SAMPLES_PER_FRAME])
  {
-@@ -159,6 +168,45 @@ void mcpx_apu_dsp_frame(MCPXAPUState *d,
+@@ -159,6 +169,45 @@ void mcpx_apu_dsp_frame(MCPXAPUState *d,
  
      dsp_ack_frame(d);
  
@@ -245,7 +248,7 @@ index de14f26..39c52fa 100644
      if (d->monitor.point != MCPX_APU_DEBUG_MON_VP) {
          for (int i = 0; i < NUM_SAMPLES_PER_FRAME; i++) {
              /* Bins 2..31 used to be computed and then dropped on the floor.
-@@ -190,17 +238,41 @@ void mcpx_apu_dsp_frame(MCPXAPUState *d,
+@@ -190,17 +239,41 @@ void mcpx_apu_dsp_frame(MCPXAPUState *d,
               * mixdown that stops discarding audio. */
              float left, right;
              if (mcpx_apu_mixdown_all()) {
@@ -256,7 +259,7 @@ index de14f26..39c52fa 100644
 +                 * at half, and everything but the centre is scaled by the
 +                 * "bed" gain so a broadcast theme can replace the game's
 +                 * music under the announcers (xbox_AudioSetGameGain). */
-+                float bed = g_apu_bed_gain, c = mixbins[2][i], lfe = mixbins[3][i] * 0.5f;
++                float bed = g_apu_bed_gain, c = mixbins[2][i] * g_apu_voice_gain, lfe = mixbins[3][i] * 0.5f;
                  left = 0.0f;
                  right = 0.0f;
                  for (int b = 0; b < NUM_MIXBINS; ++b) {
@@ -5203,10 +5206,10 @@ index 0000000..09057ec
 +    "}\n";
 diff --git a/src/kernel/nv2a_gpu_present.inc.c b/src/kernel/nv2a_gpu_present.inc.c
 new file mode 100644
-index 0000000..1b2b893
+index 0000000..413653a
 --- /dev/null
 +++ b/src/kernel/nv2a_gpu_present.inc.c
-@@ -0,0 +1,1007 @@
+@@ -0,0 +1,1008 @@
 +/* ── Presentation and video settings (2026-09-26) ────────────────────────
 + *
 + * Included into nv2a_gpu_d3d11.inc.c.
@@ -5613,7 +5616,7 @@ index 0000000..1b2b893
 + * callback runs on this thread once per presented frame, is told where the
 + * game picture sits, and returns its image (uploaded only when changed). */
 +typedef struct { int bb_w, bb_h; float game_x, game_y, game_w, game_h; } XboxHudFrame;
-+typedef struct { const void *pixels; int w, h, stride, x, y, changed; } XboxHudImage;
++typedef struct { const void *pixels; int w, h, stride, x, y, changed, dw, dh; } XboxHudImage;   /* dw/dh: drawn size (0 = w/h) */
 +typedef int (*XboxHudCallback)(const XboxHudFrame *f, XboxHudImage *img);
 +static XboxHudCallback s_hud_cb;
 +static struct {
@@ -5674,7 +5677,8 @@ index 0000000..1b2b893
 +        }
 +    }
 +    vp.TopLeftX = (float)img.x; vp.TopLeftY = (float)img.y;
-+    vp.Width = (float)img.w; vp.Height = (float)img.h; vp.MinDepth = 0; vp.MaxDepth = 1;
++    vp.Width = (float)(img.dw > 0 ? img.dw : img.w); vp.Height = (float)(img.dh > 0 ? img.dh : img.h);
++    vp.MinDepth = 0; vp.MaxDepth = 1;
 +    ID3D11DeviceContext_RSSetViewports(s_gpu11.ctx, 1, &vp);
 +    ID3D11DeviceContext_OMSetBlendState(s_gpu11.ctx, s_hud.blend, NULL, 0xFFFFFFFFu);
 +    ID3D11DeviceContext_PSSetShader(s_gpu11.ctx, s_pr.ps_ovl, NULL, 0);

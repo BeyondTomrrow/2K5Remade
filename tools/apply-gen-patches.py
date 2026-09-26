@@ -279,6 +279,13 @@ PATCHES = [
 """),
     ("DIAG_MUSICSTREAM", "sub_0003F860", "loc_0003F860: ;", "after", """    { extern void nfl2k5_diag_stream(uint32_t dst, uint32_t src, uint32_t len, uint32_t eax_, uint32_t arg); nfl2k5_diag_stream(ebx, edx, edi, eax, MEM32(esp + 4)); }
 """),
+    ("SCOREBUG_HIDE_LAYOUT1", "sub_000FC200", "loc_000FC2A6: ;", "after", """    /* Re-hide the ESPN bug after the game lays it out for a new mode. */
+    { extern void nfl2k5_scorebug_hide(void); nfl2k5_scorebug_hide(); }
+"""),
+    ("SCOREBUG_HIDE_LAYOUT2", "sub_000FC200", "loc_000FC329: ;", "after", """    { extern void nfl2k5_scorebug_hide(void); nfl2k5_scorebug_hide(); }
+"""),
+    ("SCOREBUG_HIDE_UPDATE", "sub_000FCE70", "loc_000FCE70: ;", "after", """    { extern void nfl2k5_scorebug_hide(void); nfl2k5_scorebug_hide(); }
+"""),
     ("SCOREBUG_SKIP_TEST", "sub_000FCE70", "loc_000FCE70: ;", "after", """    /* Experiment (NFL2K5_HIDE_SKIP=1): skip the ESPN scorebug update while a
      * custom broadcast package is on, to find out whether it drives the bar. */
     { extern int nfl2k5_scorebug_skip_update(void); if (nfl2k5_scorebug_skip_update()) { esp += 8; return; } }

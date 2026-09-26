@@ -214,6 +214,8 @@
     }
   },
 
+  "pregame_video": { "file": "video/NFL Today Open.mp4", "volume": 1.0 },
+
   "music": {
     "volume": 0.15,
     "fade_out": 2.5,
