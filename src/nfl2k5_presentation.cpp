@@ -629,7 +629,7 @@ static void music_play(const std::string &path, float volume, float duck, float 
         s_music.state = 2;
         xbox_AudioSetGameGain(s_music.duck);
         xbox_AudioMuteGameMusic(s_music.mute_game_music);
-        fprintf(stderr, "[PRES] theme playing: %s (%.0f s)\n", path.c_str(), s_music.pcm.size() / 96000.0);
+        fprintf(stderr, "[PRES] t=%lu theme playing: %s (%.0f s)\n", GetTickCount(), path.c_str(), s_music.pcm.size() / 96000.0);
     }).detach();
 }
 
