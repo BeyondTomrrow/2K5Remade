@@ -1,0 +1,14 @@
+{
+  "abbreviation": "MIN",
+  "city": "Minnesota",
+  "name": "Vikings",
+  "colors": {
+    "primary": "#4F2683",
+    "secondary": "#FFC62F",
+    "text": "#FFFFFF"
+  },
+  "logos": {
+    "scorebug": "logos/scorebug.png"
+  },
+  "aliases": []
+}

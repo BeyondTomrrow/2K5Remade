@@ -1,0 +1,14 @@
+{
+  "abbreviation": "DAL",
+  "city": "Dallas",
+  "name": "Cowboys",
+  "colors": {
+    "primary": "#041E42",
+    "secondary": "#869397",
+    "text": "#FFFFFF"
+  },
+  "logos": {
+    "scorebug": "logos/scorebug.png"
+  },
+  "aliases": []
+}

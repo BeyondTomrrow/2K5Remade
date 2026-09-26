@@ -16,3 +16,9 @@
 __pycache__/
 cache/
 nfl2k5_video.ini
+
+# Mod media the user supplies (licensed per user)
+mods/**/*.mp3
+mods/**/*.wav
+mods/**/*.ogg
+mods/presentation.ini

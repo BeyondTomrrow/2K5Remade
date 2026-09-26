@@ -34,16 +34,39 @@ extern void xbox_VideoSettingValueName(int i, int idx, char *buf, size_t n);
 extern int xbox_VideoSettingGet(int i);
 extern void xbox_VideoSettingSet(int i, int idx);
 
-#define VM_FN_BASE    0xFEC00000u
+/* src/nfl2k5_presentation.cpp */
+extern void nfl2k5_presentation_init(void);
+extern int nfl2k5_pres_values(int what);
+extern int nfl2k5_pres_get(int what);
+extern void nfl2k5_pres_set(int what, int v);
+extern void nfl2k5_pres_value_name(int what, int idx, char *buf, size_t n);
+
+#define VM_FN_BASE    0xFEC00000u   /* + screen * 0x1000 + row * 0x40 + slot * 4 */
 #define VM_ROW        0x34u
 #define VM_MAX_ROWS   16
-#define GAME_OPTIONS_HEADER 0x00501E48u    /* template for the new screen */
+#define VM_MAX_VALUES 64
+#define VM_STR_CHARS  64
+#define GAME_OPTIONS_HEADER 0x00501E48u    /* template for the new screens */
 
 static const uint32_t k_options_headers[] = { 0x00503288u, 0x00503458u, 0x00503628u, 0x005038C8u };
+#define COACH_MATCH_UP_HEADER 0x00585474u   /* pre-game menu: Start Game ... VIP */
+
+/* A settings screen's rows. */
+typedef struct {
+    const char *title;
+    int rows;
+    const char *const *labels;
+    int (*toggle)(int row);
+    int (*values)(int row);
+    int (*get)(int row);
+    void (*set)(int row, int v);
+    void (*name)(int row, int v, char *buf, size_t n);
+    /* guest scratch per row: current value string, and the table of all
+     * values the width query measures */
+    uint32_t cur[VM_MAX_ROWS], table[VM_MAX_ROWS], pool[VM_MAX_ROWS];
+} VmScreen;
 
 static uint32_t s_heap, s_heap_used, s_heap_size;
-static uint32_t s_value_table[VM_MAX_ROWS];   /* guest array of UTF-16 string pointers per row */
-static int s_rows;
 static RECOMP_TLS uint32_t s_called;          /* fake address being called (set by the lookup) */
 
 static uint32_t vm_alloc(uint32_t n)
@@ -56,12 +79,18 @@ static uint32_t vm_alloc(uint32_t n)
     return p;
 }
 
+static void vm_put_wstr(uint32_t p, const char *s, uint32_t max_chars)
+{
+    uint32_t i;
+    for (i = 0; i + 1 < max_chars && s[i]; i++)
+        MEM16(p + i * 2u) = (uint16_t)(unsigned char)s[i];
+    MEM16(p + i * 2u) = 0;
+}
+
 static uint32_t vm_wstr(const char *s)
 {
-    uint32_t n = (uint32_t)strlen(s), p = vm_alloc((n + 1u) * 2u), i;
-    if (!p) return 0;
-    for (i = 0; i <= n; i++)
-        MEM16(p + i * 2u) = (uint16_t)(unsigned char)s[i];
+    uint32_t n = (uint32_t)strlen(s) + 1u, p = vm_alloc(n * 2u);
+    if (p) vm_put_wstr(p, s, n);
     return p;
 }
 
@@ -72,29 +101,70 @@ static void vm_copy(uint32_t dst, uint32_t src, uint32_t n)
         MEM32(dst + i) = MEM32(src + i);
 }
 
+/* ---- Video Settings rows (nv2a_gpu_present.inc.c) ---- */
+static int vid_toggle(int r) { return xbox_VideoSettingIsToggle(r); }
+static int vid_values(int r) { return xbox_VideoSettingValues(r); }
+static int vid_get(int r) { return xbox_VideoSettingGet(r); }
+static void vid_set(int r, int v) { xbox_VideoSettingSet(r, v); }
+static void vid_name(int r, int v, char *b, size_t n) { xbox_VideoSettingValueName(r, v, b, n); }
+
+/* ---- Presentation rows (nfl2k5_presentation.cpp) ---- */
+static const char *const k_pres_labels[] = { "Broadcast Package", "Intro Theme", "Outro Theme",
+                                             "Scorebug Animations", "Theme Volume" };
+static int pres_toggle(int r) { return r == 3; }
+static int pres_values(int r) { return nfl2k5_pres_values(r); }
+static int pres_get(int r) { return nfl2k5_pres_get(r); }
+static void pres_set(int r, int v) { nfl2k5_pres_set(r, v); }
+static void pres_name(int r, int v, char *b, size_t n) { nfl2k5_pres_value_name(r, v, b, n); }
+
+static const char *s_video_labels[VM_MAX_ROWS];
+static VmScreen s_screens[2] = {
+    { "Video Settings", 0, s_video_labels, vid_toggle, vid_values, vid_get, vid_set, vid_name },
+    { "Presentation", 5, k_pres_labels, pres_toggle, pres_values, pres_get, pres_set, pres_name },
+};
+#define VM_SCREENS ((int)(sizeof s_screens / sizeof s_screens[0]))
+
 /* One function for every row slot: the lookup remembers which address the
- * game is calling. Plain `ret`, results in eax. */
+ * game is calling. Plain `ret`, results in eax. Value strings are written
+ * on demand, because some lists (the themes of the selected package)
+ * change while the screen is open. */
 static void vm_row_fn(void)
 {
     uint32_t off = s_called - VM_FN_BASE;
-    int row = (int)(off / 0x40u), slot = (int)((off % 0x40u) / 4u);
-    int n = xbox_VideoSettingValues(row), v = xbox_VideoSettingGet(row);
+    VmScreen *sc = &s_screens[off / 0x1000u];
+    int row = (int)((off % 0x1000u) / 0x40u), slot = (int)((off % 0x40u) / 4u);
+    int n = sc->values(row), v = sc->get(row);
+    char name[VM_STR_CHARS];
+    if (n > VM_MAX_VALUES) n = VM_MAX_VALUES;
+    if (n < 1) n = 1;
     switch (slot) {
     case 0: g_eax = (uint32_t)(n - 1); break;
     case 1: g_eax = 0; break;
     case 2: g_eax = (uint32_t)v; break;
-    case 3: xbox_VideoSettingSet(row, v + 1 >= n ? 0 : v + 1); g_eax = 1; break;
-    case 4: xbox_VideoSettingSet(row, v <= 0 ? n - 1 : v - 1); g_eax = 1; break;
-    case 5: g_eax = MEM32(s_value_table[row] + (uint32_t)v * 4u); break;
-    case 6:
+    case 3: sc->set(row, v + 1 >= n ? 0 : v + 1); g_eax = 1; break;
+    case 4: sc->set(row, v <= 0 ? n - 1 : v - 1); g_eax = 1; break;
+    case 5:
+        sc->name(row, v, name, sizeof name);
+        vm_put_wstr(sc->cur[row], name, VM_STR_CHARS);
+        g_eax = sc->cur[row];
+        break;
+    case 6: {
         /* Same as the game's own rows: widest string of table[0..n-1] in
          * the font passed in ecx. sub_000771A0 pops its two arguments. */
-        PUSH32(g_esp, s_value_table[row]);
+        int k;
+        for (k = 0; k < n; k++) {
+            uint32_t p = sc->pool[row] + (uint32_t)k * VM_STR_CHARS * 2u;
+            sc->name(row, k, name, sizeof name);
+            vm_put_wstr(p, name, VM_STR_CHARS);
+            MEM32(sc->table[row] + (uint32_t)k * 4u) = p;
+        }
+        PUSH32(g_esp, sc->table[row]);
         PUSH32(g_esp, (uint32_t)(n - 1));
         g_edx = 0;
         PUSH32(g_esp, VM_FN_BASE);
         sub_000771A0();
         break;
+    }
     default: g_eax = 0; break;
     }
     g_esp += 4;
@@ -102,52 +172,49 @@ static void vm_row_fn(void)
 
 recomp_func_t nfl2k5_video_menu_lookup(uint32_t address)
 {
-    uint32_t off = address - VM_FN_BASE;
-    if (off / 0x40u >= (uint32_t)s_rows || (off % 0x40u) / 4u > 6u)
+    uint32_t off = address - VM_FN_BASE, scr = off / 0x1000u;
+    if (scr >= (uint32_t)VM_SCREENS || (off % 0x1000u) / 0x40u >= (uint32_t)s_screens[scr].rows ||
+        (off % 0x40u) / 4u > 6u)
         return NULL;
     s_called = address;
     return vm_row_fn;
 }
 
-static uint32_t vm_build_screen(void)
+static uint32_t vm_build_screen(int index)
 {
+    VmScreen *sc = &s_screens[index];
     uint32_t title, rows, header;
     int i;
-    s_rows = xbox_VideoSettingCount();
-    if (s_rows > VM_MAX_ROWS) s_rows = VM_MAX_ROWS;
-    title = vm_wstr("Video Settings");
-    rows = vm_alloc(VM_ROW * (uint32_t)(s_rows + 1));
+    if (sc->rows > VM_MAX_ROWS) sc->rows = VM_MAX_ROWS;
+    title = vm_wstr(sc->title);
+    rows = vm_alloc(VM_ROW * (uint32_t)(sc->rows + 1));
     header = vm_alloc(VM_ROW);
     if (!title || !rows || !header) return 0;
-    for (i = 0; i < s_rows; i++) {
+    for (i = 0; i < sc->rows; i++) {
         uint32_t r = rows + VM_ROW * (uint32_t)i, k;
-        int n = xbox_VideoSettingValues(i), v;
         for (k = 0; k < VM_ROW; k += 4) MEM32(r + k) = 0;
-        MEM32(r + 0x00) = xbox_VideoSettingIsToggle(i) ? 5u : 7u;
-        MEM32(r + 0x04) = vm_wstr(xbox_VideoSettingName(i));
+        MEM32(r + 0x00) = sc->toggle(i) ? 5u : 7u;
+        MEM32(r + 0x04) = vm_wstr(sc->labels[i]);
         for (k = 0; k < 7; k++)
-            MEM32(r + 0x0C + k * 4u) = VM_FN_BASE + (uint32_t)i * 0x40u + k * 4u;
-        s_value_table[i] = vm_alloc(4u * (uint32_t)n);
-        if (!s_value_table[i]) return 0;
-        for (v = 0; v < n; v++) {
-            char name[64];
-            xbox_VideoSettingValueName(i, v, name, sizeof name);
-            MEM32(s_value_table[i] + (uint32_t)v * 4u) = vm_wstr(name);
-        }
+            MEM32(r + 0x0C + k * 4u) = VM_FN_BASE + (uint32_t)index * 0x1000u + (uint32_t)i * 0x40u + k * 4u;
+        sc->cur[i] = vm_alloc(VM_STR_CHARS * 2u);
+        sc->table[i] = vm_alloc(VM_MAX_VALUES * 4u);
+        sc->pool[i] = vm_alloc(VM_MAX_VALUES * VM_STR_CHARS * 2u);
+        if (!sc->cur[i] || !sc->table[i] || !sc->pool[i]) return 0;
     }
     /* End row and header copied from Game Options. */
-    vm_copy(rows + VM_ROW * (uint32_t)s_rows, GAME_OPTIONS_HEADER - VM_ROW, VM_ROW);
-    MEM32(rows + VM_ROW * (uint32_t)s_rows) = 3;
+    vm_copy(rows + VM_ROW * (uint32_t)sc->rows, GAME_OPTIONS_HEADER - VM_ROW, VM_ROW);
+    MEM32(rows + VM_ROW * (uint32_t)sc->rows) = 3;
     vm_copy(header, GAME_OPTIONS_HEADER, VM_ROW);
     MEM32(header + 0x00) = title;
     MEM32(header + 0x10) = rows;
     return header;
 }
 
-/* Copy an Options menu's rows, add the link before the end row, repoint. */
-static int vm_add_link(uint32_t options_header, uint32_t screen, uint32_t label)
+/* Copy a link menu's rows, add the link before the end row, repoint. */
+static int vm_add_link(uint32_t menu_header, uint32_t screen, uint32_t label)
 {
-    uint32_t old = MEM32(options_header + 0x10), copy, link;
+    uint32_t old = MEM32(menu_header + 0x10), copy, link;
     int n = 0;
     while (n < 32 && MEM32(old + VM_ROW * (uint32_t)n) != 3) n++;
     if (n >= 32) return 0;
@@ -162,7 +229,10 @@ static int vm_add_link(uint32_t options_header, uint32_t screen, uint32_t label)
     MEM32(link + 0x04) = label;
     MEM32(link + 0x08) = screen;
     vm_copy(link + VM_ROW, old + VM_ROW * (uint32_t)n, VM_ROW);   /* end row */
-    MEM32(options_header + 0x10) = copy;
+    MEM32(menu_header + 0x10) = copy;
+    /* Link menus show seven rows; header flag 0x4 (set on the settings
+     * screens, 0x15 vs 0x11) makes the list scroll, so more are reachable. */
+    MEM32(menu_header + 0x28) |= 0x4u;
     return n + 1;
 }
 
@@ -198,27 +268,30 @@ static DWORD WINAPI vm_memdump_thread(void *arg)
 
 void nfl2k5_video_menu_install(void)
 {
+    uint32_t video, pres;
+    unsigned k;
+    int i;
     if (getenv("NFL2K5_MEMDUMP"))
         CloseHandle(CreateThread(NULL, 0, vm_memdump_thread, NULL, 0, NULL));
-    uint32_t screen, label;
-    unsigned k;
-    if (getenv("NFL2K5_NO_VIDEO_MENU")) return;
     xbox_VideoSettingsLoad();
-    s_heap_size = 64u * 1024u;
+    nfl2k5_presentation_init();
+    if (getenv("NFL2K5_NO_VIDEO_MENU")) return;
+    s_heap_size = 512u * 1024u;
     s_heap = xbox_HeapAlloc(s_heap_size, 16);
     if (!s_heap) { fprintf(stderr, "[VIDEOMENU] no guest memory\n"); return; }
-    screen = vm_build_screen();
-    label = vm_wstr("Video Settings");
-    if (!screen || !label) { fprintf(stderr, "[VIDEOMENU] build failed\n"); return; }
+    s_screens[0].rows = xbox_VideoSettingCount();
+    for (i = 0; i < s_screens[0].rows && i < VM_MAX_ROWS; i++)
+        s_video_labels[i] = xbox_VideoSettingName(i);
+    video = vm_build_screen(0);
+    pres = vm_build_screen(1);
+    if (!video || !pres) { fprintf(stderr, "[VIDEOMENU] build failed\n"); return; }
     for (k = 0; k < sizeof k_options_headers / sizeof k_options_headers[0]; k++) {
-        int n = vm_add_link(k_options_headers[k], screen, label);
-        /* Link menus show seven rows; header flag 0x4 (set on the settings
-         * screens, 0x15 vs 0x11) makes the list scroll, so the eighth row
-         * is reachable. */
-        if (n > 0)
-            MEM32(k_options_headers[k] + 0x28) |= 0x4u;
+        int n = vm_add_link(k_options_headers[k], video, vm_wstr("Video Settings"));
         fprintf(stderr, "[VIDEOMENU] Options menu %08X: %d rows\n", (unsigned)k_options_headers[k], n);
     }
-    fprintf(stderr, "[VIDEOMENU] Video Settings screen %08X, %d settings, %u bytes\n",
-            (unsigned)screen, s_rows, (unsigned)s_heap_used);
+    /* "Presentation" right under VIP on the pre-game screen. */
+    fprintf(stderr, "[VIDEOMENU] Coach Match Up: %d rows\n",
+            vm_add_link(COACH_MATCH_UP_HEADER, pres, vm_wstr("Presentation")));
+    fprintf(stderr, "[VIDEOMENU] Video Settings %08X, Presentation %08X, %u bytes\n",
+            (unsigned)video, (unsigned)pres, (unsigned)s_heap_used);
 }

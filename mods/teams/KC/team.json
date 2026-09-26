@@ -1,0 +1,14 @@
+{
+  "abbreviation": "KC",
+  "city": "Kansas City",
+  "name": "Chiefs",
+  "colors": {
+    "primary": "#E31837",
+    "secondary": "#FFB81C",
+    "text": "#FFFFFF"
+  },
+  "logos": {
+    "scorebug": "logos/scorebug.png"
+  },
+  "aliases": []
+}

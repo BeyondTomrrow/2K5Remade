@@ -1,0 +1,14 @@
+{
+  "abbreviation": "CHI",
+  "city": "Chicago",
+  "name": "Bears",
+  "colors": {
+    "primary": "#0B162A",
+    "secondary": "#C83803",
+    "text": "#FFFFFF"
+  },
+  "logos": {
+    "scorebug": "logos/scorebug.png"
+  },
+  "aliases": []
+}

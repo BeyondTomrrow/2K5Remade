@@ -1,0 +1,14 @@
+{
+  "abbreviation": "SEA",
+  "city": "Seattle",
+  "name": "Seahawks",
+  "colors": {
+    "primary": "#002244",
+    "secondary": "#69BE28",
+    "text": "#FFFFFF"
+  },
+  "logos": {
+    "scorebug": "logos/scorebug.png"
+  },
+  "aliases": []
+}

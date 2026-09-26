@@ -1,0 +1,14 @@
+{
+  "abbreviation": "GB",
+  "city": "Green Bay",
+  "name": "Packers",
+  "colors": {
+    "primary": "#203731",
+    "secondary": "#FFB612",
+    "text": "#FFFFFF"
+  },
+  "logos": {
+    "scorebug": "logos/scorebug.png"
+  },
+  "aliases": []
+}

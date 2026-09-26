@@ -258,6 +258,15 @@ PATCHES = [
     MEM32(ebx) = 0;
 #endif
 """),
+    ("SCOREBUG_NATIVE_HIDE", "sub_000FCE70", "fp_top() = fp_top() + MEMF(0x4F0F1C); /* fadd dword ptr [0x4f0f1c] */", "after", """    /* The scorebug root's y (+65, 0xFD15E): a custom broadcast package
+     * (src/nfl2k5_presentation.cpp) moves the ESPN bug far below the screen. */
+    { extern int nfl2k5_scorebug_native_hidden(void); if (nfl2k5_scorebug_native_hidden()) fp_top() = fp_top() + 4000.0; }
+"""),
+    ("SCOREBUG_NATIVE_HOOK", "sub_000FCE70", "loc_000FCFA7: ;", "after", """    /* Custom broadcast presentations (src/nfl2k5_presentation.cpp): note
+     * whether the game shows its scorebug this frame, and hide the ESPN one
+     * when another package draws its own. */
+    { extern void nfl2k5_scorebug_native_hook(void); nfl2k5_scorebug_native_hook(); }
+"""),
 ]
 
 

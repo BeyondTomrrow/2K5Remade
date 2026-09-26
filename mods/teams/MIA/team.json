@@ -1,0 +1,14 @@
+{
+  "abbreviation": "MIA",
+  "city": "Miami",
+  "name": "Dolphins",
+  "colors": {
+    "primary": "#008E97",
+    "secondary": "#FC4C02",
+    "text": "#FFFFFF"
+  },
+  "logos": {
+    "scorebug": "logos/scorebug.png"
+  },
+  "aliases": []
+}

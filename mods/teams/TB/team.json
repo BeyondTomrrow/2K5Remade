@@ -1,0 +1,14 @@
+{
+  "abbreviation": "TB",
+  "city": "Tampa Bay",
+  "name": "Buccaneers",
+  "colors": {
+    "primary": "#D50A0A",
+    "secondary": "#34302B",
+    "text": "#FFFFFF"
+  },
+  "logos": {
+    "scorebug": "logos/scorebug.png"
+  },
+  "aliases": []
+}

@@ -1,0 +1,14 @@
+{
+  "abbreviation": "NE",
+  "city": "New England",
+  "name": "Patriots",
+  "colors": {
+    "primary": "#002244",
+    "secondary": "#C60C30",
+    "text": "#FFFFFF"
+  },
+  "logos": {
+    "scorebug": "logos/scorebug.png"
+  },
+  "aliases": []
+}

@@ -1,0 +1,14 @@
+{
+  "abbreviation": "CLE",
+  "city": "Cleveland",
+  "name": "Browns",
+  "colors": {
+    "primary": "#311D00",
+    "secondary": "#FF3C00",
+    "text": "#FFFFFF"
+  },
+  "logos": {
+    "scorebug": "logos/scorebug.png"
+  },
+  "aliases": []
+}

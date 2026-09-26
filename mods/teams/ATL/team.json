@@ -1,0 +1,14 @@
+{
+  "abbreviation": "ATL",
+  "city": "Atlanta",
+  "name": "Falcons",
+  "colors": {
+    "primary": "#A71930",
+    "secondary": "#000000",
+    "text": "#FFFFFF"
+  },
+  "logos": {
+    "scorebug": "logos/scorebug.png"
+  },
+  "aliases": []
+}

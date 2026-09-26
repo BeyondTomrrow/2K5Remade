@@ -1,0 +1,14 @@
+{
+  "abbreviation": "SD",
+  "city": "San Diego",
+  "name": "Chargers",
+  "colors": {
+    "primary": "#002A5E",
+    "secondary": "#FFC20E",
+    "text": "#FFFFFF"
+  },
+  "logos": {
+    "scorebug": "logos/scorebug.png"
+  },
+  "aliases": []
+}

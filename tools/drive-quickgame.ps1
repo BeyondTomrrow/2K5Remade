@@ -29,7 +29,7 @@ $nextTap = $TapEvery
 while (-not $p.HasExited -and ((Get-Date) - $t0).TotalSeconds -lt $PlaySeconds) {
     $s = [int]((Get-Date) - $t0).TotalSeconds
     if ($s -ge $next) {
-        & "$PSScriptRoot\capwin.ps1" -At 0 -Prefix "$Tag-$s" | Out-Null
+        & "$PSScriptRoot\capscreen.ps1" -Out "logs\$Tag-$s.png" | Out-Null
         $next += $ShotEvery
     }
     # -TapEvery N: press A every N seconds of play (skips pregame segments).

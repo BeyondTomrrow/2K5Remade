@@ -1,0 +1,14 @@
+{
+  "abbreviation": "STL",
+  "city": "St. Louis",
+  "name": "Rams",
+  "colors": {
+    "primary": "#002244",
+    "secondary": "#B3995D",
+    "text": "#FFFFFF"
+  },
+  "logos": {
+    "scorebug": "logos/scorebug.png"
+  },
+  "aliases": []
+}

@@ -11,7 +11,7 @@ index e4cd232..d97f7c9 100644
  
  # Option to build examples
 diff --git a/src/apu/apu_core.c b/src/apu/apu_core.c
-index 459be77..47537c0 100644
+index 459be77..a677ef3 100644
 --- a/src/apu/apu_core.c
 +++ b/src/apu/apu_core.c
 @@ -58,6 +58,16 @@ void mcpx_debug_end_frame(void) {}
@@ -44,7 +44,21 @@ index 459be77..47537c0 100644
      }
  }
  
-@@ -274,37 +284,46 @@ void mcpx_apu_monitor_frame(MCPXAPUState *d)
+@@ -268,43 +278,61 @@ void mcpx_apu_monitor_finalize(MCPXAPUState *d)
+             g_waveout.frames_written);
+ }
+ 
++/* Game audio gain, 0..1 (xbox_AudioSetGameGain): lets a broadcast theme
++ * play over a ducked game mix (src/nfl2k5_presentation.cpp). */
++static volatile float g_game_gain = 1.0f;
++void xbox_AudioSetGameGain(float gain)
++{
++    g_game_gain = gain < 0.0f ? 0.0f : gain > 1.0f ? 1.0f : gain;
++}
++
+ void mcpx_apu_monitor_frame(MCPXAPUState *d)
+ {
+     if ((d->ep_frame_div + 1) % 8) {
          return;
      }
  
@@ -94,8 +108,9 @@ index 459be77..47537c0 100644
 -                        g_test_tone.phase -= 2.0 * M_PI;
 -                }
 +        for (i = 0; i < MIXER_FRAME_SAMPLES; i++) {
-+            acc[acc_n][0] = d->monitor.frame_buf[i][0];
-+            acc[acc_n][1] = d->monitor.frame_buf[i][1];
++            float gain = g_game_gain;
++            acc[acc_n][0] = (int16_t)(d->monitor.frame_buf[i][0] * gain);
++            acc[acc_n][1] = (int16_t)(d->monitor.frame_buf[i][1] * gain);
 +            if (++acc_n == buf_size) {
 +                xa2_submit_samples((const int16_t *)acc, buf_size);
 +                acc_n = 0;
@@ -116,7 +131,7 @@ index 459be77..47537c0 100644
          return;
      }
  
-@@ -461,7 +480,19 @@ static void *mcpx_apu_frame_thread(void *arg)
+@@ -461,7 +489,19 @@ static void *mcpx_apu_frame_thread(void *arg)
          if (apu_active && !g_test_tone.active) {
              /* Full pipeline: VP voices → DSP → monitor → waveOut */
              se_frame(d);
@@ -433,7 +448,7 @@ index b9f429e..d26d8eb 100644
              }
              d->regs[current] = d->regs[next];
 diff --git a/src/apu/apu_xaudio2.c b/src/apu/apu_xaudio2.c
-index cd69e57..5ac6256 100644
+index cd69e57..cc82a2c 100644
 --- a/src/apu/apu_xaudio2.c
 +++ b/src/apu/apu_xaudio2.c
 @@ -9,6 +9,7 @@
@@ -453,7 +468,20 @@ index cd69e57..5ac6256 100644
  
  static IXAudio2               *g_xa2 = NULL;
  static IXAudio2MasteringVoice *g_xa2_master = NULL;
-@@ -137,9 +138,65 @@ int xa2_submit_samples(const int16_t *samples, int num_samples)
+@@ -127,6 +128,12 @@ int xa2_is_active(void)
+ 
+ /* Submit a buffer of mixed samples to XAudio2.
+  * Called from APU frame thread. Returns 1 if buffer was submitted. */
++/* Recording tap: other audio the process plays itself (the broadcast theme,
++ * src/nfl2k5_presentation.cpp) is mixed into the RECOMP_AUDIO_WAV recording
++ * at the same moment, so a capture has everything that was heard. */
++static void (*g_capture_mix)(int16_t *stereo, int frames);
++void xbox_AudioSetCaptureMix(void (*mix)(int16_t *stereo, int frames)) { g_capture_mix = mix; }
++
+ int xa2_submit_samples(const int16_t *samples, int num_samples)
+ {
+     XAUDIO2_VOICE_STATE state;
+@@ -137,9 +144,87 @@ int xa2_submit_samples(const int16_t *samples, int num_samples)
  
      if (!g_xa2_initialized || !g_xa2_source) return 0;
  
@@ -471,11 +499,33 @@ index cd69e57..5ac6256 100644
 +                                    16,0,0,0, 1,0, 2,0, 0x80,0xBB,0,0, 0x00,0xEE,0x02,0, 4,0, 16,0,
 +                                    'd','a','t','a', 0,0,0,0 };
 +                fwrite(hdr, 1, 44, wav);
++                {
++                    /* Wall-clock start of the recording, to line it up with a
++                     * screen capture: <path>.start holds Unix time in ms. */
++                    char sp[600];
++                    FILE *sf;
++                    FILETIME ft;
++                    ULARGE_INTEGER t;
++                    GetSystemTimeAsFileTime(&ft);
++                    t.LowPart = ft.dwLowDateTime; t.HighPart = ft.dwHighDateTime;
++                    snprintf(sp, sizeof sp, "%s.start", pth);
++                    if ((sf = fopen(sp, "w")) != NULL) {
++                        fprintf(sf, "%llu\n", (unsigned long long)((t.QuadPart - 116444736000000000ull) / 10000ull));
++                        fclose(sf);
++                    }
++                }
 +            }
 +        }
 +        if (wav && wav_bytes < 48000u * 4u * 600u) {
 +            uint32_t n = (uint32_t)num_samples * 4u, riff;
-+            fwrite(samples, 1, n, wav);
++            static int16_t mixbuf[XA2_BUF_SAMPLES * 2];
++            if (g_capture_mix && num_samples <= XA2_BUF_SAMPLES) {
++                memcpy(mixbuf, samples, n);
++                g_capture_mix(mixbuf, num_samples);
++                fwrite(mixbuf, 1, n, wav);
++            } else {
++                fwrite(samples, 1, n, wav);
++            }
 +            wav_bytes += n;
 +            riff = wav_bytes + 36;
 +            fseek(wav, 4, SEEK_SET); fwrite(&riff, 4, 1, wav);
@@ -4754,10 +4804,10 @@ index 0000000..09057ec
 +    "}\n";
 diff --git a/src/kernel/nv2a_gpu_present.inc.c b/src/kernel/nv2a_gpu_present.inc.c
 new file mode 100644
-index 0000000..119ee9a
+index 0000000..1b2b893
 --- /dev/null
 +++ b/src/kernel/nv2a_gpu_present.inc.c
-@@ -0,0 +1,930 @@
+@@ -0,0 +1,1007 @@
 +/* ── Presentation and video settings (2026-09-26) ────────────────────────
 + *
 + * Included into nv2a_gpu_d3d11.inc.c.
@@ -5156,6 +5206,82 @@ index 0000000..119ee9a
 +        if (SUCCEEDED(IDXGISwapChain1_SetFullscreenState(s_pr.sc, TRUE, NULL)))
 +            s_pr.fullscreen_state = 1;
 +    }
++}
++
++/* ---- HUD layer ----------------------------------------------------------
++ * A premultiplied BGRA image drawn over the game picture at display
++ * resolution -- the broadcast scorebug (src/nfl2k5_presentation.cpp). The
++ * callback runs on this thread once per presented frame, is told where the
++ * game picture sits, and returns its image (uploaded only when changed). */
++typedef struct { int bb_w, bb_h; float game_x, game_y, game_w, game_h; } XboxHudFrame;
++typedef struct { const void *pixels; int w, h, stride, x, y, changed; } XboxHudImage;
++typedef int (*XboxHudCallback)(const XboxHudFrame *f, XboxHudImage *img);
++static XboxHudCallback s_hud_cb;
++static struct {
++    ID3D11Texture2D *tex;
++    ID3D11ShaderResourceView *srv;
++    ID3D11BlendState *blend;
++    int w, h;
++} s_hud;
++
++void xbox_PresentSetHudCallback(XboxHudCallback cb) { s_hud_cb = cb; }
++
++static void pr_draw_hud(float gx, float gy, float gw, float gh)
++{
++    XboxHudFrame f;
++    XboxHudImage img;
++    D3D11_VIEWPORT vp;
++    if (!s_hud_cb)
++        return;
++    f.bb_w = (int)s_pr.bb_w; f.bb_h = (int)s_pr.bb_h;
++    f.game_x = gx; f.game_y = gy; f.game_w = gw; f.game_h = gh;
++    memset(&img, 0, sizeof img);
++    if (!s_hud_cb(&f, &img) || !img.pixels || img.w <= 0 || img.h <= 0)
++        return;
++    if (!s_hud.blend) {
++        D3D11_BLEND_DESC bld;
++        memset(&bld, 0, sizeof bld);
++        bld.RenderTarget[0].BlendEnable = TRUE;
++        bld.RenderTarget[0].SrcBlend = D3D11_BLEND_ONE; bld.RenderTarget[0].DestBlend = D3D11_BLEND_INV_SRC_ALPHA;
++        bld.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
++        bld.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE; bld.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_INV_SRC_ALPHA;
++        bld.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
++        bld.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
++        ID3D11Device_CreateBlendState(s_gpu11.dev, &bld, &s_hud.blend);
++    }
++    if (!s_hud.tex || s_hud.w != img.w || s_hud.h != img.h) {
++        D3D11_TEXTURE2D_DESC td;
++        if (s_hud.srv) { ID3D11ShaderResourceView_Release(s_hud.srv); s_hud.srv = NULL; }
++        if (s_hud.tex) { ID3D11Texture2D_Release(s_hud.tex); s_hud.tex = NULL; }
++        memset(&td, 0, sizeof td);
++        td.Width = (UINT)img.w; td.Height = (UINT)img.h; td.MipLevels = 1; td.ArraySize = 1;
++        td.Format = DXGI_FORMAT_B8G8R8A8_UNORM; td.SampleDesc.Count = 1;
++        td.Usage = D3D11_USAGE_DYNAMIC; td.BindFlags = D3D11_BIND_SHADER_RESOURCE;
++        td.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
++        if (FAILED(ID3D11Device_CreateTexture2D(s_gpu11.dev, &td, NULL, &s_hud.tex)) ||
++            FAILED(ID3D11Device_CreateShaderResourceView(s_gpu11.dev, (ID3D11Resource *)s_hud.tex, NULL, &s_hud.srv)))
++            return;
++        s_hud.w = img.w; s_hud.h = img.h;
++        img.changed = 1;
++    }
++    if (img.changed) {
++        D3D11_MAPPED_SUBRESOURCE m;
++        if (SUCCEEDED(ID3D11DeviceContext_Map(s_gpu11.ctx, (ID3D11Resource *)s_hud.tex, 0, D3D11_MAP_WRITE_DISCARD, 0, &m))) {
++            int row;
++            for (row = 0; row < img.h; row++)
++                memcpy((uint8_t *)m.pData + (size_t)row * m.RowPitch,
++                       (const uint8_t *)img.pixels + (size_t)row * (size_t)img.stride, (size_t)img.w * 4u);
++            ID3D11DeviceContext_Unmap(s_gpu11.ctx, (ID3D11Resource *)s_hud.tex, 0);
++        }
++    }
++    vp.TopLeftX = (float)img.x; vp.TopLeftY = (float)img.y;
++    vp.Width = (float)img.w; vp.Height = (float)img.h; vp.MinDepth = 0; vp.MaxDepth = 1;
++    ID3D11DeviceContext_RSSetViewports(s_gpu11.ctx, 1, &vp);
++    ID3D11DeviceContext_OMSetBlendState(s_gpu11.ctx, s_hud.blend, NULL, 0xFFFFFFFFu);
++    ID3D11DeviceContext_PSSetShader(s_gpu11.ctx, s_pr.ps_ovl, NULL, 0);
++    ID3D11DeviceContext_PSSetShaderResources(s_gpu11.ctx, 0, 1, &s_hud.srv);
++    ID3D11DeviceContext_Draw(s_gpu11.ctx, 3, 0);
++    ID3D11DeviceContext_OMSetBlendState(s_gpu11.ctx, NULL, NULL, 0xFFFFFFFFu);
 +}
 +
 +/* ---- the settings page -------------------------------------------------- */
@@ -5638,6 +5764,7 @@ index 0000000..119ee9a
 +        ID3D11DeviceContext_PSSetSamplers(s_gpu11.ctx, 0, 2, smp);
 +    }
 +    ID3D11DeviceContext_Draw(s_gpu11.ctx, 3, 0);
++    pr_draw_hud(dx, dy, dw, dh);
 +
 +    /* FPS, and the overlay (page and/or counter). */
 +    s_pr.frames++;

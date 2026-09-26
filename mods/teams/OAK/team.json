@@ -1,0 +1,14 @@
+{
+  "abbreviation": "OAK",
+  "city": "Oakland",
+  "name": "Raiders",
+  "colors": {
+    "primary": "#000000",
+    "secondary": "#A5ACAF",
+    "text": "#FFFFFF"
+  },
+  "logos": {
+    "scorebug": "logos/scorebug.png"
+  },
+  "aliases": []
+}
