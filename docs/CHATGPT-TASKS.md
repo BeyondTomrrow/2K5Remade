@@ -65,3 +65,13 @@ They are now emitted as `RECOMP_FLAGS_FALLBACK(0xADDR, _flags)` and log `[FLAGS]
 lifter compiled as never-taken because the flags at a join could not be
 merged. Classify the shapes (which setter pairs) and propose lifter fixes;
 mixed-width cmp/test joins are already handled (`_merge_flag_states`).
+
+## 5. 2026-09-26 graphics comparison (ChatGPT)
+
+The translucent full-screen pregame overlay is reproducible with
+`RECOMP_GPU=0` in `logs/gfxsoft-46.png`, as well as with the D3D11 path.
+It is therefore shared NV2A command/state handling, not a D3D11 render-target
+ownership bug.  The software log at that point reports a valid surface and no
+skipped batches; trace the blend/stencil/colour-mask state around the pregame
+overlay before changing the D3D11 renderer.  The supplied play-call corruption
+may still be a separate render-to-texture issue and needs its own capture.
