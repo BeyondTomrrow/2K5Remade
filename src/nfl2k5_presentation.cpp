@@ -1093,16 +1093,6 @@ static std::string s_test_event;
 
 static bool custom_active() { int p = s_sel_pkg; return p > 0 && p < (int)s_pkgs.size(); }
 
-/* Called by the game right after its scorebug update (SCOREBUG_NATIVE_HOOK). */
-extern "C" void nfl2k5_scorebug_native_hook(void)
-{
-    s_native_visible = rd32(0x00A95A00u) != 0;
-    s_native_tick = GetTickCount();
-}
-
-/* SCOREBUG_NATIVE_HIDE2: with a custom package on, the ESPN bug's root
- * matrix (4x4 floats, translation at +0x30) is rewritten after the game
- * places it. NFL2K5_HIDE_MODE: 1 off screen, 2 zero scale, 3 both. */
 static void gwritef(uint32_t va, float f)
 {
     if (va < 0x10000u || va > 0x0FFFFFF0u) return;
@@ -1110,10 +1100,28 @@ static void gwritef(uint32_t va, float f)
     __except (EXCEPTION_EXECUTE_HANDLER) {}
 }
 
+/* Called by the game right after its scorebug update (SCOREBUG_NATIVE_HOOK). */
+extern "C" void nfl2k5_scorebug_native_hook(void)
+{
+    s_native_visible = rd32(0x00A95A00u) != 0;
+    s_native_tick = GetTickCount();
+    /* Hide the ESPN bar: its six elements (0x70-byte records from 0xA959C8)
+     * each carry a fade factor at +0x3C that the colour loop below this hook
+     * multiplies in; zero makes the whole bar transparent, as when the game
+     * fades it out. Recomputed by the game every frame, so zeroed every
+     * frame. */
+    if (custom_active())
+        for (uint32_t i = 0; i < 6; i++)
+            gwritef(0x00A95A04u + i * 0x70u, 0.0f);
+}
+
+/* SCOREBUG_NATIVE_HIDE2: with a custom package on, the ESPN bug's root
+ * matrix (4x4 floats, translation at +0x30) is rewritten after the game
+ * places it. NFL2K5_HIDE_MODE: 1 off screen, 2 zero scale, 3 both. */
 extern "C" void nfl2k5_scorebug_native_place(uint32_t m)
 {
     static int mode = -1;
-    if (mode < 0) { const char *e = getenv("NFL2K5_HIDE_MODE"); mode = e ? atoi(e) : 3; }
+    if (mode < 0) { const char *e = getenv("NFL2K5_HIDE_MODE"); mode = e ? atoi(e) : 0; }
     if (!custom_active() || !m) return;
     if (mode & 2) { gwritef(m + 0x00, 0.0f); gwritef(m + 0x14, 0.0f); gwritef(m + 0x28, 0.0f); }
     if (mode & 1) { gwritef(m + 0x30, -20000.0f); gwritef(m + 0x34, -20000.0f); }
