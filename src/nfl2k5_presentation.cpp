@@ -219,9 +219,16 @@ static std::string upper(std::string s) { for (auto &c : s) c = (char)toupper((u
  *                   B3096C / B30B60 are empty during a match)
  *   A95A00 native scorebug shown (written by its update, 0xFC9C0)
  * ====================================================================== */
+/* Low memory (image, heap) or the contiguous window at 0x80000000 where
+ * the game's pools and scenes live. */
+static bool guest_va_ok(uint32_t va)
+{
+    return (va >= 0x10000u && va <= 0x0FFFFFF0u) || (va >= 0x80000000u && va <= 0x8FFFFFF0u);
+}
+
 static bool gread(uint32_t va, void *out, size_t n)
 {
-    if (va < 0x10000u || va > 0x0FFFFFF0u) return false;
+    if (!guest_va_ok(va)) return false;
     __try {
         memcpy(out, (const void *)((uintptr_t)va + g_xbox_mem_offset), n);
         return true;
@@ -1099,12 +1106,21 @@ static std::string s_test_event;
 
 static bool custom_active() { int p = s_sel_pkg; return p > 0 && p < (int)s_pkgs.size(); }
 
+static void gwrite32(uint32_t va, uint32_t v)
+{
+    if (!guest_va_ok(va)) return;
+    __try { *(volatile uint32_t *)((uintptr_t)va + g_xbox_mem_offset) = v; }
+    __except (EXCEPTION_EXECUTE_HANDLER) {}
+}
+
 static void gwritef(uint32_t va, float f)
 {
-    if (va < 0x10000u || va > 0x0FFFFFF0u) return;
+    if (!guest_va_ok(va)) return;
     __try { *(volatile float *)((uintptr_t)va + g_xbox_mem_offset) = f; }
     __except (EXCEPTION_EXECUTE_HANDLER) {}
 }
+
+static bool s_text_hidden;
 
 /* Called by the game right after its scorebug update (SCOREBUG_NATIVE_HOOK). */
 extern "C" void nfl2k5_scorebug_native_hook(void)
@@ -1116,9 +1132,58 @@ extern "C" void nfl2k5_scorebug_native_hook(void)
      * multiplies in; zero makes the whole bar transparent, as when the game
      * fades it out. Recomputed by the game every frame, so zeroed every
      * frame. */
-    if (custom_active())
-        for (uint32_t i = 0; i < 6; i++)
-            gwritef(0x00A95A04u + i * 0x70u, 0.0f);
+    /* Hide the ESPN bug with the game's own switch: the score_bug scene
+     * (pointer at 0xA95528) keeps its nodes in an array at +0x20, 0x80
+     * bytes each, count at +0x1C; bit 0 of a node's flags (+8) hides it
+     * (sub_000FC200 uses it to pick the bug's variants). Set on every node,
+     * every frame, while a custom package draws its own bug. */
+    if (!custom_active() && s_text_hidden) {
+        static const uint32_t k_text_colors2[] = {
+            0xA95894, 0xA95898, 0xA958BC, 0xA958C0, 0xA958E4, 0xA958E8, 0xA9590C, 0xA95910,
+            0xA95934, 0xA95938, 0xA95958, 0xA95990, 0xA959D8, 0xA95A48, 0xA95AB8, 0xA95B28,
+            0xA95B98, 0xA95C08 };
+        for (uint32_t a : k_text_colors2) {
+            uint32_t c = rd32(a);
+            if (!(c >> 24)) gwrite32(a, c | 0xFF000000u);
+        }
+        s_text_hidden = false;
+    }
+    if (custom_active()) {
+        uint32_t scene = rd32(0x00A95528u), n = scene ? rd32(scene + 0x1C) : 0, arr = scene ? rd32(scene + 0x20) : 0;
+        for (uint32_t i = 0; arr && i < n && i < 256; i++) {
+            uint32_t fl = rd32(arr + i * 0x80u + 8u);
+            if (!(fl & 1u)) gwrite32(arr + i * 0x80u + 8u, fl | 1u);
+        }
+        /* The bug's text fields are drawn separately from its meshes; their
+         * colours live in the game's text table (0xA95880..0xA95C08):
+         * clearing the alpha byte hides them. Originals kept for switching
+         * back to the ESPN presentation. */
+        static const uint32_t k_text_colors[] = {
+            0xA95894, 0xA95898, 0xA958BC, 0xA958C0, 0xA958E4, 0xA958E8, 0xA9590C, 0xA95910,
+            0xA95934, 0xA95938, 0xA95958, 0xA95990, 0xA959D8, 0xA95A48, 0xA95AB8, 0xA95B28,
+            0xA95B98, 0xA95C08 };
+        for (uint32_t a : k_text_colors) {
+            uint32_t c = rd32(a);
+            if (c >> 24) gwrite32(a, c & 0x00FFFFFFu);
+        }
+        s_text_hidden = true;
+        if (s_log) {
+            static DWORD last;
+            if (GetTickCount() - last > 5000) {
+                last = GetTickCount();
+                fprintf(stderr, "[PRES] score_bug scene %08X nodes %u at %08X:", scene, n, arr);
+                for (uint32_t i = 0; arr && i < n && i < 12; i++) {
+                    uint32_t nm = rd32(arr + i * 0x80u);
+                    uint16_t w[12] = { 0 };
+                    char a[13] = { 0 };
+                    gread(nm, w, sizeof w);
+                    for (int k = 0; k < 11 && w[k]; k++) a[k] = (char)(w[k] < 128 ? w[k] : '?');
+                    fprintf(stderr, " %s(%X)", a, rd32(arr + i * 0x80u + 8u));
+                }
+                fprintf(stderr, "\n");
+            }
+        }
+    }
 }
 
 /* SCOREBUG_NATIVE_HIDE2: with a custom package on, the ESPN bug's root
