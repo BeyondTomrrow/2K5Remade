@@ -2050,18 +2050,9 @@ recomp_func_t recomp_lookup_manual(uint32_t address)
     switch(address) {
     case 0x0004C3C0u:
         return nfl2k5_io_completion;
-    case 0x00044DF0u:
-        return nfl2k5_archive_completion_44df0;
-    case 0x00044BB0u:
-        return nfl2k5_archive_completion_44bb0;
-    case 0x00045A20u:
-        return nfl2k5_archive_completion_45a20;
-    case 0x000459D0u:
-        return nfl2k5_archive_completion_459d0;
-    case 0x00168C70u:
-        return nfl2k5_marker_completion_168c70;
-    case 0x00045600u:
-        return nfl2k5_archive_completion_45600;
+    /* 0x44DF0, 0x44BB0, 0x45A20, 0x459D0, 0x168C70, 0x45600: no overrides
+     * either (2026-09-26) -- the analysis translates them now, and the
+     * hand-written versions were how 0x45100 broke. */
     /* 0x00045100: no override any more (2026-09-25). The analysis now
      * translates it, and nfl2k5_archive_completion_45100 passed the release
      * callback (0x450D0) as the load callback for every record but the
