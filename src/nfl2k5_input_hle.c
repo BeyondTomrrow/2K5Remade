@@ -223,7 +223,11 @@ static void host_mouse_gamepad(XBOX_GAMEPAD *g)
 static void host_gamepad(XBOX_GAMEPAD *g)
 {
     XBOX_INPUT_STATE pad;
+    /* The video settings page (F1) has the controller while it is open. */
+    extern volatile long g_xbox_input_blocked;
     memset(g, 0, sizeof *g);
+    if (g_xbox_input_blocked)
+        return;
     /* NFL2K5_NO_HOST_PAD=1 ignores host controllers: scripted runs on a
      * machine with a pad attached got stray d-pad presses that walked the
      * menu cursor away from what the script selected (2026-09-25). */

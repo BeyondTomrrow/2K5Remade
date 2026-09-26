@@ -2729,10 +2729,10 @@ index 0000000..85d7275
 +}
 diff --git a/src/kernel/nv2a_gpu_d3d11.inc.c b/src/kernel/nv2a_gpu_d3d11.inc.c
 new file mode 100644
-index 0000000..f178db7
+index 0000000..0107c51
 --- /dev/null
 +++ b/src/kernel/nv2a_gpu_d3d11.inc.c
-@@ -0,0 +1,1442 @@
+@@ -0,0 +1,1520 @@
 +/* ── Hardware rendering (Direct3D 11) ─────────────────────────────────────
 + *
 + * Included into nv2a_pb_exec.c (it reads that file's state directly), after
@@ -2784,9 +2784,22 @@ index 0000000..f178db7
 +    ID3D11Texture2D *ds;
 +    ID3D11DepthStencilView *dsv;
 +    ID3D11Texture2D *staging;
++    uint32_t scale;                      /* render-target size = guest size x scale */
++    ID3D11Texture2D *down;               /* guest-sized target a scaled surface is read back through */
++    ID3D11RenderTargetView *down_rtv;
 +    int dirty;                           /* GPU holds newer pixels than guest RAM */
 +    int stale;                           /* guest RAM holds newer pixels than the GPU */
 +} GpuSurface;
++
++/* Internal resolution (video settings): every render target is this many
++ * times its guest size. Set by the presenter; surfaces follow on next use. */
++static uint32_t g_render_scale = 1;
++static uint32_t g_aniso = 1;
++
++/* nv2a_gpu_present.inc.c: scaled copies between a surface and guest-sized
++ * data, and rectangle fills. */
++static void gpu_blit(ID3D11ShaderResourceView *src, ID3D11RenderTargetView *dst, UINT dw, UINT dh, int point);
++static void gpu_fill(ID3D11RenderTargetView *dst, UINT x, UINT y, UINT w, UINT h, const float col[4], UINT mask);
 +
 +typedef struct {
 +    uint32_t addr, fmt, w, h, pitch, palette, hash;
@@ -2986,6 +2999,14 @@ index 0000000..f178db7
 +    uint32_t y;
 +    if (!s->tex || !s->dirty)
 +        return;
++    if (s->scale > 1 && s->down_rtv) {
++        ID3D11ShaderResourceView *srv = NULL;
++        if (SUCCEEDED(ID3D11Device_CreateShaderResourceView(s_gpu11.dev, (ID3D11Resource *)s->tex, NULL, &srv))) {
++            gpu_blit(srv, s->down_rtv, s->w, s->h, 0);
++            ID3D11ShaderResourceView_Release(srv);
++        }
++        ID3D11DeviceContext_CopyResource(s_gpu11.ctx, (ID3D11Resource *)s->staging, (ID3D11Resource *)s->down);
++    } else
 +    ID3D11DeviceContext_CopyResource(s_gpu11.ctx, (ID3D11Resource *)s->staging, (ID3D11Resource *)s->tex);
 +    if (FAILED(ID3D11DeviceContext_Map(s_gpu11.ctx, (ID3D11Resource *)s->staging, 0, D3D11_MAP_READ, 0, &m)))
 +        return;
@@ -3023,7 +3044,33 @@ index 0000000..f178db7
 +    if (s->dsv) ID3D11DepthStencilView_Release(s->dsv);
 +    if (s->ds) ID3D11Texture2D_Release(s->ds);
 +    if (s->staging) ID3D11Texture2D_Release(s->staging);
++    if (s->down_rtv) ID3D11RenderTargetView_Release(s->down_rtv);
++    if (s->down) ID3D11Texture2D_Release(s->down);
 +    memset(s, 0, sizeof *s);
++}
++
++/* Guest RAM -> render target. At scale 1 a straight copy; scaled, the
++ * guest-sized pixels go into the readback target and are drawn up. */
++static void gpu_surface_upload(GpuSurface *s)
++{
++    const uint8_t *mem = (const uint8_t *)xbox_GetMemoryOffset();
++    if (s->scale <= 1 || !s->down) {
++        ID3D11DeviceContext_UpdateSubresource(s_gpu11.ctx, (ID3D11Resource *)s->tex, 0, NULL,
++                                              mem + s->guest, s->pitch, 0);
++        return;
++    }
++    ID3D11DeviceContext_UpdateSubresource(s_gpu11.ctx, (ID3D11Resource *)s->down, 0, NULL, mem + s->guest, s->pitch, 0);
++    {
++        ID3D11ShaderResourceView *srv = NULL;
++        D3D11_TEXTURE2D_DESC td;
++        ID3D11Texture2D_GetDesc(s->down, &td);
++        if (!(td.BindFlags & D3D11_BIND_SHADER_RESOURCE))
++            return;
++        if (SUCCEEDED(ID3D11Device_CreateShaderResourceView(s_gpu11.dev, (ID3D11Resource *)s->down, NULL, &srv))) {
++            gpu_blit(srv, s->rtv, s->w * s->scale, s->h * s->scale, 1);
++            ID3D11ShaderResourceView_Release(srv);
++        }
++    }
 +}
 +
 +/* The render target for the current NV2A colour surface, created (and
@@ -3041,10 +3088,9 @@ index 0000000..f178db7
 +    for (i = 0; i < GPU_MAX_SURFACES; i++) {
 +        GpuSurface *s = &s_gpu11.surf[i];
 +        if (s->tex && s->guest == guest) {
-+            if (s->w == w && s->h == h && s->pitch == s_gpu.pitch) {
++            if (s->w == w && s->h == h && s->pitch == s_gpu.pitch && s->scale == g_render_scale) {
 +                if (s->stale) {             /* the CPU drew into it since */
-+                    ID3D11DeviceContext_UpdateSubresource(s_gpu11.ctx, (ID3D11Resource *)s->tex, 0, NULL,
-+                        (const uint8_t *)xbox_GetMemoryOffset() + s->guest, s->pitch, 0);
++                    gpu_surface_upload(s);
 +                    s->stale = 0;
 +                }
 +                return i;
@@ -3068,22 +3114,32 @@ index 0000000..f178db7
 +        uint8_t *mem = (uint8_t *)xbox_GetMemoryOffset();
 +        D3D11_SUBRESOURCE_DATA sd;
 +        memset(&td, 0, sizeof td);
-+        td.Width = w; td.Height = h; td.MipLevels = td.ArraySize = 1;
++        uint32_t sc = g_render_scale;
++        td.Width = w * sc; td.Height = h * sc; td.MipLevels = td.ArraySize = 1;
 +        td.Format = DXGI_FORMAT_B8G8R8A8_UNORM; td.SampleDesc.Count = 1;
 +        td.Usage = D3D11_USAGE_DEFAULT;
 +        td.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
 +        sd.pSysMem = mem + guest; sd.SysMemPitch = s_gpu.pitch; sd.SysMemSlicePitch = 0;
-+        if (FAILED(ID3D11Device_CreateTexture2D(s_gpu11.dev, &td, &sd, &s->tex)))
++        if (FAILED(ID3D11Device_CreateTexture2D(s_gpu11.dev, &td, sc == 1 ? &sd : NULL, &s->tex)))
 +            return -1;
 +        ID3D11Device_CreateRenderTargetView(s_gpu11.dev, (ID3D11Resource *)s->tex, NULL, &s->rtv);
++        s->guest = guest; s->w = w; s->h = h; s->pitch = s_gpu.pitch; s->scale = sc;
++        td.Width = w; td.Height = h;
++        if (sc > 1) {                          /* guest-sized: readback goes through it */
++            ID3D11Device_CreateTexture2D(s_gpu11.dev, &td, NULL, &s->down);   /* td has RT|SRV */
++            if (s->down)
++                ID3D11Device_CreateRenderTargetView(s_gpu11.dev, (ID3D11Resource *)s->down, NULL, &s->down_rtv);
++            gpu_surface_upload(s);
++        }
 +        td.Usage = D3D11_USAGE_STAGING; td.BindFlags = 0; td.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
 +        ID3D11Device_CreateTexture2D(s_gpu11.dev, &td, NULL, &s->staging);
++        td.Width = w * sc; td.Height = h * sc;
 +        td.Usage = D3D11_USAGE_DEFAULT; td.CPUAccessFlags = 0;
 +        td.Format = DXGI_FORMAT_D32_FLOAT_S8X24_UINT; td.BindFlags = D3D11_BIND_DEPTH_STENCIL;
 +        ID3D11Device_CreateTexture2D(s_gpu11.dev, &td, NULL, &s->ds);
 +        ID3D11Device_CreateDepthStencilView(s_gpu11.dev, (ID3D11Resource *)s->ds, NULL, &s->dsv);
 +        ID3D11DeviceContext_ClearDepthStencilView(s_gpu11.ctx, s->dsv, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
-+        s->guest = guest; s->w = w; s->h = h; s->pitch = s_gpu.pitch; s->dirty = 0;
++        s->dirty = 0;
 +        return free_i;
 +    }
 +}
@@ -3413,7 +3469,7 @@ index 0000000..f178db7
 +    D3D11_TEXTURE_ADDRESS_MODE am[2];
 +    uint32_t modes[2];
 +    modes[0] = t->addr_u; modes[1] = t->addr_v;
-+    key = (mag == 1 ? 1u : 0u) | (t->addr_u << 4) | (t->addr_v << 8);
++    key = (mag == 1 ? 1u : 0u) | (t->addr_u << 4) | (t->addr_v << 8) | (g_aniso << 16);
 +    for (i = 0; i < 64; i++) {
 +        if (cache[i] && keys[i] == key)
 +            return cache[i];
@@ -3429,6 +3485,10 @@ index 0000000..f178db7
 +              : D3D11_TEXTURE_ADDRESS_CLAMP;
 +    memset(&sd, 0, sizeof sd);
 +    sd.Filter = mag == 1 ? D3D11_FILTER_MIN_MAG_MIP_POINT : D3D11_FILTER_MIN_MAG_LINEAR_MIP_POINT;
++    if (mag != 1 && g_aniso > 1) {
++        sd.Filter = D3D11_FILTER_ANISOTROPIC;
++        sd.MaxAnisotropy = g_aniso;
++    }
 +    sd.AddressU = am[0]; sd.AddressV = am[1]; sd.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
 +    sd.MaxLOD = D3D11_FLOAT32_MAX;
 +    if (cache[i]) ID3D11SamplerState_Release(cache[i]);
@@ -3963,12 +4023,13 @@ index 0000000..f178db7
 +    /* Pipeline. */
 +    {
 +        UINT stride = sizeof(GpuVertex), off = 0;
-+        D3D11_VIEWPORT vp = { 0, 0, (float)rw, (float)rh, 0.0f, 1.0f };
++        D3D11_VIEWPORT vp = { 0, 0, (float)(rw * surf->scale), (float)(rh * surf->scale), 0.0f, 1.0f };
 +        D3D11_RECT sc;
 +        float bf[4];
 +        comb_unpack(s_gpu.blend_color, bf);
-+        sc.left = (LONG)s_gpu.clip_x; sc.top = (LONG)s_gpu.clip_y;
-+        sc.right = (LONG)(s_gpu.clip_x + s_gpu.clip_w); sc.bottom = (LONG)(s_gpu.clip_y + s_gpu.clip_h);
++        sc.left = (LONG)(s_gpu.clip_x * surf->scale); sc.top = (LONG)(s_gpu.clip_y * surf->scale);
++        sc.right = (LONG)((s_gpu.clip_x + s_gpu.clip_w) * surf->scale);
++        sc.bottom = (LONG)((s_gpu.clip_y + s_gpu.clip_h) * surf->scale);
 +        ID3D11DeviceContext_IASetPrimitiveTopology(s_gpu11.ctx, D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 +        if (vpvs && !gpu_vp_bind(vp_nverts, nv, rw, rh, vpvs))
 +            vpvs = NULL, nv = 0;
@@ -4083,12 +4144,18 @@ index 0000000..f178db7
 +        if ((param & 0xF0u) == 0xF0u && x0 == 0 && y0 == 0 && x1 >= s->w && y1 >= s->h) {
 +            ID3D11DeviceContext_ClearRenderTargetView(s_gpu11.ctx, s->rtv, col);
 +        } else {
-+            /* Partial rectangle or channel subset (ClearView needs D3D11.1):
-+             * clear the pixels in guest RAM and send them back up. */
-+            gpu_readback(s);
-+            clear_surface(param);
-+            ID3D11DeviceContext_UpdateSubresource(s_gpu11.ctx, (ID3D11Resource *)s->tex, 0, NULL,
-+                (const uint8_t *)xbox_GetMemoryOffset() + s->guest, s->pitch, 0);
++            /* Partial rectangle or channel subset: a solid quad with the
++             * channel write mask (it went through guest RAM before, a
++             * readback and re-upload per clear, and lost resolution when
++             * scaled). Param bits 4-7 are R G B A. */
++            UINT mask = ((param & 0x10u) ? D3D11_COLOR_WRITE_ENABLE_RED : 0)
++                      | ((param & 0x20u) ? D3D11_COLOR_WRITE_ENABLE_GREEN : 0)
++                      | ((param & 0x40u) ? D3D11_COLOR_WRITE_ENABLE_BLUE : 0)
++                      | ((param & 0x80u) ? D3D11_COLOR_WRITE_ENABLE_ALPHA : 0);
++            if (x1 > s->w) x1 = s->w;
++            if (y1 > s->h) y1 = s->h;
++            if (x1 > x0 && y1 > y0)
++                gpu_fill(s->rtv, x0 * s->scale, y0 * s->scale, (x1 - x0) * s->scale, (y1 - y0) * s->scale, col, mask);
 +        }
 +    }
 +    if (param & 3u) {
@@ -4114,11 +4181,22 @@ index 0000000..f178db7
 +}
 +
 +/* A frame is finished: bring the surface back to guest RAM for the window. */
++#include "nv2a_gpu_present.inc.c"
++
 +static void gpu_flip_unlocked(void)
 +{
 +    int i;
 +    if (!s_gpu11.ok)
 +        return;
++    /* Present straight from the render target (nv2a_gpu_present.inc.c).
++     * Then nothing needs the frame in guest RAM unless a screenshot or dump
++     * reads it there; render-to-texture and the software paths fetch what
++     * they read on demand (gpu_flush_range, gpu_cpu_access). */
++    pr_hook_keys();
++    if (pr_present(dma_resolve(s_gpu.color_offset))
++            && !env_cached("RECOMP_SHOT_PREFIX") && !env_cached("RECOMP_FB_DUMP")) {
++        /* presented */
++    } else
 +    for (i = 0; i < GPU_MAX_SURFACES; i++)
 +        if (s_gpu11.surf[i].tex && s_gpu11.surf[i].dirty)
 +            gpu_readback(&s_gpu11.surf[i]);
@@ -4481,6 +4559,796 @@ index 0000000..09057ec
 +    "    }\n"
 +    "    return o;\n"
 +    "}\n";
+diff --git a/src/kernel/nv2a_gpu_present.inc.c b/src/kernel/nv2a_gpu_present.inc.c
+new file mode 100644
+index 0000000..d9b4381
+--- /dev/null
++++ b/src/kernel/nv2a_gpu_present.inc.c
+@@ -0,0 +1,784 @@
++/* ── Presentation and video settings (2026-09-26) ────────────────────────
++ *
++ * Included into nv2a_gpu_d3d11.inc.c.
++ *
++ * Until now every flip read each dirty render target back into guest RAM
++ * (a GPU->CPU stall per frame) so the framebuffer window's thread could
++ * convert it and StretchDIBits it with GDI. Here the renderer presents
++ * directly: a flip-model swap chain on that window, and one draw that puts
++ * the displayed surface into the back buffer -- scaled, filtered and placed
++ * by the video settings. Guest RAM still gets the pixels when something
++ * reads them (render-to-texture, the software paths, screenshots).
++ *
++ * The same pass draws the settings page (F1, or Back+Start on a pad) as an
++ * overlay: a GDI-drawn bitmap composited over the picture. Settings live in
++ * nfl2k5_video.ini next to the executable's working directory.
++ */
++
++#include <dxgi1_2.h>
++#include "../input/xinput_xbox.h"
++
++/* src/video/fb_present.c: the window this presents into. */
++extern void *xbox_FramebufferWindowHwnd(void);
++extern void xbox_FramebufferSetGpuPresent(int on);
++extern void xbox_FramebufferSetKeyHook(void (*hook)(unsigned vk));
++extern void xbox_FramebufferApplyMode(int mode, int w, int h);
++
++/* ---- settings ---------------------------------------------------------- */
++
++enum { VM_WINDOWED, VM_BORDERLESS, VM_FULLSCREEN };
++enum { AR_ORIGINAL, AR_STRETCH, AR_16_9, AR_21_9, AR_32_9, AR_ZOOM };
++enum { SF_BILINEAR, SF_SHARP, SF_NEAREST };
++
++typedef struct {
++    int mode;               /* VM_* */
++    int res_w, res_h;       /* windowed client size / fullscreen mode */
++    int aspect;             /* AR_* */
++    int scale;              /* internal resolution multiplier, 1..9 */
++    int filter;             /* SF_* */
++    int vsync;
++    int brightness;         /* percent */
++    int gamma;              /* x100 */
++    int crop;               /* pixels cropped from each edge of the surface */
++    int show_fps;
++    int aniso;              /* 1 (off), 2, 4, 8, 16 */
++} VideoSettings;
++
++static VideoSettings s_vs = { VM_WINDOWED, 1440, 1080, AR_ORIGINAL, 2, SF_SHARP, 1, 100, 100, 0, 0, 1 };
++static volatile LONG s_vs_dirty = 1;           /* window/swap chain need (re)applying */
++
++static const char *k_vs_file = "nfl2k5_video.ini";
++
++static void vs_load(void)
++{
++    FILE *f = fopen(k_vs_file, "r");
++    char line[256];
++    if (!f)
++        return;
++    while (fgets(line, sizeof line, f)) {
++        char key[64];
++        int v, v2;
++        if (sscanf(line, " resolution = %dx%d", &v, &v2) == 2) { s_vs.res_w = v; s_vs.res_h = v2; continue; }
++        if (sscanf(line, " %63[a-z_] = %d", key, &v) != 2)
++            continue;
++        if (!strcmp(key, "mode")) s_vs.mode = v;
++        else if (!strcmp(key, "aspect")) s_vs.aspect = v;
++        else if (!strcmp(key, "scale")) s_vs.scale = v;
++        else if (!strcmp(key, "filter")) s_vs.filter = v;
++        else if (!strcmp(key, "vsync")) s_vs.vsync = v;
++        else if (!strcmp(key, "brightness")) s_vs.brightness = v;
++        else if (!strcmp(key, "gamma")) s_vs.gamma = v;
++        else if (!strcmp(key, "crop")) s_vs.crop = v;
++        else if (!strcmp(key, "show_fps")) s_vs.show_fps = v;
++        else if (!strcmp(key, "aniso")) s_vs.aniso = v;
++    }
++    fclose(f);
++    if (s_vs.scale < 1) s_vs.scale = 1;
++    if (s_vs.scale > 9) s_vs.scale = 9;
++    if (s_vs.res_w < 320 || s_vs.res_h < 240) { s_vs.res_w = 1440; s_vs.res_h = 1080; }
++}
++
++static void vs_save(void)
++{
++    FILE *f = fopen(k_vs_file, "w");
++    if (!f)
++        return;
++    fprintf(f, "; NFL 2K5 video settings (F1 in game edits these)\n"
++               "; mode: 0 windowed, 1 borderless fullscreen, 2 exclusive fullscreen\n"
++               "mode = %d\nresolution = %dx%d\n"
++               "; aspect: 0 original 4:3, 1 stretch, 2 16:9, 3 21:9, 4 32:9, 5 zoom to fill\n"
++               "aspect = %d\n"
++               "; scale: internal resolution = 720x480 times this (1..9; 9 = 6480x4320)\n"
++               "scale = %d\n"
++               "; filter: 0 bilinear, 1 sharp bilinear, 2 nearest\n"
++               "filter = %d\nvsync = %d\nbrightness = %d\ngamma = %d\ncrop = %d\nshow_fps = %d\naniso = %d\n",
++            s_vs.mode, s_vs.res_w, s_vs.res_h, s_vs.aspect, s_vs.scale, s_vs.filter, s_vs.vsync,
++            s_vs.brightness, s_vs.gamma, s_vs.crop, s_vs.show_fps, s_vs.aniso);
++    fclose(f);
++}
++
++/* ---- resolution list --------------------------------------------------- */
++
++static int s_res[64][2], s_nres;
++
++static void res_add(int w, int h)
++{
++    int i;
++    for (i = 0; i < s_nres; i++)
++        if (s_res[i][0] == w && s_res[i][1] == h) return;
++    if (s_nres < 64) { s_res[s_nres][0] = w; s_res[s_nres][1] = h; s_nres++; }
++}
++
++static void res_build(void)
++{
++    static const int presets[][2] = {
++        { 960, 720 }, { 1280, 720 }, { 1440, 1080 }, { 1600, 900 }, { 1920, 1080 }, { 2560, 1080 },
++        { 2560, 1440 }, { 3440, 1440 }, { 3840, 1600 }, { 3840, 2160 }, { 5120, 2160 }, { 5120, 2880 },
++        { 7680, 4320 }
++    };
++    DEVMODEA dm;
++    DWORD i;
++    int k, j;
++    s_nres = 0;
++    for (k = 0; k < (int)(sizeof presets / sizeof presets[0]); k++)
++        res_add(presets[k][0], presets[k][1]);
++    memset(&dm, 0, sizeof dm);
++    dm.dmSize = sizeof dm;
++    for (i = 0; EnumDisplaySettingsA(NULL, i, &dm); i++)
++        if (dm.dmPelsWidth >= 800 && dm.dmBitsPerPel == 32)
++            res_add((int)dm.dmPelsWidth, (int)dm.dmPelsHeight);
++    for (k = 1; k < s_nres; k++)                  /* by pixel count */
++        for (j = k; j > 0 && s_res[j][0] * s_res[j][1] < s_res[j - 1][0] * s_res[j - 1][1]; j--) {
++            int t0 = s_res[j][0], t1 = s_res[j][1];
++            s_res[j][0] = s_res[j - 1][0]; s_res[j][1] = s_res[j - 1][1];
++            s_res[j - 1][0] = t0; s_res[j - 1][1] = t1;
++        }
++}
++
++/* ---- presenter state --------------------------------------------------- */
++
++static struct {
++    int tried, ok;
++    HWND hwnd;
++    IDXGISwapChain1 *sc;
++    ID3D11RenderTargetView *bb_rtv;
++    UINT bb_w, bb_h;
++    ID3D11VertexShader *vs;
++    ID3D11PixelShader *ps, *ps_ovl, *ps_fill;
++    ID3D11BlendState *mask_blend[16];
++    ID3D11Buffer *cb;
++    ID3D11SamplerState *lin, *pt;
++    ID3D11BlendState *blend;
++    ID3D11RasterizerState *rs;
++    ID3D11DepthStencilState *nodepth;
++    ID3D11Texture2D *ovl;
++    ID3D11ShaderResourceView *ovl_srv;
++    int ovl_w, ovl_h, ovl_valid;
++    int fullscreen_state;
++    /* fps */
++    LARGE_INTEGER t0, freq;
++    int frames, fps;
++} s_pr;
++
++static volatile LONG s_menu_open;
++volatile LONG g_xbox_input_blocked;      /* nfl2k5_input_hle.c: game input off while the menu is up */
++static int s_menu_sel;
++
++static const char k_present_hlsl[] =
++    "cbuffer P : register(b0) { float4 src; float4 prm; float4 sz; };\n"
++    "Texture2D Src : register(t0);\n"
++    "SamplerState Lin : register(s0); SamplerState Pt : register(s1);\n"
++    "struct V { float4 pos : SV_Position; float2 uv : TEXCOORD0; };\n"
++    "V vs_main(uint id : SV_VertexID) {\n"
++    "  V o; float2 p = float2((id << 1) & 2, id & 2);\n"
++    "  o.pos = float4(p * float2(2, -2) + float2(-1, 1), 0, 1); o.uv = p; return o; }\n"
++    "float4 ps_main(V i) : SV_Target {\n"
++    "  float2 uv = src.xy + i.uv * src.zw; float4 c;\n"
++    "  if (prm.z == 1.0) c = Src.Sample(Pt, uv);\n"
++    "  else if (prm.z == 2.0) {\n"
++    "    float2 tex = uv * sz.xy, fl = floor(tex), s = frac(tex);\n"
++    "    float2 sc = max(floor(sz.zw / (sz.xy * src.zw)), 1.0);\n"
++    "    float2 rr = 0.5 - 0.5 / sc, cd = s - 0.5;\n"
++    "    float2 f = (cd - clamp(cd, -rr, rr)) * sc + 0.5;\n"
++    "    c = Src.Sample(Lin, (fl + f) / sz.xy);\n"
++    "  } else c = Src.Sample(Lin, uv);\n"
++    "  c.rgb = pow(saturate(c.rgb * prm.x), prm.y); c.a = 1.0; return c; }\n"
++    "float4 ps_ovl(V i) : SV_Target { return Src.Sample(Lin, i.uv); }\n"
++    "float4 ps_fill(V i) : SV_Target { return src; }\n";
++
++typedef struct { float src[4], prm[4], sz[4]; } PresentConsts;
++
++static int pr_init(void)
++{
++    ID3DBlob *b = NULL, *err = NULL;
++    D3D11_BUFFER_DESC bd;
++    D3D11_SAMPLER_DESC sd;
++    D3D11_BLEND_DESC bld;
++    D3D11_RASTERIZER_DESC rd;
++    D3D11_DEPTH_STENCIL_DESC dd;
++    if (s_pr.tried)
++        return s_pr.ok;
++    s_pr.tried = 1;
++    vs_load();
++    res_build();
++#define PR_COMPILE(entry, target, out, create) \
++    if (FAILED(D3DCompile(k_present_hlsl, sizeof k_present_hlsl - 1, "present", NULL, NULL, entry, target, 0, 0, &b, &err))) { \
++        fprintf(stderr, "  [PRESENT] %s: %s\n", entry, err ? (const char *)ID3D10Blob_GetBufferPointer(err) : "?"); \
++        return 0; } \
++    create(s_gpu11.dev, ID3D10Blob_GetBufferPointer(b), ID3D10Blob_GetBufferSize(b), NULL, out); \
++    ID3D10Blob_Release(b);
++    PR_COMPILE("vs_main", "vs_4_0", &s_pr.vs, ID3D11Device_CreateVertexShader)
++    PR_COMPILE("ps_main", "ps_4_0", &s_pr.ps, ID3D11Device_CreatePixelShader)
++    PR_COMPILE("ps_ovl", "ps_4_0", &s_pr.ps_ovl, ID3D11Device_CreatePixelShader)
++    PR_COMPILE("ps_fill", "ps_4_0", &s_pr.ps_fill, ID3D11Device_CreatePixelShader)
++#undef PR_COMPILE
++    memset(&bd, 0, sizeof bd);
++    bd.ByteWidth = sizeof(PresentConsts); bd.Usage = D3D11_USAGE_DYNAMIC;
++    bd.BindFlags = D3D11_BIND_CONSTANT_BUFFER; bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
++    ID3D11Device_CreateBuffer(s_gpu11.dev, &bd, NULL, &s_pr.cb);
++    memset(&sd, 0, sizeof sd);
++    sd.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
++    sd.AddressU = sd.AddressV = sd.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
++    sd.MaxLOD = D3D11_FLOAT32_MAX;
++    ID3D11Device_CreateSamplerState(s_gpu11.dev, &sd, &s_pr.lin);
++    sd.Filter = D3D11_FILTER_MIN_MAG_MIP_POINT;
++    ID3D11Device_CreateSamplerState(s_gpu11.dev, &sd, &s_pr.pt);
++    memset(&bld, 0, sizeof bld);
++    bld.RenderTarget[0].BlendEnable = TRUE;
++    bld.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC_ALPHA; bld.RenderTarget[0].DestBlend = D3D11_BLEND_INV_SRC_ALPHA;
++    bld.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
++    bld.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE; bld.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ZERO;
++    bld.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
++    bld.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
++    ID3D11Device_CreateBlendState(s_gpu11.dev, &bld, &s_pr.blend);
++    memset(&rd, 0, sizeof rd);
++    rd.FillMode = D3D11_FILL_SOLID; rd.CullMode = D3D11_CULL_NONE; rd.DepthClipEnable = TRUE;
++    ID3D11Device_CreateRasterizerState(s_gpu11.dev, &rd, &s_pr.rs);
++    memset(&dd, 0, sizeof dd);
++    ID3D11Device_CreateDepthStencilState(s_gpu11.dev, &dd, &s_pr.nodepth);
++    QueryPerformanceFrequency(&s_pr.freq);
++    QueryPerformanceCounter(&s_pr.t0);
++    s_pr.ok = s_pr.vs && s_pr.ps && s_pr.ps_ovl && s_pr.ps_fill && s_pr.cb && s_pr.lin && s_pr.pt;
++    g_render_scale = (uint32_t)s_vs.scale;
++    g_aniso = (uint32_t)s_vs.aniso;
++    return s_pr.ok;
++}
++
++/* Common state for the helper draws below. */
++static void pr_helper_state(ID3D11RenderTargetView *dst, UINT x, UINT y, UINT w, UINT h, const PresentConsts *pc)
++{
++    D3D11_MAPPED_SUBRESOURCE m;
++    D3D11_VIEWPORT vp = { (float)x, (float)y, (float)w, (float)h, 0.0f, 1.0f };
++    D3D11_RECT all = { 0, 0, 16384, 16384 };
++    if (SUCCEEDED(ID3D11DeviceContext_Map(s_gpu11.ctx, (ID3D11Resource *)s_pr.cb, 0, D3D11_MAP_WRITE_DISCARD, 0, &m))) {
++        memcpy(m.pData, pc, sizeof *pc);
++        ID3D11DeviceContext_Unmap(s_gpu11.ctx, (ID3D11Resource *)s_pr.cb, 0);
++    }
++    ID3D11DeviceContext_OMSetRenderTargets(s_gpu11.ctx, 1, &dst, NULL);
++    ID3D11DeviceContext_RSSetViewports(s_gpu11.ctx, 1, &vp);
++    ID3D11DeviceContext_RSSetScissorRects(s_gpu11.ctx, 1, &all);
++    ID3D11DeviceContext_RSSetState(s_gpu11.ctx, s_pr.rs);
++    ID3D11DeviceContext_OMSetDepthStencilState(s_gpu11.ctx, s_pr.nodepth, 0);
++    ID3D11DeviceContext_IASetInputLayout(s_gpu11.ctx, NULL);
++    ID3D11DeviceContext_IASetPrimitiveTopology(s_gpu11.ctx, D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
++    ID3D11DeviceContext_VSSetShader(s_gpu11.ctx, s_pr.vs, NULL, 0);
++    ID3D11DeviceContext_PSSetConstantBuffers(s_gpu11.ctx, 0, 1, &s_pr.cb);
++}
++
++/* src -> dst (dw x dh), filtered, no colour adjustment. */
++static void gpu_blit(ID3D11ShaderResourceView *src, ID3D11RenderTargetView *dst, UINT dw, UINT dh, int point)
++{
++    PresentConsts pc;
++    ID3D11SamplerState *smp[2];
++    ID3D11ShaderResourceView *none = NULL;
++    if (!pr_init())
++        return;
++    memset(&pc, 0, sizeof pc);
++    pc.src[2] = pc.src[3] = 1.0f;
++    pc.prm[0] = 1.0f; pc.prm[1] = 1.0f; pc.prm[2] = point ? 1.0f : 0.0f;
++    pc.sz[0] = pc.sz[2] = (float)dw; pc.sz[1] = pc.sz[3] = (float)dh;
++    pr_helper_state(dst, 0, 0, dw, dh, &pc);
++    ID3D11DeviceContext_OMSetBlendState(s_gpu11.ctx, NULL, NULL, 0xFFFFFFFFu);
++    ID3D11DeviceContext_PSSetShader(s_gpu11.ctx, s_pr.ps, NULL, 0);
++    ID3D11DeviceContext_PSSetShaderResources(s_gpu11.ctx, 0, 1, &src);
++    smp[0] = s_pr.lin; smp[1] = s_pr.pt;
++    ID3D11DeviceContext_PSSetSamplers(s_gpu11.ctx, 0, 2, smp);
++    ID3D11DeviceContext_Draw(s_gpu11.ctx, 3, 0);
++    ID3D11DeviceContext_PSSetShaderResources(s_gpu11.ctx, 0, 1, &none);
++}
++
++/* A solid rectangle, only the channels in `mask` written. */
++static void gpu_fill(ID3D11RenderTargetView *dst, UINT x, UINT y, UINT w, UINT h, const float col[4], UINT mask)
++{
++    PresentConsts pc;
++    if (!pr_init() || !mask)
++        return;
++    mask &= 15u;
++    if (!s_pr.mask_blend[mask]) {
++        D3D11_BLEND_DESC bd;
++        memset(&bd, 0, sizeof bd);
++        bd.RenderTarget[0].BlendEnable = FALSE;
++        bd.RenderTarget[0].RenderTargetWriteMask = (UINT8)mask;
++        ID3D11Device_CreateBlendState(s_gpu11.dev, &bd, &s_pr.mask_blend[mask]);
++    }
++    memset(&pc, 0, sizeof pc);
++    memcpy(pc.src, col, sizeof pc.src);
++    pr_helper_state(dst, x, y, w, h, &pc);
++    ID3D11DeviceContext_OMSetBlendState(s_gpu11.ctx, s_pr.mask_blend[mask], NULL, 0xFFFFFFFFu);
++    ID3D11DeviceContext_PSSetShader(s_gpu11.ctx, s_pr.ps_fill, NULL, 0);
++    ID3D11DeviceContext_Draw(s_gpu11.ctx, 3, 0);
++}
++
++static void pr_release_bb(void)
++{
++    if (s_pr.bb_rtv) { ID3D11RenderTargetView_Release(s_pr.bb_rtv); s_pr.bb_rtv = NULL; }
++}
++
++/* The swap chain on the framebuffer window, (re)sized to its client area. */
++static int pr_swapchain(void)
++{
++    HWND hw = (HWND)xbox_FramebufferWindowHwnd();
++    RECT cr;
++    UINT w, h;
++    if (!hw)
++        return 0;
++    if (!s_pr.sc || s_pr.hwnd != hw) {
++        IDXGIDevice *dxd = NULL;
++        IDXGIAdapter *ad = NULL;
++        IDXGIFactory2 *fac = NULL;
++        DXGI_SWAP_CHAIN_DESC1 d;
++        if (s_pr.sc) { pr_release_bb(); IDXGISwapChain1_Release(s_pr.sc); s_pr.sc = NULL; }
++        if (FAILED(ID3D11Device_QueryInterface(s_gpu11.dev, &IID_IDXGIDevice, (void **)&dxd)))
++            return 0;
++        IDXGIDevice_GetAdapter(dxd, &ad);
++        if (ad) IDXGIAdapter_GetParent(ad, &IID_IDXGIFactory2, (void **)&fac);
++        memset(&d, 0, sizeof d);
++        d.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
++        d.SampleDesc.Count = 1;
++        d.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
++        d.BufferCount = 3;
++        d.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
++        d.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
++        if (fac) {
++            HRESULT hr = IDXGIFactory2_CreateSwapChainForHwnd(fac, (IUnknown *)s_gpu11.dev, hw, &d, NULL, NULL, &s_pr.sc);
++            if (FAILED(hr))
++                fprintf(stderr, "  [PRESENT] swap chain failed 0x%08lX\n", (unsigned long)hr);
++            else
++                IDXGIFactory2_MakeWindowAssociation(fac, hw, DXGI_MWA_NO_ALT_ENTER);
++            IDXGIFactory2_Release(fac);
++        }
++        if (ad) IDXGIAdapter_Release(ad);
++        IDXGIDevice_Release(dxd);
++        if (!s_pr.sc)
++            return 0;
++        s_pr.hwnd = hw;
++        s_pr.bb_w = s_pr.bb_h = 0;
++        xbox_FramebufferSetGpuPresent(1);
++        fprintf(stderr, "  [PRESENT] presenting through a D3D11 swap chain\n");
++    }
++    GetClientRect(hw, &cr);
++    w = (UINT)(cr.right - cr.left); h = (UINT)(cr.bottom - cr.top);
++    if (!w || !h)
++        return 0;
++    if (w != s_pr.bb_w || h != s_pr.bb_h || !s_pr.bb_rtv) {
++        ID3D11Texture2D *bb = NULL;
++        pr_release_bb();
++        ID3D11DeviceContext_OMSetRenderTargets(s_gpu11.ctx, 0, NULL, NULL);
++        ID3D11DeviceContext_Flush(s_gpu11.ctx);
++        if (FAILED(IDXGISwapChain1_ResizeBuffers(s_pr.sc, 0, w, h, DXGI_FORMAT_UNKNOWN, DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH)))
++            return 0;
++        if (FAILED(IDXGISwapChain1_GetBuffer(s_pr.sc, 0, &IID_ID3D11Texture2D, (void **)&bb)))
++            return 0;
++        ID3D11Device_CreateRenderTargetView(s_gpu11.dev, (ID3D11Resource *)bb, NULL, &s_pr.bb_rtv);
++        ID3D11Texture2D_Release(bb);
++        s_pr.bb_w = w; s_pr.bb_h = h;
++        s_pr.ovl_valid = 0;
++    }
++    return s_pr.bb_rtv != NULL;
++}
++
++/* Window mode and swap-chain fullscreen state from the settings. */
++static void pr_apply_mode(void)
++{
++    int want_fs = s_vs.mode == VM_FULLSCREEN;
++    if (s_pr.sc && s_pr.fullscreen_state && !want_fs) {
++        IDXGISwapChain1_SetFullscreenState(s_pr.sc, FALSE, NULL);
++        s_pr.fullscreen_state = 0;
++    }
++    xbox_FramebufferApplyMode(s_vs.mode, s_vs.res_w, s_vs.res_h);
++    if (s_pr.sc && want_fs) {
++        DXGI_MODE_DESC md;
++        memset(&md, 0, sizeof md);
++        md.Width = (UINT)s_vs.res_w; md.Height = (UINT)s_vs.res_h;
++        md.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
++        IDXGISwapChain1_ResizeTarget(s_pr.sc, &md);
++        if (SUCCEEDED(IDXGISwapChain1_SetFullscreenState(s_pr.sc, TRUE, NULL)))
++            s_pr.fullscreen_state = 1;
++    }
++}
++
++/* ---- the settings page -------------------------------------------------- */
++
++enum { MI_MODE, MI_RES, MI_ASPECT, MI_SCALE, MI_FILTER, MI_VSYNC, MI_BRIGHT, MI_GAMMA, MI_CROP,
++       MI_ANISO, MI_FPS, MI_RESET, MI_CLOSE, MI_COUNT };
++
++static void menu_label(int item, char *name, char *val, size_t n)
++{
++    static const char *modes[] = { "Windowed", "Borderless fullscreen", "Exclusive fullscreen" };
++    static const char *aspects[] = { "Original (4:3)", "Stretch to screen", "16:9", "21:9 ultrawide",
++                                     "32:9 super ultrawide", "Zoom to fill (crop)" };
++    static const char *filters[] = { "Bilinear", "Sharp bilinear", "Nearest (pixelated)" };
++    val[0] = 0;
++    switch (item) {
++    case MI_MODE:   strcpy(name, "Display mode"); snprintf(val, n, "%s", modes[s_vs.mode % 3]); break;
++    case MI_RES:    strcpy(name, s_vs.mode == VM_BORDERLESS ? "Resolution (desktop)" : "Resolution");
++                    snprintf(val, n, "%d x %d", s_vs.res_w, s_vs.res_h); break;
++    case MI_ASPECT: strcpy(name, "Aspect ratio"); snprintf(val, n, "%s", aspects[s_vs.aspect % 6]); break;
++    case MI_SCALE:  strcpy(name, "Internal resolution");
++                    snprintf(val, n, "%dx  (%d x %d)", s_vs.scale, 720 * s_vs.scale, 480 * s_vs.scale); break;
++    case MI_FILTER: strcpy(name, "Upscaling filter"); snprintf(val, n, "%s", filters[s_vs.filter % 3]); break;
++    case MI_VSYNC:  strcpy(name, "VSync"); snprintf(val, n, "%s", s_vs.vsync ? "On" : "Off"); break;
++    case MI_BRIGHT: strcpy(name, "Brightness"); snprintf(val, n, "%d%%", s_vs.brightness); break;
++    case MI_GAMMA:  strcpy(name, "Gamma"); snprintf(val, n, "%.2f", s_vs.gamma / 100.0); break;
++    case MI_CROP:   strcpy(name, "Crop edges"); snprintf(val, n, s_vs.crop ? "%d px" : "Off", s_vs.crop); break;
++    case MI_ANISO:  strcpy(name, "Anisotropic filtering");
++                    snprintf(val, n, s_vs.aniso > 1 ? "%dx" : "Off", s_vs.aniso); break;
++    case MI_FPS:    strcpy(name, "Show FPS"); snprintf(val, n, "%s", s_vs.show_fps ? "On" : "Off"); break;
++    case MI_RESET:  strcpy(name, "Reset to defaults"); break;
++    case MI_CLOSE:  strcpy(name, "Close  (F1 / Esc)"); break;
++    default:        name[0] = 0; break;
++    }
++}
++
++static void menu_change(int item, int dir)
++{
++    int i;
++    switch (item) {
++    case MI_MODE:   s_vs.mode = (s_vs.mode + 3 + dir) % 3; InterlockedExchange(&s_vs_dirty, 1); break;
++    case MI_RES:
++        for (i = 0; i < s_nres; i++)
++            if (s_res[i][0] == s_vs.res_w && s_res[i][1] == s_vs.res_h) break;
++        i = (i >= s_nres) ? 0 : (i + s_nres + dir) % s_nres;
++        s_vs.res_w = s_res[i][0]; s_vs.res_h = s_res[i][1];
++        InterlockedExchange(&s_vs_dirty, 1);
++        break;
++    case MI_ASPECT: s_vs.aspect = (s_vs.aspect + 6 + dir) % 6; break;
++    case MI_SCALE:  s_vs.scale += dir; if (s_vs.scale < 1) s_vs.scale = 9; if (s_vs.scale > 9) s_vs.scale = 1; break;
++    case MI_FILTER: s_vs.filter = (s_vs.filter + 3 + dir) % 3; break;
++    case MI_VSYNC:  s_vs.vsync = !s_vs.vsync; break;
++    case MI_BRIGHT: s_vs.brightness += 5 * dir; if (s_vs.brightness < 50) s_vs.brightness = 50;
++                    if (s_vs.brightness > 150) s_vs.brightness = 150; break;
++    case MI_GAMMA:  s_vs.gamma += 5 * dir; if (s_vs.gamma < 60) s_vs.gamma = 60; if (s_vs.gamma > 160) s_vs.gamma = 160; break;
++    case MI_CROP:   s_vs.crop = dir > 0 ? (s_vs.crop >= 32 ? 0 : s_vs.crop + 8) : (s_vs.crop <= 0 ? 32 : s_vs.crop - 8); break;
++    case MI_ANISO:  { static const int a[] = { 1, 2, 4, 8, 16 }; int k;
++                      for (k = 0; k < 5 && a[k] != s_vs.aniso; k++) {}
++                      k = (k >= 5 ? 0 : (k + 5 + dir) % 5); s_vs.aniso = a[k]; } break;
++    case MI_FPS:    s_vs.show_fps = !s_vs.show_fps; break;
++    default: return;
++    }
++    s_pr.ovl_valid = 0;
++    vs_save();
++}
++
++static void menu_activate(int item)
++{
++    if (item == MI_RESET) {
++        VideoSettings d = { VM_WINDOWED, 1440, 1080, AR_ORIGINAL, 2, SF_SHARP, 1, 100, 100, 0, 0, 1 };
++        s_vs = d;
++        InterlockedExchange(&s_vs_dirty, 1);
++        vs_save();
++    } else if (item == MI_CLOSE) {
++        InterlockedExchange(&s_menu_open, 0);
++        InterlockedExchange(&g_xbox_input_blocked, 0);
++    } else {
++        menu_change(item, 1);
++    }
++    s_pr.ovl_valid = 0;
++}
++
++static void menu_key(unsigned vk)
++{
++    if (vk == VK_F1) {
++        LONG open = !s_menu_open;
++        InterlockedExchange(&s_menu_open, open);
++        InterlockedExchange(&g_xbox_input_blocked, open);
++        s_pr.ovl_valid = 0;
++        return;
++    }
++    if (vk == VK_RETURN && (GetKeyState(VK_MENU) & 0x8000)) {       /* Alt+Enter */
++        s_vs.mode = s_vs.mode == VM_WINDOWED ? VM_BORDERLESS : VM_WINDOWED;
++        InterlockedExchange(&s_vs_dirty, 1);
++        vs_save();
++        s_pr.ovl_valid = 0;
++        return;
++    }
++    if (!s_menu_open)
++        return;
++    switch (vk) {
++    case VK_UP:     s_menu_sel = (s_menu_sel + MI_COUNT - 1) % MI_COUNT; break;
++    case VK_DOWN:   s_menu_sel = (s_menu_sel + 1) % MI_COUNT; break;
++    case VK_LEFT:   menu_change(s_menu_sel, -1); break;
++    case VK_RIGHT:  menu_change(s_menu_sel, 1); break;
++    case VK_RETURN: case VK_SPACE: menu_activate(s_menu_sel); break;
++    case VK_ESCAPE: InterlockedExchange(&s_menu_open, 0); InterlockedExchange(&g_xbox_input_blocked, 0); break;
++    default: return;
++    }
++    s_pr.ovl_valid = 0;
++}
++
++/* Pad navigation while the page is open, and Back+Start to open it. */
++static void menu_pad(void)
++{
++    static WORD prev;
++    static DWORD repeat_at;
++    XBOX_INPUT_STATE st;
++    WORD b, down;
++    if (xbox_InputGetState(0, &st) != 0)
++        return;
++    b = st.Gamepad.wButtons;
++    if (st.Gamepad.bAnalogButtons[0] > 128) b |= 0x1000;   /* A */
++    if (st.Gamepad.bAnalogButtons[1] > 128) b |= 0x2000;   /* B */
++    down = (WORD)(b & ~prev);
++    if ((b & 0x30) == 0x30 && (down & 0x30)) {             /* Back + Start */
++        menu_key(VK_F1);
++        prev = b;
++        return;
++    }
++    if (s_menu_open) {
++        DWORD now = GetTickCount();
++        if (b & 0x0F) {                                     /* held d-pad repeats */
++            if (down & 0x0F) repeat_at = now + 350;
++            else if (now >= repeat_at) { down |= (WORD)(b & 0x0F); repeat_at = now + 90; }
++        }
++        if (down & 0x01) menu_key(VK_UP);
++        if (down & 0x02) menu_key(VK_DOWN);
++        if (down & 0x04) menu_key(VK_LEFT);
++        if (down & 0x08) menu_key(VK_RIGHT);
++        if (down & 0x1000) menu_key(VK_RETURN);
++        if (down & 0x2000) menu_key(VK_ESCAPE);
++    }
++    prev = b;
++}
++
++/* Draw the page (or just the FPS counter) with GDI into a BGRA bitmap and
++ * upload it; alpha is made from a colour key. */
++static void pr_build_overlay(void)
++{
++    const int W = 720, H = 560;
++    BITMAPINFO bi;
++    void *bits = NULL;
++    HDC dc;
++    HBITMAP bmp, old;
++    HFONT fb, fs, of;
++    int i;
++    const COLORREF key = RGB(255, 0, 255);
++    if (s_pr.ovl) { ID3D11Texture2D_Release(s_pr.ovl); s_pr.ovl = NULL; }
++    if (s_pr.ovl_srv) { ID3D11ShaderResourceView_Release(s_pr.ovl_srv); s_pr.ovl_srv = NULL; }
++    memset(&bi, 0, sizeof bi);
++    bi.bmiHeader.biSize = sizeof bi.bmiHeader;
++    bi.bmiHeader.biWidth = W; bi.bmiHeader.biHeight = -H;
++    bi.bmiHeader.biPlanes = 1; bi.bmiHeader.biBitCount = 32; bi.bmiHeader.biCompression = BI_RGB;
++    dc = CreateCompatibleDC(NULL);
++    bmp = CreateDIBSection(dc, &bi, DIB_RGB_COLORS, &bits, NULL, 0);
++    if (!bmp || !bits) { DeleteDC(dc); return; }
++    old = (HBITMAP)SelectObject(dc, bmp);
++    {
++        HBRUSH kb = CreateSolidBrush(key);
++        RECT all = { 0, 0, W, H };
++        FillRect(dc, &all, kb);
++        DeleteObject(kb);
++    }
++    fb = CreateFontA(30, 0, 0, 0, FW_BOLD, 0, 0, 0, ANSI_CHARSET, 0, 0, ANTIALIASED_QUALITY, 0, "Segoe UI");
++    fs = CreateFontA(24, 0, 0, 0, FW_NORMAL, 0, 0, 0, ANSI_CHARSET, 0, 0, ANTIALIASED_QUALITY, 0, "Segoe UI");
++    SetBkMode(dc, TRANSPARENT);
++    if (s_menu_open) {
++        HBRUSH panel = CreateSolidBrush(RGB(16, 22, 38)), bar = CreateSolidBrush(RGB(170, 20, 30));
++        HBRUSH selb = CreateSolidBrush(RGB(40, 60, 110));
++        RECT pr = { 20, 20, W - 20, H - 20 }, tr = { 20, 20, W - 20, 74 };
++        FillRect(dc, &pr, panel);
++        FillRect(dc, &tr, bar);
++        of = (HFONT)SelectObject(dc, fb);
++        SetTextColor(dc, RGB(255, 255, 255));
++        TextOutA(dc, 40, 30, "VIDEO SETTINGS", 14);
++        SelectObject(dc, fs);
++        for (i = 0; i < MI_COUNT; i++) {
++            char name[64], val[64];
++            int y = 90 + i * 32;
++            menu_label(i, name, val, sizeof val);
++            if (i == s_menu_sel) {
++                RECT sr = { 30, y - 2, W - 30, y + 30 };
++                FillRect(dc, &sr, selb);
++            }
++            SetTextColor(dc, i == s_menu_sel ? RGB(255, 210, 60) : RGB(225, 230, 240));
++            TextOutA(dc, 50, y, name, (int)strlen(name));
++            if (val[0]) {
++                SIZE ts;
++                char v2[80];
++                snprintf(v2, sizeof v2, i == s_menu_sel ? "<  %s  >" : "%s", val);
++                GetTextExtentPoint32A(dc, v2, (int)strlen(v2), &ts);
++                TextOutA(dc, W - 50 - ts.cx, y, v2, (int)strlen(v2));
++            }
++        }
++        SetTextColor(dc, RGB(140, 150, 170));
++        TextOutA(dc, 50, H - 56, "Arrows / D-pad: choose   Left/Right: change   Enter / A: select", 64);
++        SelectObject(dc, of);
++        DeleteObject(panel); DeleteObject(bar); DeleteObject(selb);
++    }
++    if (s_vs.show_fps) {
++        char t[32];
++        int len = snprintf(t, sizeof t, "%d FPS", s_pr.fps);
++        of = (HFONT)SelectObject(dc, fb);
++        SetTextColor(dc, RGB(1, 1, 1));
++        TextOutA(dc, 6, 6, t, len);
++        SetTextColor(dc, RGB(120, 255, 120));
++        TextOutA(dc, 4, 4, t, len);
++        SelectObject(dc, of);
++    }
++    GdiFlush();
++    {
++        uint32_t *p = (uint32_t *)bits;
++        int n = W * H;
++        for (i = 0; i < n; i++) {
++            uint32_t c = p[i] & 0x00FFFFFFu;
++            p[i] = c == 0x00FF00FFu ? 0u : (c | (s_menu_open && c == 0x00101626u ? 0xE6000000u : 0xFF000000u));
++        }
++    }
++    {
++        D3D11_TEXTURE2D_DESC td;
++        D3D11_SUBRESOURCE_DATA sd;
++        memset(&td, 0, sizeof td);
++        td.Width = W; td.Height = H; td.MipLevels = td.ArraySize = 1;
++        td.Format = DXGI_FORMAT_B8G8R8A8_UNORM; td.SampleDesc.Count = 1;
++        td.Usage = D3D11_USAGE_IMMUTABLE; td.BindFlags = D3D11_BIND_SHADER_RESOURCE;
++        sd.pSysMem = bits; sd.SysMemPitch = W * 4; sd.SysMemSlicePitch = 0;
++        if (SUCCEEDED(ID3D11Device_CreateTexture2D(s_gpu11.dev, &td, &sd, &s_pr.ovl)))
++            ID3D11Device_CreateShaderResourceView(s_gpu11.dev, (ID3D11Resource *)s_pr.ovl, NULL, &s_pr.ovl_srv);
++    }
++    s_pr.ovl_w = W; s_pr.ovl_h = H;
++    SelectObject(dc, old);
++    DeleteObject(bmp);
++    DeleteObject(fb); DeleteObject(fs);
++    DeleteDC(dc);
++    s_pr.ovl_valid = 1;
++}
++
++/* Where the picture goes in the back buffer, for the aspect setting. The
++ * surface is shown as 4:3 (NTSC 720x480 has non-square pixels). */
++static void pr_dest_rect(float *x, float *y, float *w, float *h)
++{
++    float bw = (float)s_pr.bb_w, bh = (float)s_pr.bb_h, ar;
++    switch (s_vs.aspect) {
++    case AR_STRETCH: *x = 0; *y = 0; *w = bw; *h = bh; return;
++    case AR_16_9:    ar = 16.0f / 9.0f; break;
++    case AR_21_9:    ar = 21.0f / 9.0f; break;
++    case AR_32_9:    ar = 32.0f / 9.0f; break;
++    case AR_ZOOM:    ar = 4.0f / 3.0f;
++        if (bw / bh > ar) { *w = bw; *h = bw / ar; } else { *h = bh; *w = bh * ar; }
++        *x = (bw - *w) * 0.5f; *y = (bh - *h) * 0.5f;
++        return;
++    default:         ar = 4.0f / 3.0f; break;
++    }
++    if (bw / bh > ar) { *h = bh; *w = bh * ar; } else { *w = bw; *h = bw / ar; }
++    *x = (bw - *w) * 0.5f; *y = (bh - *h) * 0.5f;
++}
++
++/* Present the surface at guest address `guest`. Returns 1 when it did. */
++static int pr_present(uint32_t guest)
++{
++    GpuSurface *s = NULL;
++    ID3D11ShaderResourceView *srv = NULL;
++    D3D11_MAPPED_SUBRESOURCE m;
++    PresentConsts pc;
++    D3D11_VIEWPORT vp;
++    float dx, dy, dw, dh, clear[4] = { 0, 0, 0, 1 };
++    int i;
++    LARGE_INTEGER now;
++
++    if (env_cached("RECOMP_GPU_NOPRESENT") || !pr_init())
++        return 0;
++    for (i = 0; i < GPU_MAX_SURFACES; i++)
++        if (s_gpu11.surf[i].tex && s_gpu11.surf[i].guest == guest) { s = &s_gpu11.surf[i]; break; }
++    if (!s)
++        return 0;
++    if (!pr_swapchain())
++        return 0;
++    if (!s_pr.ok)
++        return 0;
++    if (InterlockedExchange(&s_vs_dirty, 0))
++        pr_apply_mode();
++    g_render_scale = (uint32_t)s_vs.scale;     /* surfaces follow on their next use */
++    g_aniso = (uint32_t)s_vs.aniso;
++    menu_pad();
++
++    if (FAILED(ID3D11Device_CreateShaderResourceView(s_gpu11.dev, (ID3D11Resource *)s->tex, NULL, &srv)))
++        return 0;
++    {
++        float sw = (float)s->w, sh = (float)s->h, c = (float)s_vs.crop;
++        if (c * 2.0f >= sw || c * 2.0f >= sh) c = 0.0f;
++        pc.src[0] = c / sw; pc.src[1] = c / sh;
++        pc.src[2] = (sw - 2.0f * c) / sw; pc.src[3] = (sh - 2.0f * c) / sh;
++        pc.prm[0] = s_vs.brightness / 100.0f;
++        pc.prm[1] = 100.0f / (float)s_vs.gamma;
++        pc.prm[2] = (float)(s_vs.filter == SF_NEAREST ? 1 : s_vs.filter == SF_SHARP ? 2 : 0);
++        pc.prm[3] = 0.0f;
++        pr_dest_rect(&dx, &dy, &dw, &dh);
++        /* The surface texture is scale x its guest size once the internal
++         * resolution is raised; the shader's texel maths wants its real size. */
++        {
++            D3D11_TEXTURE2D_DESC td;
++            ID3D11Texture2D_GetDesc(s->tex, &td);
++            pc.sz[0] = (float)td.Width; pc.sz[1] = (float)td.Height;
++        }
++        pc.sz[2] = dw; pc.sz[3] = dh;
++    }
++    if (SUCCEEDED(ID3D11DeviceContext_Map(s_gpu11.ctx, (ID3D11Resource *)s_pr.cb, 0, D3D11_MAP_WRITE_DISCARD, 0, &m))) {
++        memcpy(m.pData, &pc, sizeof pc);
++        ID3D11DeviceContext_Unmap(s_gpu11.ctx, (ID3D11Resource *)s_pr.cb, 0);
++    }
++    ID3D11DeviceContext_OMSetRenderTargets(s_gpu11.ctx, 1, &s_pr.bb_rtv, NULL);
++    ID3D11DeviceContext_ClearRenderTargetView(s_gpu11.ctx, s_pr.bb_rtv, clear);
++    vp.TopLeftX = dx; vp.TopLeftY = dy; vp.Width = dw; vp.Height = dh; vp.MinDepth = 0; vp.MaxDepth = 1;
++    ID3D11DeviceContext_RSSetViewports(s_gpu11.ctx, 1, &vp);
++    {
++        D3D11_RECT all = { 0, 0, (LONG)s_pr.bb_w, (LONG)s_pr.bb_h };
++        ID3D11DeviceContext_RSSetScissorRects(s_gpu11.ctx, 1, &all);
++    }
++    ID3D11DeviceContext_RSSetState(s_gpu11.ctx, s_pr.rs);
++    ID3D11DeviceContext_OMSetDepthStencilState(s_gpu11.ctx, s_pr.nodepth, 0);
++    ID3D11DeviceContext_OMSetBlendState(s_gpu11.ctx, NULL, NULL, 0xFFFFFFFFu);
++    ID3D11DeviceContext_IASetInputLayout(s_gpu11.ctx, NULL);
++    ID3D11DeviceContext_IASetPrimitiveTopology(s_gpu11.ctx, D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
++    ID3D11DeviceContext_VSSetShader(s_gpu11.ctx, s_pr.vs, NULL, 0);
++    ID3D11DeviceContext_PSSetShader(s_gpu11.ctx, s_pr.ps, NULL, 0);
++    ID3D11DeviceContext_PSSetConstantBuffers(s_gpu11.ctx, 0, 1, &s_pr.cb);
++    ID3D11DeviceContext_PSSetShaderResources(s_gpu11.ctx, 0, 1, &srv);
++    {
++        ID3D11SamplerState *smp[2] = { s_pr.lin, s_pr.pt };
++        ID3D11DeviceContext_PSSetSamplers(s_gpu11.ctx, 0, 2, smp);
++    }
++    ID3D11DeviceContext_Draw(s_gpu11.ctx, 3, 0);
++
++    /* FPS, and the overlay (page and/or counter). */
++    s_pr.frames++;
++    QueryPerformanceCounter(&now);
++    if (now.QuadPart - s_pr.t0.QuadPart >= s_pr.freq.QuadPart) {
++        s_pr.fps = (int)((double)s_pr.frames * s_pr.freq.QuadPart / (double)(now.QuadPart - s_pr.t0.QuadPart) + 0.5);
++        s_pr.frames = 0;
++        s_pr.t0 = now;
++        if (s_vs.show_fps) s_pr.ovl_valid = 0;
++    }
++    if (s_menu_open || s_vs.show_fps) {
++        if (!s_pr.ovl_valid)
++            pr_build_overlay();
++        if (s_pr.ovl_srv) {
++            float scale = (float)s_pr.bb_h * 0.85f / (float)s_pr.ovl_h;
++            if (scale * s_pr.ovl_w > s_pr.bb_w * 0.95f) scale = s_pr.bb_w * 0.95f / (float)s_pr.ovl_w;
++            if (!s_menu_open) scale = (float)s_pr.bb_h / 1080.0f < 0.6f ? 0.6f : (float)s_pr.bb_h / 1080.0f;
++            vp.Width = s_pr.ovl_w * scale; vp.Height = s_pr.ovl_h * scale;
++            vp.TopLeftX = s_menu_open ? (s_pr.bb_w - vp.Width) * 0.5f : 0.0f;
++            vp.TopLeftY = s_menu_open ? (s_pr.bb_h - vp.Height) * 0.5f : 0.0f;
++            ID3D11DeviceContext_RSSetViewports(s_gpu11.ctx, 1, &vp);
++            ID3D11DeviceContext_OMSetBlendState(s_gpu11.ctx, s_pr.blend, NULL, 0xFFFFFFFFu);
++            ID3D11DeviceContext_PSSetShader(s_gpu11.ctx, s_pr.ps_ovl, NULL, 0);
++            ID3D11DeviceContext_PSSetShaderResources(s_gpu11.ctx, 0, 1, &s_pr.ovl_srv);
++            ID3D11DeviceContext_Draw(s_gpu11.ctx, 3, 0);
++        }
++    }
++    {
++        ID3D11ShaderResourceView *none = NULL;
++        ID3D11DeviceContext_PSSetShaderResources(s_gpu11.ctx, 0, 1, &none);
++    }
++    ID3D11ShaderResourceView_Release(srv);
++    IDXGISwapChain1_Present(s_pr.sc, s_vs.vsync ? 1u : 0u, 0);
++    return 1;
++}
++
++/* Called once the window exists: key presses reach the settings page. */
++static void pr_hook_keys(void)
++{
++    static int done;
++    if (!done) {
++        xbox_FramebufferSetKeyHook(menu_key);
++        done = 1;
++    }
++}
 diff --git a/src/kernel/nv2a_gpu_vp.inc.c b/src/kernel/nv2a_gpu_vp.inc.c
 new file mode 100644
 index 0000000..a147984
@@ -8334,7 +9202,7 @@ index 2189a3b..9d7605b 100644
 +    target_link_libraries(xbox_video PUBLIC mfplat mfreadwrite mfuuid mf ole32 imm32)
  endif()
 diff --git a/src/video/fb_present.c b/src/video/fb_present.c
-index 69ced11..0651a5b 100644
+index 69ced11..27b0f6f 100644
 --- a/src/video/fb_present.c
 +++ b/src/video/fb_present.c
 @@ -17,7 +17,12 @@
@@ -8382,7 +9250,92 @@ index 69ced11..0651a5b 100644
  
  void xbox_FramebufferWindowSet(uint32_t fb_va, uint32_t pitch)
  {
-@@ -125,12 +153,25 @@ int xbox_FramebufferDumpBmp(const char *path)
+@@ -41,12 +69,84 @@ void xbox_FramebufferWindowSet(uint32_t fb_va, uint32_t pitch)
+         s_fb_pitch = pitch;
+ }
+ 
++/* ── GPU presentation hooks (2026-09-26) ─────────────────────────────────
++ *
++ * The D3D11 renderer can present straight from its render target through a
++ * swap chain on this window (nv2a_gpu_present.inc.c). It then owns what the
++ * window shows: the GDI blit below stops, and so does the per-frame
++ * readback that fed it. This file keeps owning the window itself -- its
++ * thread, message pump and style -- and offers the presenter the handle,
++ * the displayed guest address, key presses (the settings page) and a way to
++ * change the window mode on this thread. */
++static volatile HWND s_fb_hwnd;
++static volatile LONG s_fb_gpu_present;
++static void (*volatile s_fb_key_hook)(unsigned vk);
++
++#define FB_WM_APPLY_MODE (WM_APP + 1)
++
++HWND xbox_FramebufferWindowHwnd(void) { return s_fb_hwnd; }
++uint32_t xbox_FramebufferWindowVa(void) { return s_fb_va; }
++void xbox_FramebufferSetGpuPresent(int on) { InterlockedExchange(&s_fb_gpu_present, on ? 1 : 0); }
++void xbox_FramebufferSetKeyHook(void (*hook)(unsigned vk)) { s_fb_key_hook = hook; }
++
++/* mode: 0 windowed (client w x h, centred), 1 borderless on the window's
++ * monitor, 2 exclusive fullscreen (the swap chain switches; the window is
++ * made borderless here). Runs on the window thread. */
++static void fb_apply_mode(HWND h, int mode, int w, int hh)
++{
++    MONITORINFO mi;
++    HMONITOR mon = MonitorFromWindow(h, MONITOR_DEFAULTTOPRIMARY);
++    memset(&mi, 0, sizeof mi);
++    mi.cbSize = sizeof mi;
++    GetMonitorInfoA(mon, &mi);
++    if (mode == 0) {
++        RECT r;
++        int mw = mi.rcWork.right - mi.rcWork.left, mh = mi.rcWork.bottom - mi.rcWork.top, ww, wh;
++        /* A client area that does not fit the work area is scaled down,
++         * keeping its shape (the default is sized for a 1440p screen). */
++        if (w > mw - 16 || hh > mh - 48) {
++            double k = (double)(mw - 16) / w, k2 = (double)(mh - 48) / hh;
++            if (k2 < k) k = k2;
++            w = (int)(w * k); hh = (int)(hh * k);
++        }
++        SetWindowLongPtrA(h, GWL_STYLE, WS_OVERLAPPEDWINDOW | WS_VISIBLE);
++        r.left = 0; r.top = 0; r.right = w; r.bottom = hh;
++        AdjustWindowRect(&r, WS_OVERLAPPEDWINDOW, FALSE);
++        ww = r.right - r.left; wh = r.bottom - r.top;
++        SetWindowPos(h, HWND_NOTOPMOST, mi.rcWork.left + (mw > ww ? (mw - ww) / 2 : 0),
++                     mi.rcWork.top + (mh > wh ? (mh - wh) / 2 : 0), ww, wh, SWP_FRAMECHANGED | SWP_SHOWWINDOW);
++    } else {
++        SetWindowLongPtrA(h, GWL_STYLE, WS_POPUP | WS_VISIBLE);
++        SetWindowPos(h, HWND_TOP, mi.rcMonitor.left, mi.rcMonitor.top,
++                     mi.rcMonitor.right - mi.rcMonitor.left, mi.rcMonitor.bottom - mi.rcMonitor.top,
++                     SWP_FRAMECHANGED | SWP_SHOWWINDOW);
++    }
++}
++
++void xbox_FramebufferApplyMode(int mode, int w, int h)
++{
++    HWND hw = s_fb_hwnd;
++    if (hw)
++        PostMessageA(hw, FB_WM_APPLY_MODE, (WPARAM)mode, MAKELPARAM(w, h));
++}
++
+ static LRESULT CALLBACK fb_wndproc(HWND h, UINT m, WPARAM w, LPARAM l)
+ {
+     if (m == WM_CLOSE || m == WM_DESTROY) {
+         InterlockedExchange(&s_fb_running, 0);
+         return 0;
+     }
++    if (m == FB_WM_APPLY_MODE) {
++        fb_apply_mode(h, (int)w, LOWORD(l), HIWORD(l));
++        return 0;
++    }
++    if ((m == WM_KEYDOWN || m == WM_SYSKEYDOWN) && s_fb_key_hook) {
++        s_fb_key_hook((unsigned)w);
++        if (w == VK_F10 || m == WM_SYSKEYDOWN)
++            return 0;            /* F10/Alt would otherwise open the system menu */
++    }
++    if (m == WM_ERASEBKGND && s_fb_gpu_present)
++        return 1;                /* the swap chain paints every pixel */
+     return DefWindowProcA(h, m, w, l);
+ }
+ 
+@@ -125,12 +225,35 @@ int xbox_FramebufferDumpBmp(const char *path)
  static DWORD WINAPI fb_thread(LPVOID unused)
  {
      HWND hwnd;
@@ -8398,6 +9351,16 @@ index 69ced11..0651a5b 100644
  
      (void)unused;
  
++    /* Real pixels: without this Windows scales the window by the display
++     * scaling (150% made a 1440x1080 window taller than a 1440p screen) and
++     * the swap chain renders at the lower logical size. */
++    {
++        typedef BOOL (WINAPI *SetDpiCtx)(HANDLE);
++        SetDpiCtx f = (SetDpiCtx)GetProcAddress(GetModuleHandleA("user32.dll"), "SetProcessDpiAwarenessContext");
++        if (f) f((HANDLE)-4);          /* DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 */
++        else SetProcessDPIAware();
++    }
++
 +    /* 2026-09-21: switched from D3D11 (device/swapchain creation was
 +     * observed hanging for 60+ seconds under this machine's GPU driver
 +     * stack, likely fighting an injected overlay/hook DLL -- confirmed via
@@ -8410,10 +9373,14 @@ index 69ced11..0651a5b 100644
      {
          WNDCLASSA wc;
          memset(&wc, 0, sizeof(wc));
-@@ -142,50 +183,137 @@ static DWORD WINAPI fb_thread(LPVOID unused)
+@@ -142,68 +265,165 @@ static DWORD WINAPI fb_thread(LPVOID unused)
      }
      r.left = 0; r.top = 0; r.right = (LONG)s_fb_width; r.bottom = (LONG)s_fb_height;
      AdjustWindowRect(&r, WS_OVERLAPPEDWINDOW, FALSE);
+-    hwnd = CreateWindowExA(0, "XboxRecompFramebuffer", "Xbox Recomp - Framebuffer",
+-                           WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+-                           CW_USEDEFAULT, CW_USEDEFAULT,
+-                           r.right - r.left, r.bottom - r.top,
 +    win_w = r.right - r.left;
 +    win_h = r.bottom - r.top;
 +    if (ultrawide) {
@@ -8432,10 +9399,7 @@ index 69ced11..0651a5b 100644
 +        }
 +        style = WS_POPUP | WS_VISIBLE;
 +    }
-     hwnd = CreateWindowExA(0, "XboxRecompFramebuffer", "Xbox Recomp - Framebuffer",
--                           WS_OVERLAPPEDWINDOW | WS_VISIBLE,
--                           CW_USEDEFAULT, CW_USEDEFAULT,
--                           r.right - r.left, r.bottom - r.top,
++    hwnd = CreateWindowExA(0, "XboxRecompFramebuffer", "ESPN NFL 2K5  (F1: video settings)",
 +                           style, win_x, win_y, win_w, win_h,
                             NULL, NULL, GetModuleHandleA(NULL), NULL);
      if (!hwnd) {
@@ -8450,6 +9414,7 @@ index 69ced11..0651a5b 100644
 +     * injected input tool) -- a real, reproducible hang, not a fix for
 +     * anything in this project's own code. */
 +    ImmAssociateContext(hwnd, NULL);
++    s_fb_hwnd = hwnd;
      hdc = GetDC(hwnd);
 +    if (!hdc) {
 +        DestroyWindow(hwnd);
@@ -8507,7 +9472,7 @@ index 69ced11..0651a5b 100644
 +                    s_fb_height = wh;
 +                    bmi.bmiHeader.biWidth = (LONG)ww;
 +                    bmi.bmiHeader.biHeight = -(LONG)wh;
-+                    if (!ultrawide) {
++                    if (!ultrawide && !s_fb_gpu_present) {
 +                        wr.left = 0; wr.top = 0; wr.right = (LONG)ww; wr.bottom = (LONG)wh;
 +                        AdjustWindowRect(&wr, WS_OVERLAPPEDWINDOW, FALSE);
 +                        SetWindowPos(hwnd, NULL, 0, 0, wr.right - wr.left, wr.bottom - wr.top,
@@ -8521,7 +9486,9 @@ index 69ced11..0651a5b 100644
 +         * NFL 2K5's Start Game the title renders into off-screen targets, the
 +         * window followed one, and the copy read 0xFFB0AFAF and took the
 +         * whole process down. A bad frame is skipped, never fatal. */
-+        if (s_fb_va && s_fb_pitch && s_rgb && s_fb_width && s_fb_pitch >= s_fb_width) {
++        if (s_fb_gpu_present) {
++            /* The GPU presenter owns the window's contents. */
++        } else if (s_fb_va && s_fb_pitch && s_rgb && s_fb_width && s_fb_pitch >= s_fb_width) {
 +            uint32_t base = s_fb_va & 0x7FFFFFFFu;
 +            uint64_t end = (uint64_t)base + (uint64_t)s_fb_pitch * s_fb_height;
 +            if ((s_fb_va >= 0x80000000u || s_fb_va < 0x04000000u) && end <= 0x04000000u) {
@@ -8567,8 +9534,15 @@ index 69ced11..0651a5b 100644
 +            if (dump && ++frames == 60)
                  xbox_FramebufferDumpBmp(dump);
          }
-         Sleep(16);
-@@ -195,15 +323,18 @@ static DWORD WINAPI fb_thread(LPVOID unused)
+-        Sleep(16);
++        if (s_fb_gpu_present)
++            MsgWaitForMultipleObjects(0, NULL, FALSE, 8, QS_ALLINPUT);   /* just pump */
++        else
++            Sleep(16);
+     }
+ 
++    s_fb_hwnd = NULL;
+     ReleaseDC(hwnd, hdc);
      DestroyWindow(hwnd);
      free(s_rgb);
      s_rgb = NULL;
@@ -8590,7 +9564,7 @@ index 69ced11..0651a5b 100644
      if (InterlockedCompareExchange(&s_fb_running, 1, 0) != 0)
          return;
      th = CreateThread(NULL, 0, fb_thread, NULL, 0, NULL);
-@@ -213,7 +344,24 @@ void xbox_FramebufferWindowStart(void)
+@@ -213,7 +433,29 @@ void xbox_FramebufferWindowStart(void)
          InterlockedExchange(&s_fb_running, 0);
  }
  
@@ -8610,6 +9584,11 @@ index 69ced11..0651a5b 100644
 +}
 +
  #else
++void *xbox_FramebufferWindowHwnd(void) { return 0; }
++uint32_t xbox_FramebufferWindowVa(void) { return 0; }
++void xbox_FramebufferSetGpuPresent(int on) { (void)on; }
++void xbox_FramebufferSetKeyHook(void (*hook)(unsigned vk)) { (void)hook; }
++void xbox_FramebufferApplyMode(int mode, int w, int h) { (void)mode; (void)w; (void)h; }
  void xbox_FramebufferWindowSet(uint32_t fb_va, uint32_t pitch) { (void)fb_va; (void)pitch; }
 +void xbox_FramebufferWindowSize(uint32_t w, uint32_t h) { (void)w; (void)h; }
  void xbox_FramebufferWindowStart(void) {}
