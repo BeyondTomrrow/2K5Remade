@@ -47,8 +47,8 @@ Pick it in game: Quick Game > Coach Match Up > Presentation (under VIP).
 - `scorebug.team_slots` - per side `block`, `score_box`, `timeouts` rectangles;
   animation layers can use `"at": "team.score_box"` etc.
 - `animations.<event>` - `duration` and `layers` (elements with `enter` / `exit`
-  `{type: fade|slide_up|slide_down|wipe_x, time}`, `blink {period, until}`,
-  `start`, `end`). Events: `touchdown`, `field_goal`, `extra_point`,
+  `{type: fade|slide_left|slide_right|slide_up|slide_down|wipe_x, time}`,
+  `blink {period, until}`, `start`, `end`). Events: `pregame`, `touchdown`, `field_goal`, `extra_point`,
   `two_point`, `safety`, `timeout`, `first_down`, `two_minute_warning`,
   `end_of_quarter`, `halftime`.
 - `music` - `intro` and `outro` lists of `{title, file}`, `volume`, `fade_out`

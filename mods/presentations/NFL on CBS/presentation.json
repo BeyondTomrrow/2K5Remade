@@ -69,6 +69,33 @@
   },
 
   "animations": {
+    "pregame": {
+      "duration": 3.2,
+      "layers": [
+        { "type": "box", "x": 0, "y": 0, "w": 316, "h": 56, "radius": 9,
+          "gradient": { "top": "{away.primary}|lighten:0.12", "bottom": "{away.primary}|darken:0.28" },
+          "enter": { "type": "slide_left", "time": 0.55 }, "exit": { "type": "fade", "time": 0.35 }, "start": 0, "end": 3.2 },
+        { "type": "image", "src": "{away.logo}", "x": 22, "y": 6, "w": 58, "h": 44,
+          "enter": { "type": "slide_left", "time": 0.55 }, "exit": { "type": "fade", "time": 0.35 }, "start": 0, "end": 3.2 },
+        { "type": "text", "text": "{away.abbr}", "x": 92, "y": 7, "w": 124, "h": 42,
+          "size": 34, "weight": 800, "stretch": "condensed", "color": "{away.text}", "align": "center",
+          "enter": { "type": "slide_left", "time": 0.55 }, "exit": { "type": "fade", "time": 0.35 }, "start": 0, "end": 3.2 },
+        { "type": "box", "x": 684, "y": 0, "w": 316, "h": 56, "radius": 9,
+          "gradient": { "top": "{home.primary}|lighten:0.12", "bottom": "{home.primary}|darken:0.28" },
+          "enter": { "type": "slide_right", "time": 0.55 }, "exit": { "type": "fade", "time": 0.35 }, "start": 0, "end": 3.2 },
+        { "type": "image", "src": "{home.logo}", "x": 920, "y": 6, "w": 58, "h": 44,
+          "enter": { "type": "slide_right", "time": 0.55 }, "exit": { "type": "fade", "time": 0.35 }, "start": 0, "end": 3.2 },
+        { "type": "text", "text": "{home.abbr}", "x": 784, "y": 7, "w": 124, "h": 42,
+          "size": 34, "weight": 800, "stretch": "condensed", "color": "{home.text}", "align": "center",
+          "enter": { "type": "slide_right", "time": 0.55 }, "exit": { "type": "fade", "time": 0.35 }, "start": 0, "end": 3.2 },
+        { "type": "box", "x": 316, "y": 0, "w": 368, "h": 56, "radius": 9,
+          "gradient": { "top": "#343941", "bottom": "#15181C" },
+          "enter": { "type": "wipe_x", "time": 0.55 }, "exit": { "type": "fade", "time": 0.35 }, "start": 0.35, "end": 3.2 },
+        { "type": "text", "text": "CBS SPORTS", "x": 316, "y": 0, "w": 368, "h": 56,
+          "size": 35, "weight": 800, "stretch": "condensed", "color": "#FFFFFF", "align": "center",
+          "enter": { "type": "fade", "time": 0.3 }, "exit": { "type": "fade", "time": 0.35 }, "start": 0.65, "end": 3.2 }
+      ]
+    },
     "touchdown": {
       "duration": 5.0,
       "layers": [

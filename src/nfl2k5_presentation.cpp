@@ -1145,7 +1145,8 @@ static void draw_layer(const Ctx &c, const JVal &L, double t, double duration)
     double start = L.num("start", 0), end = L.num("end", duration);
     double local = t - start;
     if (local < 0 || t > end) return;
-    float alpha = 1, dy = 0, clip = 1;
+    float alpha = 1, dx = 0, dy = 0, clip = 1;
+    float w = (float)L.num("w", 80);
     float h = (float)L.num("h", 40);
     if (const JVal *en = L.get("enter")) {
         double tm = en->num("time", 0.3);
@@ -1153,6 +1154,8 @@ static void draw_layer(const Ctx &c, const JVal &L, double t, double duration)
         p = 1 - (1 - p) * (1 - p);   /* ease out */
         std::string ty = en->str("type", "fade");
         if (ty == "fade") alpha *= p;
+        else if (ty == "slide_left") { dx -= (1 - p) * (w + 20); alpha *= std::min(1.0f, p * 1.5f); }
+        else if (ty == "slide_right") { dx += (1 - p) * (w + 20); alpha *= std::min(1.0f, p * 1.5f); }
         else if (ty == "slide_up") { dy += (1 - p) * (h + 10); alpha *= std::min(1.0f, p * 1.5f); }
         else if (ty == "slide_down") { dy -= (1 - p) * (h + 10); alpha *= std::min(1.0f, p * 1.5f); }
         else if (ty == "wipe_x") clip = p;
@@ -1162,6 +1165,8 @@ static void draw_layer(const Ctx &c, const JVal &L, double t, double duration)
         float q = (float)std::min(1.0, (end - t) / std::max(0.01, tm));
         std::string ty = ex->str("type", "fade");
         if (ty == "fade") alpha *= q;
+        else if (ty == "slide_left") { dx -= (1 - q) * (w + 20); alpha *= q; }
+        else if (ty == "slide_right") { dx += (1 - q) * (w + 20); alpha *= q; }
         else if (ty == "slide_down") { dy += (1 - q) * (h + 10); alpha *= q; }
         else if (ty == "slide_up") { dy -= (1 - q) * (h + 10); alpha *= q; }
         else if (ty == "wipe_x") clip = std::min(clip, q);
@@ -1175,7 +1180,7 @@ static void draw_layer(const Ctx &c, const JVal &L, double t, double duration)
      * it slides. */
     bool above = L.num("y", 0) + L.num("h", 0) <= 0.0;
     if (above) R.rt->PushAxisAlignedClip(D2D1::RectF(-100, -1000, 2000, 0), D2D1_ANTIALIAS_MODE_ALIASED);
-    draw_element(c, L, alpha, 0, dy, clip);
+    draw_element(c, L, alpha, dx, dy, clip);
     if (above) R.rt->PopAxisAlignedClip();
 }
 
@@ -1381,6 +1386,10 @@ static void music_logic(const GameState &g, bool native_on)
         s_game_started = true;
         s_coin_toss = 0;
         s_outro_played = false;
+        /* A package may define a pregame scorebug entrance.  It is queued
+         * after the match state becomes valid, not while a full-screen open
+         * video is holding the HUD. */
+        s_queue.push_back({ "pregame", HOME, "" });
         if (s_video_then_theme) {
             /* The open covered the loading show; the pregame starts now. */
             ++s_video.generation;
