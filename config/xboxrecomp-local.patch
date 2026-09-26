@@ -2729,10 +2729,10 @@ index 0000000..85d7275
 +}
 diff --git a/src/kernel/nv2a_gpu_d3d11.inc.c b/src/kernel/nv2a_gpu_d3d11.inc.c
 new file mode 100644
-index 0000000..0107c51
+index 0000000..ef30f6c
 --- /dev/null
 +++ b/src/kernel/nv2a_gpu_d3d11.inc.c
-@@ -0,0 +1,1520 @@
+@@ -0,0 +1,1568 @@
 +/* ── Hardware rendering (Direct3D 11) ─────────────────────────────────────
 + *
 + * Included into nv2a_pb_exec.c (it reads that file's state directly), after
@@ -2787,6 +2787,8 @@ index 0000000..0107c51
 +    uint32_t scale;                      /* render-target size = guest size x scale */
 +    ID3D11Texture2D *down;               /* guest-sized target a scaled surface is read back through */
 +    ID3D11RenderTargetView *down_rtv;
++    ID3D11Texture2D *copy;               /* GPU copy sampled when the target is a texture */
++    ID3D11ShaderResourceView *copy_srv;
 +    int dirty;                           /* GPU holds newer pixels than guest RAM */
 +    int stale;                           /* guest RAM holds newer pixels than the GPU */
 +} GpuSurface;
@@ -3046,6 +3048,8 @@ index 0000000..0107c51
 +    if (s->staging) ID3D11Texture2D_Release(s->staging);
 +    if (s->down_rtv) ID3D11RenderTargetView_Release(s->down_rtv);
 +    if (s->down) ID3D11Texture2D_Release(s->down);
++    if (s->copy_srv) ID3D11ShaderResourceView_Release(s->copy_srv);
++    if (s->copy) ID3D11Texture2D_Release(s->copy);
 +    memset(s, 0, sizeof *s);
 +}
 +
@@ -3231,6 +3235,50 @@ index 0000000..0107c51
 +
 +    if (!t->valid || t->width > 4096 || t->height > 4096)
 +        return NULL;
++    if (env_cached("RECOMP_RTT_TRACE")) {
++        /* Which textures read memory a render target covers. */
++        static uint32_t seen[64][3];
++        static int nseen;
++        int k2, j2;
++        for (k2 = 0; k2 < GPU_MAX_SURFACES; k2++) {
++            GpuSurface *sf = &s_gpu11.surf[k2];
++            if (!sf->tex || !(t->offset < sf->guest + sf->pitch * sf->h && sf->guest < t->offset + gpu_tex_bytes(t)))
++                continue;
++            for (j2 = 0; j2 < nseen; j2++)
++                if (seen[j2][0] == t->offset && seen[j2][1] == t->color && seen[j2][2] == sf->guest) break;
++            if (j2 == nseen && nseen < 64) {
++                seen[nseen][0] = t->offset; seen[nseen][1] = t->color; seen[nseen][2] = sf->guest; nseen++;
++                fprintf(stderr, "  [RTT] stage %d tex %08X fmt %02X %ux%u pitch %u cube %d <- surface %08X %ux%u pitch %u dirty %d\n",
++                        st, t->offset, t->color, t->width, t->height, t->pitch, cube, sf->guest, sf->w, sf->h, sf->pitch, sf->dirty);
++            }
++        }
++    }
++    /* A texture that is exactly a render target (NFL 2K5 samples its front
++     * and back buffers as 720x480 LIN_X8R8G8B8 for full-screen effects):
++     * copy the target on the GPU and sample the copy. Reading it back to
++     * guest RAM and decoding it again was ~22% of a frame, stalled on the
++     * GPU, and lost the internal resolution (2026-09-26). The copy keeps
++     * the draw from sampling the target it may be drawing into. */
++    if (!cube && (t->color == 0x1E || t->color == 0x12)) {
++        int k3;
++        for (k3 = 0; k3 < GPU_MAX_SURFACES; k3++) {
++            GpuSurface *sf = &s_gpu11.surf[k3];
++            if (sf->tex && sf->guest == t->offset && sf->w == t->width && sf->h == t->height && sf->pitch == t->pitch) {
++                if (!sf->copy) {
++                    D3D11_TEXTURE2D_DESC td;
++                    ID3D11Texture2D_GetDesc(sf->tex, &td);
++                    td.BindFlags = D3D11_BIND_SHADER_RESOURCE;
++                    if (FAILED(ID3D11Device_CreateTexture2D(s_gpu11.dev, &td, NULL, &sf->copy)))
++                        break;
++                    ID3D11Device_CreateShaderResourceView(s_gpu11.dev, (ID3D11Resource *)sf->copy, NULL, &sf->copy_srv);
++                }
++                if (sf->copy_srv) {
++                    ID3D11DeviceContext_CopyResource(s_gpu11.ctx, (ID3D11Resource *)sf->copy, (ID3D11Resource *)sf->tex);
++                    return sf->copy_srv;
++                }
++            }
++        }
++    }
 +    gpu_flush_range(t->offset, gpu_tex_bytes(t));     /* render-to-texture */
 +    /* Hashed by identity, probed over a short run; the oldest slot of the run
 +     * is the victim. In-game NFL 2K5 binds far more than the old 256-entry
@@ -4561,10 +4609,10 @@ index 0000000..09057ec
 +    "}\n";
 diff --git a/src/kernel/nv2a_gpu_present.inc.c b/src/kernel/nv2a_gpu_present.inc.c
 new file mode 100644
-index 0000000..d9b4381
+index 0000000..f6de35b
 --- /dev/null
 +++ b/src/kernel/nv2a_gpu_present.inc.c
-@@ -0,0 +1,784 @@
+@@ -0,0 +1,789 @@
 +/* ── Presentation and video settings (2026-09-26) ────────────────────────
 + *
 + * Included into nv2a_gpu_d3d11.inc.c.
@@ -5312,6 +5360,11 @@ index 0000000..d9b4381
 +        s_pr.fps = (int)((double)s_pr.frames * s_pr.freq.QuadPart / (double)(now.QuadPart - s_pr.t0.QuadPart) + 0.5);
 +        s_pr.frames = 0;
 +        s_pr.t0 = now;
++        {
++            static int secs;
++            if (++secs % 10 == 0)
++                fprintf(stderr, "  [FPS] %d (scale %d, vsync %d)\n", s_pr.fps, s_vs.scale, s_vs.vsync);
++        }
 +        if (s_vs.show_fps) s_pr.ovl_valid = 0;
 +    }
 +    if (s_menu_open || s_vs.show_fps) {
