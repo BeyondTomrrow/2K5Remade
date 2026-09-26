@@ -1,4 +1,4 @@
-param([ValidateSet('Release','Debug')][string]$Configuration = 'Release', [switch]$Game, [switch]$Optimize)
+param([ValidateSet('Release','Debug')][string]$Configuration = 'Release', [switch]$Game, [switch]$Optimize, [switch]$DebugGen)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 $vs = $null
@@ -37,7 +37,11 @@ $gameOption = if ($Game) { 'ON' } else { 'OFF' }
 # -Optimize: generated code compiled with optimisation (NFL2K5_OPTIMIZE=ON) in its
 # own build directory, so the /Od build stays usable. A fresh cache there gets the
 # current recommended force-unblock set (see PROJECT_STATUS.md, 2026-09-23).
-$buildDir = if ($Optimize) { "$root\build\$Configuration-opt" } else { "$root\build\$Configuration" }
+# 2026-09-26: optimised generated code is the default, so build\Release\NFL2K5.exe
+# (the exe that gets double-clicked) is the fast one. -DebugGen builds the /Od
+# variant in build\<Configuration>-od; -Optimize keeps building -opt as before.
+$buildDir = if ($Optimize) { "$root\build\$Configuration-opt" } elseif ($DebugGen) { "$root\build\$Configuration-od" } else { "$root\build\$Configuration" }
+if (-not $DebugGen) { $Optimize = $true }
 $extra = if ($Optimize) { @('-DNFL2K5_OPTIMIZE=ON', '-DNFL2K5_FORCE_UNBLOCK_AUDIO_LOCK=ON', '-DNFL2K5_FORCE_UNBLOCK_33660_DRAIN=ON', '-DNFL2K5_FORCE_UNBLOCK_NETPOLL=ON', '-DNFL2K5_FORCE_UNBLOCK_STATE9_READY=ON') } else { @() }
 & $cmake -S $root -B $buildDir -G Ninja "-DCMAKE_BUILD_TYPE=$Configuration" "-DNFL2K5_BUILD_GAME=$gameOption" @extra -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl 2>&1 | Tee-Object "$root\logs\configure-$Configuration.log"
 if ($LASTEXITCODE) { throw 'CMake configure failed.' }

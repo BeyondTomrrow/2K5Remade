@@ -2309,6 +2309,7 @@ int main(int argc, char **argv)
          * software rasteriser and identical on every screen compared so far.
          * RECOMP_GPU=0 goes back to software. */
         if (!getenv("RECOMP_GPU")) _putenv_s("RECOMP_GPU", "1");
+        if (!getenv("RECOMP_GPU_VP")) _putenv_s("RECOMP_GPU_VP", "1");   /* vertex programs on the GPU */
         if (!getenv("XBOX_LOG_LEVEL")) _putenv_s("XBOX_LOG_LEVEL", "0");
         if (!getenv("RECOMP_KERNEL_LOG_BUDGET")) _putenv_s("RECOMP_KERNEL_LOG_BUDGET", "0");
     }
