@@ -2,6 +2,17 @@
 
 Everything here is read by the game at startup.
 
+## Make a scorebug without editing JSON
+
+Open `tools\open-scorebug-studio.ps1`. Scorebug Studio is an offline visual
+editor with CBS-style, ESPN-style, FOX-style, NBC-style, Netflix-style, and
+custom starting looks. It previews the scorebug, lets you drag it into place,
+and downloads a game-ready `presentation.json`. Create a folder in
+`mods\presentations\` for the new package and put the download in it.
+
+The editor produces this existing format, so advanced creators can still edit
+the JSON later to add their own layers, images, music, video, and animations.
+
 ## teams/<ABBR>/
 
 One folder per team, named by the game's team code (SF, DAL, KC, ...).

@@ -1,0 +1,16 @@
+# Scorebug Studio
+
+Open `index.html` in a browser. It works offline and installs nothing.
+
+Choose a CBS-style, ESPN-style, FOX-style, NBC-style, Netflix-style, or custom
+starting point. Change the colours, network label, font, placement, and size;
+drag the preview to position it; then use **Download presentation.json**.
+
+Create a folder under `mods\presentations\` with your package name and put the
+downloaded file in that folder. Start the game, then choose it at **Coach Match
+Up > Presentation**.
+
+The editor exports the same package format that the current renderer reads. It
+does not contain network logos, theme music, or video: creators can add their
+own permitted files to the package later, while the exported scorebug works on
+its own.
