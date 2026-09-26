@@ -1394,7 +1394,7 @@ static void nfl2k5_archive_completion_45100(void)
             MEM32(record + 0x20u) = g_eax + record + 0x1Fu;
 
         tag = MEM32(record + 0xCu);
-        g_edx = (index >= count - 1u) ? 0x000450B0u : 0x000450D0u;
+        g_edx = 0x000450B0u;   /* load callback for every record (was 0x450D0 for all but the last) */
         PUSH32(g_esp, 0x000450D0u);
 
         if (index < count - 1u) {
@@ -2062,8 +2062,11 @@ recomp_func_t recomp_lookup_manual(uint32_t address)
         return nfl2k5_marker_completion_168c70;
     case 0x00045600u:
         return nfl2k5_archive_completion_45600;
-    case 0x00045100u:
-        return nfl2k5_archive_completion_45100;
+    /* 0x00045100: no override any more (2026-09-25). The analysis now
+     * translates it, and nfl2k5_archive_completion_45100 passed the release
+     * callback (0x450D0) as the load callback for every record but the
+     * last -- the original loads with 0x450B0 for all of them -- so each
+     * texture set was released as it loaded: black uniforms and field. */
     case 0x0004D810u:
         return nfl2k5_io_worker;
     case 0x004DB047u:

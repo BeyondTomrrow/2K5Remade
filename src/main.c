@@ -852,6 +852,55 @@ void nfl2k5_diag_fsm(uint32_t obj, uint32_t desc, int push)
             break;
 }
 
+/* 2026-09-25: a texture whose address resolves to 0 (DIAG_TEXZERO in
+ * sub_00031FA0). tex = the D3D texture object: {Common, Data, +8, Format,
+ * Size}. First 12 distinct objects. */
+void nfl2k5_diag_texzero(uint32_t tex, uint32_t ret)
+{
+    static uint32_t seen[12];
+    static int n;
+    const uint8_t *m = (const uint8_t *)xbox_GetMemoryOffset();
+    int i;
+    for (i = 0; i < n; i++) if (seen[i] == tex) return;
+    if (n >= 12) return;
+    seen[n++] = tex;
+    fprintf(stderr, "  [TEXZERO] tex %08X (ret %08X): %08X %08X %08X %08X %08X | %08X %08X %08X %08X\n", tex, ret,
+            *(const uint32_t *)(m + tex), *(const uint32_t *)(m + tex + 4), *(const uint32_t *)(m + tex + 8),
+            *(const uint32_t *)(m + tex + 12), *(const uint32_t *)(m + tex + 16), *(const uint32_t *)(m + tex + 20),
+            *(const uint32_t *)(m + tex + 24), *(const uint32_t *)(m + tex + 28), *(const uint32_t *)(m + tex + 32));
+}
+
+void nfl2k5_diag_reg(uint32_t fn, uint32_t edx_, uint32_t a0, uint32_t a1, uint32_t obj)
+{
+    static volatile LONG n;
+    if ((edx_ != 0x450B0u && edx_ != 0x450D0u) || InterlockedIncrement(&n) > 200)
+        return;
+    fprintf(stderr, "  [REG] sub_%08X edx=%08X [esp]=%08X [esp+4]=%08X obj=%08X\n", fn, edx_, a0, a1, obj);
+}
+
+void nfl2k5_diag_res43(uint32_t obj, uint32_t load, uint32_t fre, uint32_t where)
+{
+    static volatile LONG n;
+    if (InterlockedIncrement(&n) > 400)
+        return;
+    fprintf(stderr, "  [RES43] %s ret=%08X obj=%08X +18/load=%08X +1C/free=%08X\n", where == 1 ? "call " : "enter", where, obj, load, fre);
+}
+
+/* 2026-09-25: archive resource load (1) / release (0) callbacks
+ * (DIAG_RESLOAD/RESFREE): res+0x14 is the texture header, res+0x20 the
+ * shared block whose +8 is its reference count, 0xB12124 the base. */
+void nfl2k5_diag_res(uint32_t res, int load, uint32_t ret, uint32_t r2, uint32_t r3)
+{
+    static volatile LONG n;
+    const uint8_t *m = (const uint8_t *)xbox_GetMemoryOffset();
+    uint32_t hdr = *(const uint32_t *)(m + res + 0x14u), blk = *(const uint32_t *)(m + res + 0x20u);
+    if (InterlockedIncrement(&n) > 600)
+        return;
+    fprintf(stderr, "  [RES] %s res=%08X hdr=%08X data=%08X fmt=%08X blk=%08X ref=%d base=%08X ret=%08X<%08X<%08X B09590=%08X\n",
+            load ? "load" : "FREE", res, hdr, *(const uint32_t *)(m + hdr + 4u), *(const uint32_t *)(m + hdr + 12u),
+            blk, blk ? *(const int32_t *)(m + blk + 8u) : -1, *(const uint32_t *)(m + 0xB12124u), ret, r2, r3, *(const uint32_t *)(m + 0xB09590u));
+}
+
 /* 2026-09-25: presentation script commands (DIAG_SCRIPTOP). Prints each
  * command a script context starts, and the first poll of a command, with the
  * {type, start, poll} entry at 0xA8F7B8 + op*12. */
@@ -1286,7 +1335,7 @@ static BOOL hw_watch_arm_thread(DWORD tid)
          * LEN fields) untouched -- some other legitimate debugger/runtime
          * facility could be using them; only ever set/clear bit 0 and its
          * own condition/length fields here. */
-        ctx.Dr7 = (ctx.Dr7 & ~(DWORD64)0xF0003ull) | 0x1ull | (0x1ull << 16) | (0x3ull << 18);
+        ctx.Dr7 = (ctx.Dr7 & ~(DWORD64)0xF0003ull) | 0x1ull | ((getenv("RECOMP_HW_WATCH_RW") ? 0x3ull : 0x1ull) << 16) | (0x3ull << 18);   /* RW0: 01 write, 11 read or write */
         ok = SetThreadContext(h, &ctx);
     }
 
@@ -1333,6 +1382,18 @@ static LONG CALLBACK hw_watch_handler(EXCEPTION_POINTERS *ep)
         return EXCEPTION_CONTINUE_SEARCH;
 
     LONG n = InterlockedIncrement(&g_hw_watch_hits);
+    {
+        /* Each code location once: a read watch fires every frame. */
+        static DWORD64 seen_rip[512];
+        static int nseen;
+        int k;
+        for (k = 0; k < nseen; k++)
+            if (seen_rip[k] == ep->ContextRecord->Rip) {
+                ep->ContextRecord->Dr6 = 0;
+                return EXCEPTION_CONTINUE_EXECUTION;
+            }
+        if (nseen < 512) seen_rip[nseen++] = ep->ContextRecord->Rip;
+    }
     fprintf(stderr, "  [HWWATCH] hit #%ld guest_va=0x%08X rip=0x%llX\n",
             n, g_hw_watch_guest_va, (unsigned long long)ep->ContextRecord->Rip);
     char storage[sizeof(SYMBOL_INFO) + 256] = {0};
@@ -2837,7 +2898,11 @@ int main(int argc, char **argv)
              * run -- this arms a hardware write-watch on that exact field
              * (0xA77E38+0x14 = 0xA77E4C) to find out whether anything ever
              * writes it during a normal run, and if so, from where. */
-            hw_watch_install(0xA77E4Cu, "archive-obj-A77E38-plus14");
+            const char *wa = getenv("RECOMP_HW_WATCH_ADDR");
+            if (wa && *wa)
+                hw_watch_install((uint32_t)strtoul(wa, NULL, 16), "RECOMP_HW_WATCH_ADDR");
+            else
+                hw_watch_install(0xA77E4Cu, "archive-obj-A77E38-plus14");
         }
     }
     guest_function entry = recomp_lookup(0x00016BD1);

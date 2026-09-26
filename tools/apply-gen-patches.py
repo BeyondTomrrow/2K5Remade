@@ -172,6 +172,33 @@ PATCHES = [
     ("JOIN_2F7CA4_CMP", "sub_002F7C50", "loc_002F7CA4: ;", "after", """\
     if (CMP_EQ(_fa, _fb)) goto loc_002F7CE3;
 """),
+    # Texture bound with address 0 (2026-09-25, black field / bodies): log
+    # the D3D texture object sub_00031FA0 is writing (esi) and the caller.
+    ("DIAG_TEXZERO", "sub_00031FA0", "ebx = edx + 0x81B00;", "before", """\
+    if (eax == 0) { extern void nfl2k5_diag_texzero(uint32_t tex, uint32_t ret); nfl2k5_diag_texzero(esi, MEM32(esp + 0x10)); }
+"""),
+    # Archive resource load/release callbacks (2026-09-25): textures drawn
+    # after their release (Data back to 0) -> black field and uniforms.
+    ("DIAG_REG_00043E10", "sub_00043E10", "loc_00043E10: ;", "after", """    { extern void nfl2k5_diag_reg(uint32_t fn, uint32_t edx_, uint32_t a0, uint32_t a1, uint32_t obj); nfl2k5_diag_reg(0x00043E10, edx, MEM32(esp), MEM32(esp + 4), ecx); }
+"""),
+    ("DIAG_REG_00043E30", "sub_00043E30", "loc_00043E30: ;", "after", """    { extern void nfl2k5_diag_reg(uint32_t fn, uint32_t edx_, uint32_t a0, uint32_t a1, uint32_t obj); nfl2k5_diag_reg(0x00043E30, edx, MEM32(esp), MEM32(esp + 4), ecx); }
+"""),
+    ("DIAG_REG_00043E50", "sub_00043E50", "loc_00043E50: ;", "after", """    { extern void nfl2k5_diag_reg(uint32_t fn, uint32_t edx_, uint32_t a0, uint32_t a1, uint32_t obj); nfl2k5_diag_reg(0x00043E50, edx, MEM32(esp), MEM32(esp + 4), ecx); }
+"""),
+    ("DIAG_REG_00043E70", "sub_00043E70", "loc_00043E70: ;", "after", """    { extern void nfl2k5_diag_reg(uint32_t fn, uint32_t edx_, uint32_t a0, uint32_t a1, uint32_t obj); nfl2k5_diag_reg(0x00043E70, edx, MEM32(esp), MEM32(esp + 4), ecx); }
+"""),
+    ("DIAG_RES43D20_IN", "sub_00043D20", "loc_00043D20: ;", "after", """\
+    { extern void nfl2k5_diag_res43(uint32_t obj, uint32_t load, uint32_t fre, uint32_t where); nfl2k5_diag_res43(esi, ebx, eax, MEM32(esp)); }
+"""),
+    ("DIAG_RES43D20_CALL", "sub_00043D20", "loc_00043D67: ;", "after", """\
+    { extern void nfl2k5_diag_res43(uint32_t obj, uint32_t load, uint32_t fre, uint32_t where); nfl2k5_diag_res43(esi, MEM32(esi + 0x18), MEM32(esi + 0x1C), 1); }
+"""),
+    ("DIAG_RESLOAD", "sub_000450B0", "loc_000450B0: ;", "after", """\
+    { extern void nfl2k5_diag_res(uint32_t res, int load, uint32_t ret, uint32_t r2, uint32_t r3); nfl2k5_diag_res(ecx, 1, MEM32(esp), MEM32(esp + 8), MEM32(esp + 0x18)); }
+"""),
+    ("DIAG_RESFREE", "sub_000450D0", "loc_000450D0: ;", "after", """\
+    { extern void nfl2k5_diag_res(uint32_t res, int load, uint32_t ret, uint32_t r2, uint32_t r3); nfl2k5_diag_res(ecx, 0, MEM32(esp), MEM32(esp + 8), MEM32(esp + 0x18)); }
+"""),
     # Game state-machine pushes/pops (2026-09-24): see nfl2k5_diag_fsm in src/main.c.
     ("DIAG_FSMPUSH", "sub_0006E390", "loc_0006E3E6: ;", "after", """\
     { extern void nfl2k5_diag_fsm(uint32_t obj, uint32_t desc, int push); nfl2k5_diag_fsm(esi, edi, 1); }

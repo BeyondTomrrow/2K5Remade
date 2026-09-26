@@ -4713,7 +4713,7 @@ index 0000000..5fc196e
 +    return 1;
 +}
 diff --git a/src/kernel/nv2a_pb_exec.c b/src/kernel/nv2a_pb_exec.c
-index b3dcbf7..530119d 100644
+index b3dcbf7..1388e43 100644
 --- a/src/kernel/nv2a_pb_exec.c
 +++ b/src/kernel/nv2a_pb_exec.c
 @@ -24,8 +24,10 @@
@@ -6428,7 +6428,98 @@ index b3dcbf7..530119d 100644
      if (method >= NV097_SET_VERTEX4F && method < NV097_SET_VERTEX4F + 16) {
          uint32_t c = (method - NV097_SET_VERTEX4F) / 4;
          s_gpu.imm_pos[c] = v.f;
-@@ -1570,7 +3060,22 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1566,11 +3056,113 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+                     subch, method, param);
+     }
+ 
++    /* RECOMP_TEX_TRACE=1 (2026-09-25, black field): each distinct raw
++     * texture offset / format word per stage, and the context-DMA methods.
++     * Format bits 0-1 pick the DMA object (1 = A, 2 = B) the offset is in. */
++    if (subch == 0 && env_cached("RECOMP_TEX_TRACE")
++            && ((method >= 0x1B00 && method < 0x1C00 && ((method & 0x3F) == 0 || (method & 0x3F) == 4))
++                || (method >= 0x0180 && method < 0x01A0))) {
++        static uint32_t seen[512][2];
++        static unsigned nseen;
++        unsigned k;
++        for (k = 0; k < nseen; k++)
++            if (seen[k][0] == method && seen[k][1] == param) break;
++        /* Texture offset 0: the FORMAT word that follows is the header's
++         * Format field ({Common, Data, Lock, Format, Size}); find every
++         * header in guest memory with that Format and Data == 0. */
++        {
++            static int pending, dumps;
++            /* Where the zero was read, and what that word says later: a
++             * recorded pushbuffer whose fixups land after we ran it. */
++            static uint32_t zva[8], zdraw[8], nz, zdone;
++            {
++                extern volatile uint32_t g_nv2a_pb_last_word_va;
++                const uint8_t *gm = (const uint8_t *)xbox_GetMemoryOffset();
++                if (method == 0x1B00 && param == 0 && nz < 8) {
++                    zva[nz] = g_nv2a_pb_last_word_va; zdraw[nz] = s_gpu.draws; nz++;
++                    if (nz <= 4)
++                        fprintf(stderr, "  [TEXZERO] D3D buffers: A6AA14=%08X A6AA18=%08X A6AA20=%08X %08X %08X A6AA2C=%08X A6AA30=%08X\n",
++                                *(const uint32_t *)(gm + 0xA6AA14u), *(const uint32_t *)(gm + 0xA6AA18u),
++                                *(const uint32_t *)(gm + 0xA6AA20u), *(const uint32_t *)(gm + 0xA6AA24u),
++                                *(const uint32_t *)(gm + 0xA6AA28u), *(const uint32_t *)(gm + 0xA6AA2Cu),
++                                *(const uint32_t *)(gm + 0xA6AA30u));
++                    if (nz == 1) {
++                        uint32_t w, nzb = 0;
++                        for (w = 0; w < 0x4000; w++) nzb += gm[0x80000000u + w] != 0;
++                        fprintf(stderr, "  [TEXZERO] phys 0..0x4000: %u nonzero bytes; first: %08X %08X %08X %08X; palette@0x4000: %08X %08X %08X %08X\n",
++                                nzb, *(const uint32_t *)(gm + 0x80000000u), *(const uint32_t *)(gm + 0x80000004u),
++                                *(const uint32_t *)(gm + 0x80000100u), *(const uint32_t *)(gm + 0x80002000u),
++                                *(const uint32_t *)(gm + 0x80004000u), *(const uint32_t *)(gm + 0x80004004u),
++                                *(const uint32_t *)(gm + 0x80004100u), *(const uint32_t *)(gm + 0x800043FCu));
++                    }
++                    if (nz <= 3) {
++                        uint32_t w;
++                        fprintf(stderr, "  [TEXZERO] stream from %08X:", zva[nz - 1] - 16);
++                        for (w = 0; w < 96; w++) {
++                            if ((w & 7) == 0) fprintf(stderr, "\n  [TEXZERO]  ");
++                            fprintf(stderr, " %08X", *(const uint32_t *)(gm + zva[nz - 1] - 16 + w * 4));
++                        }
++                        fprintf(stderr, "\n");
++                    }
++                }
++                if (nz && zdone < nz && s_gpu.draws > zdraw[zdone] + 20000u) {
++                    fprintf(stderr, "  [TEXZERO] offset word at %08X (read 0 at draw %u) now %08X, next %08X %08X\n",
++                            zva[zdone], zdraw[zdone], *(const uint32_t *)(gm + zva[zdone]),
++                            *(const uint32_t *)(gm + zva[zdone] + 4), *(const uint32_t *)(gm + zva[zdone] + 8));
++                    zdone++;
++                }
++            }
++            if (method == 0x1B00)
++                pending = (param == 0);
++            else if (method == 0x1B04 && pending && dumps < 4) {
++                const uint8_t *gm = (const uint8_t *)xbox_GetMemoryOffset();
++                uint32_t a, found = 0;
++                pending = 0;
++                dumps++;
++                fprintf(stderr, "  [TEXZERO] format %08X with offset 0; headers:\n", param);
++                __try {
++                    for (a = 0x10000u; a < 0x04000000u && found < 24; a += 4) {
++                        if ((*(const uint32_t *)(gm + a) & 0xFFF0FFFCu) != (param & 0xFFF0FFFCu))
++                            continue;
++                        found++;
++                        fprintf(stderr, "  [TEXZERO]   %08X: %08X %08X %08X [%08X] %08X %08X %08X %08X\n", a - 12,
++                                *(const uint32_t *)(gm + a - 12), *(const uint32_t *)(gm + a - 8),
++                                *(const uint32_t *)(gm + a - 4), *(const uint32_t *)(gm + a),
++                                *(const uint32_t *)(gm + a + 4), *(const uint32_t *)(gm + a + 8),
++                                *(const uint32_t *)(gm + a + 12), *(const uint32_t *)(gm + a + 16));
++                    }
++                } __except (EXCEPTION_EXECUTE_HANDLER) {
++                    fprintf(stderr, "  [TEXZERO]   (scan stopped at %08X)\n", a);
++                }
++            }
++        }
++        if (k == nseen && nseen < 512) {
++            seen[nseen][0] = method; seen[nseen][1] = param; nseen++;
++            fprintf(stderr, "  [TEXTRACE] method %04X = %08X (stage %u %s) draws %u\n", method, param,
++                    method >= 0x1B00 ? (method - 0x1B00) >> 6 : 0,
++                    method < 0x1B00 ? "ctxdma" : (method & 0x3F) ? "format" : "offset", s_gpu.draws);
++        }
++    }
+     if (subch != 0) {                      /* 3D class lives on subchannel 0 */
          note_unhandled(method, param);
          return;
      }
@@ -6451,7 +6542,7 @@ index b3dcbf7..530119d 100644
      case NV097_SET_SURFACE_CLIP_HORIZONTAL:
          s_gpu.clip_x = param & 0xFFFF;
          s_gpu.clip_w = (param >> 16) & 0xFFFF;
-@@ -1586,16 +3091,32 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1586,16 +3178,32 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
          s_gpu.pitch = param & 0xFFFF;      /* colour pitch; zeta is the top half */
          break;
      case NV097_SET_SURFACE_COLOR_OFFSET:
@@ -6484,7 +6575,7 @@ index b3dcbf7..530119d 100644
          if (param) {
              s_gpu.prim = param;
              s_gpu.idx_count = 0;
-@@ -1620,8 +3141,15 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1620,8 +3228,15 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
      case NV097_INLINE_ARRAY:
          /* Vertex data, not a pointer to it. Buffered rather than decoded here
           * because the format is only fully known at END. */
@@ -6501,7 +6592,7 @@ index b3dcbf7..530119d 100644
          break;
  
      case NV097_DRAW_ARRAYS: {
-@@ -1644,6 +3172,13 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1644,6 +3259,13 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
          break;
      }
  
@@ -6515,7 +6606,7 @@ index b3dcbf7..530119d 100644
      case NV097_ARRAY_ELEMENT16:
          /* Two 16-bit indices per parameter word. */
          if (s_gpu.prim && s_gpu.idx_count + 2 <= NV_MAX_INDICES) {
-@@ -1659,6 +3194,23 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1659,6 +3281,23 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
          record_tex_reg(method, param);
          break;
  
@@ -6539,7 +6630,7 @@ index b3dcbf7..530119d 100644
      case NV097_SET_FLIP_READ:
          s_gpu.flip_read = param;
          return;
-@@ -1682,6 +3234,47 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1682,6 +3321,47 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
          /* The stall ends when the buffer being read is the one just finished.
           * There is no scanout here to wait for, so that is now. */
          s_gpu.flip_read = s_gpu.flip_write;
@@ -6587,7 +6678,7 @@ index b3dcbf7..530119d 100644
          /* And this is a completed swap, which is what a title's own swap
           * counter counts -- see xbox_Nv2aFrameCounterFlip. */
          xbox_Nv2aFrameCounterFlip();
-@@ -1696,6 +3289,11 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1696,6 +3376,11 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
          return;
  
      case NV097_SET_TEXTURE_FORMAT:
@@ -6599,7 +6690,7 @@ index b3dcbf7..530119d 100644
          s_gpu.tex.color = (param >> 8) & 0xFF;
          /* A swizzled texture carries its own dimensions here, as log2 in
           * BASE_SIZE_U/V (nv2a_regs.h: 0x00F00000 / 0x0F000000). It has to:
-@@ -1729,6 +3327,9 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1729,6 +3414,9 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
      case NV097_SET_TEXTURE_IMAGE_RECT:
          s_gpu.tex.width  = param >> 16;
          s_gpu.tex.height = param & 0xFFFF;
@@ -6609,7 +6700,7 @@ index b3dcbf7..530119d 100644
          record_tex_reg(method, param);
          break;
  
-@@ -1948,9 +3549,12 @@ void nv2a_pb_exec_report(void)
+@@ -1948,9 +3636,12 @@ void nv2a_pb_exec_report(void)
              dma_resolve(s_gpu.drawn_offset), s_gpu.color_offset,
              dma_resolve(s_gpu.color_offset));
      fprintf(stderr, "[GPU] rasterised %u triangles; %u batches skipped as not"
