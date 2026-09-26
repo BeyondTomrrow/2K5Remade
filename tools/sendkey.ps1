@@ -12,7 +12,7 @@ public static class K {
 }
 "@
 $vk = @{ SPACE = 0x20; RETURN = 0x0D; Z = 0x5A; X = 0x58; C = 0x43; V = 0x56; LEFT = 0x25; UP = 0x26; RIGHT = 0x27; DOWN = 0x28 }
-$h = [K]::FindWindow('XboxRecompFramebuffer', [NullString]::Value)
+$h = [K]::FindWindow('ESPN NFL 2K5', [NullString]::Value)
 if ($h -eq [IntPtr]::Zero) { 'no window'; return }
 [void][K]::SetForegroundWindow($h)
 Start-Sleep -Milliseconds 200

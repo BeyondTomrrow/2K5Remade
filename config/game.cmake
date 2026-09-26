@@ -2,7 +2,7 @@ file(GLOB NFL2K5_GENERATED CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/src/recomp/g
 if(NOT NFL2K5_GENERATED)
   message(FATAL_ERROR "Run tools/analyze.ps1 -Recompile before building the game.")
 endif()
-add_executable(NFL2K5 WIN32 src/main.c src/recomp_manual.c src/nfl2k5_input_hle.c src/nfl2k5_video_menu.c ${NFL2K5_GENERATED})
+add_executable(NFL2K5 WIN32 src/main.c src/recomp_manual.c src/nfl2k5_input_hle.c src/nfl2k5_video_menu.c src/nfl2k5.rc ${NFL2K5_GENERATED})
 target_include_directories(NFL2K5 PRIVATE src/recomp/gen)
 option(NFL2K5_ABI_CHECK "Diagnostic: verify ebx/esi/edi preservation across every recompiled call" OFF)
 option(NFL2K5_COVERAGE "Diagnostic: record which recompiled functions are ever entered via a direct call, to measure what fraction of the program actually runs (see PROJECT_STATUS.md, 2026-09-22)" OFF)

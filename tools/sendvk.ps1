@@ -8,7 +8,7 @@ public class W32K {
   [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h, uint m, IntPtr w, IntPtr l);
 }
 "@
-$h = [W32K]::FindWindow('XboxRecompFramebuffer', [NullString]::Value)
+$h = [W32K]::FindWindow('ESPN NFL 2K5', [NullString]::Value)
 if ($h -eq [IntPtr]::Zero) { 'no window'; exit 1 }
 [W32K]::PostMessage($h, 0x100, [IntPtr]$Vk, [IntPtr]1) | Out-Null
 [W32K]::PostMessage($h, 0x101, [IntPtr]$Vk, [IntPtr]0xC0000001) | Out-Null

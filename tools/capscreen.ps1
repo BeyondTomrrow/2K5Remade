@@ -14,7 +14,7 @@ public class W32 {
   [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
 }
 "@
-$h = [W32]::FindWindow('XboxRecompFramebuffer', [NullString]::Value)
+$h = [W32]::FindWindow('ESPN NFL 2K5', [NullString]::Value)
 if ($h -eq [IntPtr]::Zero) { 'no window'; exit 1 }
 [W32]::SetForegroundWindow($h) | Out-Null
 Start-Sleep -Milliseconds 400

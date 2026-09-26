@@ -14,7 +14,7 @@ $sp = (Join-Path (Split-Path $PSScriptRoot -Parent) "logs")
 $t0 = Get-Date
 foreach ($t in $At) {
     while (((Get-Date) - $t0).TotalSeconds -lt $t) { Start-Sleep -Milliseconds 200 }
-    $h = [W]::FindWindow('XboxRecompFramebuffer', [NullString]::Value)
+    $h = [W]::FindWindow('ESPN NFL 2K5', [NullString]::Value)
     if ($h -eq [IntPtr]::Zero) { "t=$t no window"; continue }
     $r = New-Object W+RECT
     [void][W]::GetClientRect($h, [ref]$r)

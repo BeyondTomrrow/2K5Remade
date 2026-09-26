@@ -433,7 +433,7 @@ index b9f429e..d26d8eb 100644
              }
              d->regs[current] = d->regs[next];
 diff --git a/src/apu/apu_xaudio2.c b/src/apu/apu_xaudio2.c
-index cd69e57..88701bc 100644
+index cd69e57..5ac6256 100644
 --- a/src/apu/apu_xaudio2.c
 +++ b/src/apu/apu_xaudio2.c
 @@ -9,6 +9,7 @@
@@ -453,7 +453,7 @@ index cd69e57..88701bc 100644
  
  static IXAudio2               *g_xa2 = NULL;
  static IXAudio2MasteringVoice *g_xa2_master = NULL;
-@@ -137,6 +138,34 @@ int xa2_submit_samples(const int16_t *samples, int num_samples)
+@@ -137,9 +138,65 @@ int xa2_submit_samples(const int16_t *samples, int num_samples)
  
      if (!g_xa2_initialized || !g_xa2_source) return 0;
  
@@ -486,8 +486,39 @@ index cd69e57..88701bc 100644
 +    }
 +
      IXAudio2SourceVoice_GetState(g_xa2_source, &state, XAUDIO2_VOICE_NOSAMPLESPLAYED);
++    /* Dropped buffers (queue full: the APU runs ahead of the speakers) and
++     * underruns (queue empty: behind) are both audible clicks; count them. */
++    {
++        static unsigned long drops, starves, subs;
++        static DWORD last;
++        DWORD now = GetTickCount();
++        subs++;
++        if ((int)state.BuffersQueued >= XA2_NUM_BUFS) drops++;
++        else if (state.BuffersQueued == 0 && subs > 50) starves++;
++        if (now - last >= 10000) {
++            fprintf(stderr, "[XA2] submits=%lu dropped=%lu underruns=%lu queued=%u\n",
++                    subs, drops, starves, (unsigned)state.BuffersQueued);
++            last = now;
++        }
++    }
      if ((int)state.BuffersQueued >= XA2_NUM_BUFS) return 0;
  
++    /* Keep a cushion. The APU makes samples at exactly the output rate, so
++     * the queue depth never recovers by itself: it sat at one buffer
++     * (~21 ms), and any stall of the frame thread emptied it -- a click.
++     * One silent buffer ahead when the queue runs low keeps ~40-60 ms
++     * queued from then on (2026-09-26). */
++    if (state.BuffersQueued <= 1 && (int)state.BuffersQueued + 2 <= XA2_NUM_BUFS) {
++        static const int16_t silence[XA2_BUF_SAMPLES][2];
++        memset(&xbuf, 0, sizeof(xbuf));
++        xbuf.AudioBytes = XA2_BUF_SAMPLES * XA2_CHANNELS * sizeof(int16_t);
++        xbuf.pAudioData = (const BYTE *)silence;
++        IXAudio2SourceVoice_SubmitSourceBuffer(g_xa2_source, &xbuf, NULL);
++    }
++
+     idx = g_xa2_next_buf;
+     copy_samples = (num_samples > XA2_BUF_SAMPLES) ? XA2_BUF_SAMPLES : num_samples;
+     memcpy(g_xa2_bufs[idx], samples, copy_samples * XA2_CHANNELS * sizeof(int16_t));
 diff --git a/src/input/xinput_device.c b/src/input/xinput_device.c
 index 1a662a8..c9f5989 100644
 --- a/src/input/xinput_device.c
@@ -9510,7 +9541,7 @@ index 2189a3b..9d7605b 100644
 +    target_link_libraries(xbox_video PUBLIC mfplat mfreadwrite mfuuid mf ole32 imm32)
  endif()
 diff --git a/src/video/fb_present.c b/src/video/fb_present.c
-index 69ced11..27b0f6f 100644
+index 69ced11..06ce15d 100644
 --- a/src/video/fb_present.c
 +++ b/src/video/fb_present.c
 @@ -17,7 +17,12 @@
@@ -9643,7 +9674,7 @@ index 69ced11..27b0f6f 100644
      return DefWindowProcA(h, m, w, l);
  }
  
-@@ -125,12 +225,35 @@ int xbox_FramebufferDumpBmp(const char *path)
+@@ -125,85 +225,207 @@ int xbox_FramebufferDumpBmp(const char *path)
  static DWORD WINAPI fb_thread(LPVOID unused)
  {
      HWND hwnd;
@@ -9681,7 +9712,14 @@ index 69ced11..27b0f6f 100644
      {
          WNDCLASSA wc;
          memset(&wc, 0, sizeof(wc));
-@@ -142,68 +265,165 @@ static DWORD WINAPI fb_thread(LPVOID unused)
+         wc.lpfnWndProc   = fb_wndproc;
+         wc.hInstance     = GetModuleHandleA(NULL);
+         wc.hCursor       = LoadCursorA(NULL, IDC_ARROW);
+-        wc.lpszClassName = "XboxRecompFramebuffer";
++        /* The game's icon (resource 1 of the executable, if it has one). */
++        wc.hIcon         = LoadIconA(GetModuleHandleA(NULL), MAKEINTRESOURCEA(1));
++        wc.lpszClassName = "ESPN NFL 2K5";
+         RegisterClassA(&wc);
      }
      r.left = 0; r.top = 0; r.right = (LONG)s_fb_width; r.bottom = (LONG)s_fb_height;
      AdjustWindowRect(&r, WS_OVERLAPPEDWINDOW, FALSE);
@@ -9707,7 +9745,7 @@ index 69ced11..27b0f6f 100644
 +        }
 +        style = WS_POPUP | WS_VISIBLE;
 +    }
-+    hwnd = CreateWindowExA(0, "XboxRecompFramebuffer", "ESPN NFL 2K5  (F1: video settings)",
++    hwnd = CreateWindowExA(0, "ESPN NFL 2K5", "ESPN NFL 2K5",
 +                           style, win_x, win_y, win_w, win_h,
                             NULL, NULL, GetModuleHandleA(NULL), NULL);
      if (!hwnd) {
@@ -9872,7 +9910,7 @@ index 69ced11..27b0f6f 100644
      if (InterlockedCompareExchange(&s_fb_running, 1, 0) != 0)
          return;
      th = CreateThread(NULL, 0, fb_thread, NULL, 0, NULL);
-@@ -213,7 +433,29 @@ void xbox_FramebufferWindowStart(void)
+@@ -213,7 +435,29 @@ void xbox_FramebufferWindowStart(void)
          InterlockedExchange(&s_fb_running, 0);
  }
  
@@ -9902,6 +9940,26 @@ index 69ced11..27b0f6f 100644
  void xbox_FramebufferWindowStart(void) {}
 +void xbox_FramebufferWindowForceStart(void) {}
  #endif
+diff --git a/src/video/video_pump.c b/src/video/video_pump.c
+index 6fdf222..66180ee 100644
+--- a/src/video/video_pump.c
++++ b/src/video/video_pump.c
+@@ -43,12 +43,13 @@ static HWND vp_create_window(void)
+     wc.lpfnWndProc   = vp_wndproc;
+     wc.hInstance     = GetModuleHandleA(NULL);
+     wc.hCursor       = LoadCursorA(NULL, IDC_ARROW);
+-    wc.lpszClassName = "XboxRecompVideo";
++    wc.hIcon         = LoadIconA(GetModuleHandleA(NULL), MAKEINTRESOURCEA(1));
++    wc.lpszClassName = "ESPN NFL 2K5 Video";
+     RegisterClassA(&wc);
+ 
+     r.left = 0; r.top = 0; r.right = VP_WINDOW_W; r.bottom = VP_WINDOW_H;
+     AdjustWindowRect(&r, WS_OVERLAPPEDWINDOW, FALSE);
+-    return CreateWindowExA(0, "XboxRecompVideo", "Xbox Recomp - Video",
++    return CreateWindowExA(0, "ESPN NFL 2K5 Video", "ESPN NFL 2K5",
+                            WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+                            CW_USEDEFAULT, CW_USEDEFAULT,
+                            r.right - r.left, r.bottom - r.top,
 diff --git a/templates/runtime/recomp_types.h b/templates/runtime/recomp_types.h
 index dc1dae0..398a525 100644
 --- a/templates/runtime/recomp_types.h
