@@ -2240,3 +2240,11 @@ Reached natively (user-verified): intro movies, legal/SEGA screens, title, main 
 - **Tools**: `tools/record-demo.ps1` (video of boot -> menus -> kickoff with audio), `tools/drive-menu.ps1`; RECOMP_AUDIO_WAV includes the theme and writes `<wav>.start`.
 - **Mods (.2k5patch) on hold** by the user; see the memory note / `docs`.
 - **Known**: intro movies still play far below real time (NFL2K5_SKIP_INTRO skips them).
+
+## 2026-09-26 (afternoon): broadcast packages finished for now
+
+- Menu-music static fixed (ADPCM realignment after the game's mid-block stream restarts; see apu_vp.c adpcm_realign). Found with xemu under gdb and a WASAPI loopback recorder (tools/loopback_rec.c).
+- Broadcast mix: commentary on mixbin 2 is centred (it played in the left ear only); the game's music voices 0x44/0x45 are muted under a broadcast theme; the theme dips only under commentary.
+- ESPN bug (live play) hidden via the score_bug scene's node hidden bit and its text colours; play-calling screen bar still shows (separate UI).
+- Team logos exported from the game's pack for the scorebug; CBS open video replaces the Berman loading show when a package is on; Berman returns with ESPN (Original).
+- Details and open items: docs/HANDOFF-CHATGPT.md.

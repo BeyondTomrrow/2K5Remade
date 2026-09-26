@@ -124,25 +124,43 @@ play). Everything below is committed on `master`.
   `NFL2K5_PRES_LOG/TEST/EVENT`, `NFL2K5_MEMDUMP=addr:len`, `RECOMP_HW_WATCH`
   (+ `_ADDR`, prints guest stack).
 
+### Done later on 2026-09-26
+- **Broadcast mix**: NFL 2K5 puts commentary on mixbin 2 (centre), crowd and
+  music on 0/1. Mixdown (`apu_dsp.c`): centre -> both at -3 dB, LFE -> both
+  at half, everything else scaled by the "bed" gain (`xbox_AudioSetGameGain`),
+  commentary gain separate (`xbox_AudioSetCommentaryGain`), commentary level
+  meter (`xbox_AudioGameLevel`). While a theme plays, the game's own music
+  voices 0x44/0x45 are muted (`xbox_AudioMuteGameMusic`); the theme dips
+  under the announcers only.
+- **ESPN bug hidden** with a package on: score_bug scene (0xA95528) nodes at
+  +0x20 (0x80 each, count +0x1C), bit 0 of node flags (+8) = hidden; its text
+  colours (table 0xA95880..0xA95C08) get alpha 0. Hooks: SCOREBUG_NATIVE_HOOK,
+  SCOREBUG_HIDE_LAYOUT1/2 (after sub_000FC200), SCOREBUG_HIDE_UPDATE.
+  NOTE: the presentation's guest-memory helpers must accept the contiguous
+  window 0x80000000.. (scenes and pools live there).
+- **Team logos** from the game's own pack (`tools/export_team_logos.py`, uses
+  2K5 Mod Studio's decoder) -> `mods/teams/<ABBR>/logos/scorebug.png`.
+- **Pregame open video** (`pregame_video` in presentation.json): plays over
+  the match-loading studio show (Berman) -- trigger: 0xA9288C mode 1/3, done
+  0xA92888 == 0, match clock not up -- with the game muted, holds its last
+  frame until the pregame starts, then the intro theme. Video via Media
+  Foundation -> HUD layer (scalable image). CBS package ships
+  "NFL Today Open.mp4" (user's file, gitignored).
+
 ### Open problems (user-reported), priority order
-1. **ESPN scorebar still visible at the top** when the CBS package is on.
-   Latest attempt (built, NOT verified): zero the six element fade factors
-   (0x70-byte records from 0xA959C8, fade at +0x3C) every frame in
-   `nfl2k5_scorebug_native_hook` (gen patch SCOREBUG_NATIVE_HOOK after the
-   visibility update 0xFC9C0 inside sub_000FCE70). Moving the root matrix
-   (gen patch SCOREBUG_NATIVE_HIDE2, `NFL2K5_HIDE_MODE`) had no visible effect.
-2. **Audio mix**: user wants the theme audible but under the play-by-play
-   (current: package volume 0.12, dips to 50% when game level > 0.02);
-   crowd sometimes too loud over announcers; the game plays its own sting at
-   the team-intro "camera flash" -- the theme should duck/stop there.
-3. **Play-call screen**: the three play-art panels + "LAST PLAY" window at
-   the bottom are missing (only the formation circles on the field show).
-   Probably render-to-texture / 2D panel rendering in the GPU path.
-4. **Field**: zig-zag light/dark green artefacts on the grass near the line
-   of scrimmage; **parking lot visible in the screen corners** (geometry /
-   clip or sky issue at the edges).
-5. Intro movies play far below real time (NFL2K5_SKIP_INTRO skips them).
-6. Mods (.2k5patch support) on hold by the user.
+1. **Play-calling screen**: the ESPN bar at the top of the play-call screen
+   is a separate UI object (not score_bug; skipping score_bug's update
+   leaves it intact) -- not hidden yet. The three play-art panels and the
+   LAST PLAY window at the bottom are missing; a light-green area with a
+   saw-tooth top edge shows instead (probably the panel background / a
+   render-to-texture). `RECOMP_RTT_TRACE` only shows full 720x480 surface
+   copies; `RECOMP_GPU_PICK` produced no output (check its gating).
+2. **Field**: zig-zag light/dark grass artefacts; **parking lot visible in
+   the screen corners** in some camera angles.
+3. Audio polish per user taste (levels are package JSON: `music.volume`,
+   `duck_under_announcers`, `announcer_level`, `mute_game_music`).
+4. Intro movies play far below real time (NFL2K5_SKIP_INTRO skips them).
+5. Mods (.2k5patch support) on hold by the user.
 
 ## Older status (2026-09-24, late night)
 

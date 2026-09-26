@@ -1310,7 +1310,9 @@ extern "C" void nfl2k5_presentation_popup(const char *title)
     if (title && !_strnicmp(title, "Coin Toss", 9)) s_coin_toss = 1;
 }
 
-static bool s_video_then_theme;   /* the open video runs; the theme follows it */
+static bool s_video_then_theme;   /* the open covers the loading show; the theme follows */
+static bool s_video_hold;         /* keep the open's last frame up until the pregame starts */
+static bool s_was_loading;
 
 static void start_intro_theme(const Package *pkg, const JVal *m, float vol, float duck, float fade)
 {
@@ -1325,13 +1327,39 @@ static void music_logic(const GameState &g, bool native_on)
 {
     const Package *pkg = custom_active() ? &s_pkgs[s_sel_pkg] : nullptr;
     double t = now_s();
+    {
+        /* Match loading (the studio show, Berman): mode 0xA9288C is 1 or 3
+         * and 0xA92888 (done) is 0 while the match itself (clock) is not up
+         * yet. A package with a pregame_video plays it over that show. */
+        uint32_t mode = rd32(0x00A9288Cu), done = rd32(0x00A92888u);
+        bool loading = (mode == 1 || mode == 3) && !done && !g.valid;
+        static bool played_this_load;
+        if (mode == 0) played_this_load = false;          /* back in the front end */
+        if (loading && !s_was_loading && !s_game_started && pkg && !played_this_load && !s_video_then_theme) {
+            played_this_load = true;
+            const JVal *pv = pkg->root.get("pregame_video");
+            std::string vfile = pv ? pv->str("file") : "";
+            if (!vfile.empty() && file_exists(pkg->dir + "/" + vfile)) {
+                std::string path = pkg->dir + "/" + vfile;
+                float v0 = s_sel_vol / 10.0f;
+                video_play(path);
+                music_play(path, v0 * (float)pv->num("volume", 1.0), 0.0f, 0.3f);
+                xbox_AudioSetGameGain(0.0f);
+                xbox_AudioSetCommentaryGain(0.0f);
+                s_video_then_theme = true;
+                s_video_hold = true;
+            }
+        }
+        s_was_loading = loading;
+    }
     if (!g.valid) {
         if (s_invalid_since == 0) s_invalid_since = t;
         if (t - s_invalid_since > 4.0) {        /* left the match */
             if (s_game_started || s_outro_played) music_fade();
-            if (s_video.state) { ++s_video.generation; s_video.state = 0; }
-            s_video_then_theme = false;
-            xbox_AudioSetCommentaryGain(1.0f);
+            if (!s_video_then_theme) {
+                if (s_video.state) { ++s_video.generation; s_video.state = 0; }
+                xbox_AudioSetCommentaryGain(1.0f);
+            }
             s_game_started = s_outro_played = s_intro_active = false;
         }
         return;
@@ -1352,34 +1380,16 @@ static void music_logic(const GameState &g, bool native_on)
         s_game_started = true;
         s_coin_toss = 0;
         s_outro_played = false;
-        const JVal *pv = pkg ? pkg->root.get("pregame_video") : nullptr;
-        std::string vfile = pv ? pv->str("file") : "";
-        if (!vfile.empty() && file_exists(pkg->dir + "/" + vfile)) {
-            /* The package's own open instead of the studio segment: the
-             * game is silenced, the segment skipped (A), the video plays
-             * with its sound, and the theme follows it. */
-            std::string path = pkg->dir + "/" + vfile;
-            video_play(path);
-            music_play(path, vol * (float)pv->num("volume", 1.0), 0.0f, 0.3f);
-            xbox_AudioSetGameGain(0.0f);
-            xbox_AudioSetCommentaryGain(0.0f);
-            s_video_then_theme = true;
-        } else {
-            start_intro_theme(pkg, m, vol, duck, fade);
-        }
-    }
-    if (s_video_then_theme) {
-        static double skip_at;
-        if (s_video.state == 1 && skip_at == 0) skip_at = now_s() + 1.5;
-        if (skip_at > 0 && now_s() >= skip_at) { nfl2k5_input_press_a(250); skip_at = -1; }
-        if (s_video.state == 2) {
+        if (s_video_then_theme) {
+            /* The open covered the loading show; the pregame starts now. */
+            ++s_video.generation;
             s_video.state = 0;
+            s_video_hold = false;
             s_video_then_theme = false;
-            skip_at = 0;
             xbox_AudioSetCommentaryGain(1.0f);
             xbox_AudioSetGameGain(1.0f);
-            start_intro_theme(pkg, m, vol, duck, fade);
         }
+        start_intro_theme(pkg, m, vol, duck, fade);
     }
     /* The intro plays over the pregame show and fades at the coin toss (or
      * when play starts, if there was none). */
@@ -1442,7 +1452,7 @@ static int hud_callback(const XboxHudFrame *f, XboxHudImage *img)
     s_prev = g;
     s_prev_valid = g.valid;
 
-    if (s_video.state == 1) {
+    if (s_video.state == 1 || (s_video.state == 2 && s_video_hold)) {
         /* Full screen, letterboxed over black: the frame is placed in a
          * black canvas with the backbuffer's aspect, drawn over the whole
          * backbuffer. */
