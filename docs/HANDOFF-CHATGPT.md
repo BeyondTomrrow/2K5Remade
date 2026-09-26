@@ -83,7 +83,68 @@ cdb (WinDbg) is at `C:\Program Files\WindowsApps\Microsoft.WinDbg_1.2606.22001.0
 - **GPU renderer** (`nv2a_gpu_d3d11.inc.c`, `#include`d into nv2a_pb_exec.c so it reads the executor's state; default ON, `RECOMP_GPU=0` disables): vertex programs still run on the CPU (`vp_vertex`), then triangles go to a D3D11 device (no swapchain). Each guest colour surface gets a B8G8R8A8 render target + D24S8, seeded from guest RAM and **read back into guest RAM at every FLIP_STALL** (so the existing GDI window and anything that reads the framebuffer keep working). Ownership protocol: `dirty` = GPU newer (read back before the CPU touches it: software 2D batches, partial clears, a texture that aliases the surface), `stale` = guest RAM newer (re-uploaded before the next GPU draw). Textures are decoded once through the software sampler (`sample_stage`, so every format behaves identically) into RGBA8 and cached by address/format/size/palette + a sparse content hash. One HLSL pixel shader interprets the register-combiner state from a constant buffer (a line-by-line port of `comb_eval`); alpha test via `discard`; blend/depth-stencil/sampler states are cached by key. Depth: `oPos.z` scaled by `SET_CLIP_MIN/MAX` (0x394/0x398). Position = screen coords → NDC, multiplied back by w (xemu does the same), so the GPU clips near-plane geometry correctly. Pre-transformed 2D batches (fixed-function mode) are drawn on the GPU too, shaded like the software path (texture x diffuse, no depth). Check the HLSL offline: extract the string and run `fxc /T ps_4_0 /E ps_main` (fxc is in `F:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64`). HLSL reserves `pass`.
 - **Logging**: stderr is fully buffered (64 KB) with a 500 ms flusher thread. Unbuffered logging stalled threads holding the guest lock.
 
-## Status (updated 2026-09-24, late night)
+## Status (updated 2026-09-26 midday, Claude) -- READ THIS FIRST
+
+The game boots, all front-end menus work, matches play from pregame through
+kickoff and play with textures, fog, depth and sound, at ~25 fps (20-40 in
+play). Everything below is committed on `master`.
+
+### Done since 2026-09-25
+- **Audio**: voices are resampled at their pitch (`apu_vp.c` voice_resample,
+  cubic); XAudio2 keeps a 3-4 buffer cushion. **Menu music static** fixed:
+  the game restarts its music stream more often than on the console and each
+  restart leaves the looping ADPCM buffer shifted off the 36-byte block grid;
+  `adpcm_realign()` in `apu_vp.c` finds the shift (8 valid headers in a row)
+  and decodes there. ADPCM CBO is exposed per block. `AUDIO_LOCK` now waits
+  for the real DirectSound completion by draining DPCs (2 s fallback);
+  `STOPWAIT` has its own flag, off.
+- **Native menus**: `src/nfl2k5_video_menu.c` builds real game settings
+  screens from the game's menu tables (header 0x34 bytes, rows 0x34 bytes:
+  type 0 link, 5 Off/On, 7 value list with 7 functions; row functions live
+  at fake addresses 0xFEC00000.. served by `recomp_lookup_manual`).
+  Options > **Video Settings** (all four Options menus) and Coach Match Up >
+  **Presentation** (under VIP). Header flag 0x4 makes a link list scroll.
+- **Video**: GPU presenter with settings (F1 or in-game), internal res 1-9x,
+  resolutions up to 7680x4320, 21:9/32:9, borderless/fullscreen. App icon and
+  name "ESPN NFL 2K5" (`src/nfl2k5.rc`).
+- **Broadcast presentations** (`src/nfl2k5_presentation.cpp`, `mods/README.md`):
+  `mods/presentations/<Name>/presentation.json` (scorebug elements,
+  animations, intro/outro themes), `mods/teams/<ABBR>/team.json` (+ logos/).
+  "NFL on CBS" package included. Scorebug drawn with Direct2D into the
+  presenter's HUD layer; match state from game globals (see the header comment
+  in that file); team codes from the loaded playbook names (B307D0/B30810).
+  Theme plays from the pregame show, is a quiet bed that dips under the
+  announcers (APU level meter `xbox_AudioGameLevel`), stops at the "Coin Toss"
+  popup. Settings in `mods/presentation.ini`.
+- **Tools**: `tools/record-demo.ps1` (video: boot -> menus -> kickoff, with
+  audio), `tools/drive-menu.ps1`, `tools/drive-quickgame.ps1`,
+  `tools/loopback_rec.exe` (records the PC's speakers, e.g. xemu's audio),
+  `tools/xemu-ring-check.ps1` + `tools/xemu-music-*.gdb` (xemu under gdb as
+  an oracle). Env diagnostics: `RECOMP_APU_VOICE_LOG`, `RECOMP_STREAM_LOG`,
+  `NFL2K5_PRES_LOG/TEST/EVENT`, `NFL2K5_MEMDUMP=addr:len`, `RECOMP_HW_WATCH`
+  (+ `_ADDR`, prints guest stack).
+
+### Open problems (user-reported), priority order
+1. **ESPN scorebar still visible at the top** when the CBS package is on.
+   Latest attempt (built, NOT verified): zero the six element fade factors
+   (0x70-byte records from 0xA959C8, fade at +0x3C) every frame in
+   `nfl2k5_scorebug_native_hook` (gen patch SCOREBUG_NATIVE_HOOK after the
+   visibility update 0xFC9C0 inside sub_000FCE70). Moving the root matrix
+   (gen patch SCOREBUG_NATIVE_HIDE2, `NFL2K5_HIDE_MODE`) had no visible effect.
+2. **Audio mix**: user wants the theme audible but under the play-by-play
+   (current: package volume 0.12, dips to 50% when game level > 0.02);
+   crowd sometimes too loud over announcers; the game plays its own sting at
+   the team-intro "camera flash" -- the theme should duck/stop there.
+3. **Play-call screen**: the three play-art panels + "LAST PLAY" window at
+   the bottom are missing (only the formation circles on the field show).
+   Probably render-to-texture / 2D panel rendering in the GPU path.
+4. **Field**: zig-zag light/dark green artefacts on the grass near the line
+   of scrimmage; **parking lot visible in the screen corners** (geometry /
+   clip or sky issue at the edges).
+5. Intro movies play far below real time (NFL2K5_SKIP_INTRO skips them).
+6. Mods (.2k5patch support) on hold by the user.
+
+## Older status (2026-09-24, late night)
 
 Working: boot, intro movies (CRI Sofdec decoded by the game's own code), legal/SEGA/title screens, main menu, VIP creation and save to the emulated HDD, Team Select (3D helmets), Coach Matchup, ESPN 25th Anniversary list, Team Rosters (partly), Create Player (partly). Input works (keyboard + XInput). **GPU rendering (Direct3D 11) is now the default** (`RECOMP_GPU=0` for software); menus run ~31 fps vs ~8 in software.
 
