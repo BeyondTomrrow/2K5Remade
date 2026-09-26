@@ -43,7 +43,10 @@ $extra = if ($Optimize) { @('-DNFL2K5_OPTIMIZE=ON', '-DNFL2K5_FORCE_UNBLOCK_AUDI
 if ($LASTEXITCODE) { throw 'CMake configure failed.' }
 if ($Game) { $buildTargets = @('--target','NFL2K5','NFL2K5_toolchain_check') }
 else { $buildTargets = @() }
-& $cmake --build $buildDir @buildTargets --parallel 4 2>&1 | Tee-Object "$root\logs\build-$Configuration.log"
+# One compile job per logical processor (the generated files are up to ~30 MB
+# each; 12 jobs peak well under the 48 GB this machine has).
+$jobs = if ($env:NUMBER_OF_PROCESSORS) { [int]$env:NUMBER_OF_PROCESSORS } else { 4 }
+& $cmake --build $buildDir @buildTargets --parallel $jobs 2>&1 | Tee-Object "$root\logs\build-$Configuration.log"
 if ($LASTEXITCODE) { throw 'Build failed; see logs.' }
 & "$buildDir\NFL2K5_toolchain_check.exe"
 if ($LASTEXITCODE) { throw 'Native toolchain check failed.' }
