@@ -1024,6 +1024,7 @@ static bool shown(const Ctx &c, const std::string &cond)
     if (cond == "possession:away") return g.phase == 4 && g.poss == 1;
     if (cond == "possession:home") return g.phase == 4 && g.poss == 2;
     if (cond == "scrimmage") return g.phase == 4;
+    if (cond == "not_scrimmage") return g.phase != 4;
     if (cond == "final") return is_final(g);
     if (cond == "not_final") return !is_final(g);
     return true;

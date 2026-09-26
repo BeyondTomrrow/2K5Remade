@@ -42,8 +42,8 @@ Pick it in game: Quick Game > Coach Match Up > Presentation (under VIP).
   top/bottom, `radius`, `stroke`), `text` (`text` template, `size`, `weight`,
   `stretch`, `color`, `align`, `italic`, `shadow`), `image` (`src`),
   `timeouts` (`team`, `count`, `bar_w`, `bar_h`, `gap`, `on`, `off`).
-  Optional `show`: `possession:away`, `possession:home`, `scrimmage`, `final`,
-  `not_final`.
+  Optional `show`: `possession:away`, `possession:home`, `scrimmage`,
+  `not_scrimmage`, `final`, `not_final`.
 - `scorebug.team_slots` - per side `block`, `score_box`, `timeouts` rectangles;
   animation layers can use `"at": "team.score_box"` etc.
 - `animations.<event>` - `duration` and `layers` (elements with `enter` / `exit`
