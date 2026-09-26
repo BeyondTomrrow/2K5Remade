@@ -11,7 +11,7 @@ index e4cd232..d97f7c9 100644
  
  # Option to build examples
 diff --git a/src/apu/apu_core.c b/src/apu/apu_core.c
-index 459be77..a6fa4ca 100644
+index 459be77..6eac713 100644
 --- a/src/apu/apu_core.c
 +++ b/src/apu/apu_core.c
 @@ -58,6 +58,16 @@ void mcpx_debug_end_frame(void) {}
@@ -44,7 +44,7 @@ index 459be77..a6fa4ca 100644
      }
  }
  
-@@ -268,43 +278,76 @@ void mcpx_apu_monitor_finalize(MCPXAPUState *d)
+@@ -268,43 +278,82 @@ void mcpx_apu_monitor_finalize(MCPXAPUState *d)
              g_waveout.frames_written);
  }
  
@@ -54,10 +54,16 @@ index 459be77..a6fa4ca 100644
 +/* Smoothed level (RMS, 0..1 of full scale) of what the game plays, so a
 + * broadcast theme can dip under the announcers (xbox_AudioGameLevel). */
 +static volatile float g_game_level;
-+float xbox_AudioGameLevel(void) { return g_game_level; }
++/* The broadcast mix acts inside the mixdown (apu_dsp.c): the gain scales the
++ * game's music/crowd bed but not the commentary, and the level reported is
++ * the commentary's, so a theme dips only under the announcers. */
++extern volatile float g_apu_bed_gain, g_apu_voice_level;
++extern volatile int g_apu_mute_music;
++void xbox_AudioMuteGameMusic(int mute) { g_apu_mute_music = mute; }
++float xbox_AudioGameLevel(void) { return g_apu_voice_level; }
 +void xbox_AudioSetGameGain(float gain)
 +{
-+    g_game_gain = gain < 0.0f ? 0.0f : gain > 1.0f ? 1.0f : gain;
++    g_apu_bed_gain = gain < 0.0f ? 0.0f : gain > 1.0f ? 1.0f : gain;
 +}
 +
  void mcpx_apu_monitor_frame(MCPXAPUState *d)
@@ -146,7 +152,7 @@ index 459be77..a6fa4ca 100644
          return;
      }
  
-@@ -461,7 +504,19 @@ static void *mcpx_apu_frame_thread(void *arg)
+@@ -461,7 +510,19 @@ static void *mcpx_apu_frame_thread(void *arg)
          if (apu_active && !g_test_tone.active) {
              /* Full pipeline: VP voices → DSP → monitor → waveOut */
              se_frame(d);
@@ -167,10 +173,100 @@ index 459be77..a6fa4ca 100644
              mcpx_apu_monitor_frame(d);
              d->ep_frame_div++;
 diff --git a/src/apu/apu_dsp.c b/src/apu/apu_dsp.c
-index de14f26..737fae7 100644
+index de14f26..39c52fa 100644
 --- a/src/apu/apu_dsp.c
 +++ b/src/apu/apu_dsp.c
-@@ -200,7 +200,20 @@ void mcpx_apu_dsp_frame(MCPXAPUState *d,
+@@ -27,6 +27,9 @@
+ 
+ #include <stdlib.h>
+ #include <string.h>
++#include <stdio.h>
++#include <math.h>
++#include <windows.h>
+ 
+ /* ── DSP command doorbell acknowledgement ────────────────────────────────
+  *
+@@ -138,6 +141,12 @@ void mcpx_apu_update_dsp_preference(MCPXAPUState *d)
+     (void)d;
+ }
+ 
++/* Broadcast mix controls (xbox_AudioSetGameGain / xbox_AudioGameLevel in
++ * apu_core.c): bed gain for everything but the commentary, and the smoothed
++ * level of the commentary (centre bin). */
++volatile float g_apu_bed_gain = 1.0f;
++volatile float g_apu_voice_level;
++
+ void mcpx_apu_dsp_frame(MCPXAPUState *d,
+                          float mixbins[NUM_MIXBINS][NUM_SAMPLES_PER_FRAME])
+ {
+@@ -159,6 +168,45 @@ void mcpx_apu_dsp_frame(MCPXAPUState *d,
+ 
+     dsp_ack_frame(d);
+ 
++    {
++        double e = 0;
++        float r, a;
++        for (int i = 0; i < NUM_SAMPLES_PER_FRAME; i++)
++            e += (double)mixbins[2][i] * mixbins[2][i];
++        r = (float)sqrt(e / NUM_SAMPLES_PER_FRAME);
++        a = r > g_apu_voice_level ? 0.3f : 0.004f;    /* fast attack, slow release */
++        g_apu_voice_level += (r - g_apu_voice_level) * a;
++    }
++
++    {
++        /* RECOMP_APU_BIN_LOG=1: RMS of each mixbin every 2 s, to see which
++         * bins carry what (commentary, crowd, music, effect sends). */
++        static int on = -1;
++        static double e[NUM_MIXBINS];
++        static unsigned long n;
++        static DWORD last;
++        if (on < 0) on = getenv("RECOMP_APU_BIN_LOG") != NULL;
++        if (on) {
++            for (int b = 0; b < NUM_MIXBINS; b++)
++                for (int i = 0; i < NUM_SAMPLES_PER_FRAME; i++)
++                    e[b] += (double)mixbins[b][i] * mixbins[b][i];
++            n += NUM_SAMPLES_PER_FRAME;
++            if (GetTickCount() - last > 2000) {
++                char line[512];
++                int len = 0;
++                for (int b = 0; b < NUM_MIXBINS; b++) {
++                    double r = sqrt(e[b] / (double)(n ? n : 1));
++                    if (r > 0.0005)
++                        len += snprintf(line + len, sizeof line - len, " %d:%.3f", b, r);
++                    e[b] = 0;
++                }
++                n = 0;
++                last = GetTickCount();
++                fprintf(stderr, "[BINS]%s\n", len ? line : " silent");
++            }
++        }
++    }
++
+     if (d->monitor.point != MCPX_APU_DEBUG_MON_VP) {
+         for (int i = 0; i < NUM_SAMPLES_PER_FRAME; i++) {
+             /* Bins 2..31 used to be computed and then dropped on the floor.
+@@ -190,17 +238,41 @@ void mcpx_apu_dsp_frame(MCPXAPUState *d,
+              * mixdown that stops discarding audio. */
+             float left, right;
+             if (mcpx_apu_mixdown_all()) {
++                /* Bins 0-5 are the speaker feeds (FL, FR, C, LFE, SL, SR).
++                 * NFL 2K5 puts its commentary on the centre bin (2), crowd,
++                 * music and stings on 0/1: the centre goes to both sides at
++                 * -3 dB (it used to land in the left ear only), LFE to both
++                 * at half, and everything but the centre is scaled by the
++                 * "bed" gain so a broadcast theme can replace the game's
++                 * music under the announcers (xbox_AudioSetGameGain). */
++                float bed = g_apu_bed_gain, c = mixbins[2][i], lfe = mixbins[3][i] * 0.5f;
+                 left = 0.0f;
+                 right = 0.0f;
+                 for (int b = 0; b < NUM_MIXBINS; ++b) {
++                    if (b == 2 || b == 3) continue;
+                     if (b & 1) right += mixbins[b][i];
+                     else       left  += mixbins[b][i];
+                 }
++                left = (left + lfe) * bed + 0.7071f * c;
++                right = (right + lfe) * bed + 0.7071f * c;
+             } else {
                  left = mixbins[0][i];
                  right = mixbins[1][i];
              }
@@ -266,7 +362,7 @@ index dd6bec1..a7cd974 100644
  
  /* Stub address space - just passed to ldl_le_phys etc. (ignored) */
 diff --git a/src/apu/apu_vp.c b/src/apu/apu_vp.c
-index b9f429e..4866113 100644
+index b9f429e..1e8dd30 100644
 --- a/src/apu/apu_vp.c
 +++ b/src/apu/apu_vp.c
 @@ -66,11 +66,17 @@ static void set_notify_status(MCPXAPUState *d, uint32_t v, int notifier,
@@ -331,7 +427,7 @@ index b9f429e..4866113 100644
          voice_set_mask(d, (uint16_t)d->regs[NV_PAPU_FECV],
                         NV_PAVS_VOICE_PAR_OFFSET,
                         NV_PAVS_VOICE_PAR_OFFSET_CBO, argument);
-@@ -727,6 +756,60 @@ static float voice_step_envelope(MCPXAPUState *d, uint16_t v, uint32_t reg_0,
+@@ -727,6 +756,62 @@ static float voice_step_envelope(MCPXAPUState *d, uint16_t v, uint32_t reg_0,
   * Sample fetching from voice buffers
   * ============================================================ */
  
@@ -358,6 +454,8 @@ index b9f429e..4866113 100644
 + * valid and decode at that shift until the grid itself is valid again. A
 + * random 8-block match is ~1e-23, so this never fires on good data. */
 +static uint8_t s_adpcm_shift[MCPX_HW_MAX_VOICES];
++
++volatile int g_apu_mute_music;   /* xbox_AudioMuteGameMusic */
 +
 +static int adpcm_header_ok(uint32_t w)
 +{
@@ -392,7 +490,7 @@ index b9f429e..4866113 100644
  static int voice_get_samples(MCPXAPUState *d, uint32_t v, float samples[][2],
                         int num_samples_requested)
  {
-@@ -825,6 +908,8 @@ static int voice_get_samples(MCPXAPUState *d, uint32_t v, float samples[][2],
+@@ -825,6 +910,8 @@ static int voice_get_samples(MCPXAPUState *d, uint32_t v, float samples[][2],
  
      bool adpcm =
          (container_size_index == NV_PAVS_VOICE_CFG_FMT_CONTAINER_SIZE_ADPCM);
@@ -401,7 +499,7 @@ index b9f429e..4866113 100644
  
      if (adpcm) {
          block_size = 36;
-@@ -841,9 +926,14 @@ static int voice_get_samples(MCPXAPUState *d, uint32_t v, float samples[][2],
+@@ -841,9 +928,14 @@ static int voice_get_samples(MCPXAPUState *d, uint32_t v, float samples[][2],
              unsigned int block_position = cbo % ADPCM_SAMPLES_PER_BLOCK;
              if (adpcm_block_index != (int)block_index) {
                  uint32_t linear_addr = block_index * (uint32_t)block_size;
@@ -417,7 +515,7 @@ index b9f429e..4866113 100644
                             block_size);
                  } else {
                      linear_addr += ba;
-@@ -934,6 +1024,15 @@ static int voice_get_samples(MCPXAPUState *d, uint32_t v, float samples[][2],
+@@ -934,6 +1026,15 @@ static int voice_get_samples(MCPXAPUState *d, uint32_t v, float samples[][2],
          }
      }
  
@@ -433,7 +531,7 @@ index b9f429e..4866113 100644
      voice_set_mask(d, (uint16_t)v, NV_PAVS_VOICE_PAR_OFFSET,
                     NV_PAVS_VOICE_PAR_OFFSET_CBO, cbo);
      return sample_count;
-@@ -946,26 +1045,83 @@ static int voice_get_samples(MCPXAPUState *d, uint32_t v, float samples[][2],
+@@ -946,26 +1047,83 @@ static int voice_get_samples(MCPXAPUState *d, uint32_t v, float samples[][2],
   * resample. This gives us functional audio at the cost of quality.
   * ============================================================ */
  
@@ -533,7 +631,7 @@ index b9f429e..4866113 100644
  }
  
  /* ============================================================
-@@ -1006,6 +1162,96 @@ static void voice_process(MCPXAPUState *d,
+@@ -1006,6 +1164,96 @@ static void voice_process(MCPXAPUState *d,
                                          NV_PAVS_VOICE_CFG_ENV0_EF_PITCHSCALE);
      float rate = 1.0f / powf(2.0f, (p + ps * 32 * ef_value) / 4096.0f);
      dbg->rate = rate;
@@ -630,7 +728,38 @@ index b9f429e..4866113 100644
  
      /* Step amplitude envelope */
      float ea_value = voice_step_envelope(
-@@ -1169,10 +1415,43 @@ static void voice_process(MCPXAPUState *d,
+@@ -1089,9 +1337,30 @@ static void voice_process(MCPXAPUState *d,
+         dbg->bin[i] = (uint8_t)bin[i];
+         dbg->vol[i] = vol[i];
+     }
++    {
++        /* RECOMP_APU_VOICE_LOG: where each voice goes (bin:gain), every 5 s. */
++        static DWORD last_route[MCPX_HW_MAX_VOICES];
++        if (getenv("RECOMP_APU_VOICE_LOG") && GetTickCount() - last_route[v] > 5000) {
++            char buf[256];
++            int len = 0;
++            last_route[v] = GetTickCount();
++            for (int i = 0; i < 8; i++)
++                if (attenuate(vol[i]) > 0.001f)
++                    len += snprintf(buf + len, sizeof buf - len, " %d:%.2f", bin[i], attenuate(vol[i]));
++            fprintf(stderr, "[ROUTE] %03X ebo %06X csize %u rate %.3f ->%s\n", v,
++                    voice_get_mask(d, v, NV_PAVS_VOICE_PAR_NEXT, NV_PAVS_VOICE_PAR_NEXT_EBO),
++                    voice_get_mask(d, v, NV_PAVS_VOICE_CFG_FMT, NV_PAVS_VOICE_CFG_FMT_CONTAINER_SIZE),
++                    rate, len ? buf : " (silent)");
++        }
++    }
+ 
+     if (voice_should_mute(v)) return;
+ 
++    /* A broadcast theme replaces the game's own music (menus and pregame):
++     * NFL 2K5 streams it on voices 0x44/0x45 (left/right), commentary and
++     * crowd on others (measured 2026-09-26, RECOMP_APU_VOICE_LOG). */
++    if (g_apu_mute_music && (v == 0x44 || v == 0x45)) return;
++
+     /* Low-pass filter */
+     int fmode = voice_get_mask(d, v, NV_PAVS_VOICE_CFG_MISC,
+                                NV_PAVS_VOICE_CFG_MISC_FMODE);
+@@ -1169,10 +1438,43 @@ static void voice_process(MCPXAPUState *d,
   * Simplified single-threaded version (no worker threads initially)
   * ============================================================ */
  
@@ -674,7 +803,7 @@ index b9f429e..4866113 100644
  
      for (int list = 0; list < 3; list++) {
          hwaddr top, current, next;
-@@ -1194,9 +1473,11 @@ void mcpx_apu_vp_frame(MCPXAPUState *d,
+@@ -1194,9 +1496,11 @@ void mcpx_apu_vp_frame(MCPXAPUState *d,
  
              if (!voice_get_mask(d, v, NV_PAVS_VOICE_PAR_STATE,
                                  NV_PAVS_VOICE_PAR_STATE_ACTIVE_VOICE)) {

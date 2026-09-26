@@ -59,6 +59,7 @@ typedef struct { const void *pixels; int w, h, stride, x, y, changed; } XboxHudI
 typedef int (*XboxHudCallback)(const XboxHudFrame *f, XboxHudImage *img);
 void xbox_PresentSetHudCallback(XboxHudCallback cb);
 void xbox_AudioSetGameGain(float gain);
+void xbox_AudioMuteGameMusic(int mute);
 float xbox_AudioGameLevel(void);
 void xbox_AudioSetCaptureMix(void (*mix)(int16_t *stereo, int frames));
 }
@@ -507,6 +508,7 @@ struct Music {
     float talk_duck = 0.35f;        /* theme level while the game is loud (announcers) */
     float talk_level = 0.02f;       /* game RMS counted as "talking" */
     float duck_now = 1.0f;
+    int mute_game_music = 1;       /* the theme replaces the game's own music */
     size_t cap_pos = 0;             /* recording tap cursor into pcm */
     double fade_start = 0;
 } s_music;
@@ -578,6 +580,7 @@ static void music_stop_now()
     if (s_music.voice) { s_music.voice->Stop(); s_music.voice->FlushSourceBuffers(); s_music.voice->DestroyVoice(); s_music.voice = nullptr; }
     s_music.state = 0;
     xbox_AudioSetGameGain(1.0f);
+    xbox_AudioMuteGameMusic(0);
 }
 
 static void music_play(const std::string &path, float volume, float duck, float fade)
@@ -616,6 +619,7 @@ static void music_play(const std::string &path, float volume, float duck, float 
         s_music.voice->Start();
         s_music.state = 2;
         xbox_AudioSetGameGain(s_music.duck);
+        xbox_AudioMuteGameMusic(s_music.mute_game_music);
         fprintf(stderr, "[PRES] theme playing: %s (%.0f s)\n", path.c_str(), s_music.pcm.size() / 96000.0);
     }).detach();
 }
@@ -638,6 +642,7 @@ static void music_tick()
         s_music.voice->DestroyVoice(); s_music.voice = nullptr;
         s_music.state = 0;
         xbox_AudioSetGameGain(1.0f);
+        xbox_AudioMuteGameMusic(0);
         return;
     }
     {
@@ -659,6 +664,7 @@ static void music_tick()
             s_music.voice->DestroyVoice(); s_music.voice = nullptr;
             s_music.state = 0;
             xbox_AudioSetGameGain(1.0f);
+            xbox_AudioMuteGameMusic(0);
             return;
         }
         s_music.cur_vol = s_music.volume * s_music.duck_now * (1.0f - k);
@@ -1127,6 +1133,13 @@ extern "C" void nfl2k5_scorebug_native_place(uint32_t m)
     if (mode & 1) { gwritef(m + 0x30, -20000.0f); gwritef(m + 0x34, -20000.0f); }
 }
 
+extern "C" int nfl2k5_scorebug_skip_update(void)
+{
+    static int on = -1;
+    if (on < 0) on = getenv("NFL2K5_HIDE_SKIP") != nullptr;
+    return on && custom_active();
+}
+
 extern "C" int nfl2k5_scorebug_native_hidden(void)
 {
     static unsigned long calls;
@@ -1165,6 +1178,7 @@ static void music_logic(const GameState &g, bool native_on)
     if (m) {
         s_music.talk_duck = (float)m->num("duck_under_announcers", 0.35);
         s_music.talk_level = (float)m->num("announcer_level", 0.02);
+        s_music.mute_game_music = m->flag("mute_game_music", true) ? 1 : 0;
     }
     float fade = m ? (float)m->num("fade_out", 2.5) : 2.5f;
     bool fresh = g.period <= 1 && g.t[0].score == 0 && g.t[1].score == 0 && g.phase <= 2 &&

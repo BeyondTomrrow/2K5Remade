@@ -279,6 +279,10 @@ PATCHES = [
 """),
     ("DIAG_MUSICSTREAM", "sub_0003F860", "loc_0003F860: ;", "after", """    { extern void nfl2k5_diag_stream(uint32_t dst, uint32_t src, uint32_t len, uint32_t eax_, uint32_t arg); nfl2k5_diag_stream(ebx, edx, edi, eax, MEM32(esp + 4)); }
 """),
+    ("SCOREBUG_SKIP_TEST", "sub_000FCE70", "loc_000FCE70: ;", "after", """    /* Experiment (NFL2K5_HIDE_SKIP=1): skip the ESPN scorebug update while a
+     * custom broadcast package is on, to find out whether it drives the bar. */
+    { extern int nfl2k5_scorebug_skip_update(void); if (nfl2k5_scorebug_skip_update()) { esp += 8; return; } }
+"""),
     ("SCOREBUG_NATIVE_HIDE2", "sub_000FCE70", "loc_000FD178: ;", "before", """    /* Custom broadcast presentations (src/nfl2k5_presentation.cpp): hide the
      * ESPN bug by rewriting its root matrix (esi) after the game places it. */
     { extern void nfl2k5_scorebug_native_place(uint32_t matrix); nfl2k5_scorebug_native_place(esi); }

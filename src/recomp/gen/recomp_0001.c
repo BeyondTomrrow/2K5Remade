@@ -31564,7 +31564,7 @@ loc_0003CB13: ;
 
 loc_0003CB1E: ;
     /* NFL2K5-GENPATCH:STOPWAIT_3CAF0 */
-#ifdef NFL2K5_FORCE_UNBLOCK_AUDIO_LOCK
+#ifdef NFL2K5_FORCE_UNBLOCK_STOPWAIT
     /* EXPERIMENTAL, 2026-09-24: sub_0003CAF0 stops a DirectSound buffer and
      * spins on GetStatus until its PLAYING bit clears. Only the APU finishing
      * the voice-off clears it (voice+0x12 state), and the APU is a stub, so
@@ -39120,6 +39120,8 @@ void sub_0003F860(void)
     (void)_fa; (void)_fb; (void)_fas; (void)_fbs;
 
 loc_0003F860: ;
+    /* NFL2K5-GENPATCH:DIAG_MUSICSTREAM */
+    { extern void nfl2k5_diag_stream(uint32_t dst, uint32_t src, uint32_t len, uint32_t eax_, uint32_t arg); nfl2k5_diag_stream(ebx, edx, edi, eax, MEM32(esp + 4)); }
     PUSH32(esp, ebp);
     ebp = MEM32(esp + 8);
     PUSH32(esp, esi);

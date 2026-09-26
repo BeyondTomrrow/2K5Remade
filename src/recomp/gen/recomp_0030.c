@@ -19149,10 +19149,29 @@ loc_0044BC8D: ;
     MEM32(ebx) = eax;
     /* NFL2K5-GENPATCH:AUDIO_LOCK */
 #ifdef NFL2K5_FORCE_UNBLOCK_AUDIO_LOCK
-    /* EXPERIMENTAL, 2026-09-21: the busy-wait at loc_0044BCAB spins on a
-     * DirectSound-buffer completion counter the stubbed APU never
-     * acknowledges. Clear it immediately. See PROJECT_STATUS.md. */
-    MEM32(ebx) = 0;
+    /* The busy-wait at loc_0044BCAB spins until the APU's interrupt path (a
+     * DPC) counts a DirectSound operation down to zero. On the console the
+     * interrupt preempts this loop; here DPCs only run where the kernel
+     * drains them, so the loop spun forever. Until 2026-09-26 the counter was
+     * simply cleared -- DirectSound then freed buffers the APU was still
+     * playing, the title reused the memory, and the menu music played
+     * garbage (static). Now: wait for the real completion, draining DPCs as
+     * the interrupt would; clear it only after 2 s as a last resort. */
+    {
+        extern void xbox_bridge_drain_guest_dpcs(void);
+        extern unsigned long __stdcall GetTickCount(void);
+        extern void __stdcall Sleep(unsigned long);
+        unsigned long t0 = GetTickCount();
+        while (MEM32(ebx) != 0 && GetTickCount() - t0 < 2000u) {
+            xbox_bridge_drain_guest_dpcs();
+            Sleep(0);
+        }
+        if (MEM32(ebx) != 0) {
+            static volatile long timeouts;
+            timeouts++;
+            MEM32(ebx) = 0;
+        }
+    }
 #endif
 
 loc_0044BCAB: ;

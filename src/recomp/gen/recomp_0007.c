@@ -163607,6 +163607,10 @@ void sub_000FCE70(void)
     #define fp_st1() fp_st(1)
 
 loc_000FCE70: ;
+    /* NFL2K5-GENPATCH:SCOREBUG_SKIP_TEST */
+    /* Experiment (NFL2K5_HIDE_SKIP=1): skip the ESPN scorebug update while a
+     * custom broadcast package is on, to find out whether it drives the bar. */
+    { extern int nfl2k5_scorebug_skip_update(void); if (nfl2k5_scorebug_skip_update()) { esp += 8; return; } }
     PUSH32(esp, ebp);
     ebp = esp;
     g_ebp = ebp; /* publish frame for frameless callees */
@@ -163767,6 +163771,11 @@ loc_000FCF9E: ;
     PUSH32(esp, 0x000FCFA7u); RECOMP_ABI_CALL(0x000FC9C0u, sub_000FC9C0); /* call 0x000FC9C0 */
 
 loc_000FCFA7: ;
+    /* NFL2K5-GENPATCH:SCOREBUG_NATIVE_HOOK */
+    /* Custom broadcast presentations (src/nfl2k5_presentation.cpp): note
+     * whether the game shows its scorebug this frame, and hide the ESPN one
+     * when another package draws its own. */
+    { extern void nfl2k5_scorebug_native_hook(void); nfl2k5_scorebug_native_hook(); }
     ecx = MEM32(0xA9552C);
     g_ebp = ebp; /* frame stays current across calls */
     g_seh_ebp = ebp;
@@ -164072,6 +164081,10 @@ loc_000FD159: ;
     fp_push(MEMF(esi + 0x38)); /* fld float */
     fp_top() = fp_top() + MEMF(0x4E5CAC); /* fadd dword ptr [0x4e5cac] */
     MEMF(esi + 0x38) = (float)fp_top(); fp_pop(); /* fstp */
+    /* NFL2K5-GENPATCH:SCOREBUG_NATIVE_HIDE2 */
+    /* Custom broadcast presentations (src/nfl2k5_presentation.cpp): hide the
+     * ESPN bug by rewriting its root matrix (esi) after the game places it. */
+    { extern void nfl2k5_scorebug_native_place(uint32_t matrix); nfl2k5_scorebug_native_place(esi); }
 
 loc_000FD178: ;
     ecx = edi + -64;
