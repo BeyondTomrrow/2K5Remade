@@ -2248,3 +2248,12 @@ Reached natively (user-verified): intro movies, legal/SEGA screens, title, main 
 - ESPN bug (live play) hidden via the score_bug scene's node hidden bit and its text colours; play-calling screen bar still shows (separate UI).
 - Team logos exported from the game's pack for the scorebug; CBS open video replaces the Berman loading show when a package is on; Berman returns with ESPN (Original).
 - Details and open items: docs/HANDOFF-CHATGPT.md.
+
+## 2026-09-26 (evening): field-transition vertex fallback and clean match verification
+
+- **Texture/geometry corruption isolated:** the large play-call/pregame wedges were reproduced with the D3D11 path and disappeared when host GPU vertex-program translation was disabled, while the reference interpreter remained coherent. The fault was therefore in a translated vertex program, not texture decoding or swapchain presentation.
+- **Narrow fix:** added `RECOMP_GPU_VP_SKIP_START` support to the GPU vertex-program selector and defaulted it to program start `46` in `src/main.c`. All other vertex programs remain on the accelerated path; only the known-bad field/transition mesh uses the reference interpreter.
+- **Verification:** Release build completed. A clean `drive-quickgame.ps1 -Side left` run with no diagnostic environment variables reached kickoff and live gameplay without the former stretched wedges or garbled transition surfaces. Captures are in `logs/gfxdefaultfix-*.png`; the 40-second frame shows a coherent play-call field, scoreboard, and player markers. The selective run also reached normal live gameplay.
+- **Audio verification:** the same run reports `[XA2] ... dropped=0 underruns=0 queued=3`, with active APU voices and no output starvation. The earlier menu/static fixes remain intact.
+- **Presentation verification:** captures are full 3840x2160 borderless frames with the game image correctly scaled; the prior fullscreen gray-mark symptom did not reproduce in this run.
+- **Current limitation:** program 46 still needs a faithful host translation for full GPU performance; the interpreter fallback costs FPS in heavy scenes but preserves correct pixels. Next work is to compare its generated HLSL against the reference instruction sequence, then run a longer audio/menu soak and measure the fallback's frame-time cost.
