@@ -6390,10 +6390,10 @@ index 0000000..8f5d34a
 +}
 diff --git a/src/kernel/nv2a_gpu_vp.inc.c b/src/kernel/nv2a_gpu_vp.inc.c
 new file mode 100644
-index 0000000..57d8d76
+index 0000000..ea9882d
 --- /dev/null
 +++ b/src/kernel/nv2a_gpu_vp.inc.c
-@@ -0,0 +1,609 @@
+@@ -0,0 +1,628 @@
 +/* ── NV2A vertex programs on the GPU ─────────────────────────────────────
 + *
 + * Included into nv2a_gpu_d3d11.inc.c. Opt-in with RECOMP_GPU_VP=1 while it is
@@ -6476,7 +6476,10 @@ index 0000000..57d8d76
 +    "  PIn o;\n"
 +    "  float4 P = O[0];\n"
 +    "  float w = P.w;\n"
-+    "  if (!(w > 1e-6 || w < -1e-6)) w = 1e-6;\n"
++    /* Match gpu_vertex/the reference interpreter.  The old 1e-6 guard was
++     * large enough to rewrite valid near-plane w values in program 46,
++     * collapsing projected field vertices into long wedges. */
++    "  if (!(w > 5.192093e-39 || w < -5.192093e-39)) w = 5.192093e-39;\n"
 +    "  float nx = P.x / info.x * 2.0 - 1.0, ny = 1.0 - P.y / info.y * 2.0;\n"
 +    "  float zc = P.z;\n"
 +    "  float nz = saturate(zc / info.z);\n"
@@ -6774,6 +6777,33 @@ index 0000000..57d8d76
 +    uint32_t key = gpu_vp_hash(s_vp.start), i, base = key & (GPU_VP_CACHE - 1);
 +    GpuVpProg *e = NULL;
 +    static int workers;
++    {
++        const char *dump = env_cached("RECOMP_GPU_VP_DUMP_START");
++        static uint8_t dumped[256];
++        if (dump && s_vp.start < sizeof dumped && !dumped[s_vp.start]
++                && (uint32_t)strtoul(dump, NULL, 0) == s_vp.start) {
++            uint32_t len = 0, slot;
++            char *src = gpu_vp_translate(s_vp.start, &len);
++            char path[96];
++            FILE *f;
++            dumped[s_vp.start] = 1;
++            CreateDirectoryA("cache", NULL);
++            snprintf(path, sizeof path, "cache\\vp-start-%u.hlsl", s_vp.start);
++            f = fopen(path, "wb");
++            if (f && src) { fwrite(src, 1, strlen(src), f); fclose(f); }
++            else if (f) fclose(f);
++            snprintf(path, sizeof path, "cache\\vp-start-%u.words.txt", s_vp.start);
++            f = fopen(path, "w");
++            if (f) {
++                for (slot = s_vp.start; slot < s_vp.start + len; slot++)
++                    fprintf(f, "%3u: %08X %08X %08X %08X\n", slot,
++                            s_vp.prog[slot][0], s_vp.prog[slot][1],
++                            s_vp.prog[slot][2], s_vp.prog[slot][3]);
++                fclose(f);
++            }
++            free(src);
++        }
++    }
 +    if (env_cached("RECOMP_GPU_VP_LOG_STARTS")) {
 +        static uint8_t seen[256];
 +        if (s_vp.start < sizeof seen && !seen[s_vp.start]) {
@@ -6823,17 +6853,6 @@ index 0000000..57d8d76
 +        uint32_t len = 0;
 +        char *src = gpu_vp_translate(s_vp.start, &len);
 +        if (!src) { e->state = 3; return NULL; }
-+        {
-+            const char *dump = env_cached("RECOMP_GPU_VP_DUMP_START");
-+            if (dump && (uint32_t)strtoul(dump, NULL, 0) == s_vp.start) {
-+                char path[96];
-+                FILE *f;
-+                snprintf(path, sizeof path, "cache\\vp-start-%u.hlsl", s_vp.start);
-+                CreateDirectoryA("cache", NULL);
-+                f = fopen(path, "wb");
-+                if (f) { fwrite(src, 1, strlen(src), f); fclose(f); }
-+            }
-+        }
 +        e->len = len;
 +        e->state = 1;
 +        if (!workers) {

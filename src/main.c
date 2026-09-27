@@ -2339,11 +2339,9 @@ int main(int argc, char **argv)
          * RECOMP_GPU=0 goes back to software. */
         if (!getenv("RECOMP_GPU")) _putenv_s("RECOMP_GPU", "1");
         if (!getenv("RECOMP_GPU_VP")) _putenv_s("RECOMP_GPU_VP", "1");   /* vertex programs on the GPU */
-        /* Program 46 writes the large field/transition meshes with state that
-         * the host translator does not yet reproduce exactly. Keep the fast
-         * GPU path for every other program and use the verified interpreter
-         * for this one until its instruction sequence is fully matched. */
-        if (!getenv("RECOMP_GPU_VP_SKIP_START")) _putenv_s("RECOMP_GPU_VP_SKIP_START", "46");
+        /* RECOMP_GPU_VP_SKIP_START remains available for shader diagnosis.
+         * Program 46 no longer needs the reference fallback: its corruption
+         * was the translated shader's overly large near-zero w clamp. */
         if (!getenv("XBOX_LOG_LEVEL")) _putenv_s("XBOX_LOG_LEVEL", "0");
         if (!getenv("RECOMP_KERNEL_LOG_BUDGET")) _putenv_s("RECOMP_KERNEL_LOG_BUDGET", "0");
     }
