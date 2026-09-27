@@ -4749,9 +4749,9 @@ index 0000000..ef30f6c
 +                        uint32_t v = *(const uint32_t *)pm.pData;
 +                        ID3D11DeviceContext_Unmap(s_gpu11.ctx, (ID3D11Resource *)pick, 0);
 +                        if (v != last)
-+                            fprintf(stderr, "  [PICK] f%u (%u,%u) %08X -> %08X by %s tris=%u prog=%08X blend=%u %04X/%04X z=%04X/%u tex0=%08X fmt=%02X %ux%u c0=%08X/%08X fin=%08X/%08X d0=%.2f,%.2f,%.2f,%.2f\n",
++                            fprintf(stderr, "  [PICK] f%u (%u,%u) %08X -> %08X by %s tris=%u vpstart=%u prog=%08X blend=%u %04X/%04X z=%04X/%u tex0=%08X fmt=%02X %ux%u c0=%08X/%08X fin=%08X/%08X d0=%.2f,%.2f,%.2f,%.2f\n",
 +                                    s_gpu11.frame, px, py, last, v, vpvs ? "gpuvp" : (flat2d ? "2d" : "vp"), nv / 3,
-+                                    s_comb.stage_prog, s_gpu.blend, s_gpu.blend_sf, s_gpu.blend_df,
++                                    s_vp.start, s_comb.stage_prog, s_gpu.blend, s_gpu.blend_sf, s_gpu.blend_df,
 +                                    s_vp.depth_func, s_vp.depth_mask, s_gpu.tex.offset, s_gpu.tex.color,
 +                                    s_gpu.tex.width, s_gpu.tex.height, s_comb.color_icw[0], s_comb.color_ocw[0],
 +                                    s_comb.final0, s_comb.final1,
@@ -6627,6 +6627,17 @@ index 0000000..a147984
 +    uint32_t key = gpu_vp_hash(s_vp.start), i, base = key & (GPU_VP_CACHE - 1);
 +    GpuVpProg *e = NULL;
 +    static int workers;
++    {
++        const char *skip = env_cached("RECOMP_GPU_VP_SKIP_START");
++        const char *p = skip;
++        while (p && *p) {
++            char *end;
++            unsigned long v = strtoul(p, &end, 0);
++            if (end == p) break;
++            if ((uint32_t)v == s_vp.start) return NULL;
++            p = *end ? end + 1 : end;
++        }
++    }
 +    for (i = 0; i < 16; i++) {
 +        GpuVpProg *c = &s_vpc[(base + i) & (GPU_VP_CACHE - 1)];
 +        LONG st = c->state;
