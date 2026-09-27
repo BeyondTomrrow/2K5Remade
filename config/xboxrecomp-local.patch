@@ -1110,7 +1110,7 @@ index e515377..7e97cd3 100644
 +
  #endif /* XBOX_KERNEL_H */
 diff --git a/src/kernel/kernel_bridge.c b/src/kernel/kernel_bridge.c
-index 5b56513..8e31309 100644
+index 5b56513..4c689af 100644
 --- a/src/kernel/kernel_bridge.c
 +++ b/src/kernel/kernel_bridge.c
 @@ -49,6 +49,7 @@
@@ -1980,7 +1980,47 @@ index 5b56513..8e31309 100644
  static int kernel_raise_interrupt(uint32_t vector)
  {
      uint32_t kint = xbox_GetConnectedInterrupt(vector);
-@@ -1992,31 +2457,33 @@ static void kernel_vblank_tick(void)
+@@ -1976,47 +2441,68 @@ static int kernel_raise_interrupt(uint32_t vector)
+ static void kernel_vblank_tick(void)
+ {
+     static int enabled = -1;
+-    static long long next_ms;
+-    long long now;
++    static LARGE_INTEGER frequency;
++    static LONGLONG next_tick;
++    LARGE_INTEGER now;
++    LONGLONG interval;
+ 
+     if (enabled < 0)
+         enabled = getenv("RECOMP_VBLANK") != NULL;
+     if (!enabled)
+         return;
+ 
+-    now = (long long)GetTickCount64();
+-    if (now < next_ms)
++    if (!frequency.QuadPart)
++        QueryPerformanceFrequency(&frequency);
++    QueryPerformanceCounter(&now);
++    interval = frequency.QuadPart / 60;
++    if (!next_tick)
++        next_tick = now.QuadPart;
++    if (now.QuadPart < next_tick)
+         return;
+-    next_ms = now + 16;                       /* ~60 Hz */
++
++    /* Keep an absolute 60 Hz clock.  Advancing from `now` here used to turn
++     * the timer thread's 10 ms polling interval into a 20 ms vblank: every
++     * requested 16 ms deadline was observed at the following poll and the
++     * lateness was added to the next deadline.  NFL 2K5 consequently saw a
++     * 50 Hz console and its two-vblank gameplay pacing fell to 20 fps once
++     * synchronous command processing was included.  Retaining the fractional
++     * schedule makes late polls alternate naturally and average exactly 60
++     * Hz, while the large-lag guard avoids an interrupt catch-up storm after
++     * a debugger pause or a heavily contended guest lock. */
++    next_tick += interval;
++    if (now.QuadPart - next_tick > interval * 4)
++        next_tick = now.QuadPart + interval;
+ 
      if (!xbox_GetConnectedInterrupt(NV2A_VECTOR))
          return;
  
@@ -2030,7 +2070,7 @@ index 5b56513..8e31309 100644
  
  /* ── KeInitializeDpc (ordinal 107) ────────────────────────
   * VOID KeInitializeDpc(PKDPC Dpc, PKDEFERRED_ROUTINE DeferredRoutine,
-@@ -2084,6 +2551,13 @@ static void bridge_KeInitializeInterrupt(void)
+@@ -2084,6 +2570,13 @@ static void bridge_KeInitializeInterrupt(void)
      BRIDGE_MEM32(interrupt_va + 0)  = routine;
      BRIDGE_MEM32(interrupt_va + 4)  = context;
      BRIDGE_MEM32(interrupt_va + 8)  = vector;
@@ -2044,7 +2084,7 @@ index 5b56513..8e31309 100644
      g_eax = 0;
  }
  
-@@ -2225,17 +2699,6 @@ static void bridge_KeInitializeTimerEx(void)
+@@ -2225,17 +2718,6 @@ static void bridge_KeInitializeTimerEx(void)
   * audio off a timer. A title that needs better wants the host's timer queue,
   * not a smaller sleep.
   */
@@ -2062,7 +2102,7 @@ index 5b56513..8e31309 100644
  static DWORD WINAPI kernel_timer_thread(LPVOID unused)
  {
      int slot = xbox_worker_stack_alloc();
-@@ -2263,114 +2726,99 @@ static DWORD WINAPI kernel_timer_thread(LPVOID unused)
+@@ -2263,114 +2745,99 @@ static DWORD WINAPI kernel_timer_thread(LPVOID unused)
          g_fs_base = tib;
      }
  
@@ -2156,17 +2196,7 @@ index 5b56513..8e31309 100644
 -        InitializeCriticalSection(&g_timer_lock);
 -        g_timer_started = 1;
 -        CloseHandle(CreateThread(NULL, 0, kernel_timer_thread, NULL, 0, NULL));
-+    /* Guest KTIMER is a 40-byte Xbox record.  Do not cast its guest-memory
-+     * address to XBOX_KTIMER: that host-only type contains 64-bit handles.
-+     * The bridge-owned timer table is responsible for host scheduling. */
-+    uint32_t timer = STACK_ARG(0);
-+    uint32_t dpc = STACK_ARG(3);
-+    int64_t due = (int64_t)(((uint64_t)STACK_ARG(2) << 32) | STACK_ARG(1));
-+    if (timer) {
-+        BRIDGE_MEM32(timer + 4) = 0; /* Header.SignalState: non-signalled */
-+        BRIDGE_MEM32(timer + 0x1C) = dpc;
-+        bridge_arm_guest_timer(timer, dpc, due < 0 ? (uint64_t)-due : 0, 0);
-     }
+-    }
 -
 -    EnterCriticalSection(&g_timer_lock);
 -    for (i = 0; i < XBOX_MAX_TIMERS; i++) {
@@ -2178,7 +2208,17 @@ index 5b56513..8e31309 100644
 -        g_timers[free_slot].dpc_va    = dpc_va;
 -        g_timers[free_slot].due_ms    = (long long)GetTickCount64() + delay_ms;
 -        g_timers[free_slot].period_ms = period_ms;
--    }
++    /* Guest KTIMER is a 40-byte Xbox record.  Do not cast its guest-memory
++     * address to XBOX_KTIMER: that host-only type contains 64-bit handles.
++     * The bridge-owned timer table is responsible for host scheduling. */
++    uint32_t timer = STACK_ARG(0);
++    uint32_t dpc = STACK_ARG(3);
++    int64_t due = (int64_t)(((uint64_t)STACK_ARG(2) << 32) | STACK_ARG(1));
++    if (timer) {
++        BRIDGE_MEM32(timer + 4) = 0; /* Header.SignalState: non-signalled */
++        BRIDGE_MEM32(timer + 0x1C) = dpc;
++        bridge_arm_guest_timer(timer, dpc, due < 0 ? (uint64_t)-due : 0, 0);
+     }
 -    LeaveCriticalSection(&g_timer_lock);
 -
 -    /* A freshly set timer starts unsignaled, like the real KeSetTimer. */
@@ -2253,7 +2293,7 @@ index 5b56513..8e31309 100644
  }
  
  /* ── ExQueryPoolBlockSize (ordinal 24) ────────────────────
-@@ -2792,13 +3240,17 @@ static void bridge_NtCreateFile(void)
+@@ -2792,13 +3259,17 @@ static void bridge_NtCreateFile(void)
      {
          extern uint32_t xbox_LastFileError(void);
          uint32_t _e = g_eax ? xbox_LastFileError() : 0u;
@@ -2273,7 +2313,7 @@ index 5b56513..8e31309 100644
              fprintf(stderr, "  [FILE] -> 0x%08X\n", g_eax);
      }
      fflush(stderr);
-@@ -2846,16 +3298,34 @@ static void deliver_one_apc(uint32_t apc_routine, uint32_t apc_context,
+@@ -2846,16 +3317,34 @@ static void deliver_one_apc(uint32_t apc_routine, uint32_t apc_context,
       * dispatch correctly fails to find it and the kernel fallback is the one
       * that matters. Checking only recomp_lookup left it undelivered. */
      recomp_func_t fn = recomp_lookup(apc_routine);
@@ -2311,7 +2351,7 @@ index 5b56513..8e31309 100644
      } else {
          uint32_t ord = 0;
          if (apc_routine >= KERNEL_VA_BASE && apc_routine < KERNEL_VA_END) {
-@@ -3041,6 +3511,38 @@ static void bridge_NtReadFile(void)
+@@ -3041,6 +3530,38 @@ static void bridge_NtReadFile(void)
          off.HighPart = (LONG)BRIDGE_MEM32(offset_va + 4);
          poff = &off;
      }
@@ -2350,7 +2390,7 @@ index 5b56513..8e31309 100644
      g_eax = (uint32_t)xbox_NtReadFile(handle, NULL, NULL, NULL, &ios,
                  XBOX_TO_NATIVE(buffer_va), length, poff);
  
-@@ -3056,11 +3558,11 @@ static void bridge_NtReadFile(void)
+@@ -3056,11 +3577,11 @@ static void bridge_NtReadFile(void)
           * early looks identical to one that never started -- until you can
           * see where each one landed. */
          if (poff)
@@ -2364,7 +2404,7 @@ index 5b56513..8e31309 100644
          else
              fprintf(stderr, "  [READ] @seq want=%u got=%u st=0x%08X  %02X %02X %02X %02X\n",
                      length, got, (uint32_t)ios.Status,
-@@ -3515,6 +4017,12 @@ static void bridge_IoCreateSymbolicLink(void)
+@@ -3515,6 +4036,12 @@ static void bridge_IoCreateSymbolicLink(void)
  }
  
  /* ── ObReferenceObjectByHandle (ordinal 246) ─────────────── */
@@ -2377,7 +2417,7 @@ index 5b56513..8e31309 100644
  static void bridge_ObReferenceObjectByHandle(void)
  {
      /* Xbox: NTSTATUS ObReferenceObjectByHandle(HANDLE Handle, PVOID ObjectType, PVOID* Object)
-@@ -3524,6 +4032,12 @@ static void bridge_ObReferenceObjectByHandle(void)
+@@ -3524,6 +4051,12 @@ static void bridge_ObReferenceObjectByHandle(void)
      uint32_t object_ptr = STACK_ARG(2);
      if (object_ptr) BRIDGE_MEM32(object_ptr) = 0;
      g_eax = 0;  /* STATUS_SUCCESS */
@@ -2390,7 +2430,7 @@ index 5b56513..8e31309 100644
  }
  
  /* ── RtlRaiseException (ordinal 302) ─────────────────────
-@@ -3736,6 +4250,20 @@ static void bridge_KeQueryBasePriorityThread(void)
+@@ -3736,6 +4269,20 @@ static void bridge_KeQueryBasePriorityThread(void)
  
  static void bridge_KeSetBasePriorityThread(void)
  {
@@ -2411,7 +2451,7 @@ index 5b56513..8e31309 100644
      g_eax = (uint32_t)xbox_KeSetBasePriorityThread(
          XBOX_TO_NATIVE(STACK_ARG(0)), (LONG)STACK_ARG(1));
  }
-@@ -3766,7 +4294,8 @@ static void bridge_MmLockUnlockBufferPages(void)
+@@ -3766,7 +4313,8 @@ static void bridge_MmLockUnlockBufferPages(void)
   */
  static void bridge_MmQueryAllocationSize(void)
  {
@@ -2421,7 +2461,7 @@ index 5b56513..8e31309 100644
  }
  
  /* ── NtCreateMutant (ordinal 192, 3 args) */
-@@ -3825,18 +4354,33 @@ static void bridge_NtReleaseMutant(void)
+@@ -3825,18 +4373,33 @@ static void bridge_NtReleaseMutant(void)
  static void bridge_NtSuspendThread(void)
  {
      uint32_t count_va = STACK_ARG(1);
@@ -2458,7 +2498,7 @@ index 5b56513..8e31309 100644
  }
  
  /* ── ObfDereferenceObject (ordinal 250, fastcall: object in ecx)
-@@ -4034,6 +4578,7 @@ static void bridge_KeAlertThread(void)
+@@ -4034,6 +4597,7 @@ static void bridge_KeAlertThread(void)
  
  static void bridge_KeWaitForMultipleObjects(void)
  {
@@ -2466,7 +2506,7 @@ index 5b56513..8e31309 100644
      uint32_t count      = STACK_ARG(0);
      uint32_t objects_va = STACK_ARG(1);
      uint32_t wait_type  = STACK_ARG(2);
-@@ -4042,6 +4587,8 @@ static void bridge_KeWaitForMultipleObjects(void)
+@@ -4042,6 +4606,8 @@ static void bridge_KeWaitForMultipleObjects(void)
      HANDLE handles[BRIDGE_MAXIMUM_WAIT_OBJECTS];
      uint32_t i;
  
@@ -2475,7 +2515,7 @@ index 5b56513..8e31309 100644
      if (count == 0) {
          g_eax = (uint32_t)STATUS_INVALID_PARAMETER;
          return;
-@@ -4052,11 +4599,23 @@ static void bridge_KeWaitForMultipleObjects(void)
+@@ -4052,11 +4618,23 @@ static void bridge_KeWaitForMultipleObjects(void)
          handles[i] = bridge_resolve_handle(
              objects_va ? BRIDGE_MEM32(objects_va + i * 4) : 0);
  
@@ -2504,7 +2544,7 @@ index 5b56513..8e31309 100644
  }
  
  #undef BRIDGE_MAXIMUM_WAIT_OBJECTS
-@@ -8816,6 +9375,7 @@ static void kernel_thunk_dispatch(void)
+@@ -8816,6 +9394,7 @@ static void kernel_thunk_dispatch(void)
      int slot = g_kernel_dispatch_slot;
      bridge_func_t bridge;
      ULONG ordinal;
@@ -2512,7 +2552,7 @@ index 5b56513..8e31309 100644
  
      if (slot < 0 || slot >= XBOX_KERNEL_THUNK_TABLE_SIZE) {
          fprintf(stderr, "  [KERNEL] bad slot %d\n", slot);
-@@ -8824,8 +9384,14 @@ static void kernel_thunk_dispatch(void)
+@@ -8824,8 +9403,14 @@ static void kernel_thunk_dispatch(void)
          return;
      }
  
@@ -2527,7 +2567,7 @@ index 5b56513..8e31309 100644
  
      g_kernel_call_count++;
      if (ordinal < XBOX_KERNEL_THUNK_TABLE_SIZE)
-@@ -8848,8 +9414,14 @@ static void kernel_thunk_dispatch(void)
+@@ -8848,8 +9433,14 @@ static void kernel_thunk_dispatch(void)
          DWORD now = GetTickCount();
          if (last_summary_tick == 0) last_summary_tick = now;
          if (now - last_summary_tick >= 2000 && g_kernel_call_count > 200) {
@@ -2544,7 +2584,7 @@ index 5b56513..8e31309 100644
              /* And which ones, ranked. "Latest" names whatever the sample
               * happened to land on; the question behind this line is what a
               * title sitting still is actually asking the kernel for, and
-@@ -8872,8 +9444,124 @@ static void kernel_thunk_dispatch(void)
+@@ -8872,8 +9463,124 @@ static void kernel_thunk_dispatch(void)
                              (unsigned long long)g_ordinal_calls[best]);
                  }
              }
@@ -2670,7 +2710,7 @@ index 5b56513..8e31309 100644
          }
      }
  
-@@ -8951,8 +9639,58 @@ static void kernel_thunk_dispatch(void)
+@@ -8951,8 +9658,58 @@ static void kernel_thunk_dispatch(void)
       * On real x86, stdcall callee does "ret N" to pop the return address
       * and N bytes of arguments. We already popped the dummy return address
       * above; now pop the args. */
@@ -2729,7 +2769,7 @@ index 5b56513..8e31309 100644
      if (g_kernel_watch_va) {
          uint32_t _after = BRIDGE_MEM32(g_kernel_watch_va);
          if (_after != _watch_before) {
-@@ -8988,6 +9726,35 @@ recomp_func_t recomp_lookup_kernel(uint32_t xbox_va)
+@@ -8988,6 +9745,35 @@ recomp_func_t recomp_lookup_kernel(uint32_t xbox_va)
      return NULL;
  }
  
@@ -2765,7 +2805,7 @@ index 5b56513..8e31309 100644
  /* ── Initialization ─────────────────────────────────────── */
  
  /*
-@@ -9076,6 +9843,13 @@ void xbox_kernel_bridge_init(void)
+@@ -9076,6 +9862,13 @@ void xbox_kernel_bridge_init(void)
  
      /* Initialize kernel data export values first */
      kernel_data_init();
@@ -2779,7 +2819,7 @@ index 5b56513..8e31309 100644
  
      for (i = 0; i < g_thunk_table_count; i++) {
          uint32_t va = g_thunk_table_base + i * 4;
-@@ -9192,4 +9966,33 @@ void xbox_kernel_bridge_init(void)
+@@ -9192,4 +9985,33 @@ void xbox_kernel_bridge_init(void)
      fprintf(stderr, "  Synthetic VA range: 0x%08X-0x%08X\n",
              KERNEL_VA_BASE, KERNEL_VA_BASE + (resolved - 1) * 4);
  
@@ -3349,10 +3389,10 @@ index 0000000..85d7275
 +}
 diff --git a/src/kernel/nv2a_gpu_d3d11.inc.c b/src/kernel/nv2a_gpu_d3d11.inc.c
 new file mode 100644
-index 0000000..fdd2a6c
+index 0000000..404c80f
 --- /dev/null
 +++ b/src/kernel/nv2a_gpu_d3d11.inc.c
-@@ -0,0 +1,1621 @@
+@@ -0,0 +1,1656 @@
 +/* ── Hardware rendering (Direct3D 11) ─────────────────────────────────────
 + *
 + * Included into nv2a_pb_exec.c (it reads that file's state directly), after
@@ -4422,6 +4462,8 @@ index 0000000..fdd2a6c
 +    ID3D11VertexShader *vpvs = NULL;     /* the program on the GPU (RECOMP_GPU_VP) */
 +    UINT first_vertex = 0;                /* where this batch sits in the vertex ring */
 +    uint32_t vp_nverts = 0;
++    LARGE_INTEGER cpu_vp_t0 = { 0 }, cpu_vp_t1;
++    int profile_cpu_vp = 0;
 +
 +    if (!gpu_enabled() || !gpu_init())
 +        return 0;
@@ -4460,7 +4502,10 @@ index 0000000..fdd2a6c
 +    if (vpvs) {
 +        nv = gpu_vp_build(&vp_nverts);
 +        s_vp.verts += vp_nverts;
-+    } else switch (s_gpu.prim) {
++    } else {
++        profile_cpu_vp = !flat2d && env_cached("RECOMP_GPU_PROFILE") != NULL;
++        if (profile_cpu_vp) QueryPerformanceCounter(&cpu_vp_t0);
++        switch (s_gpu.prim) {
 +    case NV_PRIM_TRIANGLES:
 +        for (i = 0; i + 2 < n; i += 3) GPU_TRI(i, i + 1, i + 2);
 +        break;
@@ -4489,6 +4534,36 @@ index 0000000..fdd2a6c
 +        break;
 +    default:
 +        break;
++        }
++        if (profile_cpu_vp) {
++            static LARGE_INTEGER frequency;
++            static LONGLONG start46_ticks, other_ticks;
++            static uint64_t start46_verts, other_verts;
++            static uint32_t start46_batches, other_batches;
++            static DWORD since;
++            DWORD now = GetTickCount();
++            QueryPerformanceCounter(&cpu_vp_t1);
++            if (!frequency.QuadPart) QueryPerformanceFrequency(&frequency);
++            if (s_vp.start == 46) {
++                start46_ticks += cpu_vp_t1.QuadPart - cpu_vp_t0.QuadPart;
++                start46_verts += nv; start46_batches++;
++            } else {
++                other_ticks += cpu_vp_t1.QuadPart - cpu_vp_t0.QuadPart;
++                other_verts += nv; other_batches++;
++            }
++            if (!since) since = now;
++            if (now - since >= 5000) {
++                fprintf(stderr, "  [GPUVPPERF] cpu start46=%u batches/%llu verts/%.2fms other=%u/%llu/%.2fms over %lums\n",
++                        start46_batches, (unsigned long long)start46_verts,
++                        start46_ticks * 1000.0 / frequency.QuadPart,
++                        other_batches, (unsigned long long)other_verts,
++                        other_ticks * 1000.0 / frequency.QuadPart, now - since);
++                start46_ticks = other_ticks = 0;
++                start46_verts = other_verts = 0;
++                start46_batches = other_batches = 0;
++                since = now;
++            }
++        }
 +    }
 +#undef GPU_TRI
 +#undef GPU_LINE
@@ -5282,10 +5357,10 @@ index 0000000..09057ec
 +    "}\n";
 diff --git a/src/kernel/nv2a_gpu_present.inc.c b/src/kernel/nv2a_gpu_present.inc.c
 new file mode 100644
-index 0000000..804fb13
+index 0000000..8f5d34a
 --- /dev/null
 +++ b/src/kernel/nv2a_gpu_present.inc.c
-@@ -0,0 +1,1013 @@
+@@ -0,0 +1,1027 @@
 +/* ── Presentation and video settings (2026-09-26) ────────────────────────
 + *
 + * Included into nv2a_gpu_d3d11.inc.c.
@@ -5316,7 +5391,7 @@ index 0000000..804fb13
 +
 +enum { VM_WINDOWED, VM_BORDERLESS, VM_FULLSCREEN };
 +enum { AR_ORIGINAL, AR_STRETCH, AR_16_9, AR_21_9, AR_32_9, AR_ZOOM };
-+enum { SF_BILINEAR, SF_SHARP, SF_NEAREST };
++enum { SF_BILINEAR, SF_SHARP, SF_NEAREST, SF_ENHANCED };
 +
 +typedef struct {
 +    int mode;               /* VM_* */
@@ -5335,7 +5410,7 @@ index 0000000..804fb13
 +/* NFL 2K5 draws several full-screen backdrops only inside the 640-pixel
 + * title-safe area of its 720-pixel scanout.  A CRT hid the remaining edge;
 + * showing the full scanout exposes hard black strips beside the sky. */
-+static VideoSettings s_vs = { VM_WINDOWED, 1440, 1080, AR_ORIGINAL, 2, SF_SHARP, 1, 100, 100, 40, 0, 1 };
++static VideoSettings s_vs = { VM_WINDOWED, 1440, 1080, AR_ORIGINAL, 2, SF_ENHANCED, 1, 100, 100, 40, 0, 1 };
 +static volatile LONG s_vs_dirty = 1;
 +void xbox_VideoSettingsLoad(void);           /* window/swap chain need (re)applying */
 +
@@ -5367,6 +5442,7 @@ index 0000000..804fb13
 +    fclose(f);
 +    if (s_vs.scale < 1) s_vs.scale = 1;
 +    if (s_vs.scale > 9) s_vs.scale = 9;
++    if (s_vs.filter < SF_BILINEAR || s_vs.filter > SF_ENHANCED) s_vs.filter = SF_ENHANCED;
 +    if (s_vs.crop < 0) s_vs.crop = 0;
 +    if (s_vs.crop > 40) s_vs.crop = 40;
 +    if (s_vs.res_w < 320 || s_vs.res_h < 240) { s_vs.res_w = 1440; s_vs.res_h = 1080; }
@@ -5384,7 +5460,7 @@ index 0000000..804fb13
 +               "aspect = %d\n"
 +               "; scale: internal resolution = 720x480 times this (1..9; 9 = 6480x4320)\n"
 +               "scale = %d\n"
-+               "; filter: 0 bilinear, 1 sharp bilinear, 2 nearest\n"
++               "; filter: 0 bilinear, 1 sharp bilinear, 2 nearest, 3 enhanced\n"
 +               "filter = %d\nvsync = %d\nbrightness = %d\ngamma = %d\ncrop = %d\nshow_fps = %d\naniso = %d\n",
 +            s_vs.mode, s_vs.res_w, s_vs.res_h, s_vs.aspect, s_vs.scale, s_vs.filter, s_vs.vsync,
 +            s_vs.brightness, s_vs.gamma, s_vs.crop, s_vs.show_fps, s_vs.aniso);
@@ -5476,6 +5552,17 @@ index 0000000..804fb13
 +    "    float2 rr = 0.5 - 0.5 / sc, cd = s - 0.5;\n"
 +    "    float2 f = (cd - clamp(cd, -rr, rr)) * sc + 0.5;\n"
 +    "    c = Src.Sample(Lin, (fl + f) / sz.xy);\n"
++    "  } else if (prm.z == 3.0) {\n"
++    "    float2 d = 1.0 / sz.xy;\n"
++    "    float4 cc = Src.Sample(Lin, uv);\n"
++    "    float4 n = Src.Sample(Lin, uv + float2(0,-d.y));\n"
++    "    float4 s = Src.Sample(Lin, uv + float2(0, d.y));\n"
++    "    float4 e = Src.Sample(Lin, uv + float2( d.x,0));\n"
++    "    float4 w = Src.Sample(Lin, uv + float2(-d.x,0));\n"
++    "    float3 lo = min(cc.rgb, min(min(n.rgb,s.rgb),min(e.rgb,w.rgb)));\n"
++    "    float3 hi = max(cc.rgb, max(max(n.rgb,s.rgb),max(e.rgb,w.rgb)));\n"
++    "    float3 detail = cc.rgb * 4.0 - n.rgb - s.rgb - e.rgb - w.rgb;\n"
++    "    c = float4(clamp(cc.rgb + detail * 0.16, lo, hi), cc.a);\n"
 +    "  } else c = Src.Sample(Lin, uv);\n"
 +    "  c.rgb = pow(saturate(c.rgb * prm.x), prm.y); c.a = 1.0; return c; }\n"
 +    "float4 ps_ovl(V i) : SV_Target { return Src.Sample(Lin, i.uv); }\n"
@@ -5778,7 +5865,7 @@ index 0000000..804fb13
 +    static const char *modes[] = { "Windowed", "Borderless fullscreen", "Exclusive fullscreen" };
 +    static const char *aspects[] = { "Original (4:3)", "Stretch to screen", "16:9", "21:9 ultrawide",
 +                                     "32:9 super ultrawide", "Zoom to fill (crop)" };
-+    static const char *filters[] = { "Bilinear", "Sharp bilinear", "Nearest (pixelated)" };
++    static const char *filters[] = { "Bilinear", "Sharp bilinear", "Nearest (pixelated)", "Enhanced sharp" };
 +    val[0] = 0;
 +    switch (item) {
 +    case MI_MODE:   strcpy(name, "Display mode"); snprintf(val, n, "%s", modes[s_vs.mode % 3]); break;
@@ -5787,7 +5874,7 @@ index 0000000..804fb13
 +    case MI_ASPECT: strcpy(name, "Aspect ratio"); snprintf(val, n, "%s", aspects[s_vs.aspect % 6]); break;
 +    case MI_SCALE:  strcpy(name, "Internal resolution");
 +                    snprintf(val, n, "%dx  (%d x %d)", s_vs.scale, 720 * s_vs.scale, 480 * s_vs.scale); break;
-+    case MI_FILTER: strcpy(name, "Upscaling filter"); snprintf(val, n, "%s", filters[s_vs.filter % 3]); break;
++    case MI_FILTER: strcpy(name, "Upscaling filter"); snprintf(val, n, "%s", filters[s_vs.filter % 4]); break;
 +    case MI_VSYNC:  strcpy(name, "VSync"); snprintf(val, n, "%s", s_vs.vsync ? "On" : "Off"); break;
 +    case MI_BRIGHT: strcpy(name, "Brightness"); snprintf(val, n, "%d%%", s_vs.brightness); break;
 +    case MI_GAMMA:  strcpy(name, "Gamma"); snprintf(val, n, "%.2f", s_vs.gamma / 100.0); break;
@@ -5815,7 +5902,7 @@ index 0000000..804fb13
 +        break;
 +    case MI_ASPECT: s_vs.aspect = (s_vs.aspect + 6 + dir) % 6; break;
 +    case MI_SCALE:  s_vs.scale += dir; if (s_vs.scale < 1) s_vs.scale = 9; if (s_vs.scale > 9) s_vs.scale = 1; break;
-+    case MI_FILTER: s_vs.filter = (s_vs.filter + 3 + dir) % 3; break;
++    case MI_FILTER: s_vs.filter = (s_vs.filter + 4 + dir) % 4; break;
 +    case MI_VSYNC:  s_vs.vsync = !s_vs.vsync; break;
 +    case MI_BRIGHT: s_vs.brightness += 5 * dir; if (s_vs.brightness < 50) s_vs.brightness = 50;
 +                    if (s_vs.brightness > 150) s_vs.brightness = 150; break;
@@ -5834,7 +5921,7 @@ index 0000000..804fb13
 +static void menu_activate(int item)
 +{
 +    if (item == MI_RESET) {
-+        VideoSettings d = { VM_WINDOWED, 1440, 1080, AR_ORIGINAL, 2, SF_SHARP, 1, 100, 100, 0, 0, 1 };
++        VideoSettings d = { VM_WINDOWED, 1440, 1080, AR_ORIGINAL, 2, SF_ENHANCED, 1, 100, 100, 40, 0, 1 };
 +        s_vs = d;
 +        InterlockedExchange(&s_vs_dirty, 1);
 +        vs_save();
@@ -5876,7 +5963,8 @@ index 0000000..804fb13
 +{
 +    if (i < 0 || i >= VM_COUNT) return 1;
 +    switch (k_vm_items[i]) {
-+    case MI_MODE: case MI_FILTER: return 3;
++    case MI_MODE: return 3;
++    case MI_FILTER: return 4;
 +    case MI_RES:    res_build(); return s_nres ? s_nres : 1;
 +    case MI_ASPECT: return 6;
 +    case MI_SCALE:  return 9;
@@ -5935,7 +6023,7 @@ index 0000000..804fb13
 +    static const char *modes[] = { "Windowed", "Borderless", "Fullscreen" };
 +    static const char *aspects[] = { "4:3 Original", "Stretch", "16:9", "21:9 Ultrawide",
 +                                     "32:9 Super Ultrawide", "Zoom to Fill" };
-+    static const char *filters[] = { "Bilinear", "Sharp Bilinear", "Nearest" };
++    static const char *filters[] = { "Bilinear", "Sharp Bilinear", "Nearest", "Enhanced Sharp" };
 +    VideoSettings v = s_vs;
 +    int item;
 +    buf[0] = 0;
@@ -5947,7 +6035,7 @@ index 0000000..804fb13
 +    case MI_RES:    snprintf(buf, n, "%d x %d", v.res_w, v.res_h); break;
 +    case MI_ASPECT: snprintf(buf, n, "%s", aspects[v.aspect % 6]); break;
 +    case MI_SCALE:  snprintf(buf, n, "%dx (%d x %d)", v.scale, 720 * v.scale, 480 * v.scale); break;
-+    case MI_FILTER: snprintf(buf, n, "%s", filters[v.filter % 3]); break;
++    case MI_FILTER: snprintf(buf, n, "%s", filters[v.filter % 4]); break;
 +    case MI_VSYNC:  snprintf(buf, n, "%s", v.vsync ? "On" : "Off"); break;
 +    case MI_BRIGHT: snprintf(buf, n, "%d%%", v.brightness); break;
 +    case MI_GAMMA:  snprintf(buf, n, "%d.%02d", v.gamma / 100, v.gamma % 100); break;
@@ -6210,7 +6298,8 @@ index 0000000..804fb13
 +        pc.src[2] = (sw - 2.0f * c) / sw; pc.src[3] = (sh - 2.0f * c) / sh;
 +        pc.prm[0] = s_vs.brightness / 100.0f;
 +        pc.prm[1] = 100.0f / (float)s_vs.gamma;
-+        pc.prm[2] = (float)(s_vs.filter == SF_NEAREST ? 1 : s_vs.filter == SF_SHARP ? 2 : 0);
++        pc.prm[2] = (float)(s_vs.filter == SF_NEAREST ? 1 : s_vs.filter == SF_SHARP ? 2
++                               : s_vs.filter == SF_ENHANCED ? 3 : 0);
 +        pc.prm[3] = 0.0f;
 +        pr_dest_rect(&dx, &dy, &dw, &dh);
 +        /* The surface texture is scale x its guest size once the internal
@@ -6301,10 +6390,10 @@ index 0000000..804fb13
 +}
 diff --git a/src/kernel/nv2a_gpu_vp.inc.c b/src/kernel/nv2a_gpu_vp.inc.c
 new file mode 100644
-index 0000000..089cb7b
+index 0000000..57d8d76
 --- /dev/null
 +++ b/src/kernel/nv2a_gpu_vp.inc.c
-@@ -0,0 +1,598 @@
+@@ -0,0 +1,609 @@
 +/* ── NV2A vertex programs on the GPU ─────────────────────────────────────
 + *
 + * Included into nv2a_gpu_d3d11.inc.c. Opt-in with RECOMP_GPU_VP=1 while it is
@@ -6734,6 +6823,17 @@ index 0000000..089cb7b
 +        uint32_t len = 0;
 +        char *src = gpu_vp_translate(s_vp.start, &len);
 +        if (!src) { e->state = 3; return NULL; }
++        {
++            const char *dump = env_cached("RECOMP_GPU_VP_DUMP_START");
++            if (dump && (uint32_t)strtoul(dump, NULL, 0) == s_vp.start) {
++                char path[96];
++                FILE *f;
++                snprintf(path, sizeof path, "cache\\vp-start-%u.hlsl", s_vp.start);
++                CreateDirectoryA("cache", NULL);
++                f = fopen(path, "wb");
++                if (f) { fwrite(src, 1, strlen(src), f); fclose(f); }
++            }
++        }
 +        e->len = len;
 +        e->state = 1;
 +        if (!workers) {
@@ -9590,7 +9690,7 @@ index 0000000..6def568
 +
 +#endif /* XBOX_GGL_H */
 diff --git a/src/kernel/xbox_memory_layout.c b/src/kernel/xbox_memory_layout.c
-index 53d8c75..99645d3 100644
+index 53d8c75..0911884 100644
 --- a/src/kernel/xbox_memory_layout.c
 +++ b/src/kernel/xbox_memory_layout.c
 @@ -14,8 +14,12 @@
@@ -9723,7 +9823,7 @@ index 53d8c75..99645d3 100644
                      /* Periodic, because what the title submits at init is not
                       * what it submits once it is drawing a menu, and the
                       * question the survey answers is about the latter. */
-@@ -848,6 +848,102 @@ static DWORD WINAPI nv2a_ack_thread(LPVOID param)
+@@ -848,6 +848,158 @@ static DWORD WINAPI nv2a_ack_thread(LPVOID param)
                  fflush(stderr);
              }
          }
@@ -9732,15 +9832,64 @@ index 53d8c75..99645d3 100644
 +/* One walker at a time: the title's kickoff (xbox_Nv2aKick) and the
 + * fallback poller below share pb_exec_poll's state. */
 +static SRWLOCK s_pb_exec_lock = SRWLOCK_INIT;
++static volatile LONG s_pb_sync_kick_active;
++
++/* Optional, low-overhead command-processor timing.  Keep this outside the
++ * verbose GPU trace: writing a line per draw changes the title's timing and
++ * makes performance captures useless.  RECOMP_GPU_PROFILE prints one
++ * aggregate line every five seconds instead. */
++static int pb_profile_enabled(void)
++{
++    static int enabled = -1;
++    if (enabled < 0) {
++        const char *v = getenv("RECOMP_GPU_PROFILE");
++        enabled = v && *v && strcmp(v, "0") != 0;
++    }
++    return enabled;
++}
++
++static void pb_profile_sample(LONGLONG ticks)
++{
++    static LARGE_INTEGER freq;
++    static LONGLONG total, maximum;
++    static LONG kicks;
++    static DWORD since;
++    DWORD now;
++    if (!pb_profile_enabled())
++        return;
++    if (!freq.QuadPart)
++        QueryPerformanceFrequency(&freq);
++    total += ticks;
++    if (ticks > maximum) maximum = ticks;
++    kicks++;
++    now = GetTickCount();
++    if (!since) since = now;
++    if (now - since >= 5000 && kicks) {
++        fprintf(stderr, "  [GPUPERF] kickoff count=%ld total=%.2fms avg=%.3fms max=%.2fms over %lums\n",
++                kicks, total * 1000.0 / freq.QuadPart,
++                total * 1000.0 / freq.QuadPart / kicks,
++                maximum * 1000.0 / freq.QuadPart, now - since);
++        total = maximum = 0; kicks = 0; since = now;
++    }
++}
 +
 +static DWORD WINAPI pb_exec_thread(LPVOID param)
 +{
 +    volatile uint32_t *regs = (volatile uint32_t *)param;
 +    while (!InterlockedCompareExchange(&g_nv2a_ack_stop, 0, 0)) {
-+        AcquireSRWLockExclusive(&s_pb_exec_lock);
-+        pb_exec_poll(regs);
-+        ReleaseSRWLockExclusive(&s_pb_exec_lock);
-+        Sleep(1);
++        /* This poller only exists for titles/submission paths without a
++         * KickOff hook.  Once xbox_Nv2aKick has run, polling the same PUT on
++         * a 1 ms host thread can win the race after the guest writes PUT but
++         * before its hook executes.  The guest thread then blocks behind an
++         * entire frame of rendering (40-80 ms spikes in stadium captures).
++         * Keep the fallback for early setup, then retire it without a busy
++         * wait as soon as the accurate synchronous path proves available. */
++        if (!InterlockedCompareExchange(&s_pb_sync_kick_active, 0, 0)
++                && TryAcquireSRWLockExclusive(&s_pb_exec_lock)) {
++            pb_exec_poll(regs);
++            ReleaseSRWLockExclusive(&s_pb_exec_lock);
++        }
++        Sleep(4);
 +    }
 +    return 0;
 +}
@@ -9756,11 +9905,18 @@ index 53d8c75..99645d3 100644
 + * again, is what the hardware does. */
 +void xbox_Nv2aKick(void)
 +{
++    LARGE_INTEGER t0 = { 0 }, t1;
 +    if (!g_nv2a_memory)
 +        return;
++    InterlockedExchange(&s_pb_sync_kick_active, 1);
++    if (pb_profile_enabled()) QueryPerformanceCounter(&t0);
 +    AcquireSRWLockExclusive(&s_pb_exec_lock);
 +    pb_exec_poll((volatile uint32_t *)g_nv2a_memory);
 +    ReleaseSRWLockExclusive(&s_pb_exec_lock);
++    if (pb_profile_enabled()) {
++        QueryPerformanceCounter(&t1);
++        pb_profile_sample(t1.QuadPart - t0.QuadPart);
++    }
 +}
 +
 +static DWORD WINAPI nv2a_ack_thread(LPVOID param)
@@ -9826,7 +9982,7 @@ index 53d8c75..99645d3 100644
          if (s_nv2a_trace) {
              static uint32_t last_start = 0xFFFFFFFFu;
              uint32_t start = *(volatile uint32_t *)((char *)regs + 0x600800);
-@@ -885,6 +981,7 @@ static void xbox_Nv2aAckStart(void)
+@@ -885,6 +1037,7 @@ static void xbox_Nv2aAckStart(void)
      g_nv2a_ack_stop = 0;
      g_nv2a_ack_thread = CreateThread(NULL, 0, nv2a_ack_thread,
                                       g_nv2a_memory, 0, NULL);
@@ -9834,7 +9990,7 @@ index 53d8c75..99645d3 100644
      if (g_nv2a_ack_thread) {
          fprintf(stderr, "  NV2A busy-bit ack: %zu register(s) acknowledged\n",
                  sizeof(NV2A_ACK) / sizeof(NV2A_ACK[0]));
-@@ -913,6 +1010,7 @@ ptrdiff_t g_xbox_mem_offset = 0;
+@@ -913,6 +1066,7 @@ ptrdiff_t g_xbox_mem_offset = 0;
   * nothing breaks before the title is loaded. */
  uint32_t g_xbox_image_lo = 0;
  uint32_t g_xbox_image_hi = 0;
@@ -9842,7 +9998,7 @@ index 53d8c75..99645d3 100644
  uint32_t g_xbox_code_lo = 0;
  uint32_t g_xbox_code_hi = 0;
  
-@@ -1081,6 +1179,7 @@ extern volatile uint32_t g_icall_trace_idx;
+@@ -1081,6 +1235,7 @@ extern volatile uint32_t g_icall_trace_idx;
  extern volatile uint64_t g_icall_count;
  
  static uint32_t *s_watchdog_esp;
@@ -9850,7 +10006,7 @@ index 53d8c75..99645d3 100644
  /* The other guest registers are thread-local too, so the watchdog has to be
   * handed the guest thread's copies rather than reading its own -- which are
   * always zero, and read as "every register is null" at exactly the moment the
-@@ -1224,11 +1323,15 @@ static DWORD WINAPI xbox_watchdog_thread(LPVOID unused)
+@@ -1224,11 +1379,15 @@ static DWORD WINAPI xbox_watchdog_thread(LPVOID unused)
  
      for (i = 0; i < 400 && esp; i++) {
          uint32_t a = esp + i * 4;
@@ -9867,7 +10023,7 @@ index 53d8c75..99645d3 100644
      _exit(3);
      return 0;
  }
-@@ -1248,6 +1351,8 @@ void xbox_WatchdogStart(void)
+@@ -1248,6 +1407,8 @@ void xbox_WatchdogStart(void)
       * be handed the address of the one that matters rather than reading its
       * own, which is always zero. */
      s_watchdog_esp = &g_esp;
@@ -9876,7 +10032,7 @@ index 53d8c75..99645d3 100644
      s_watchdog_regs[0] = &g_eax; s_watchdog_regs[1] = &g_ecx;
      s_watchdog_regs[2] = &g_edx; s_watchdog_regs[3] = &g_ebx;
      s_watchdog_regs[4] = &g_esi; s_watchdog_regs[5] = &g_edi;
-@@ -1669,6 +1774,8 @@ BOOL xbox_MemoryLayoutInit(const void *xbe_data, size_t xbe_size)
+@@ -1669,6 +1830,8 @@ BOOL xbox_MemoryLayoutInit(const void *xbe_data, size_t xbe_size)
  
      /* Set the global offset for recompiled code MEM macros */
      g_xbox_mem_offset = g_memory_offset;
@@ -9885,7 +10041,7 @@ index 53d8c75..99645d3 100644
  
      /*
       * Initialize the Xbox stack for recompiled code.
-@@ -1718,7 +1825,12 @@ BOOL xbox_MemoryLayoutInit(const void *xbe_data, size_t xbe_size)
+@@ -1718,7 +1881,12 @@ BOOL xbox_MemoryLayoutInit(const void *xbe_data, size_t xbe_size)
           * only worked while page zero was mapped. Pointing at real zeroed
           * memory says the same thing to the title and survives that page being
           * unmapped, which is what makes a genuine null dereference visible. */
@@ -9899,7 +10055,7 @@ index 53d8c75..99645d3 100644
          memset(XBOX_VA(FAKE_PRCB_VA), 0, 0x400);
          MEM32_INIT(XBOX_FS_BASE + 0x20, FAKE_PRCB_VA);
          #undef FAKE_PRCB_VA
-@@ -1729,8 +1841,8 @@ BOOL xbox_MemoryLayoutInit(const void *xbe_data, size_t xbe_size)
+@@ -1729,8 +1897,8 @@ BOOL xbox_MemoryLayoutInit(const void *xbe_data, size_t xbe_size)
           * to its data area. We allocate a fake structure at 0x00760000
           * (in the BSS area) and a data buffer at 0x00700000.
           */
@@ -9910,7 +10066,7 @@ index 53d8c75..99645d3 100644
  
          MEM32_INIT(XBOX_FS_BASE + 0x28, FAKE_TLS_VA);
          /* TLS[0x28] = pointer to RW data area */
-@@ -1764,8 +1876,8 @@ BOOL xbox_MemoryLayoutInit(const void *xbe_data, size_t xbe_size)
+@@ -1764,8 +1932,8 @@ BOOL xbox_MemoryLayoutInit(const void *xbe_data, size_t xbe_size)
           * Every guest thread therefore shares LastError. Give this a per-thread
           * allocation when a title is observed to care.
           */
@@ -9921,7 +10077,7 @@ index 53d8c75..99645d3 100644
          {
              DWORD tls_dir_va = *(const DWORD *)(xbe + XBE_TLS_ADDR_OFFSET);
  
-@@ -1971,6 +2083,20 @@ BOOL xbox_MemoryLayoutInit(const void *xbe_data, size_t xbe_size)
+@@ -1971,6 +2139,20 @@ BOOL xbox_MemoryLayoutInit(const void *xbe_data, size_t xbe_size)
                  if (VirtualProtect((char *)g_mcpx_memory, 0x00080000u,
                                     PAGE_NOACCESS, &old_protect))
                      g_apu_mmio_trapped = 1;
@@ -9942,7 +10098,7 @@ index 53d8c75..99645d3 100644
                  if (g_apu_mmio_trapped)
                      fprintf(stderr, "  APU: 0x%08X..0x%08X trapped for MMIO\n",
                              XBOX_MCPX_BASE, XBOX_MCPX_BASE + 0x00080000u);
-@@ -2504,55 +2630,161 @@ void xbox_FreeThreadStack(uint32_t stack_top)
+@@ -2504,55 +2686,161 @@ void xbox_FreeThreadStack(uint32_t stack_top)
          g_thread_stacks_used--;
  }
  
