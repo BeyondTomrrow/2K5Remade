@@ -7023,7 +7023,7 @@ index 0000000..ea9882d
 +    return 1;
 +}
 diff --git a/src/kernel/nv2a_pb_exec.c b/src/kernel/nv2a_pb_exec.c
-index b3dcbf7..6cce5a5 100644
+index b3dcbf7..77c8163 100644
 --- a/src/kernel/nv2a_pb_exec.c
 +++ b/src/kernel/nv2a_pb_exec.c
 @@ -24,8 +24,10 @@
@@ -7119,7 +7119,19 @@ index b3dcbf7..6cce5a5 100644
      int      valid;
  } Texture;
  
-@@ -246,7 +296,13 @@ static struct {
+@@ -222,6 +272,11 @@ static struct {
+     uint32_t   prim;                    /* SET_BEGIN_END parameter, 0 = ended */
+     uint16_t   idx[NV_MAX_INDICES];
+     uint32_t   idx_count;
++    /* DRAW_ARRAYS method words are individual draw calls unless adjacent
++     * ranges can be joined.  Keep that provenance so a non-contiguous range
++     * can be flushed instead of turning two strips into one (which creates a
++     * long bridge triangle across the field). */
++    int        draw_arrays_active;
+     /* INLINE_ARRAY payload: vertices written straight into the pushbuffer
+      * instead of into a buffer the title points at. Same vertex format, a
+      * different place to read them from. */
+@@ -246,7 +301,13 @@ static struct {
      uint64_t pixels;
      uint32_t pixel_max;   /* brightest value any pixel write carried */
      uint32_t clip_x, clip_w, clip_y, clip_h;
@@ -7133,7 +7145,7 @@ index b3dcbf7..6cce5a5 100644
      uint32_t clears, unhandled_total;
      uint32_t flip_read, flip_write, flip_modulo, flips;
      uint32_t tris_drawn, tris_skipped_offscreen, batches_untransformed;
-@@ -257,6 +313,18 @@ static struct {
+@@ -257,6 +318,18 @@ static struct {
      Texture  tex;
  } s_gpu;
  
@@ -7152,7 +7164,7 @@ index b3dcbf7..6cce5a5 100644
  /* Unhandled methods, ranked. The interesting output is not that something was
   * skipped but which things dominate, because that is the order to implement
   * them in. */
-@@ -291,9 +359,22 @@ static void record_tex_reg(uint32_t method, uint32_t param)
+@@ -291,9 +364,22 @@ static void record_tex_reg(uint32_t method, uint32_t param)
       * which is nearly all of them, since swizzled is the Xbox default. That
       * left the title's own textures unsampled and every textured quad drawn in
       * flat vertex colour. */
@@ -7175,7 +7187,7 @@ index b3dcbf7..6cce5a5 100644
  }
  
  /* Every distinct texture a batch was drawn with, and how many batches used it.
-@@ -349,6 +430,11 @@ static void note_unhandled(uint32_t method, uint32_t param)
+@@ -349,6 +435,11 @@ static void note_unhandled(uint32_t method, uint32_t param)
          }
      }
      if (s_unhandled_count < PB_EXEC_MAX_UNHANDLED) {
@@ -7187,7 +7199,7 @@ index b3dcbf7..6cce5a5 100644
          s_unhandled[s_unhandled_count].method = method;
          s_unhandled[s_unhandled_count].count = 1;
          s_unhandled[s_unhandled_count].last_param = param;
-@@ -367,8 +453,12 @@ static int fetch_attr(const VertexAttr *a, uint32_t index, float out[4])
+@@ -367,8 +458,12 @@ static int fetch_attr(const VertexAttr *a, uint32_t index, float out[4])
  
      out[0] = out[1] = out[2] = 0.0f;
      out[3] = 1.0f;
@@ -7201,7 +7213,7 @@ index b3dcbf7..6cce5a5 100644
      if (s_gpu.inline_active) {
          /* The batch arrived as INLINE_ARRAY, so `offset` is a byte offset into
           * the buffered payload rather than a guest address -- and 0 is a legal
-@@ -402,6 +492,29 @@ static int fetch_attr(const VertexAttr *a, uint32_t index, float out[4])
+@@ -402,6 +497,29 @@ static int fetch_attr(const VertexAttr *a, uint32_t index, float out[4])
          for (i = 0; i < a->size && i < 4; i++)
              out[i] = (float)p[i] / 255.0f;
          return 1;
@@ -7231,7 +7243,7 @@ index b3dcbf7..6cce5a5 100644
      default:
          return 0;
      }
-@@ -501,6 +614,11 @@ static void raster_triangle(const float a[2], const float b[2],
+@@ -501,6 +619,11 @@ static void raster_triangle(const float a[2], const float b[2],
                              const float c[2], uint32_t argb,
                              const float uv[3][2]);
  
@@ -7243,7 +7255,7 @@ index b3dcbf7..6cce5a5 100644
  static void clear_surface(uint32_t param)
  {
      uint8_t *mem = (uint8_t *)xbox_GetMemoryOffset();
-@@ -520,6 +638,30 @@ static void clear_surface(uint32_t param)
+@@ -520,6 +643,30 @@ static void clear_surface(uint32_t param)
          s_gpu.color_base = base;
      }
  
@@ -7274,7 +7286,7 @@ index b3dcbf7..6cce5a5 100644
      for (y = 0; y < s_gpu.clip_h; y++) {
          uint8_t *row = mem + s_gpu.color_base
                       + (size_t)(s_gpu.clip_y + y) * s_gpu.pitch;
-@@ -538,6 +680,7 @@ static void clear_surface(uint32_t param)
+@@ -538,6 +685,7 @@ static void clear_surface(uint32_t param)
                  p[x] = v;
          }
      }
@@ -7282,7 +7294,7 @@ index b3dcbf7..6cce5a5 100644
      s_gpu.clears++;
      /* Progress markers, interleaved with everything else in the log. The
       * summary says drawing stopped; only a marker next to the surrounding
-@@ -597,7 +740,12 @@ static void clear_surface(uint32_t param)
+@@ -597,7 +745,12 @@ static void clear_surface(uint32_t param)
       * would show the one nothing is writing. */
      /* The window has to read where the pixels actually are, which is the
       * resolved address rather than the DMA-object offset. */
@@ -7296,7 +7308,7 @@ index b3dcbf7..6cce5a5 100644
  
      /* And open the window, rather than waiting for AvSetDisplayMode to do it.
       *
-@@ -710,6 +858,17 @@ static int sample_texture(uint32_t u, uint32_t v, uint32_t *argb)
+@@ -710,6 +863,17 @@ static int sample_texture(uint32_t u, uint32_t v, uint32_t *argb)
      if (d3d8_format_dxt_block_bytes(fmt))
          return d3d8_dxt_decode_texel(mem + s_gpu.tex.offset, fmt, u, v,
                                       s_gpu.tex.width, argb);
@@ -7314,7 +7326,7 @@ index b3dcbf7..6cce5a5 100644
      if (d3d8_format_is_swizzled(fmt)) {
          /* Morton order: a texel's index is interleaved from x and y instead of
           * v*pitch + u, so index from the base of the image. The switch below
-@@ -830,8 +989,9 @@ static void dump_texture_bmp(uint32_t seq)
+@@ -830,8 +994,9 @@ static void dump_texture_bmp(uint32_t seq)
      pad = (4 - (row_bytes & 3)) & 3;
      filesz = 54 + (row_bytes + pad) * h;
  
@@ -7326,7 +7338,7 @@ index b3dcbf7..6cce5a5 100644
      f = fopen(path, "wb");
      if (!f)
          return;
-@@ -913,6 +1073,112 @@ static void put_pixel(uint8_t *mem, uint32_t bpp, int x, int y, uint32_t argb)
+@@ -913,6 +1078,112 @@ static void put_pixel(uint8_t *mem, uint32_t bpp, int x, int y, uint32_t argb)
      }
  }
  
@@ -7439,7 +7451,7 @@ index b3dcbf7..6cce5a5 100644
  /* Half-space fill. Barycentric edge functions rather than scanline slopes:
   * the same test decides both windings, so a title that emits clockwise
   * triangles does not silently render nothing. */
-@@ -976,11 +1242,11 @@ static void raster_triangle(const float a[2], const float b[2],
+@@ -976,11 +1247,11 @@ static void raster_triangle(const float a[2], const float b[2],
                  if (su < 0.0f) su = 0.0f;
                  if (sv < 0.0f) sv = 0.0f;
                  if (sample_texture((uint32_t)su, (uint32_t)sv, &texel)) {
@@ -7453,7 +7465,7 @@ index b3dcbf7..6cce5a5 100644
          }
      }
      s_gpu.tris_drawn++;
-@@ -1136,11 +1402,18 @@ static int batch_is_screen_space(void)
+@@ -1136,11 +1407,18 @@ static int batch_is_screen_space(void)
  }
  
  /* NV097 primitive types that are triangles under some winding. */
@@ -7477,7 +7489,7 @@ index b3dcbf7..6cce5a5 100644
  
  /* How many post-draw captures to keep: enough to see whether the geometry
   * is stable from frame to frame, few enough not to fill a directory. */
-@@ -1210,14 +1483,30 @@ static void raster_batch(void)
+@@ -1210,14 +1488,30 @@ static void raster_batch(void)
                             vertex_color(s_gpu.idx[i]));
          break;
      case NV_PRIM_TRIANGLE_FAN:
@@ -7512,7 +7524,7 @@ index b3dcbf7..6cce5a5 100644
      default:
          break;                             /* points and lines: not yet */
      }
-@@ -1242,6 +1531,1183 @@ static void raster_batch(void)
+@@ -1242,6 +1536,1183 @@ static void raster_batch(void)
   * question is what space attribute 0 arrives in: a title running a vertex
   * program hands over object-space positions that mean nothing without running
   * it, while pre-transformed screen-space coordinates can be drawn directly. */
@@ -8696,7 +8708,7 @@ index b3dcbf7..6cce5a5 100644
  static void draw_primitive(void)
  {
      float v[4];
-@@ -1250,6 +2716,22 @@ static void draw_primitive(void)
+@@ -1250,6 +2721,22 @@ static void draw_primitive(void)
      if (!s_gpu.prim || !s_gpu.idx_count)
          return;
      s_gpu.draws++;
@@ -8719,7 +8731,7 @@ index b3dcbf7..6cce5a5 100644
      if ((s_gpu.draws % 200) == 0)
          fprintf(stderr, "  [GPU] draw #%u\n", s_gpu.draws);
      s_gpu.verts += s_gpu.idx_count;
-@@ -1270,7 +2752,44 @@ static void draw_primitive(void)
+@@ -1270,7 +2757,44 @@ static void draw_primitive(void)
          }
      }
  
@@ -8765,7 +8777,7 @@ index b3dcbf7..6cce5a5 100644
  
      if (getenv("RECOMP_PB_EXEC_VERBOSE")) {
          static int shown;
-@@ -1390,6 +2909,12 @@ static void draw_inline_array(void)
+@@ -1390,6 +2914,12 @@ static void draw_inline_array(void)
          case 0:  bytes = 4;                        break;  /* D3DCOLOR   */
          case 2:  bytes = 4 * s_gpu.attr[a].size;   break;  /* float      */
          case 4:  bytes = s_gpu.attr[a].size;       break;  /* ubyte norm */
@@ -8778,7 +8790,7 @@ index b3dcbf7..6cce5a5 100644
          default: bytes = 4 * s_gpu.attr[a].size;   break;
          }
          s_gpu.attr[a].offset = off;
-@@ -1493,6 +3018,37 @@ static int imm_vertex_method(uint32_t method, uint32_t param)
+@@ -1493,6 +3023,37 @@ static int imm_vertex_method(uint32_t method, uint32_t param)
      union { uint32_t u; float f; } v;
      v.u = param;
  
@@ -8816,7 +8828,7 @@ index b3dcbf7..6cce5a5 100644
      if (method >= NV097_SET_VERTEX4F && method < NV097_SET_VERTEX4F + 16) {
          uint32_t c = (method - NV097_SET_VERTEX4F) / 4;
          s_gpu.imm_pos[c] = v.f;
-@@ -1566,11 +3122,126 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1566,11 +3127,126 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
                      subch, method, param);
      }
  
@@ -8943,7 +8955,7 @@ index b3dcbf7..6cce5a5 100644
      case NV097_SET_SURFACE_CLIP_HORIZONTAL:
          s_gpu.clip_x = param & 0xFFFF;
          s_gpu.clip_w = (param >> 16) & 0xFFFF;
-@@ -1586,16 +3257,32 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1586,19 +3262,36 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
          s_gpu.pitch = param & 0xFFFF;      /* colour pitch; zeta is the top half */
          break;
      case NV097_SET_SURFACE_COLOR_OFFSET:
@@ -8976,12 +8988,29 @@ index b3dcbf7..6cce5a5 100644
          if (param) {
              s_gpu.prim = param;
              s_gpu.idx_count = 0;
-@@ -1620,8 +3307,15 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
++            s_gpu.draw_arrays_active = 0;
+             s_gpu.inline_count = 0;
+             s_gpu.imm_count = 0;
+         } else {
+@@ -1612,6 +3305,7 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+             else
+                 draw_primitive();
+             s_gpu.prim = 0;
++            s_gpu.draw_arrays_active = 0;
+             s_gpu.inline_count = 0;
+             s_gpu.imm_count = 0;
+         }
+@@ -1620,8 +3314,20 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
      case NV097_INLINE_ARRAY:
          /* Vertex data, not a pointer to it. Buffered rather than decoded here
           * because the format is only fully known at END. */
 -        if (s_gpu.prim && s_gpu.inline_count < NV_MAX_INLINE)
 +        if (s_gpu.prim && s_gpu.inline_count < NV_MAX_INLINE) {
++            if (s_gpu.draw_arrays_active && s_gpu.idx_count) {
++                draw_primitive();
++                s_gpu.idx_count = 0;
++                s_gpu.draw_arrays_active = 0;
++            }
 +            if (getenv("RECOMP_PB_DRAW_TRACE") && s_gpu.inline_count < 8) {
 +                extern uint32_t g_nv2a_pb_last_word_va;
 +                fprintf(stderr, "  [GPU] INLINE[%u]=%08X prim=%u src_va=0x%08X\n",
@@ -8993,7 +9022,23 @@ index b3dcbf7..6cce5a5 100644
          break;
  
      case NV097_DRAW_ARRAYS: {
-@@ -1644,6 +3338,13 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1639,13 +3345,41 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+ 
+         if (!s_gpu.prim)
+             break;
++        /* xemu keeps one (start,count) entry per DRAW_ARRAYS and submits each
++         * as a separate draw.  It only joins immediately adjacent ranges.
++         * Concatenating discontinuous triangle strips manufactured triangles
++         * between the last vertex of one field tile and the first vertex of
++         * the next, producing the large pale/white wedges seen in game. */
++        if (s_gpu.draw_arrays_active && s_gpu.idx_count
++                && start != (uint32_t)s_gpu.idx[s_gpu.idx_count - 1] + 1u) {
++            draw_primitive();
++            s_gpu.idx_count = 0;
++        }
++        s_gpu.draw_arrays_active = 1;
+         for (i = 0; i < count && s_gpu.idx_count < NV_MAX_INDICES; i++)
+             s_gpu.idx[s_gpu.idx_count++] = (uint16_t)(start + i);
          break;
      }
  
@@ -9001,13 +9046,25 @@ index b3dcbf7..6cce5a5 100644
 +        /* One index per word. D3D sends the last index of an odd-length
 +         * 16-bit list this way, so without it every such draw lost its final
 +         * vertex. */
++        if (s_gpu.draw_arrays_active && s_gpu.idx_count) {
++            draw_primitive();
++            s_gpu.idx_count = 0;
++            s_gpu.draw_arrays_active = 0;
++        }
 +        if (s_gpu.prim && s_gpu.idx_count < NV_MAX_INDICES)
 +            s_gpu.idx[s_gpu.idx_count++] = (uint16_t)param;
 +        break;
      case NV097_ARRAY_ELEMENT16:
          /* Two 16-bit indices per parameter word. */
++        if (s_gpu.draw_arrays_active && s_gpu.idx_count) {
++            draw_primitive();
++            s_gpu.idx_count = 0;
++            s_gpu.draw_arrays_active = 0;
++        }
          if (s_gpu.prim && s_gpu.idx_count + 2 <= NV_MAX_INDICES) {
-@@ -1659,6 +3360,23 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+             s_gpu.idx[s_gpu.idx_count++] = (uint16_t)(param & 0xFFFF);
+             s_gpu.idx[s_gpu.idx_count++] = (uint16_t)(param >> 16);
+@@ -1659,6 +3393,23 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
          record_tex_reg(method, param);
          break;
  
@@ -9031,7 +9088,7 @@ index b3dcbf7..6cce5a5 100644
      case NV097_SET_FLIP_READ:
          s_gpu.flip_read = param;
          return;
-@@ -1682,6 +3400,47 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1682,6 +3433,47 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
          /* The stall ends when the buffer being read is the one just finished.
           * There is no scanout here to wait for, so that is now. */
          s_gpu.flip_read = s_gpu.flip_write;
@@ -9079,7 +9136,7 @@ index b3dcbf7..6cce5a5 100644
          /* And this is a completed swap, which is what a title's own swap
           * counter counts -- see xbox_Nv2aFrameCounterFlip. */
          xbox_Nv2aFrameCounterFlip();
-@@ -1696,6 +3455,11 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1696,6 +3488,11 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
          return;
  
      case NV097_SET_TEXTURE_FORMAT:
@@ -9091,7 +9148,7 @@ index b3dcbf7..6cce5a5 100644
          s_gpu.tex.color = (param >> 8) & 0xFF;
          /* A swizzled texture carries its own dimensions here, as log2 in
           * BASE_SIZE_U/V (nv2a_regs.h: 0x00F00000 / 0x0F000000). It has to:
-@@ -1729,6 +3493,9 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1729,6 +3526,9 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
      case NV097_SET_TEXTURE_IMAGE_RECT:
          s_gpu.tex.width  = param >> 16;
          s_gpu.tex.height = param & 0xFFFF;
@@ -9101,7 +9158,7 @@ index b3dcbf7..6cce5a5 100644
          record_tex_reg(method, param);
          break;
  
-@@ -1948,9 +3715,12 @@ void nv2a_pb_exec_report(void)
+@@ -1948,9 +3748,12 @@ void nv2a_pb_exec_report(void)
              dma_resolve(s_gpu.drawn_offset), s_gpu.color_offset,
              dma_resolve(s_gpu.color_offset));
      fprintf(stderr, "[GPU] rasterised %u triangles; %u batches skipped as not"
