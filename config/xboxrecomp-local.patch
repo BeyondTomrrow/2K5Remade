@@ -5274,12 +5274,15 @@ index 0000000..413653a
 +    int vsync;
 +    int brightness;         /* percent */
 +    int gamma;              /* x100 */
-+    int crop;               /* pixels cropped from each edge of the surface */
++    int crop;               /* Xbox overscan pixels cropped from each edge */
 +    int show_fps;
 +    int aniso;              /* 1 (off), 2, 4, 8, 16 */
 +} VideoSettings;
 +
-+static VideoSettings s_vs = { VM_WINDOWED, 1440, 1080, AR_ORIGINAL, 2, SF_SHARP, 1, 100, 100, 0, 0, 1 };
++/* NFL 2K5 draws several full-screen backdrops only inside the 640-pixel
++ * title-safe area of its 720-pixel scanout.  A CRT hid the remaining edge;
++ * showing the full scanout exposes hard black strips beside the sky. */
++static VideoSettings s_vs = { VM_WINDOWED, 1440, 1080, AR_ORIGINAL, 2, SF_SHARP, 1, 100, 100, 40, 0, 1 };
 +static volatile LONG s_vs_dirty = 1;
 +void xbox_VideoSettingsLoad(void);           /* window/swap chain need (re)applying */
 +
@@ -5311,6 +5314,8 @@ index 0000000..413653a
 +    fclose(f);
 +    if (s_vs.scale < 1) s_vs.scale = 1;
 +    if (s_vs.scale > 9) s_vs.scale = 9;
++    if (s_vs.crop < 0) s_vs.crop = 0;
++    if (s_vs.crop > 40) s_vs.crop = 40;
 +    if (s_vs.res_w < 320 || s_vs.res_h < 240) { s_vs.res_w = 1440; s_vs.res_h = 1080; }
 +}
 +
@@ -5762,7 +5767,7 @@ index 0000000..413653a
 +    case MI_BRIGHT: s_vs.brightness += 5 * dir; if (s_vs.brightness < 50) s_vs.brightness = 50;
 +                    if (s_vs.brightness > 150) s_vs.brightness = 150; break;
 +    case MI_GAMMA:  s_vs.gamma += 5 * dir; if (s_vs.gamma < 60) s_vs.gamma = 60; if (s_vs.gamma > 160) s_vs.gamma = 160; break;
-+    case MI_CROP:   s_vs.crop = dir > 0 ? (s_vs.crop >= 32 ? 0 : s_vs.crop + 8) : (s_vs.crop <= 0 ? 32 : s_vs.crop - 8); break;
++    case MI_CROP:   s_vs.crop = dir > 0 ? (s_vs.crop >= 40 ? 0 : s_vs.crop + 8) : (s_vs.crop <= 0 ? 40 : s_vs.crop - 8); break;
 +    case MI_ANISO:  { static const int a[] = { 1, 2, 4, 8, 16 }; int k;
 +                      for (k = 0; k < 5 && a[k] != s_vs.aniso; k++) {}
 +                      k = (k >= 5 ? 0 : (k + 5 + dir) % 5); s_vs.aniso = a[k]; } break;

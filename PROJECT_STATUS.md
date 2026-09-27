@@ -2257,3 +2257,10 @@ Reached natively (user-verified): intro movies, legal/SEGA screens, title, main 
 - **Audio verification:** the same run reports `[XA2] ... dropped=0 underruns=0 queued=3`, with active APU voices and no output starvation. The earlier menu/static fixes remain intact.
 - **Presentation verification:** captures are full 3840x2160 borderless frames with the game image correctly scaled; the prior fullscreen gray-mark symptom did not reproduce in this run.
 - **Current limitation:** program 46 still needs a faithful host translation for full GPU performance; the interpreter fallback costs FPS in heavy scenes but preserves correct pixels. Next work is to compare its generated HLSL against the reference instruction sequence, then run a longer audio/menu soak and measure the fallback's frame-time cost.
+
+## 2026-09-26 (late evening): Xbox overscan restored for stadium backdrops
+
+- **Root cause confirmed with Xemu and native captures:** the apparent sky texture cutoff was the title's original overscan area. NFL 2K5 draws several full-screen backdrops inside a 640-pixel title-safe region of its 720x480 scanout; presenting every scanout pixel exposed hard black strips that a CRT hid.
+- **D3D11 fix:** the presenter now defaults to 40 pixels of overscan crop, accepts saved values through 40, and exposes 40 in the Video Settings crop cycle. Existing users can still select Off.
+- **Verification:** Release rebuilt successfully. `logs/overscan40-5.png`, `overscan40-10.png`, and `overscan40-20.png` show the tailgate and coin-toss sky filling the output with complete player bodies and no black side cutoff. Xemu reference capture is `analysis/xemu-captures/xemu-window.png`.
+- **Still open:** the play-call screen's missing LAST PLAY / three play-art panels and the field's zig-zag grass artefacts are separate render-to-texture/state issues.
