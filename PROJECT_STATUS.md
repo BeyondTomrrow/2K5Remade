@@ -2306,3 +2306,10 @@ Reached natively (user-verified): intro movies, legal/SEGA screens, title, main 
 - **Runtime verification:** a renderer-native one-frame-per-second D3D11 capture completed the same automated kickoff and live-play route. Before the fix, `logs/fieldtap-143.bmp` contains a large white sideline wedge and `logs/fieldtap-146.bmp` contains long triangular grass seams. After the fix, `logs/fieldfix-101.bmp` through `logs/fieldfix-220.bmp` cover coin toss, kickoff, two live plays, post-play closeups, and repeated play-selection screens with a continuous field and no bridge triangles. The run remained stable around the normal 30 FPS gameplay tier.
 - **Current graphics state:** the reported field wedge/grass-strip corruption is fixed on the D3D11 path. The play-selection layout and player models remain correct.
 - **Next:** diagnose the native ADPCM stream's per-region alignment failure without editing Claude-owned `external/xboxrecomp/src/apu/` files, and visually verify the revised FOX package overlay over a live presented frame.
+
+## 2026-09-27: FOX scorebug play-call suppression and reference cleanup
+
+- **Play-call behavior:** the presentation HUD now reads the title's four-state play-call controller at `0x00B38C30` (writer `sub_00071B50`, consumer `sub_000721D0`). Any nonzero transition/visible state suppresses the custom broadcast bug so it does not cover the LAST PLAY window or three play cards.
+- **Runtime verification:** a complete automated Quick Game logged `native 1 playcall 0` during live presentation and `native 0 playcall 2` during play selection, confirming the FOX overlay follows the requested visibility rule without hiding live action.
+- **Reference cleanup:** removed the invented down-and-distance cap, narrowed and lowered the package, and enlarged the free-floating team logos to more closely match the supplied minimal FOX reference.
+- **Build:** the revised presentation code and JSON are included in the verified Release build used for the field-strip test.

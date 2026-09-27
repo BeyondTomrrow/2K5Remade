@@ -6,8 +6,8 @@
   "font": "Bahnschrift",
 
   "scorebug": {
-    "canvas": { "width": 560, "height": 96, "overflow_top": 70 },
-    "placement": { "center_x": 0.5, "center_y": 0.895, "width": 0.56 },
+    "canvas": { "width": 560, "height": 94, "overflow_top": 10 },
+    "placement": { "center_x": 0.5, "center_y": 0.905, "width": 0.48 },
     "fade_time": 0.2,
 
     "team_slots": {
@@ -34,8 +34,8 @@
       { "type": "text", "text": "{home.score}", "x": 356, "y": 11, "w": 88, "h": 68,
         "size": 57, "weight": 800, "stretch": "condensed", "color": "#F4F4F4", "align": "center", "shadow": "#000000AA" },
 
-      { "type": "image", "src": "{away.logo}", "x": 0, "y": 0, "w": 120, "h": 88 },
-      { "type": "image", "src": "{home.logo}", "x": 440, "y": 0, "w": 120, "h": 88 },
+      { "type": "image", "src": "{away.logo}", "x": -8, "y": -3, "w": 136, "h": 96 },
+      { "type": "image", "src": "{home.logo}", "x": 432, "y": -3, "w": 136, "h": 96 },
 
       { "type": "box", "x": 112, "y": 24, "w": 4, "h": 44, "fill": "#F4C430", "show": "possession:away" },
       { "type": "box", "x": 444, "y": 24, "w": 4, "h": 44, "fill": "#F4C430", "show": "possession:home" },
@@ -43,18 +43,7 @@
       { "type": "timeouts", "team": "away", "x": 126, "y": 82, "count": 3, "bar_w": 18, "bar_h": 6, "gap": 7,
         "on": "#E9E9E9", "off": "#45464A" },
       { "type": "timeouts", "team": "home", "x": 364, "y": 82, "count": 3, "bar_w": 18, "bar_h": 6, "gap": 7,
-        "on": "#E9E9E9", "off": "#45464A" },
-
-      { "type": "box", "x": 204, "y": -25, "w": 152, "h": 29, "radius": 2,
-        "gradient": { "top": "#183966", "bottom": "#091B35" }, "show": "scrimmage" },
-      { "type": "box", "x": 204, "y": -25, "w": 6, "h": 29, "fill": "#F4C430", "show": "scrimmage" },
-      { "type": "text", "text": "{down_distance}", "x": 211, "y": -25, "w": 139, "h": 29,
-        "size": 20, "weight": 800, "stretch": "condensed", "color": "#FFFFFF", "align": "center", "show": "scrimmage" },
-
-      { "type": "box", "x": 204, "y": -25, "w": 152, "h": 29, "radius": 2,
-        "gradient": { "top": "#E8E8E8", "bottom": "#B9BBC0" }, "show": "not_scrimmage" },
-      { "type": "text", "text": "FOX NFL", "x": 204, "y": -25, "w": 152, "h": 29,
-        "size": 20, "weight": 900, "stretch": "condensed", "italic": true, "color": "#0B2347", "align": "center", "show": "not_scrimmage" }
+        "on": "#E9E9E9", "off": "#45464A" }
     ]
   },
 

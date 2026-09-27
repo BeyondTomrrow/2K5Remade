@@ -1431,6 +1431,13 @@ static int hud_callback(const XboxHudFrame *f, XboxHudImage *img)
         g.t[1].score = 0; g.t[1].timeouts = 3; g.t[1].abbr = "NE";
     }
     bool native_on = s_native_visible && GetTickCount() - s_native_tick < 300;
+    /* NFL 2K5's play-call overlay has its own four-state controller.  The
+     * state is written by sub_00071B50 and consumed every frame by
+     * sub_000721D0; zero means the overlay is down, while 1..3 cover its
+     * visible and transition states.  The stock ESPN bug is part of that
+     * screen, but modern broadcast bugs should leave the play cards clear. */
+    bool playcall_on = rd32(0x00B38C30u) != 0;
+    if (playcall_on) native_on = false;
     if (s_test) native_on = true;
 
     if (s_log && !g.valid) {
@@ -1448,10 +1455,10 @@ static int hud_callback(const XboxHudFrame *f, XboxHudImage *img)
         static DWORD last;
         if (GetTickCount() - last > 3000) {
             last = GetTickCount();
-            fprintf(stderr, "[PRES] q%d %.1f/%.0f phase %d down %d ball %.1f line %.1f poss %d  %s %d(%d) - %s %d(%d)  native %d\n",
+            fprintf(stderr, "[PRES] q%d %.1f/%.0f phase %d down %d ball %.1f line %.1f poss %d  %s %d(%d) - %s %d(%d)  native %d playcall %u\n",
                     g.period, g.clock, g.period_len, g.phase, g.down, g.ball, g.line, g.poss,
                     g.t[0].abbr.c_str(), g.t[0].score, g.t[0].timeouts, g.t[1].abbr.c_str(), g.t[1].score, g.t[1].timeouts,
-                    (int)native_on);
+                    (int)native_on, rd32(0x00B38C30u));
         }
     }
 
