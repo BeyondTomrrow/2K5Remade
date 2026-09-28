@@ -416,6 +416,23 @@ struct Package {
 static std::vector<Package> s_pkgs;           /* [0] is the game's own ESPN presentation */
 static std::atomic<int> s_sel_pkg{ 0 }, s_sel_intro{ 1 }, s_sel_outro{ 1 }, s_sel_anim{ 1 }, s_sel_vol{ 8 };
 
+/* The package may carry its fonts. Registering them privately makes the
+ * broadcast reproducible without installing anything into Windows. */
+static void register_package_fonts(const Package &p)
+{
+    std::wstring mask = widen(p.dir + "/fonts/*.ttf");
+    WIN32_FIND_DATAW fd;
+    HANDLE h = FindFirstFileW(mask.c_str(), &fd);
+    if (h == INVALID_HANDLE_VALUE) return;
+    do {
+        if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
+        std::wstring path = widen(p.dir + "/fonts/") + fd.cFileName;
+        int added = AddFontResourceExW(path.c_str(), FR_PRIVATE, nullptr);
+        if (added) fprintf(stderr, "[PRES] private font %ls\n", fd.cFileName);
+    } while (FindNextFileW(h, &fd));
+    FindClose(h);
+}
+
 static void load_packages()
 {
     Package def;
@@ -443,6 +460,7 @@ static void load_packages()
         }
         fprintf(stderr, "[PRES] package \"%s\" (%zu intro, %zu outro themes)\n",
                 p.name.c_str(), p.intro.size(), p.outro.size());
+        register_package_fonts(p);
         s_pkgs.push_back(std::move(p));
     } while (FindNextFileW(h, &fd));
     FindClose(h);
@@ -1333,12 +1351,13 @@ static void draw_element(const Ctx &c, const JVal &e, float alpha, float dx, flo
         int side = e.str("team") == "away" ? AWAY : HOME;
         int count = (int)e.num("count", 3), have = c.g->t[side].timeouts;
         float bw = (float)e.num("bar_w", 30), bh = (float)e.num("bar_h", 6), gap = (float)e.num("gap", 10);
+        float radius = (float)e.num("radius", bh / 2);
         for (int i = 0; i < count; i++) {
             ID2D1SolidColorBrush *b = nullptr;
             rt->CreateSolidColorBrush(color(c, i < have ? e.str("on", "#F5C518") : e.str("off", "#FFFFFF33"), alpha), &b);
             if (b) {
                 float bx = x + i * (bw + gap);
-                rt->FillRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(bx, y, bx + bw, y + bh), bh / 2, bh / 2), b);
+                rt->FillRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(bx, y, bx + bw, y + bh), radius, radius), b);
                 b->Release();
             }
         }
@@ -1839,7 +1858,12 @@ static int hud_callback(const XboxHudFrame *f, XboxHudImage *img)
     /* Explicit, interruptible HIDDEN -> FADE_IN -> LIVE -> FADE_OUT state.
      * A transition reverses from its current progress, so a sudden return to
      * live play never drops or flashes stale game information. */
-    update_bug_lifecycle(sb, g.valid && native_on, dt);
+    /* The stock ESPN scorebug signal is useful for cuts and replays, but it
+     * is not raised consistently by NFL 2K5's live scrimmage cameras. FOX
+     * therefore follows verified live game phase too, while the play-call
+     * controller remains the authoritative hide signal. */
+    bool fox_live = g.valid && !playcall_on && (g.phase == 4 || native_on);
+    update_bug_lifecycle(sb, fox_live, dt);
 
     /* Next animation. */
     const JVal *anims = pkg.root.get("animations");

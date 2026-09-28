@@ -3,7 +3,7 @@
   "name": "NFL on FOX",
   "network": "FOX NFL",
   "description": "Compact FOX-style broadcast scorebug with oversized team logos, stacked clock and quarter, timeout markers, and a live down-and-distance tab.",
-  "font": "Bahnschrift",
+  "font": "Human PE Narrow",
   "scorebug": {
     "canvas": {
       "width": 572,
@@ -66,8 +66,8 @@
         "h": 64,
         "radius": 0,
         "gradient": {
-          "top": "#525254",
-          "bottom": "#3D3D3F"
+          "top": "#2E3030B8",
+          "bottom": "#151718A8"
         },
         "shadow": "#00000055"
       },
@@ -154,6 +154,7 @@
         "bar_w": 23,
         "bar_h": 8,
         "gap": 5,
+        "radius": 0,
         "on": "#F1F1F1",
         "off": "#5A5A5A"
       },
@@ -166,6 +167,7 @@
         "bar_w": 23,
         "bar_h": 8,
         "gap": 5,
+        "radius": 0,
         "on": "#F1F1F1",
         "off": "#5A5A5A"
       },
@@ -191,7 +193,7 @@
         "y": -31,
         "w": 244,
         "h": 29,
-        "fill": "#343538E8",
+        "fill": "#221C18B8",
         "show": "scrimmage"
       },
       {
@@ -214,7 +216,8 @@
         "y": -26,
         "w": 1,
         "h": 19,
-        "fill": "#77787C"
+        "fill": "#A7A7A788",
+        "show": "scrimmage"
       },
       {
         "type": "text",
@@ -245,6 +248,20 @@
         "from_scale": 0.99
       }
     }
+  },
+  "music": {
+    "volume": 0.35,
+    "fade_out": 2.5,
+    "duck_game_audio": 1.0,
+    "mute_game_music": true,
+    "duck_under_announcers": 0.35,
+    "announcer_level": 0.02,
+    "intro": [
+      { "title": "NFL on FOX Theme", "file": "music/NFL on FOX Theme Song.mp3" }
+    ],
+    "outro": [
+      { "title": "NFL on FOX Theme", "file": "music/NFL on FOX Theme Song.mp3" }
+    ]
   },
   "animations": {
     "pregame": {

@@ -2314,6 +2314,14 @@ Reached natively (user-verified): intro movies, legal/SEGA screens, title, main 
 - **Reference cleanup:** removed the invented down-and-distance cap, narrowed and lowered the package, and enlarged the free-floating team logos to more closely match the supplied minimal FOX reference.
 - **Build:** the revised presentation code and JSON are included in the verified Release build used for the field-strip test.
 
+### FOX package enablement and supplied-font pass
+
+- Selected `NFL on FOX` in `mods/presentation.ini` and enabled its first intro-theme selection. Startup now reports `NFL on FOX (1 intro, 1 outro themes)` and loads `music/NFL on FOX Theme Song.mp3` as the package theme.
+- The supplied Human PE Narrow Bold/Regular and All-Pro Sans Bold/Heavy WOFF2 files were converted into package-local TTF assets and registered with `FR_PRIVATE` when the presentation package loads. The scorebug now uses `Human PE Narrow`, without requiring a system-wide font install.
+- The center clock plate and down-and-distance plate now use alpha-tinted dark surfaces rather than opaque blocks. Timeout bars accept a JSON `radius`; FOX sets it to `0` for the reference's square corners.
+- Fixed the visibility source: FOX now appears throughout valid live scrimmage (`phase == 4`) rather than relying solely on the stock ESPN bug's intermittent visibility tick. The play-call controller at `B38C30` remains a hard hide condition.
+- Release build and package-load smoke test passed. Startup confirmed the four private fonts and FOX package/theme selection.
+
 ## 2026-09-27: local ADPCM grid validation against Xemu
 
 - **Reference result:** the existing Xemu GDB ring probe captured seven retail music-buffer snapshots. Xemu's copy destination was consistently offset 14 bytes modulo 36, yet every snapshot retained all 3,072 valid ADPCM headers on the base grid. Mid-block copies are therefore normal; blindly forcing the entire ring to one newly detected grid is not.

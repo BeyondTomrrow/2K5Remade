@@ -23,6 +23,19 @@ The implementation preserves these measurements at 16:9. On ultrawide output the
 
 `logs/fox-layout-7-0.png` is the first post-change D3D11 capture at 3440x1440. It verifies the measured scorebug geometry, live team assets, live scores, live clock/quarter, timeout indicators, safe-area scaling, and layering behind the title's coin-toss overlay. `NFL2K5_PRES_TEST=1` intentionally kept the bug visible for that comparison; normal runs retain contextual visibility.
 
+## Local typography and music
+
+The supplied `Human PE Narrow` family is the active scorebug face. Its bold
+cut is used for scores, clocks, down/distance, and timeout labels; its regular
+cut is available for supporting text. The supplied All-Pro Sans Bold and Heavy
+cuts are packaged for NFL/FOX title and player-stat layers. They are converted
+to TTF under `fonts/` and loaded privately by the game, so the package does
+not depend on fonts being installed in Windows.
+
+`music/NFL on FOX Theme Song.mp3` is enabled as the package's pregame and
+outro theme. The initial mix is deliberately moderate (0.35) and ducks beneath
+commentary.
+
 ## Motion references currently absent
 
 No FOX fade-in or FOX quarter-end video exists in the supplied attachment folders or the project tree as of 2026-09-27. The only attached broadcast motion file is the CBS Sports HQ clip, which is not used as a FOX reference. The engine now supports editable keyframes, easing, transforms, crop/wipes, polygons, opacity, anchors, and full-screen timelines so the FOX motion can be transcribed when its actual source clips are present. No invented motion is labelled frame-accurate.
