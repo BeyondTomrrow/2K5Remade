@@ -1,4 +1,4 @@
-This is an existing NFL 2K5 Xbox native recompilation project.
+﻿This is an existing NFL 2K5 Xbox native recompilation project.
 
 Do NOT start over or recreate anything.
 
@@ -172,7 +172,7 @@ Inspect the existing repository and continue from there.
 
 ---
 
-## Verified progress — 2026-09-13
+## Verified progress â€” 2026-09-13
 
 - Removed the opt-in scheduler-recovery helper that directly inserted callback
   addresses. The normal title registration path now independently reaches the
@@ -207,7 +207,7 @@ Inspect the existing repository and continue from there.
 - Current next action: implement the observed state-9 branch of `0x004945A3`,
   rerun, then trace the next state or non-zero frontend primitive.
 
-## Verified progress — 2026-09-14
+## Verified progress â€” 2026-09-14
 
 - Reconstructed the missing mid-function target `0x00042182` from the local
   XBE disassembly. The previous generic return stub skipped the provider
@@ -247,7 +247,7 @@ Inspect the existing repository and continue from there.
   record ahead of `0x00AF57C8`, including its resource-completion callback,
   before extending the NV2A rasterizer.
 
-### Runtime trace update — 2026-09-14 (archive completion)
+### Runtime trace update â€” 2026-09-14 (archive completion)
 
 - Reconstructed `0x00045A20`, a third archive-queue completion callback that
   the automatic function finder omitted because it terminates in two resource
@@ -264,7 +264,7 @@ Inspect the existing repository and continue from there.
   seven-callback timing path from the known nine-callback path, then trace the
   first frontend record producer or the first non-zero `SET_BEGIN_END` batch.
 
-### Runtime trace update — 2026-09-14 (scheduler/resource chain)
+### Runtime trace update â€” 2026-09-14 (scheduler/resource chain)
 
 - Added memory-only entry/return markers around the scheduler's indirect
   callback invocation.  The nine-callback trace shows entry and return counts
@@ -285,7 +285,7 @@ Inspect the existing repository and continue from there.
   this must be traced to its descriptor-field producer before vertex work can
   reliably begin.
 
-### Runtime trace update — 2026-09-14 (archive callback correction)
+### Runtime trace update â€” 2026-09-14 (archive callback correction)
 
 - Corrected the ordinary terminal path in manual callback `0x00044DF0`: it now
   installs the same `0x00044DA0` completion and `0x00044DC0` continuation used
@@ -302,7 +302,7 @@ Inspect the existing repository and continue from there.
   path in the existing NV2A executor.
 
 
-### Runtime trace update — 2026-09-14 (stable scheduler and frontend state)
+### Runtime trace update â€” 2026-09-14 (stable scheduler and frontend state)
 
 - A clean native run now reliably holds all nine expected scheduler callbacks while the title worker and frontend queue worker run in their normal guest contexts. The active table is `0003E910`, `00041810`, `003CD120`, `0003A1C0`, `0003A310`, `00051F00`, `00039380`, `00042BD0`, and `00045F20`.
 - The worker queue no longer monopolizes a host core when its completed-resource list is empty: the empty path yields for one millisecond while retaining the original sentinel and immediate processing semantics for real records.
@@ -311,7 +311,7 @@ Inspect the existing repository and continue from there.
 - The NV2A stream reaches framebuffer setup, clears, vertex-array format setup, `SET_BEGIN_END`, and `INLINE_ARRAY`, but still has zero completed draw batches and zero rasterized triangles. No legal-screen pixels are visible yet.
 - Next action: trace the first asynchronous resource/state callback that should call `0x003CBBF0`, preserving guest scheduling, then follow the resulting first nonempty frontend record into its existing prepare/submit path.
 
-### Runtime trace update — 2026-09-14 (state-nine packet handoff)
+### Runtime trace update â€” 2026-09-14 (state-nine packet handoff)
 
 - A clean delayed native run again held all nine title-owned scheduler callbacks and executed the title's state-nine update path. The dispatcher reached `0x00492E9B` 10 times and its state-nine packet builder `0x00492414` 9 times.
 - The packet handoff `0x0048BB78` ran 9 times. Its sequence allocator advanced from its expected pre-increment value (`0xFFFFFFFF`) and the protected submit path returned success (`1`), so the packet is being queued rather than rejected by allocation or IRQL handling.
@@ -319,7 +319,7 @@ Inspect the existing repository and continue from there.
 - The completed-resource frontend queue remains empty and the pushbuffer still contains setup/clear commands with a zero-dword begin/end batch. Current next action: trace the consumer of the successful `0x0048BB78` title packet and its completion callback into the first frontend/UI resource submission.
 Verified correction (2026-09-14): Original XBE slot 004E3CBC is ordinal 119, KeInsertQueueDpc, NOT KeSetEvent. Earlier diagnosis was incorrect. Added blocking condition-variable event waits with atomic signal consumption; Release build passed and a 26-second run completed without establishing legal-screen rendering. Next audit: queued DPC routine resolution, guest register preservation and stack cleanup. Event changes do not establish a fix for the packet path.
 
-### Current verified progress — 2026-09-14
+### Current verified progress â€” 2026-09-14
 
 - **Native boot and scheduler: 55%.** The Release x64 build loads the user's local `original/default.xbe`, runs the title code, and holds all nine expected scheduler callbacks during stable diagnostic runs.
 - **Kernel compatibility: 40%.** Memory mapping, title threads, timing, archive completion, and basic DPC queue/drain behavior run. `KeInsertQueueDpc` has now been identified from the retail XBE as the relevant packet handoff. The delivery callback's downstream record processing remains unverified.
@@ -330,33 +330,33 @@ Verified correction (2026-09-14): Original XBE slot 004E3CBC is ordinal 119, KeI
 
 **Current blocker:** The DPC path is not being dropped: a verified run queued and drained 50 guest DPCs with no unresolved routine. The next trace captures the exact DPC routine and context that receives the packet work, then follows that routine until it either calls `0x0048E0A6` or exposes the compatibility condition that prevents it.
 
-### Runtime trace update — 2026-09-14 (packet DPC path)
+### Runtime trace update â€” 2026-09-14 (packet DPC path)
 
 - The retail packet handoff at `0x0049516F` was confirmed to call kernel ordinal 119, `KeInsertQueueDpc`. A stable 26-second Release run held all nine scheduler callbacks and queued that DPC six times with routine `0x00495A8C` and context `0x01A21130`.
 - The guest-safe DPC drain executes `0x00495A8C` correctly. Its resource gate opens (`pending=6`, `limit=10`) and its completed-item list is nonempty (`0x01A229E8`), which rules out the timer/scheduler and empty-queue theories for this path.
 - Each item takes the special completion branch into `0x004951D2`. That routine immediately exits because its required context buffer at `context + 0x8B0` is null; consequently its call to `0x0048E0A6` never occurs and no frontend records are enqueued.
 - Follow-up correction: retail XBE cross-references identify `0x00495187` as an XNET network-buffer service wrapper, reached from the network service table rather than the frontend renderer. The null `context + 0x8B0` buffer therefore means that optional network path is idle; it is not a justified frontend initialization target. No synthetic network buffer will be introduced.
 
-### Runtime trace update — 2026-09-14 (Xemu baseline and native draw capture)
+### Runtime trace update â€” 2026-09-14 (Xemu baseline and native draw capture)
 
 - Xemu was started against the user's local ISO and inspected through its existing GDB server. At the beginning of the active title session it has the complete nine-entry scheduler table, including `0x003CD120`, `0x00042BD0`, and `0x00045F20`; a breakpoint confirms `0x003CD120` executes. Its CPU is in normal title worker code at `0x0003598F`, not a reset or crash loop.
 - Added a bounded, opt-in observation trace at the native D3D11 PGRAPH draw boundary. With `RECOMP_PGRAPH_DRAW_TRACE=1`, it records only the first four `SET_BEGIN_END` batches and their first 32 `INLINE_ARRAY` words after the common MMIO decoder expands them. It does not alter guest execution, timing, state, or rendering.
 - Release build succeeded. The first capture run fell into the known seven-callback startup timing profile, so it did not reach a draw batch and produced no inline-word trace. The next capture must use the established stable nine-callback profile, then compare the actual packet shape before changing the renderer.
 
-### Runtime trace update — 2026-09-14 (registration order verified)
+### Runtime trace update â€” 2026-09-14 (registration order verified)
 
 - Added a bounded history of title scheduler-registration requests. A Release run reached all nine callbacks and matched the clean Xemu boot exactly: `3E910`, `41810`, `3CD120`, `3A1C0`, `3A310`, `51F00`, `39380`, `42BD0`, then `45F20`.
 - The two formerly intermittent registrations were requested by the retail title itself from `0x00043D09` and `0x000460DD`; they were not injected or fabricated by the bridge. The same run executed `0x00045F20` repeatedly.
 - That run also observed live `SET_BEGIN_END` and `INLINE_ARRAY` packets. The D3D11 PGRAPH translator's trace did not receive them, proving that the current presentation path is driven by the pushbuffer scan/executor route instead. Renderer work must instrument and extend that route, using its real packet payload, rather than assume the translator's five-word UI vertex format.
 
-### Evidence correction and resume-pointer fix — 2026-09-14
+### Evidence correction and resume-pointer fix â€” 2026-09-14
 
 - The nine-callback native sample already has B09570=1 and B122AC=1, matching the sampled Xemu values. Comparing those with an earlier seven-callback run did not establish a missing initialization gate. Both globals are maintained as initialization reference counts.
 - Six zero inline words are confirmed, but their purpose and whether they are an intentional initialization batch remain unverified. They do not by themselves prove a damaged vertex buffer or a renderer fault. Different allocation addresses in Xemu and native are also not evidence of incorrect mapping.
 - Corrected bridge_NtResumeThread to preserve a null optional PreviousSuspendCount pointer instead of translating guest address zero. Release rebuild passed after closing the running EXE. The new 22:17 native sample reaches nine callbacks and 850 completed injected scheduler dispatches; DMA PUT still stops at 03E50F0C. This change has not established visual progress.
 - Next investigation: the sampled resource-loading wait through sub_00035CE0/sub_000358D0, including the B0284C counter and suspend/resume pairing. The legal screen remains unverified and no menu geometry has been established.
 
-### Worker-pairing and FIFO trace — 2026-09-15
+### Worker-pairing and FIFO trace â€” 2026-09-15
 
 - A clean 25-second Release run again held all nine title-registered callbacks and
   completed more than 200,000 calls of `0x00045F20` without a crash. The worker
@@ -380,7 +380,7 @@ Verified correction (2026-09-14): Original XBE slot 004E3CBC is ordinal 119, KeI
   emit the first nonzero FIFO batch. Keep the optional XNET packet DPC separate:
   it is a network service path and is not a valid source of synthetic UI work.
 
-### Retail Xemu queue-pump comparison — 2026-09-15
+### Retail Xemu queue-pump comparison â€” 2026-09-15
 
 - Reconnected to the user's live local Xemu session. It is in the title and
   again exposes the same nine-entry scheduler table as the native process.
@@ -397,7 +397,7 @@ Verified correction (2026-09-14): Original XBE slot 004E3CBC is ordinal 119, KeI
   build. A local 64 MB reference snapshot was captured under
   `analysis/xemu-captures`; it is diagnostic data and must remain untracked.
 
-### Live Xemu steady-state check — 2026-09-15
+### Live Xemu steady-state check â€” 2026-09-15
 
 - After a title restart, Xemu again reached the same nine-callback scheduler
   table seen in the native process. The frontend queue-pump code and its
@@ -410,7 +410,7 @@ Verified correction (2026-09-14): Original XBE slot 004E3CBC is ordinal 119, KeI
   settled. The next Xemu comparison must be armed before the next title reset
   to catch the transient archive completion that precedes this state.
 
-### Root-cause trace of the frontend-producer stall — 2026-09-17
+### Root-cause trace of the frontend-producer stall â€” 2026-09-17
 
 - Note: `HANDOFF.MD.txt` (dated today) still names `0x004945A3` as the open
   blocker. That address was already resolved on 2026-09-13 (see above); this
@@ -465,7 +465,7 @@ Verified correction (2026-09-14): Original XBE slot 004E3CBC is ordinal 119, KeI
   found that shortcut wrong for adjacent callbacks (see the 2026-09-14 XNET
   correction above).
 
-### Root cause confirmed: unfired D3D device resource-notify callback — 2026-09-17 (continued)
+### Root cause confirmed: unfired D3D device resource-notify callback â€” 2026-09-17 (continued)
 
 - The single reference to `0x00026EE0`'s address anywhere in the XBE (found
   by scanning every section for the literal dword `E0 6E 02 00`) is inside
@@ -517,7 +517,7 @@ Verified correction (2026-09-14): Original XBE slot 004E3CBC is ordinal 119, KeI
   same guest thread that is currently blocked in `sub_00028DE0`'s wait loop,
   not from an unrelated native thread.
 
-### Fix implemented and verified: GPU resource-notify callback delivery — 2026-09-17 (continued)
+### Fix implemented and verified: GPU resource-notify callback delivery â€” 2026-09-17 (continued)
 
 - Implemented `nfl2k5_gpu_notify_service()` in `src/recomp_manual.c`, called
   from `sub_00028DE0` (`src/recomp/gen/recomp_0000.c`) immediately before its
@@ -560,7 +560,7 @@ Verified correction (2026-09-14): Original XBE slot 004E3CBC is ordinal 119, KeI
   frontend-producer stall since it was first identified; all earlier
   2026-09-14/15 entries on this thread were tracing without a fix.
 
-### External review received and acted on — 2026-09-17 (continued)
+### External review received and acted on â€” 2026-09-17 (continued)
 
 - Received a third-party technical review package (Patrick Carey /
   `patrickfcarey` on GitHub, `Newerest` on Discord) recommending: keep the
@@ -624,7 +624,7 @@ Verified correction (2026-09-14): Original XBE slot 004E3CBC is ordinal 119, KeI
   additional runs will find new targets, because the code past the plateau
   is simply never reached to observe.
 
-### Correction: sub_00178150 is not reached on retail hardware either — 2026-09-17 (continued)
+### Correction: sub_00178150 is not reached on retail hardware either â€” 2026-09-17 (continued)
 
 - Reconnected to a live Xemu session with its GDB server (no saved snapshot
   exists; a fresh boot auto-launched the disc and hit the title's own code at
@@ -668,7 +668,7 @@ Verified correction (2026-09-14): Original XBE slot 004E3CBC is ordinal 119, KeI
   `docs/GEMINI-HANDOFF.md`) is what they reference, rather than continuing to
   treat `SET_BEGIN_END` alone as the milestone.
 
-### xemu built from source, running, confirmed showing the game — 2026-09-17 (continued)
+### xemu built from source, running, confirmed showing the game â€” 2026-09-17 (continued)
 
 Per the approved hosting direction, stood up a real Windows build of xemu from
 its public source, as the foundation the future CPU-hook integration attaches
@@ -746,7 +746,7 @@ to. No toolchain existed on this machine beforehand.
   functions wired in (pure passthrough, provably identical to plain xemu)
   before adding the first one.
 
-### Real boot sequence, confirmed by watching a live retail Xemu session — 2026-09-17 (continued)
+### Real boot sequence, confirmed by watching a live retail Xemu session â€” 2026-09-17 (continued)
 
 The user watched their own live Xemu session play through the actual retail
 boot sequence end to end and narrated it in real time. The confirmed order:
@@ -819,7 +819,7 @@ session's scratch temp directory, not committed):
   monitor `cont` or a bare `c` continue immediately followed by disconnecting
   -- both of those left the VM re-paused in this session's testing.
 
-### CPU-hook Stage 1 and 2: a real recompiled function now runs inside xemu's own dispatch loop — 2026-09-17 (continued)
+### CPU-hook Stage 1 and 2: a real recompiled function now runs inside xemu's own dispatch loop â€” 2026-09-17 (continued)
 
 Followed through on the hook point identified in the previous entry.
 
@@ -901,7 +901,7 @@ Followed through on the hook point identified in the previous entry.
   functions (ideally working outward from `0x00016BD1` toward whatever
   currently stalls) rather than anything-remaining in Stage 1/2 itself.
 
-### Native boot stall: first concrete, address-level trace of what it's actually spinning on — 2026-09-17 (continued)
+### Native boot stall: first concrete, address-level trace of what it's actually spinning on â€” 2026-09-17 (continued)
 
 The previous entries documented *that* native rendering never reaches a
 draw call and speculated the archive-completion plateau (~23 calls) was the
@@ -927,7 +927,7 @@ different in an important way, from what was previously assumed.
   number is not reproducible run-to-run**; what's reproducible is that
   *some* thread spins forever, but not always the same one.
 - **Confirmed via the new `ret=` field**: one run spun on kernel ordinal 99
-  (`KeDelayExecutionThread`) ~1400×/sec, always returning to the same guest
+  (`KeDelayExecutionThread`) ~1400Ã—/sec, always returning to the same guest
   address, `0x0001B632`. A second, independent run instead spun on ordinal
   246 (`ObReferenceObjectByHandle`) at a different address, `0x00016D15`.
   **Different runs stall in different places** -- strong evidence of a real
@@ -1083,7 +1083,7 @@ different in an important way, from what was previously assumed.
   re-measuring it in the same run -- this pass's evidence is that which
   pipeline stage stalls first varies between runs.
 
-### Followed the chain one more hop, and it reframes the whole investigation — 2026-09-17 (continued)
+### Followed the chain one more hop, and it reframes the whole investigation â€” 2026-09-17 (continued)
 
 - Traced `sub_003D58B0`'s own caller the same way (entry trace, no manual
   override, clean bisection this time): every call came from
@@ -1157,7 +1157,7 @@ different in an important way, from what was previously assumed.
   single call site -- worth prioritizing over continuing to trace
   individual spin sites one at a time.
 
-### Actually tried it: a real, reversible experiment, with a clean negative result that itself is the useful finding — 2026-09-17 (continued)
+### Actually tried it: a real, reversible experiment, with a clean negative result that itself is the useful finding â€” 2026-09-17 (continued)
 
 Rather than stop at "next action: find the D3D8 wait function," found the guest ISR address a cheaper way and tried synthesizing it directly. This section is the full, honest result -- it did not fix rendering, but it produced a precise, evidenced answer for *why not*, which is real progress on its own.
 
@@ -1430,7 +1430,7 @@ Re-derived the guest VAs for the `sub_00278310`/`sub_00363350` `.rdata` hits ind
 - **Separately, the `sub_00363350` hit at `0x0085EFE4` looks like a false positive.** Dumping its surrounding dwords shows values shaped like floating-point camera/animation constants (e.g. `0x3F800000` = 1.0f, `0x43C2762C` ~= 388.5f), not a plausible record layout. `0x00363350` occurring there is most likely a coincidental 4-byte match inside unrelated numeric data, not a real callback registration.
 - **Corrected next step**: stop treating this table as the root cause. The actual missing piece is still whatever record/table entry corresponds to the *first* frontend state (something name-string-tagged like `"legal_screen"`, `"attract"`, `"main_menu"`, or similar -- not `"navigation_pause_notitle"`), which has not yet been located. The same techniques used here remain valid and useful: search the XBE for other `game_vtable`-shaped callback addresses with zero static callers, resolve their `.rdata` records with correct VA math, and read the UTF-16LE name-string field to identify which UI state each one actually belongs to before assuming any of them is the blocker.
 - No code changes made. This is a correction to the investigative record only.
-### Worker-pairing review: idle acquire is paired by its caller — 2026-09-20
+### Worker-pairing review: idle acquire is paired by its caller â€” 2026-09-20
 
 - Reviewed the `0xB0284C` claim in the source and retail disassembly before
   modifying the generated worker loop. `sub_000358D0` and `sub_000358F0` are
@@ -1455,7 +1455,7 @@ Re-derived the guest VAs for the `sub_00278310`/`sub_00363350` `.rdata` hits ind
   `sub_00028F70` transaction. Only change this path if that run demonstrates
   an unmatched counter after its known caller-side release.
 
-### CPU-hook Stage 3: sub_0001714C hooked, verified, and the game is already rendering real gameplay through it — 2026-09-20 (continued)
+### CPU-hook Stage 3: sub_0001714C hooked, verified, and the game is already rendering real gameplay through it â€” 2026-09-20 (continued)
 
 Picked the CPU-hook/hybrid xemu direction back up (Stage 1/2 from 2026-09-17: `external/xemu-src`, `accel/tcg/xemu-recomp-hook.{c,h}`, `target/i386/xemu-recomp-nfl2k5.c`) rather than continuing to chase the standalone `NFL2K5.exe` recompiler, whose every remaining lead (worker-gate pairing, the vtable-table thread) has now dead-ended. This entry also corrects course on an earlier assumption in this same file: the standalone recomp's "zero vertex data" bug is a from-scratch-NV2A-reimplementation problem specific to that path, not a fact about the game or the hybrid approach.
 
@@ -2321,3 +2321,16 @@ Reached natively (user-verified): intro movies, legal/SEGA screens, title, main 
 - **Fix:** `adpcm_realign` now scores four consecutive local headers at every candidate byte shift, requires the current block to be valid, prefers the existing shift on a tie, and changes alignment only to a locally verified run. Claude's pitch resampler, physical-memory translation, XAudio2 queue, and broadcast mixer remain intact.
 - **Verification:** Release built successfully and a 143.7-second native capture (`logs/audio-local-grid.wav`) ran through menus, pregame, and kickoff. XAudio2 reported zero dropped buffers and maintained a 2-3 buffer queue. Over the final 30 seconds, peak amplitude fell from 0.420 in the supplied-problem reproduction to 0.139, median >8 kHz energy ratio fell from 0.00046 to 0.00026, and spectral flatness fell from 0.00039 to 0.00029. The Xemu reference measured 0.00033 above 8 kHz and 0.00007 flatness over its 15-second sample.
 - **Result:** the high-energy broadband burst characteristic of the reported earrape is removed from the recorded native mix. A subjective speaker/headphone check is still useful for final balance, but this is a decoder correction rather than a volume clamp.
+
+## 2026-09-27: FOX reference-locked layout and broadcast motion foundation
+
+- **Reference measurement:** inspected every supplied image/video attachment and separated FOX material from the CBS clip and native diagnostic recording. The available FOX still is 1280x720; its visible scorebug bounds are x=349..920, y=593..687 (572x95), giving normalized placement center (0.5000, 0.8896) and width 0.446875. The current package now uses those exact outer measurements. A reference ledger is in `mods/presentations/NFL on FOX/REFERENCE.md`.
+- **Visual correction:** removed the invented large dark score panels. The FOX template now uses floating team logos and scores, a 96-pixel clock/quarter plate, and short timeout strips matching the supplied still. The game-owned team PNGs remain replaceable assets; no FOX or team logo was redrawn.
+- **Live data:** retained live team, logo, score, timeouts, possession, quarter, clock, down/distance, and field-position data. Optional team records can now come from `team.json`. Penalty, interception, fumble, turnover, injury, and replay popup titles feed the broadcast event queue rather than modifying football logic.
+- **Presentation boundary:** added `src/nfl2k5_broadcast.h`, a C-compatible live-state, event, and contextual-player-stat interface. Its snapshot exposes teams, asset paths, scores, records, timeouts, possession, quarter, clock, down, distance, ball position, phase, and flag state. It supports QB, RB, receiver, defense, and kicker inserts with temporary display duration. The FOX package includes an editable player-stat insert driven by `{player.*}` fields. Play clock remains explicitly unavailable (`-1`) until its real title producer is mapped.
+- **Motion engine:** added explicit interruptible HIDDEN / FADE_IN / LIVE / FADE_OUT states; named easing curves; reusable keyframes for position, scale, rotation, opacity, crop, and anchors; box shadows; polygon layers; and full-screen timeline canvases. Quarter boundaries now branch as Q1, halftime, Q3, quarter start, final, or overtime final, with backward-compatible animation fallbacks.
+- **Build:** multiple Release builds completed successfully after the engine and package changes.
+- **Runtime verification:** `logs/fox-layout-7-0.png` is a targeted D3D11 capture at 3440x1440. It verifies that the scorebug uses live KC/NE logos and data, remains anchored to the 16:9 game-safe region at ultrawide resolution, and layers below the game's coin-toss overlay. `NFL2K5_PRES_TEST=1` was used only to keep it visible for measurement. Normal contextual hiding was separately observed during broadcast shots.
+- **Reference limitation:** no FOX live-scorebug fade-in video or FOX quarter-end video is present anywhere in the supplied attachment directories or project tree. The only broadcast motion reference on disk is CBS. The engine is ready to transcribe those clips as editable layers, but no invented bumper has been labelled frame-accurate.
+- **Next:** ingest the actual FOX fade-in and quarter-end source clips, make frame contact sheets, transcribe their timing into the new keyframe/full-screen definitions, then map title player-stat memory producers to `nfl2k5_broadcast_player_stat` for automatic contextual stat selection.
+

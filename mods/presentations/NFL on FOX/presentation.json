@@ -4,158 +4,893 @@
   "network": "FOX NFL",
   "description": "Compact FOX-style broadcast scorebug with oversized team logos, stacked clock and quarter, timeout markers, and a live down-and-distance tab.",
   "font": "Bahnschrift",
-
   "scorebug": {
-    "canvas": { "width": 560, "height": 94, "overflow_top": 10 },
-    "placement": { "center_x": 0.5, "center_y": 0.905, "width": 0.48 },
-    "fade_time": 0.2,
-
-    "team_slots": {
-      "away": { "block": [0, 4, 204, 84], "score_box": [116, 14, 88, 65], "timeouts": [126, 82, 70, 6] },
-      "home": { "block": [356, 4, 204, 84], "score_box": [356, 14, 88, 65], "timeouts": [364, 82, 70, 6] }
+    "canvas": {
+      "width": 572,
+      "height": 95,
+      "overflow_top": 82
     },
-
+    "placement": {
+      "center_x": 0.5,
+      "center_y": 0.8896,
+      "width": 0.446875
+    },
+    "team_slots": {
+      "away": {
+        "block": [
+          0,
+          0,
+          242,
+          95
+        ],
+        "score_box": [
+          148,
+          6,
+          94,
+          63
+        ],
+        "timeouts": [
+          153,
+          73,
+          84,
+          8
+        ]
+      },
+      "home": {
+        "block": [
+          338,
+          0,
+          234,
+          95
+        ],
+        "score_box": [
+          338,
+          6,
+          94,
+          63
+        ],
+        "timeouts": [
+          343,
+          73,
+          84,
+          8
+        ]
+      }
+    },
     "elements": [
-      { "type": "box", "x": 116, "y": 14, "w": 88, "h": 65, "radius": 2,
-        "gradient": { "top": "#494A4D", "bottom": "#292A2D" }, "shadow": "#00000099" },
-      { "type": "box", "x": 356, "y": 14, "w": 88, "h": 65, "radius": 2,
-        "gradient": { "top": "#494A4D", "bottom": "#292A2D" }, "shadow": "#00000099" },
-
-      { "type": "box", "x": 204, "y": 9, "w": 152, "h": 74, "radius": 2,
-        "gradient": { "top": "#333438", "bottom": "#16171A" }, "shadow": "#000000AA" },
-      { "type": "box", "x": 204, "y": 55, "w": 152, "h": 2, "fill": "#6E7075" },
-      { "type": "text", "text": "{clock}", "x": 204, "y": 7, "w": 152, "h": 49,
-        "size": 35, "weight": 800, "stretch": "condensed", "color": "#FFFFFF", "align": "center", "shadow": "#000000AA" },
-      { "type": "text", "text": "{quarter}", "x": 204, "y": 55, "w": 152, "h": 28,
-        "size": 22, "weight": 800, "stretch": "condensed", "color": "#F5F5F5", "align": "center" },
-
-      { "type": "text", "text": "{away.score}", "x": 116, "y": 11, "w": 88, "h": 68,
-        "size": 57, "weight": 800, "stretch": "condensed", "color": "#F4F4F4", "align": "center", "shadow": "#000000AA" },
-      { "type": "text", "text": "{home.score}", "x": 356, "y": 11, "w": 88, "h": 68,
-        "size": 57, "weight": 800, "stretch": "condensed", "color": "#F4F4F4", "align": "center", "shadow": "#000000AA" },
-
-      { "type": "image", "src": "{away.logo}", "x": -8, "y": -3, "w": 136, "h": 96 },
-      { "type": "image", "src": "{home.logo}", "x": 432, "y": -3, "w": 136, "h": 96 },
-
-      { "type": "box", "x": 112, "y": 24, "w": 4, "h": 44, "fill": "#F4C430", "show": "possession:away" },
-      { "type": "box", "x": 444, "y": 24, "w": 4, "h": 44, "fill": "#F4C430", "show": "possession:home" },
-
-      { "type": "timeouts", "team": "away", "x": 126, "y": 82, "count": 3, "bar_w": 18, "bar_h": 6, "gap": 7,
-        "on": "#E9E9E9", "off": "#45464A" },
-      { "type": "timeouts", "team": "home", "x": 364, "y": 82, "count": 3, "bar_w": 18, "bar_h": 6, "gap": 7,
-        "on": "#E9E9E9", "off": "#45464A" }
-    ]
+      {
+        "type": "box",
+        "x": 242,
+        "y": 10,
+        "w": 96,
+        "h": 64,
+        "radius": 0,
+        "gradient": {
+          "top": "#525254",
+          "bottom": "#3D3D3F"
+        },
+        "shadow": "#00000055"
+      },
+      {
+        "type": "text",
+        "text": "{clock}",
+        "x": 242,
+        "y": 9,
+        "w": 96,
+        "h": 35,
+        "size": 28,
+        "weight": 900,
+        "stretch": "condensed",
+        "color": "#FFFFFF",
+        "align": "center",
+        "shadow": "#00000088"
+      },
+      {
+        "type": "text",
+        "text": "{quarter}",
+        "x": 242,
+        "y": 41,
+        "w": 96,
+        "h": 31,
+        "size": 23,
+        "weight": 900,
+        "stretch": "condensed",
+        "color": "#FFFFFF",
+        "align": "center",
+        "shadow": "#00000088"
+      },
+      {
+        "type": "text",
+        "text": "{away.score}",
+        "x": 148,
+        "y": 1,
+        "w": 94,
+        "h": 70,
+        "size": 61,
+        "weight": 900,
+        "stretch": "condensed",
+        "color": "#F2F2F2",
+        "align": "center",
+        "shadow": "#00000055"
+      },
+      {
+        "type": "text",
+        "text": "{home.score}",
+        "x": 338,
+        "y": 1,
+        "w": 94,
+        "h": 70,
+        "size": 61,
+        "weight": 900,
+        "stretch": "condensed",
+        "color": "#F2F2F2",
+        "align": "center",
+        "shadow": "#00000055"
+      },
+      {
+        "type": "box",
+        "x": 147,
+        "y": 69,
+        "w": 95,
+        "h": 13,
+        "fill": "{away.primary}|darken:0.52|alpha:0.82",
+        "show": "possession:away"
+      },
+      {
+        "type": "box",
+        "x": 338,
+        "y": 69,
+        "w": 95,
+        "h": 13,
+        "fill": "{home.primary}|darken:0.52|alpha:0.82",
+        "show": "possession:home"
+      },
+      {
+        "type": "timeouts",
+        "team": "away",
+        "x": 153,
+        "y": 73,
+        "count": 3,
+        "bar_w": 23,
+        "bar_h": 8,
+        "gap": 5,
+        "on": "#F1F1F1",
+        "off": "#5A5A5A"
+      },
+      {
+        "type": "timeouts",
+        "team": "home",
+        "x": 343,
+        "y": 73,
+        "count": 3,
+        "bar_w": 23,
+        "bar_h": 8,
+        "gap": 5,
+        "on": "#F1F1F1",
+        "off": "#5A5A5A"
+      },
+      {
+        "type": "image",
+        "src": "{away.logo}",
+        "x": 0,
+        "y": 0,
+        "w": 151,
+        "h": 95
+      },
+      {
+        "type": "image",
+        "src": "{home.logo}",
+        "x": 425,
+        "y": 0,
+        "w": 147,
+        "h": 95
+      },
+      {
+        "type": "box",
+        "x": 214,
+        "y": -31,
+        "w": 244,
+        "h": 29,
+        "fill": "#343538E8",
+        "show": "scrimmage"
+      },
+      {
+        "type": "text",
+        "text": "{down_distance}",
+        "x": 214,
+        "y": -31,
+        "w": 152,
+        "h": 29,
+        "size": 20,
+        "weight": 900,
+        "stretch": "condensed",
+        "color": "#FFFFFF",
+        "align": "center",
+        "show": "scrimmage"
+      },
+      {
+        "type": "box",
+        "x": 366,
+        "y": -26,
+        "w": 1,
+        "h": 19,
+        "fill": "#77787C"
+      },
+      {
+        "type": "text",
+        "text": "{ball_on}",
+        "x": 368,
+        "y": -31,
+        "w": 90,
+        "h": 29,
+        "size": 15,
+        "weight": 800,
+        "stretch": "condensed",
+        "color": "#E8E8E8",
+        "align": "left",
+        "show": "scrimmage"
+      }
+    ],
+    "lifecycle": {
+      "fade_in": {
+        "duration": 0.34,
+        "ease": "cubic_out",
+        "from_y": 8,
+        "from_scale": 0.985
+      },
+      "fade_out": {
+        "duration": 0.22,
+        "ease": "cubic_in",
+        "from_y": 5,
+        "from_scale": 0.99
+      }
+    }
   },
-
   "animations": {
     "pregame": {
       "duration": 4.0,
       "layers": [
-        { "type": "box", "x": 60, "y": -66, "w": 440, "h": 52, "radius": 3,
-          "gradient": { "top": "#243F68", "bottom": "#08182F" },
-          "enter": { "type": "wipe_x", "time": 0.55 }, "exit": { "type": "fade", "time": 0.35 }, "end": 4.0 },
-        { "type": "text", "text": "NFL ON FOX", "x": 60, "y": -66, "w": 440, "h": 52,
-          "size": 34, "weight": 900, "stretch": "condensed", "italic": true, "color": "#FFFFFF", "align": "center",
-          "enter": { "type": "fade", "time": 0.3 }, "exit": { "type": "fade", "time": 0.35 }, "start": 0.4, "end": 4.0 }
+        {
+          "type": "box",
+          "x": 60,
+          "y": -66,
+          "w": 440,
+          "h": 52,
+          "radius": 3,
+          "gradient": {
+            "top": "#243F68",
+            "bottom": "#08182F"
+          },
+          "end": 4.0,
+          "keyframes": [
+            {
+              "time": 0.0,
+              "y": 18,
+              "scale": 0.96,
+              "opacity": 0.0
+            },
+            {
+              "time": 0.32,
+              "y": 0,
+              "scale": 1.0,
+              "opacity": 1.0,
+              "ease": "cubic_out"
+            },
+            {
+              "time": 3.55,
+              "y": 0,
+              "scale": 1.0,
+              "opacity": 1.0
+            },
+            {
+              "time": 4.0,
+              "y": -8,
+              "scale": 0.99,
+              "opacity": 0.0,
+              "ease": "cubic_in"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": "NFL ON FOX",
+          "x": 60,
+          "y": -66,
+          "w": 440,
+          "h": 52,
+          "size": 34,
+          "weight": 900,
+          "stretch": "condensed",
+          "italic": true,
+          "color": "#FFFFFF",
+          "align": "center",
+          "start": 0.4,
+          "end": 4.0,
+          "keyframes": [
+            {
+              "time": 0.0,
+              "y": 18,
+              "scale": 0.96,
+              "opacity": 0.0
+            },
+            {
+              "time": 0.32,
+              "y": 0,
+              "scale": 1.0,
+              "opacity": 1.0,
+              "ease": "cubic_out"
+            },
+            {
+              "time": 3.55,
+              "y": 0,
+              "scale": 1.0,
+              "opacity": 1.0
+            },
+            {
+              "time": 4.0,
+              "y": -8,
+              "scale": 0.99,
+              "opacity": 0.0,
+              "ease": "cubic_in"
+            }
+          ]
+        }
       ]
     },
     "touchdown": {
       "duration": 4.5,
       "layers": [
-        { "type": "box", "x": 116, "y": -50, "w": 328, "h": 42, "radius": 2,
-          "gradient": { "top": "{team.primary}|lighten:0.12", "bottom": "{team.primary}|darken:0.35" },
-          "enter": { "type": "slide_up", "time": 0.3 }, "exit": { "type": "slide_down", "time": 0.3 } },
-        { "type": "text", "text": "TOUCHDOWN  {team.abbr}", "x": 116, "y": -50, "w": 328, "h": 42,
-          "size": 29, "weight": 900, "stretch": "condensed", "italic": true, "color": "#FFFFFF", "align": "center",
-          "enter": { "type": "slide_up", "time": 0.3 }, "exit": { "type": "slide_down", "time": 0.3 } },
-        { "type": "box", "at": "team.score_box", "radius": 2, "fill": "#F4C430", "blink": { "period": 0.4, "until": 3.0 } },
-        { "type": "text", "at": "team.score_box", "text": "{team.score}", "size": 57, "weight": 800,
-          "stretch": "condensed", "color": "#111318", "align": "center", "blink": { "period": 0.4, "until": 3.0 } }
+        {
+          "type": "box",
+          "x": 116,
+          "y": -50,
+          "w": 328,
+          "h": 42,
+          "radius": 2,
+          "gradient": {
+            "top": "{team.primary}|lighten:0.12",
+            "bottom": "{team.primary}|darken:0.35"
+          },
+          "enter": {
+            "type": "slide_up",
+            "time": 0.3
+          },
+          "exit": {
+            "type": "slide_down",
+            "time": 0.3
+          }
+        },
+        {
+          "type": "text",
+          "text": "TOUCHDOWN  {team.abbr}",
+          "x": 116,
+          "y": -50,
+          "w": 328,
+          "h": 42,
+          "size": 29,
+          "weight": 900,
+          "stretch": "condensed",
+          "italic": true,
+          "color": "#FFFFFF",
+          "align": "center",
+          "enter": {
+            "type": "slide_up",
+            "time": 0.3
+          },
+          "exit": {
+            "type": "slide_down",
+            "time": 0.3
+          }
+        },
+        {
+          "type": "box",
+          "at": "team.score_box",
+          "radius": 2,
+          "fill": "#F4C430",
+          "blink": {
+            "period": 0.4,
+            "until": 3.0
+          }
+        },
+        {
+          "type": "text",
+          "at": "team.score_box",
+          "text": "{team.score}",
+          "size": 57,
+          "weight": 800,
+          "stretch": "condensed",
+          "color": "#111318",
+          "align": "center",
+          "blink": {
+            "period": 0.4,
+            "until": 3.0
+          }
+        }
       ]
     },
     "field_goal": {
       "duration": 3.5,
       "layers": [
-        { "type": "box", "x": 204, "y": -25, "w": 152, "h": 29, "radius": 2,
-          "gradient": { "top": "#F4C430", "bottom": "#C89700" }, "enter": { "type": "wipe_x", "time": 0.25 }, "exit": { "type": "fade", "time": 0.25 } },
-        { "type": "text", "text": "FIELD GOAL", "x": 204, "y": -25, "w": 152, "h": 29,
-          "size": 20, "weight": 900, "stretch": "condensed", "color": "#111318", "align": "center",
-          "enter": { "type": "wipe_x", "time": 0.25 }, "exit": { "type": "fade", "time": 0.25 } }
+        {
+          "type": "box",
+          "x": 204,
+          "y": -25,
+          "w": 152,
+          "h": 29,
+          "radius": 2,
+          "gradient": {
+            "top": "#F4C430",
+            "bottom": "#C89700"
+          },
+          "enter": {
+            "type": "wipe_x",
+            "time": 0.25
+          },
+          "exit": {
+            "type": "fade",
+            "time": 0.25
+          }
+        },
+        {
+          "type": "text",
+          "text": "FIELD GOAL",
+          "x": 204,
+          "y": -25,
+          "w": 152,
+          "h": 29,
+          "size": 20,
+          "weight": 900,
+          "stretch": "condensed",
+          "color": "#111318",
+          "align": "center",
+          "enter": {
+            "type": "wipe_x",
+            "time": 0.25
+          },
+          "exit": {
+            "type": "fade",
+            "time": 0.25
+          }
+        }
       ]
     },
     "extra_point": {
       "duration": 2.5,
       "layers": [
-        { "type": "box", "x": 204, "y": -25, "w": 152, "h": 29, "radius": 2, "fill": "#E8E8E8",
-          "enter": { "type": "fade", "time": 0.2 }, "exit": { "type": "fade", "time": 0.25 } },
-        { "type": "text", "text": "PAT GOOD", "x": 204, "y": -25, "w": 152, "h": 29,
-          "size": 20, "weight": 900, "stretch": "condensed", "color": "#0B2347", "align": "center" }
+        {
+          "type": "box",
+          "x": 204,
+          "y": -25,
+          "w": 152,
+          "h": 29,
+          "radius": 2,
+          "fill": "#E8E8E8",
+          "enter": {
+            "type": "fade",
+            "time": 0.2
+          },
+          "exit": {
+            "type": "fade",
+            "time": 0.25
+          }
+        },
+        {
+          "type": "text",
+          "text": "PAT GOOD",
+          "x": 204,
+          "y": -25,
+          "w": 152,
+          "h": 29,
+          "size": 20,
+          "weight": 900,
+          "stretch": "condensed",
+          "color": "#0B2347",
+          "align": "center"
+        }
       ]
     },
     "two_point": {
       "duration": 3.0,
       "layers": [
-        { "type": "box", "x": 204, "y": -25, "w": 152, "h": 29, "radius": 2, "fill": "#0B2347",
-          "enter": { "type": "wipe_x", "time": 0.25 }, "exit": { "type": "fade", "time": 0.25 } },
-        { "type": "text", "text": "2-PT GOOD", "x": 204, "y": -25, "w": 152, "h": 29,
-          "size": 20, "weight": 900, "stretch": "condensed", "color": "#FFFFFF", "align": "center" }
+        {
+          "type": "box",
+          "x": 204,
+          "y": -25,
+          "w": 152,
+          "h": 29,
+          "radius": 2,
+          "fill": "#0B2347",
+          "enter": {
+            "type": "wipe_x",
+            "time": 0.25
+          },
+          "exit": {
+            "type": "fade",
+            "time": 0.25
+          }
+        },
+        {
+          "type": "text",
+          "text": "2-PT GOOD",
+          "x": 204,
+          "y": -25,
+          "w": 152,
+          "h": 29,
+          "size": 20,
+          "weight": 900,
+          "stretch": "condensed",
+          "color": "#FFFFFF",
+          "align": "center"
+        }
       ]
     },
     "safety": {
       "duration": 3.5,
       "layers": [
-        { "type": "box", "x": 204, "y": -25, "w": 152, "h": 29, "radius": 2, "fill": "#F4C430",
-          "enter": { "type": "wipe_x", "time": 0.25 }, "exit": { "type": "fade", "time": 0.25 } },
-        { "type": "text", "text": "SAFETY", "x": 204, "y": -25, "w": 152, "h": 29,
-          "size": 20, "weight": 900, "stretch": "condensed", "color": "#111318", "align": "center" }
+        {
+          "type": "box",
+          "x": 204,
+          "y": -25,
+          "w": 152,
+          "h": 29,
+          "radius": 2,
+          "fill": "#F4C430",
+          "enter": {
+            "type": "wipe_x",
+            "time": 0.25
+          },
+          "exit": {
+            "type": "fade",
+            "time": 0.25
+          }
+        },
+        {
+          "type": "text",
+          "text": "SAFETY",
+          "x": 204,
+          "y": -25,
+          "w": 152,
+          "h": 29,
+          "size": 20,
+          "weight": 900,
+          "stretch": "condensed",
+          "color": "#111318",
+          "align": "center"
+        }
       ]
     },
     "timeout": {
       "duration": 3.0,
       "layers": [
-        { "type": "box", "x": 204, "y": -25, "w": 152, "h": 29, "radius": 2,
-          "gradient": { "top": "{team.primary}|lighten:0.1", "bottom": "{team.primary}|darken:0.3" },
-          "enter": { "type": "wipe_x", "time": 0.25 }, "exit": { "type": "fade", "time": 0.25 } },
-        { "type": "text", "text": "TIMEOUT {team.abbr}", "x": 204, "y": -25, "w": 152, "h": 29,
-          "size": 19, "weight": 900, "stretch": "condensed", "color": "#FFFFFF", "align": "center" }
+        {
+          "type": "box",
+          "x": 204,
+          "y": -25,
+          "w": 152,
+          "h": 29,
+          "radius": 2,
+          "gradient": {
+            "top": "{team.primary}|lighten:0.1",
+            "bottom": "{team.primary}|darken:0.3"
+          },
+          "enter": {
+            "type": "wipe_x",
+            "time": 0.25
+          },
+          "exit": {
+            "type": "fade",
+            "time": 0.25
+          }
+        },
+        {
+          "type": "text",
+          "text": "TIMEOUT {team.abbr}",
+          "x": 204,
+          "y": -25,
+          "w": 152,
+          "h": 29,
+          "size": 19,
+          "weight": 900,
+          "stretch": "condensed",
+          "color": "#FFFFFF",
+          "align": "center"
+        }
       ]
     },
     "first_down": {
       "duration": 2.0,
       "layers": [
-        { "type": "box", "x": 204, "y": -25, "w": 152, "h": 29, "radius": 2,
-          "gradient": { "top": "#F4C430", "bottom": "#C89700" }, "enter": { "type": "wipe_x", "time": 0.22 }, "exit": { "type": "fade", "time": 0.22 } },
-        { "type": "text", "text": "FIRST DOWN", "x": 204, "y": -25, "w": 152, "h": 29,
-          "size": 20, "weight": 900, "stretch": "condensed", "color": "#111318", "align": "center" }
+        {
+          "type": "box",
+          "x": 204,
+          "y": -25,
+          "w": 152,
+          "h": 29,
+          "radius": 2,
+          "gradient": {
+            "top": "#F4C430",
+            "bottom": "#C89700"
+          },
+          "enter": {
+            "type": "wipe_x",
+            "time": 0.22
+          },
+          "exit": {
+            "type": "fade",
+            "time": 0.22
+          }
+        },
+        {
+          "type": "text",
+          "text": "FIRST DOWN",
+          "x": 204,
+          "y": -25,
+          "w": 152,
+          "h": 29,
+          "size": 20,
+          "weight": 900,
+          "stretch": "condensed",
+          "color": "#111318",
+          "align": "center"
+        }
       ]
     },
     "two_minute_warning": {
       "duration": 3.5,
       "layers": [
-        { "type": "box", "x": 204, "y": -25, "w": 152, "h": 29, "radius": 2, "fill": "#0B2347",
-          "enter": { "type": "wipe_x", "time": 0.25 }, "exit": { "type": "fade", "time": 0.25 } },
-        { "type": "text", "text": "2:00 WARNING", "x": 204, "y": -25, "w": 152, "h": 29,
-          "size": 19, "weight": 900, "stretch": "condensed", "color": "#FFFFFF", "align": "center" }
+        {
+          "type": "box",
+          "x": 204,
+          "y": -25,
+          "w": 152,
+          "h": 29,
+          "radius": 2,
+          "fill": "#0B2347",
+          "enter": {
+            "type": "wipe_x",
+            "time": 0.25
+          },
+          "exit": {
+            "type": "fade",
+            "time": 0.25
+          }
+        },
+        {
+          "type": "text",
+          "text": "2:00 WARNING",
+          "x": 204,
+          "y": -25,
+          "w": 152,
+          "h": 29,
+          "size": 19,
+          "weight": 900,
+          "stretch": "condensed",
+          "color": "#FFFFFF",
+          "align": "center"
+        }
       ]
     },
     "end_of_quarter": {
       "duration": 4.0,
       "layers": [
-        { "type": "box", "x": 204, "y": -25, "w": 152, "h": 29, "radius": 2, "fill": "#22252B",
-          "enter": { "type": "wipe_x", "time": 0.25 }, "exit": { "type": "fade", "time": 0.25 } },
-        { "type": "text", "text": "END {ended_quarter}", "x": 204, "y": -25, "w": 152, "h": 29,
-          "size": 19, "weight": 900, "stretch": "condensed", "color": "#FFFFFF", "align": "center" }
+        {
+          "type": "box",
+          "x": 204,
+          "y": -25,
+          "w": 152,
+          "h": 29,
+          "radius": 2,
+          "fill": "#22252B",
+          "enter": {
+            "type": "wipe_x",
+            "time": 0.25
+          },
+          "exit": {
+            "type": "fade",
+            "time": 0.25
+          }
+        },
+        {
+          "type": "text",
+          "text": "END {ended_quarter}",
+          "x": 204,
+          "y": -25,
+          "w": 152,
+          "h": 29,
+          "size": 19,
+          "weight": 900,
+          "stretch": "condensed",
+          "color": "#FFFFFF",
+          "align": "center"
+        }
       ]
     },
     "halftime": {
       "duration": 5.0,
       "layers": [
-        { "type": "box", "x": 116, "y": -50, "w": 328, "h": 42, "radius": 2,
-          "gradient": { "top": "#243F68", "bottom": "#08182F" },
-          "enter": { "type": "slide_up", "time": 0.3 }, "exit": { "type": "slide_down", "time": 0.3 } },
-        { "type": "text", "text": "FOX NFL HALFTIME", "x": 116, "y": -50, "w": 328, "h": 42,
-          "size": 28, "weight": 900, "stretch": "condensed", "italic": true, "color": "#FFFFFF", "align": "center",
-          "enter": { "type": "slide_up", "time": 0.3 }, "exit": { "type": "slide_down", "time": 0.3 } }
+        {
+          "type": "box",
+          "x": 116,
+          "y": -50,
+          "w": 328,
+          "h": 42,
+          "radius": 2,
+          "gradient": {
+            "top": "#243F68",
+            "bottom": "#08182F"
+          },
+          "enter": {
+            "type": "slide_up",
+            "time": 0.3
+          },
+          "exit": {
+            "type": "slide_down",
+            "time": 0.3
+          }
+        },
+        {
+          "type": "text",
+          "text": "FOX NFL HALFTIME",
+          "x": 116,
+          "y": -50,
+          "w": 328,
+          "h": 42,
+          "size": 28,
+          "weight": 900,
+          "stretch": "condensed",
+          "italic": true,
+          "color": "#FFFFFF",
+          "align": "center",
+          "enter": {
+            "type": "slide_up",
+            "time": 0.3
+          },
+          "exit": {
+            "type": "slide_down",
+            "time": 0.3
+          }
+        }
+      ]
+    },
+    "player_stat": {
+      "duration": 5.0,
+      "layers": [
+        {
+          "type": "box",
+          "x": 4,
+          "y": -72,
+          "w": 270,
+          "h": 58,
+          "radius": 0,
+          "gradient": {
+            "top": "#353638EE",
+            "bottom": "#171719F2"
+          },
+          "keyframes": [
+            {
+              "time": 0,
+              "x": -34,
+              "opacity": 0,
+              "crop_x": 0
+            },
+            {
+              "time": 0.28,
+              "x": 0,
+              "opacity": 1,
+              "crop_x": 1,
+              "ease": "cubic_out"
+            },
+            {
+              "time": 4.6,
+              "x": 0,
+              "opacity": 1
+            },
+            {
+              "time": 5.0,
+              "x": -20,
+              "opacity": 0,
+              "ease": "cubic_in"
+            }
+          ]
+        },
+        {
+          "type": "box",
+          "x": 4,
+          "y": -72,
+          "w": 6,
+          "h": 58,
+          "fill": "{team.primary}",
+          "keyframes": [
+            {
+              "time": 0,
+              "opacity": 0
+            },
+            {
+              "time": 0.22,
+              "opacity": 1,
+              "ease": "cubic_out"
+            },
+            {
+              "time": 4.7,
+              "opacity": 1
+            },
+            {
+              "time": 5.0,
+              "opacity": 0,
+              "ease": "cubic_in"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": "{player.name}",
+          "x": 18,
+          "y": -69,
+          "w": 244,
+          "h": 28,
+          "size": 20,
+          "weight": 900,
+          "stretch": "condensed",
+          "color": "#FFFFFF",
+          "align": "left",
+          "keyframes": [
+            {
+              "time": 0.12,
+              "x": -18,
+              "opacity": 0
+            },
+            {
+              "time": 0.34,
+              "x": 0,
+              "opacity": 1,
+              "ease": "cubic_out"
+            },
+            {
+              "time": 4.65,
+              "opacity": 1
+            },
+            {
+              "time": 5.0,
+              "opacity": 0,
+              "ease": "cubic_in"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": "{player.line}",
+          "x": 18,
+          "y": -42,
+          "w": 244,
+          "h": 24,
+          "size": 15,
+          "weight": 700,
+          "stretch": "condensed",
+          "color": "#E5E5E5",
+          "align": "left",
+          "keyframes": [
+            {
+              "time": 0.18,
+              "x": -14,
+              "opacity": 0
+            },
+            {
+              "time": 0.4,
+              "x": 0,
+              "opacity": 1,
+              "ease": "cubic_out"
+            },
+            {
+              "time": 4.65,
+              "opacity": 1
+            },
+            {
+              "time": 5.0,
+              "opacity": 0,
+              "ease": "cubic_in"
+            }
+          ]
+        }
       ]
     }
   }

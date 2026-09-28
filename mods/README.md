@@ -38,6 +38,10 @@ Pick it in game: Quick Game > Coach Match Up > Presentation (under VIP).
   the bar for timeouts and banners.
 - `scorebug.placement` - centre (`center_x`, `center_y`) and `width`, as fractions
   of the game picture.
+- `scorebug.lifecycle` - interruptible `fade_in` / `fade_out` definitions with
+  `duration`, named `ease`, and optional `from_y` / `from_scale`. The engine
+  tracks HIDDEN, FADE_IN, LIVE and FADE_OUT and reverses a partial transition
+  cleanly when gameplay resumes.
 - `scorebug.elements` - drawn in order. Types: `box` (fill or `gradient`
   top/bottom, `radius`, `stroke`), `text` (`text` template, `size`, `weight`,
   `stretch`, `color`, `align`, `italic`, `shadow`), `image` (`src`),
@@ -51,12 +55,30 @@ Pick it in game: Quick Game > Coach Match Up > Presentation (under VIP).
   `blink {period, until}`, `start`, `end`). Events: `pregame`, `touchdown`, `field_goal`, `extra_point`,
   `two_point`, `safety`, `timeout`, `first_down`, `two_minute_warning`,
   `end_of_quarter`, `halftime`.
+- Layers may instead define reusable `keyframes`. Each keyframe has a `time`
+  in seconds and any of `x`, `y`, `scale`, `scale_x`, `scale_y`, `rotation`,
+  `opacity`, `crop_x`, `crop_y`, and `ease`. Supported easing is `linear`,
+  `ease_in`, `ease_out`, `ease_in_out`, `cubic_in`, `cubic_out`, and
+  `cubic_in_out`. Omitted values inherit from the preceding keyframe. Scale
+  and rotation use `anchor_x` / `anchor_y` (0..1).
 - `music` - `intro` and `outro` lists of `{title, file}`, `volume`, `fade_out`
   (seconds), `duck_game_audio` (game volume while a theme plays).
 
-Templates: `{down_distance} {quarter} {clock} {away.abbr} {away.score}
+Templates: `{down_distance} {ball_on} {quarter} {clock} {away.abbr} {away.score}
 {away.name} {away.city} {away.logo} {home.*} {team.*}` (`team` = the team an
 animation is about), `{ended_quarter}`, `{network}`.
+
+Contextual-stat layers use `{player.name}`, `{player.line}`, and fields such
+as `{player.completions}`, `{player.attempts}`, `{player.passing_yards}`,
+`{player.carries}`, `{player.rushing_yards}`, `{player.receptions}`,
+`{player.receiving_yards}`, `{player.tackles}`, `{player.sacks}`, and
+`{player.field_goals_made}`. The C-compatible boundary in
+`src/nfl2k5_broadcast.h` lets title-state hooks publish these inserts and
+broadcast events without coupling a package to football logic.
+It also exposes a fixed-layout `Nfl2k5BroadcastState` snapshot containing both
+teams, logo paths, scores, records, timeouts, possession, quarter, game clock,
+down, distance, ball position, phase, and flag state. Play clock remains `-1`
+until its verified title-memory producer is mapped.
 Colours: `#RRGGBB[AA]`, `{away.primary}`, `{home.secondary}`, `{team.text}`,
 with modifiers `|darken:0.3`, `|lighten:0.1`, `|alpha:0.5`.
 

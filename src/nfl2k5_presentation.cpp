@@ -27,6 +27,7 @@
 #include <d2d1.h>
 #include <dwrite.h>
 #include <wincodec.h>
+#include "nfl2k5_broadcast.h"
 #include <mfapi.h>
 #include <mfidl.h>
 #include <mfreadwrite.h>
@@ -253,6 +254,7 @@ struct GameState {
 enum { AWAY = 0, HOME = 1 };
 static const uint32_t k_team_obj[2] = { 0x00E5FC60u, 0x00E5FC20u };
 static const uint32_t k_playbook_name[2] = { 0x00B30810u, 0x00B307D0u };
+static std::atomic<ULONGLONG> s_flag_until{ 0 };
 
 static std::string read_team_code(uint32_t va)
 {
@@ -301,7 +303,7 @@ static bool read_state(GameState &g)
  * Teams (mods/teams)
  * ====================================================================== */
 struct TeamInfo {
-    std::string abbr, city, name, logo;
+    std::string abbr, city, name, logo, record;
     D2D1_COLOR_F primary{ 0.3f, 0.3f, 0.34f, 1 }, secondary{ 0.8f, 0.8f, 0.8f, 1 }, text{ 1, 1, 1, 1 };
 };
 
@@ -333,6 +335,7 @@ static void load_teams()
         t.abbr = j.str("abbreviation", dir8);
         t.city = j.str("city");
         t.name = j.str("name", t.abbr.c_str());
+        t.record = j.str("record");
         if (const JVal *c = j.get("colors")) {
             parse_hex(c->str("primary"), t.primary);
             parse_hex(c->str("secondary"), t.secondary);
@@ -357,6 +360,47 @@ static TeamInfo team_info(const std::string &abbr)
     TeamInfo t;
     t.abbr = t.name = abbr.empty() ? "---" : abbr;
     return t;
+}
+
+static std::mutex s_broadcast_state_lock;
+static Nfl2k5BroadcastState s_broadcast_state{};
+
+static void copy_broadcast_text(char *dst, size_t cap, const std::string &src)
+{
+    if (!dst || !cap) return;
+    strncpy_s(dst, cap, src.c_str(), _TRUNCATE);
+}
+
+static void publish_broadcast_state(const GameState &g)
+{
+    Nfl2k5BroadcastState out{};
+    out.valid = g.valid ? 1 : 0;
+    out.possession = g.poss; out.quarter = g.period; out.game_clock = g.clock;
+    out.play_clock = -1; out.down = g.down; out.phase = g.phase;
+    out.distance = (int)lroundf(fabsf(g.line - g.ball) / 91.44f);
+    int yard = (int)lroundf(std::max(0.0f, std::min(100.0f, g.ball / 91.44f)));
+    out.ball_on = std::min(yard, 100 - yard);
+    out.flag_state = GetTickCount64() < s_flag_until ? 1 : 0;
+    for (int side = 0; side < 2; side++) {
+        Nfl2k5BroadcastTeamState &d = side == AWAY ? out.away : out.home;
+        TeamInfo t = team_info(g.t[side].abbr);
+        copy_broadcast_text(d.abbreviation, sizeof d.abbreviation, upper(g.t[side].abbr));
+        copy_broadcast_text(d.city, sizeof d.city, t.city);
+        copy_broadcast_text(d.name, sizeof d.name, t.name);
+        copy_broadcast_text(d.logo_path, sizeof d.logo_path, t.logo);
+        copy_broadcast_text(d.record, sizeof d.record, t.record);
+        d.score = g.t[side].score; d.timeouts = g.t[side].timeouts;
+    }
+    std::lock_guard<std::mutex> lock(s_broadcast_state_lock);
+    s_broadcast_state = out;
+}
+
+extern "C" int nfl2k5_broadcast_get_state(Nfl2k5BroadcastState *state)
+{
+    if (!state) return 0;
+    std::lock_guard<std::mutex> lock(s_broadcast_state_lock);
+    *state = s_broadcast_state;
+    return state->valid;
 }
 
 /* ======================================================================
@@ -785,18 +829,63 @@ static void video_play(const std::string &path)
 /* ======================================================================
  * Events
  * ====================================================================== */
-struct Event { std::string name; int team; std::string ended_quarter; };
+struct PlayerStat {
+    int kind = NFL2K5_STAT_QB;
+    std::string name;
+    int completions = 0, attempts = 0, passing_yards = 0, passing_touchdowns = 0, interceptions = 0;
+    int carries = 0, rushing_yards = 0, rushing_touchdowns = 0;
+    int receptions = 0, receiving_yards = 0, receiving_touchdowns = 0;
+    int tackles = 0, sacks = 0, defensive_interceptions = 0;
+    int field_goals_made = 0, field_goals_attempted = 0, longest_field_goal = 0;
+};
+struct Event {
+    std::string name;
+    int team = HOME;
+    std::string ended_quarter;
+    PlayerStat player;
+    double requested_duration = 0;
+};
 struct ActiveAnim { Event ev; const JVal *def = nullptr; double t0 = 0, duration = 0; };
 
 static std::vector<Event> s_queue;
+static std::mutex s_queue_lock;
 static ActiveAnim s_anim;
 static bool s_anim_on;
+
+static void queue_event(Event ev)
+{
+    std::lock_guard<std::mutex> lock(s_queue_lock);
+    s_queue.push_back(std::move(ev));
+}
+
+static bool pop_event(Event &ev)
+{
+    std::lock_guard<std::mutex> lock(s_queue_lock);
+    if (s_queue.empty()) return false;
+    ev = std::move(s_queue.front());
+    s_queue.erase(s_queue.begin());
+    return true;
+}
+
+static bool queue_empty()
+{
+    std::lock_guard<std::mutex> lock(s_queue_lock);
+    return s_queue.empty();
+}
+
+static void clear_events()
+{
+    std::lock_guard<std::mutex> lock(s_queue_lock);
+    s_queue.clear();
+}
 
 static const char *ordinal(int period)
 {
     static const char *q[] = { "", "1ST", "2ND", "3RD", "4TH" };
     return period >= 1 && period <= 4 ? q[period] : "OT";
 }
+
+static bool is_final(const GameState &g);
 
 static void detect_events(const GameState &p, const GameState &g)
 {
@@ -805,20 +894,59 @@ static void detect_events(const GameState &p, const GameState &g)
         if (d > 0) {
             const char *name = d >= 6 ? "touchdown" : d == 3 ? "field_goal" : d == 1 ? "extra_point"
                              : d == 2 ? (p.phase == 3 ? "two_point" : "safety") : nullptr;
-            if (name) s_queue.push_back({ name, s, "" });
+            if (name) queue_event({ name, s, "" });
         }
         if (g.t[s].timeouts < p.t[s].timeouts && g.period == p.period)
-            s_queue.push_back({ "timeout", s, "" });
+            queue_event({ "timeout", s, "" });
     }
     if (g.period == p.period + 1 && p.period >= 1) {
-        s_queue.push_back({ p.period == 2 ? "halftime" : "end_of_quarter", g.poss ? g.poss - 1 : HOME,
-                            std::string(ordinal(p.period)) + (p.period <= 4 ? " QUARTER" : "") });
+        const char *boundary = p.period == 1 ? "end_q1" : p.period == 2 ? "halftime" :
+                               p.period == 3 ? "end_q3" : "quarter_start";
+        queue_event({ boundary, g.poss ? g.poss - 1 : HOME,
+                      std::string(ordinal(p.period)) + (p.period <= 4 ? " QUARTER" : "") });
     }
+    if (!is_final(p) && is_final(g))
+        queue_event({ g.period > 4 ? "final_overtime" : "final", g.poss ? g.poss - 1 : HOME, "FINAL" });
     if ((g.period == 2 || g.period == 4) && g.period == p.period && p.clock > 120.0f && g.clock <= 120.0f)
-        s_queue.push_back({ "two_minute_warning", g.poss ? g.poss - 1 : HOME, "" });
+        queue_event({ "two_minute_warning", g.poss ? g.poss - 1 : HOME, "" });
     if (g.phase == 4 && p.phase == 4 && p.down > 1 && g.down == 1 && g.poss == p.poss &&
         g.t[0].score == p.t[0].score && g.t[1].score == p.t[1].score && g.poss)
-        s_queue.push_back({ "first_down", g.poss - 1, "" });
+        queue_event({ "first_down", g.poss - 1, "" });
+}
+
+static const char *event_name(Nfl2k5BroadcastEvent event)
+{
+    static const char *names[] = {
+        "game_start", "drive_start", "first_down", "touchdown", "field_goal", "extra_point",
+        "two_point", "turnover", "interception", "fumble", "sack", "penalty", "timeout",
+        "injury", "replay_begin", "replay_end", "end_of_quarter", "halftime", "quarter_start",
+        "game_end"
+    };
+    return event >= NFL2K5_EVENT_GAME_START && event <= NFL2K5_EVENT_GAME_END ? names[event] : nullptr;
+}
+
+extern "C" void nfl2k5_broadcast_event(Nfl2k5BroadcastEvent event, int team)
+{
+    const char *name = event_name(event);
+    if (name) queue_event({ name, team == AWAY ? AWAY : HOME, "" });
+}
+
+extern "C" void nfl2k5_broadcast_player_stat(const Nfl2k5PlayerStat *s, int team)
+{
+    if (!s || !s->player_name) return;
+    Event ev;
+    ev.name = "player_stat";
+    ev.team = team == AWAY ? AWAY : HOME;
+    ev.requested_duration = s->display_seconds > 0 ? s->display_seconds : 5.0;
+    ev.player.kind = s->kind; ev.player.name = s->player_name;
+#define COPY_STAT(F) ev.player.F = s->F
+    COPY_STAT(completions); COPY_STAT(attempts); COPY_STAT(passing_yards); COPY_STAT(passing_touchdowns); COPY_STAT(interceptions);
+    COPY_STAT(carries); COPY_STAT(rushing_yards); COPY_STAT(rushing_touchdowns);
+    COPY_STAT(receptions); COPY_STAT(receiving_yards); COPY_STAT(receiving_touchdowns);
+    COPY_STAT(tackles); COPY_STAT(sacks); COPY_STAT(defensive_interceptions);
+    COPY_STAT(field_goals_made); COPY_STAT(field_goals_attempted); COPY_STAT(longest_field_goal);
+#undef COPY_STAT
+    queue_event(std::move(ev));
 }
 
 /* ======================================================================
@@ -930,6 +1058,22 @@ static std::string down_distance(const GameState &g)
     return buf;
 }
 
+static std::string ball_position(const GameState &g)
+{
+    if (g.phase != 4 || !g.poss || !std::isfinite(g.ball)) return "";
+    /* The down-state distances are centimetres measured from one goal line.
+     * Present them in the conventional FOX "PHI 37" form.  Which side of
+     * midfield owns the yard line follows possession and field direction;
+     * team abbreviations keep the result useful even before the title's
+     * drive-direction flag is mapped. */
+    int yard = (int)lroundf(std::max(0.0f, std::min(100.0f, g.ball / 91.44f)));
+    int shown_yard = yard <= 50 ? yard : 100 - yard;
+    if (shown_yard <= 0) return "GOAL";
+    /* Team-side labelling additionally needs the title's current drive
+     * direction (coin toss and quarter changes); do not guess it. */
+    return "BALL " + std::to_string(shown_yard);
+}
+
 static bool is_final(const GameState &g)
 {
     if (g.t[0].score == g.t[1].score) return false;
@@ -947,15 +1091,44 @@ static std::string var(const Ctx &c, const std::string &name)
         if (k == "name") return t.name;
         if (k == "city") return t.city;
         if (k == "logo") return t.logo;
+        if (k == "record") return t.record;
         return "";
     };
     size_t dot = name.find('.');
     if (dot != std::string::npos) {
         std::string who = name.substr(0, dot), k = name.substr(dot + 1);
+        if (who == "player" && c.ev) {
+            const PlayerStat &p = c.ev->player;
+            if (k == "name") return upper(p.name);
+#define PLAYER_INT(KEY, FIELD) if (k == KEY) return std::to_string(p.FIELD)
+            PLAYER_INT("completions", completions); PLAYER_INT("attempts", attempts);
+            PLAYER_INT("passing_yards", passing_yards); PLAYER_INT("passing_touchdowns", passing_touchdowns);
+            PLAYER_INT("interceptions", interceptions); PLAYER_INT("carries", carries);
+            PLAYER_INT("rushing_yards", rushing_yards); PLAYER_INT("rushing_touchdowns", rushing_touchdowns);
+            PLAYER_INT("receptions", receptions); PLAYER_INT("receiving_yards", receiving_yards);
+            PLAYER_INT("receiving_touchdowns", receiving_touchdowns); PLAYER_INT("tackles", tackles);
+            PLAYER_INT("sacks", sacks); PLAYER_INT("defensive_interceptions", defensive_interceptions);
+            PLAYER_INT("field_goals_made", field_goals_made); PLAYER_INT("field_goals_attempted", field_goals_attempted);
+            PLAYER_INT("longest_field_goal", longest_field_goal);
+#undef PLAYER_INT
+            if (k == "line") {
+                char b[160];
+                switch (p.kind) {
+                case NFL2K5_STAT_QB: snprintf(b, sizeof b, "%d/%d  %d YDS  %d TD  %d INT", p.completions, p.attempts, p.passing_yards, p.passing_touchdowns, p.interceptions); break;
+                case NFL2K5_STAT_RB: snprintf(b, sizeof b, "%d CAR  %d YDS  %d TD", p.carries, p.rushing_yards, p.rushing_touchdowns); break;
+                case NFL2K5_STAT_RECEIVER: snprintf(b, sizeof b, "%d REC  %d YDS  %d TD", p.receptions, p.receiving_yards, p.receiving_touchdowns); break;
+                case NFL2K5_STAT_DEFENSE: snprintf(b, sizeof b, "%d TKL  %d SACK  %d INT", p.tackles, p.sacks, p.defensive_interceptions); break;
+                default: snprintf(b, sizeof b, "%d/%d FG  LONG %d", p.field_goals_made, p.field_goals_attempted, p.longest_field_goal); break;
+                }
+                return b;
+            }
+            return "";
+        }
         int s = who == "away" ? AWAY : who == "home" ? HOME : (who == "team" && c.ev) ? c.ev->team : -1;
         return s >= 0 ? team_var(s, k) : "";
     }
     if (name == "down_distance") return down_distance(g);
+    if (name == "ball_on") return ball_position(g);
     if (name == "quarter") {
         if (g.period == 0) return "";
         if (is_final(g)) return g.period > 4 ? "F/OT" : "FINAL";
@@ -970,6 +1143,7 @@ static std::string var(const Ctx &c, const std::string &name)
     }
     if (name == "ended_quarter") return c.ev ? c.ev->ended_quarter : "";
     if (name == "network") return c.pkg ? c.pkg->root.str("network") : "";
+    if (name == "flag_state") return GetTickCount64() < s_flag_until ? "FLAG" : "";
     return "";
 }
 
@@ -1027,6 +1201,8 @@ static bool shown(const Ctx &c, const std::string &cond)
     if (cond == "not_scrimmage") return g.phase != 4;
     if (cond == "final") return is_final(g);
     if (cond == "not_final") return !is_final(g);
+    if (cond == "flag") return GetTickCount64() < s_flag_until;
+    if (cond == "no_flag") return GetTickCount64() >= s_flag_until;
     return true;
 }
 
@@ -1061,6 +1237,16 @@ static void draw_element(const Ctx &c, const JVal &e, float alpha, float dx, flo
     if (type == "box") {
         float rad = (float)e.num("radius", 0);
         D2D1_ROUNDED_RECT rr = D2D1::RoundedRect(D2D1::RectF(x, y, x + w, y + h), rad, rad);
+        std::string shadow = e.str("shadow");
+        if (!shadow.empty()) {
+            float sox = (float)e.num("shadow_x", 2), soy = (float)e.num("shadow_y", 3);
+            ID2D1SolidColorBrush *sh = nullptr;
+            rt->CreateSolidColorBrush(color(c, shadow, alpha), &sh);
+            if (sh) {
+                D2D1_ROUNDED_RECT sr = D2D1::RoundedRect(D2D1::RectF(x + sox, y + soy, x + w + sox, y + h + soy), rad, rad);
+                rt->FillRoundedRectangle(sr, sh); sh->Release();
+            }
+        }
         ID2D1Brush *brush = nullptr;
         if (const JVal *gr = e.get("gradient")) {
             D2D1_GRADIENT_STOP st[2] = { { 0, color(c, gr->str("top"), alpha) }, { 1, color(c, gr->str("bottom"), alpha) } };
@@ -1082,6 +1268,26 @@ static void draw_element(const Ctx &c, const JVal &e, float alpha, float dx, flo
             ID2D1SolidColorBrush *sb = nullptr;
             rt->CreateSolidColorBrush(color(c, stroke, alpha), &sb);
             if (sb) { rt->DrawRoundedRectangle(rr, sb, (float)e.num("stroke_width", 1)); sb->Release(); }
+        }
+    } else if (type == "polygon") {
+        const JVal *pts = e.get("points");
+        if (pts && pts->a.size() >= 3 && R.d2d) {
+            ID2D1PathGeometry *geo = nullptr;
+            ID2D1GeometrySink *sink = nullptr;
+            if (SUCCEEDED(R.d2d->CreatePathGeometry(&geo)) && SUCCEEDED(geo->Open(&sink))) {
+                auto point = [&](const JVal &p) {
+                    return D2D1::Point2F(x + (p.a.size() > 0 ? (float)p.a[0].n : 0),
+                                        y + (p.a.size() > 1 ? (float)p.a[1].n : 0));
+                };
+                sink->BeginFigure(point(pts->a[0]), D2D1_FIGURE_BEGIN_FILLED);
+                for (size_t i = 1; i < pts->a.size(); i++) sink->AddLine(point(pts->a[i]));
+                sink->EndFigure(D2D1_FIGURE_END_CLOSED);
+                sink->Close(); sink->Release();
+                ID2D1SolidColorBrush *b = nullptr;
+                rt->CreateSolidColorBrush(color(c, e.str("fill", "#FFFFFF"), alpha), &b);
+                if (b) { rt->FillGeometry(geo, b); b->Release(); }
+            }
+            if (geo) geo->Release();
         }
     } else if (type == "text") {
         std::wstring txt = widen(expand(c, e.str("text")));
@@ -1140,6 +1346,71 @@ static void draw_element(const Ctx &c, const JVal &e, float alpha, float dx, flo
     if (clipped) rt->PopAxisAlignedClip();
 }
 
+static float motion_ease(float p, const std::string &name)
+{
+    p = std::max(0.0f, std::min(1.0f, p));
+    if (name == "linear") return p;
+    if (name == "ease_in" || name == "quad_in") return p * p;
+    if (name == "ease_in_out" || name == "smoothstep") return p * p * (3.0f - 2.0f * p);
+    if (name == "cubic_in") return p * p * p;
+    if (name == "cubic_out") { float q = 1.0f - p; return 1.0f - q * q * q; }
+    if (name == "cubic_in_out")
+        return p < 0.5f ? 4.0f * p * p * p : 1.0f - powf(-2.0f * p + 2.0f, 3.0f) / 2.0f;
+    /* FOX elements decelerate quickly and settle without overshoot. */
+    return 1.0f - (1.0f - p) * (1.0f - p);
+}
+
+struct MotionPose {
+    float x = 0, y = 0, sx = 1, sy = 1, rotation = 0, opacity = 1;
+    float crop_x = 1, crop_y = 1;
+};
+
+static float key_value(const JVal &k, const char *name, float fallback)
+{
+    const JVal *v = k.get(name);
+    return v && v->t == JVal::Num ? (float)v->n : fallback;
+}
+
+/* Optional per-layer keyframes are expressed in seconds.  Every omitted
+ * property inherits from the preceding keyframe, keeping motion definitions
+ * compact and editable. */
+static MotionPose motion_pose(const JVal &L, double local)
+{
+    MotionPose out;
+    const JVal *keys = L.get("keyframes");
+    if (!keys || keys->a.empty()) return out;
+    MotionPose prev;
+    double prev_t = keys->a.front().num("time", 0);
+    auto apply = [](MotionPose p, const JVal &k) {
+        p.x = key_value(k, "x", p.x); p.y = key_value(k, "y", p.y);
+        p.sx = key_value(k, "scale_x", key_value(k, "scale", p.sx));
+        p.sy = key_value(k, "scale_y", key_value(k, "scale", p.sy));
+        p.rotation = key_value(k, "rotation", p.rotation);
+        p.opacity = key_value(k, "opacity", p.opacity);
+        p.crop_x = key_value(k, "crop_x", p.crop_x);
+        p.crop_y = key_value(k, "crop_y", p.crop_y);
+        return p;
+    };
+    prev = apply(prev, keys->a.front());
+    if (local <= prev_t) return prev;
+    for (size_t i = 1; i < keys->a.size(); i++) {
+        const JVal &k = keys->a[i];
+        double next_t = k.num("time", prev_t);
+        MotionPose next = apply(prev, k);
+        if (local <= next_t) {
+            float p = next_t > prev_t ? (float)((local - prev_t) / (next_t - prev_t)) : 1.0f;
+            p = motion_ease(p, k.str("ease", "linear"));
+#define LERP_FIELD(F) out.F = prev.F + (next.F - prev.F) * p
+            LERP_FIELD(x); LERP_FIELD(y); LERP_FIELD(sx); LERP_FIELD(sy);
+            LERP_FIELD(rotation); LERP_FIELD(opacity); LERP_FIELD(crop_x); LERP_FIELD(crop_y);
+#undef LERP_FIELD
+            return out;
+        }
+        prev = next; prev_t = next_t;
+    }
+    return prev;
+}
+
 static void draw_layer(const Ctx &c, const JVal &L, double t, double duration)
 {
     double start = L.num("start", 0), end = L.num("end", duration);
@@ -1151,7 +1422,7 @@ static void draw_layer(const Ctx &c, const JVal &L, double t, double duration)
     if (const JVal *en = L.get("enter")) {
         double tm = en->num("time", 0.3);
         float p = (float)std::min(1.0, local / std::max(0.01, tm));
-        p = 1 - (1 - p) * (1 - p);   /* ease out */
+        p = motion_ease(p, en->str("ease", "ease_out"));
         std::string ty = en->str("type", "fade");
         if (ty == "fade") alpha *= p;
         else if (ty == "slide_left") { dx -= (1 - p) * (w + 20); alpha *= std::min(1.0f, p * 1.5f); }
@@ -1176,12 +1447,30 @@ static void draw_layer(const Ctx &c, const JVal &L, double t, double duration)
         if (local < until && fmod(local, period) >= period / 2) return;
         if (local >= until) return;
     }
+    MotionPose pose = motion_pose(L, local);
+    dx += pose.x; dy += pose.y; alpha *= pose.opacity;
+    clip = std::min(clip, pose.crop_x);
+    D2D1_MATRIX_3X2_F old;
+    R.rt->GetTransform(&old);
+    float x = (float)L.num("x", 0) + dx, y = (float)L.num("y", 0) + dy;
+    float ax = x + (float)L.num("anchor_x", 0.5) * w;
+    float ay = y + (float)L.num("anchor_y", 0.5) * h;
+    if (pose.sx != 1 || pose.sy != 1 || pose.rotation != 0) {
+        D2D1_MATRIX_3X2_F local_xf = D2D1::Matrix3x2F::Scale(pose.sx, pose.sy, D2D1::Point2F(ax, ay)) *
+                                      D2D1::Matrix3x2F::Rotation(pose.rotation, D2D1::Point2F(ax, ay));
+        R.rt->SetTransform(local_xf * old);
+    }
+    bool crop_y = pose.crop_y < 1.0f;
+    if (crop_y)
+        R.rt->PushAxisAlignedClip(D2D1::RectF(x - 100, y, x + w + 100, y + h * pose.crop_y), D2D1_ANTIALIAS_MODE_ALIASED);
     /* A layer that lives above the bar (a banner) never shows over it while
      * it slides. */
     bool above = L.num("y", 0) + L.num("h", 0) <= 0.0;
     if (above) R.rt->PushAxisAlignedClip(D2D1::RectF(-100, -1000, 2000, 0), D2D1_ANTIALIAS_MODE_ALIASED);
     draw_element(c, L, alpha, dx, dy, clip);
     if (above) R.rt->PopAxisAlignedClip();
+    if (crop_y) R.rt->PopAxisAlignedClip();
+    R.rt->SetTransform(old);
 }
 
 /* ======================================================================
@@ -1192,7 +1481,10 @@ static std::atomic<DWORD> s_native_tick{ 0 };
 static int s_loaded_pkg = -1;
 static GameState s_prev;
 static bool s_prev_valid;
-static float s_show = 0;            /* fade in/out of the whole bug */
+enum BugLifecycle { BUG_HIDDEN, BUG_FADE_IN, BUG_LIVE, BUG_FADE_OUT };
+static BugLifecycle s_bug_lifecycle = BUG_HIDDEN;
+static float s_show = 0;            /* eased opacity of the whole bug */
+static float s_life_progress = 0;   /* uninterrupted 0..1 transition */
 static double s_last_t;
 static std::string s_last_sig;
 static bool s_game_started, s_outro_played, s_intro_active;
@@ -1201,6 +1493,32 @@ static bool s_test, s_log;
 static std::string s_test_event;
 
 static bool custom_active() { int p = s_sel_pkg; return p > 0 && p < (int)s_pkgs.size(); }
+
+static void update_bug_lifecycle(const JVal *sb, bool wanted, float dt)
+{
+    const JVal *life = sb ? sb->get("lifecycle") : nullptr;
+    const JVal *in = life ? life->get("fade_in") : nullptr;
+    const JVal *out = life ? life->get("fade_out") : nullptr;
+    float in_time = in ? (float)in->num("duration", 0.25) : (float)(sb ? sb->num("fade_time", 0.25) : 0.25);
+    float out_time = out ? (float)out->num("duration", 0.2) : (float)(sb ? sb->num("fade_time", 0.2) : 0.2);
+    if (wanted) {
+        if (s_bug_lifecycle == BUG_HIDDEN || s_bug_lifecycle == BUG_FADE_OUT)
+            s_bug_lifecycle = BUG_FADE_IN;
+        if (s_bug_lifecycle == BUG_FADE_IN) {
+            s_life_progress = std::min(1.0f, s_life_progress + dt / std::max(0.01f, in_time));
+            s_show = motion_ease(s_life_progress, in ? in->str("ease", "cubic_out") : "cubic_out");
+            if (s_life_progress >= 1.0f) { s_bug_lifecycle = BUG_LIVE; s_show = 1.0f; }
+        }
+    } else {
+        if (s_bug_lifecycle == BUG_LIVE || s_bug_lifecycle == BUG_FADE_IN)
+            s_bug_lifecycle = BUG_FADE_OUT;
+        if (s_bug_lifecycle == BUG_FADE_OUT) {
+            s_life_progress = std::max(0.0f, s_life_progress - dt / std::max(0.01f, out_time));
+            s_show = motion_ease(s_life_progress, out ? out->str("ease", "cubic_in") : "cubic_in");
+            if (s_life_progress <= 0.0f) { s_bug_lifecycle = BUG_HIDDEN; s_show = 0.0f; }
+        }
+    }
+}
 
 static void gwrite32(uint32_t va, uint32_t v)
 {
@@ -1313,7 +1631,18 @@ extern "C" int nfl2k5_scorebug_native_hidden(void)
 static std::atomic<int> s_coin_toss{ 0 };
 extern "C" void nfl2k5_presentation_popup(const char *title)
 {
-    if (title && !_strnicmp(title, "Coin Toss", 9)) s_coin_toss = 1;
+    if (!title) return;
+    std::string t = upper(title);
+    if (t.find("COIN TOSS") != std::string::npos) s_coin_toss = 1;
+    int team = s_prev.poss ? s_prev.poss - 1 : HOME;
+    if (t.find("PENALTY") != std::string::npos || t.find("FLAG") != std::string::npos) {
+        s_flag_until = GetTickCount64() + 8000;
+        queue_event({ "penalty", team, "" });
+    } else if (t.find("INTERCEPTION") != std::string::npos) queue_event({ "interception", team, "" });
+    else if (t.find("FUMBLE") != std::string::npos) queue_event({ "fumble", team, "" });
+    else if (t.find("TURNOVER") != std::string::npos) queue_event({ "turnover", team, "" });
+    else if (t.find("INJURY") != std::string::npos) queue_event({ "injury", team, "" });
+    else if (t.find("REPLAY") != std::string::npos) queue_event({ "replay_begin", team, "" });
 }
 
 static bool s_video_then_theme;   /* the open covers the loading show; the theme follows */
@@ -1389,7 +1718,7 @@ static void music_logic(const GameState &g, bool native_on)
         /* A package may define a pregame scorebug entrance.  It is queued
          * after the match state becomes valid, not while a full-screen open
          * video is holding the HUD. */
-        s_queue.push_back({ "pregame", HOME, "" });
+        queue_event({ "pregame", HOME, "" });
         if (s_video_then_theme) {
             /* The open covered the loading show; the pregame starts now. */
             ++s_video.generation;
@@ -1430,6 +1759,7 @@ static int hud_callback(const XboxHudFrame *f, XboxHudImage *img)
         g.t[0].score = 0; g.t[0].timeouts = 3; g.t[0].abbr = "KC";
         g.t[1].score = 0; g.t[1].timeouts = 3; g.t[1].abbr = "NE";
     }
+    publish_broadcast_state(g);
     bool native_on = s_native_visible && GetTickCount() - s_native_tick < 300;
     /* NFL 2K5's play-call overlay has its own four-state controller.  The
      * state is written by sub_00071B50 and consumed every frame by
@@ -1465,7 +1795,7 @@ static int hud_callback(const XboxHudFrame *f, XboxHudImage *img)
     music_logic(g, native_on);
 
     if (g.valid && s_prev_valid && s_sel_anim && custom_active()) detect_events(s_prev, g);
-    if (!g.valid || !s_prev_valid) s_queue.clear();
+    if (!g.valid || !s_prev_valid) clear_events();
     s_prev = g;
     s_prev_valid = g.valid;
 
@@ -1501,43 +1831,49 @@ static int hud_callback(const XboxHudFrame *f, XboxHudImage *img)
     const JVal *sb = pkg.root.get("scorebug");
     if (!sb) return 0;
 
-    if (!s_test_event.empty() && !s_anim_on && s_queue.empty()) {
+    if (!s_test_event.empty() && !s_anim_on && queue_empty()) {
         static double next;
-        if (t >= next) { s_queue.push_back({ s_test_event, HOME, "1ST QUARTER" }); next = t + 7.0; }
+        if (t >= next) { queue_event({ s_test_event, HOME, "1ST QUARTER" }); next = t + 7.0; }
     }
 
-    /* Whole-bug visibility with a short fade. */
-    float fade = (float)sb->num("fade_time", 0.25);
-    float target = (g.valid && native_on) ? 1.0f : 0.0f;
-    if (s_show < target) s_show = std::min(target, s_show + dt / std::max(0.01f, fade));
-    else if (s_show > target) s_show = std::max(target, s_show - dt / std::max(0.01f, fade));
-    if (s_show <= 0.0f) { s_anim_on = false; return 0; }
+    /* Explicit, interruptible HIDDEN -> FADE_IN -> LIVE -> FADE_OUT state.
+     * A transition reverses from its current progress, so a sudden return to
+     * live play never drops or flashes stale game information. */
+    update_bug_lifecycle(sb, g.valid && native_on, dt);
 
     /* Next animation. */
     const JVal *anims = pkg.root.get("animations");
     if (s_anim_on && t - s_anim.t0 > s_anim.duration) s_anim_on = false;
-    while (!s_anim_on && !s_queue.empty()) {
-        Event ev = s_queue.front();
-        s_queue.erase(s_queue.begin());
+    Event ev;
+    while (!s_anim_on && pop_event(ev)) {
         const JVal *def = anims ? anims->get(ev.name.c_str()) : nullptr;
+        if (!def && anims && (ev.name == "end_q1" || ev.name == "end_q3")) def = anims->get("end_of_quarter");
+        if (!def && anims && (ev.name == "final" || ev.name == "final_overtime")) def = anims->get("game_end");
         if (!def) continue;
-        s_anim.ev = ev; s_anim.def = def; s_anim.t0 = t; s_anim.duration = def->num("duration", 3);
+        s_anim.ev = ev; s_anim.def = def; s_anim.t0 = t;
+        s_anim.duration = ev.requested_duration > 0 ? ev.requested_duration : def->num("duration", 3);
         s_anim_on = true;
         fprintf(stderr, "[PRES] animation %s (%s)\n", ev.name.c_str(), ev.team == AWAY ? "away" : "home");
     }
+    bool fullscreen = s_anim_on && s_anim.def && s_anim.def->flag("fullscreen", false);
+    if (s_show <= 0.0f && !fullscreen) return 0;
 
     /* Layout: the bug is canvas.width units across placement.width of the
      * game picture, centred on placement.center_*; the image adds room above
      * for timeouts and banners. */
-    const JVal *cv = sb->get("canvas"), *pl = sb->get("placement");
+    const JVal *cv = fullscreen ? s_anim.def->get("canvas") : sb->get("canvas");
+    const JVal *pl = sb->get("placement");
     float cw = cv ? (float)cv->num("width", 1000) : 1000, ch = cv ? (float)cv->num("height", 56) : 56;
-    float top = cv ? (float)cv->num("overflow_top", 70) : 70;
-    float u = f->game_w * (pl ? (float)pl->num("width", 0.92) : 0.92f) / cw;
-    float cx = f->game_x + f->game_w * (pl ? (float)pl->num("center_x", 0.5) : 0.5f);
-    float cy = f->game_y + f->game_h * (pl ? (float)pl->num("center_y", 0.915) : 0.915f);
-    const int pad = 4;
-    int W = (int)ceilf(cw * u) + pad * 2, H = (int)ceilf((ch + top) * u) + pad * 2;
-    int X = (int)floorf(cx - cw * u / 2) - pad, Y = (int)floorf(cy - ch * u / 2 - top * u) - pad;
+    float top = fullscreen ? 0.0f : cv ? (float)cv->num("overflow_top", 70) : 70;
+    float u = fullscreen ? std::min(f->game_w / cw, f->game_h / ch)
+                         : f->game_w * (pl ? (float)pl->num("width", 0.92) : 0.92f) / cw;
+    float cx = f->game_x + f->game_w * (fullscreen ? 0.5f : pl ? (float)pl->num("center_x", 0.5) : 0.5f);
+    float cy = f->game_y + f->game_h * (fullscreen ? 0.5f : pl ? (float)pl->num("center_y", 0.915) : 0.915f);
+    const int pad = fullscreen ? 0 : 4;
+    int W = fullscreen ? f->game_w : (int)ceilf(cw * u) + pad * 2;
+    int H = fullscreen ? f->game_h : (int)ceilf((ch + top) * u) + pad * 2;
+    int X = fullscreen ? f->game_x : (int)floorf(cx - cw * u / 2) - pad;
+    int Y = fullscreen ? f->game_y : (int)floorf(cy - ch * u / 2 - top * u) - pad;
     if (W < 8 || H < 8 || W > 16384 || H > 4096) return 0;
 
     Ctx c;
@@ -1545,7 +1881,7 @@ static int hud_callback(const XboxHudFrame *f, XboxHudImage *img)
     c.pkg = &pkg;
     c.team[AWAY] = team_info(g.t[AWAY].abbr);
     c.team[HOME] = team_info(g.t[HOME].abbr);
-    c.opacity = s_show;
+    c.opacity = fullscreen ? 1.0f : s_show;
 
     /* Redraw only when something visible changed. */
     char sigbuf[160];
@@ -1561,9 +1897,29 @@ static int hud_callback(const XboxHudFrame *f, XboxHudImage *img)
         if (!R.rt) return 0;
         R.rt->BeginDraw();
         R.rt->Clear(D2D1::ColorF(0, 0, 0, 0));
-        R.rt->SetTransform(D2D1::Matrix3x2F::Scale(u, u) * D2D1::Matrix3x2F::Translation((float)pad, (float)pad + top * u));
-        if (const JVal *els = sb->get("elements"))
-            for (auto &e : els->a) draw_element(c, e, 1.0f, 0, 0, 1.0f);
+        float life_y = 0, life_scale = 1;
+        if (const JVal *life = sb->get("lifecycle")) {
+            const JVal *def = life->get(s_bug_lifecycle == BUG_FADE_OUT ? "fade_out" : "fade_in");
+            if (def) {
+                life_y = (float)def->num("from_y", 0) * (1.0f - s_life_progress);
+                float from_scale = (float)def->num("from_scale", 1);
+                life_scale = from_scale + (1.0f - from_scale) * s_life_progress;
+            }
+        }
+        D2D1_MATRIX_3X2_F base;
+        if (fullscreen) {
+            float ox = (W - cw * u) * 0.5f, oy = (H - ch * u) * 0.5f;
+            base = D2D1::Matrix3x2F::Scale(u, u) * D2D1::Matrix3x2F::Translation(ox, oy);
+        } else {
+            base = D2D1::Matrix3x2F::Scale(u, u) *
+                D2D1::Matrix3x2F::Translation((float)pad, (float)pad + (top + life_y) * u);
+        }
+        if (!fullscreen && life_scale != 1.0f)
+            base = D2D1::Matrix3x2F::Scale(life_scale, life_scale, D2D1::Point2F(cw * 0.5f, ch * 0.5f)) * base;
+        R.rt->SetTransform(base);
+        if (!fullscreen || !s_anim.def->flag("hide_scorebug", true))
+            if (const JVal *els = sb->get("elements"))
+                for (auto &e : els->a) draw_element(c, e, 1.0f, 0, 0, 1.0f);
         if (s_anim_on && s_anim.def) {
             Ctx ac = c;
             ac.ev = &s_anim.ev;
