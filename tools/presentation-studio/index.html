@@ -55,6 +55,25 @@ main { position: relative; overflow: hidden; background: #0a0d12; }
 #sel .h[data-h=se] { left: 100%; top: 100%; cursor: nwse-resize; } #sel .h[data-h=s] { left: 50%; top: 100%; cursor: ns-resize; }
 #sel .h[data-h=sw] { left: 0; top: 100%; cursor: nesw-resize; } #sel .h[data-h=w] { left: 0; top: 50%; cursor: ew-resize; }
 #sel .tag { position: absolute; left: -2px; top: -26px; background: var(--sel); color: #000; font: 600 14px/22px Consolas, monospace; padding: 0 6px; white-space: nowrap; }
+#code { position: absolute; inset: 0; display: none; grid-template-columns: 220px 1fr; background: var(--bg); }
+body.codeview #code { display: grid; }
+body.codeview #viewport, body.codeview #hint { display: none; }
+#files { overflow: auto; border-right: 1px solid var(--line); padding: 6px 0; }
+#files div { padding: 3px 10px; cursor: pointer; white-space: nowrap; font-family: Consolas, monospace; font-size: 12px; }
+#files div:hover { background: #22303f; }
+#files div.sel { background: #12304f; color: #fff; }
+#files div.bin { color: var(--muted); cursor: default; }
+#editorWrap { display: grid; grid-template-rows: 34px 1fr; min-width: 0; }
+#codeBar { display: flex; align-items: center; gap: 6px; padding: 0 8px; border-bottom: 1px solid var(--line); font-family: Consolas, monospace; }
+#codeBar .spacer { flex: 1; }
+#codeText { width: 100%; height: 100%; resize: none; border: 0; border-radius: 0; padding: 10px 12px; tab-size: 2;
+            font: 13px/1.5 Consolas, "Cascadia Mono", monospace; background: #0b1016; white-space: pre; }
+#codeText.dirty { box-shadow: inset 3px 0 0 var(--sel); }
+dialog { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 8px; width: 520px; padding: 16px 18px; }
+dialog::backdrop { background: #0008; }
+dialog h3 { margin: 0 0 8px; font-size: 15px; }
+dialog p { color: var(--muted); font-size: 12px; margin: 6px 0; }
+dialog .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
 #hint { position: absolute; left: 10px; bottom: 8px; color: var(--muted); font-size: 12px; pointer-events: none; }
 </style>
 </head>
@@ -62,6 +81,8 @@ main { position: relative; overflow: hidden; background: #0a0d12; }
 <header>
   <h1>Presentation Studio</h1>
   <select id="pkg" style="width:240px"></select>
+  <button id="importBtn">Import HTML…</button>
+  <button id="viewBtn">Code view</button>
   <button id="reload">Reload page</button>
   <button id="save">Save layout (Ctrl+S)</button>
   <button id="undo">Undo (Ctrl+Z)</button>
@@ -108,6 +129,14 @@ main { position: relative; overflow: hidden; background: #0a0d12; }
       </div>
     </div>
   </div>
+  <div id="code">
+    <div id="files"></div>
+    <div id="editorWrap">
+      <div id="codeBar"><span id="codeName">choose a file</span><span class="spacer"></span>
+        <button id="codeSave">Save file (Ctrl+S)</button><button id="codeRevert">Revert</button></div>
+      <textarea id="codeText" spellcheck="false" wrap="off" disabled></textarea>
+    </div>
+  </div>
   <div id="hint">Click to select. Drag to move, drag a handle or edge to resize (Shift keeps proportions). Arrows nudge 1 px, Shift+arrows 10 px. Esc deselects.</div>
 </main>
 
@@ -141,6 +170,19 @@ main { position: relative; overflow: hidden; background: #0a0d12; }
   <p style="color:var(--muted);font-size:12px">Move / scale: drag the reference, mouse wheel scales it. Lock prevents accidental changes.</p>
 </aside>
 
+<dialog id="importDlg">
+  <h3>Import HTML as a presentation package</h3>
+  <p>Choose a folder holding an HTML page with its CSS, JavaScript and images, or choose the files directly. They are copied into a new folder under mods/presentations; the originals are not changed.</p>
+  <label>Folder</label><input type="file" id="impFolder" webkitdirectory multiple>
+  <label>…or individual files</label><input type="file" id="impFiles" multiple accept=".html,.htm,.css,.js,.json,.png,.jpg,.jpeg,.gif,.svg,.webp,.ttf,.otf,.woff,.woff2,.mp4,.webm,.mp3">
+  <label>Entry page</label><select id="impEntry"></select>
+  <label>Package name</label><input id="impName" placeholder="My Scorebug">
+  <label class="check"><input type="checkbox" id="impTransparent" checked> Make the page background transparent (the game shows through)</label>
+  <p id="impInfo"></p>
+  <p>The entry page gets two additions so it works in the game and here: the Presentation API runtime (game data and events, <code>NFL2K5.onState</code> / <code>NFL2K5.onEvent</code>) and <code>layout.css</code> for visual edits. Its canvas is 1920×1080.</p>
+  <div class="actions"><button id="impCancel">Cancel</button><button id="impGo">Import</button></div>
+</dialog>
+
 <script>
 'use strict';
 const $ = id => document.getElementById(id);
@@ -167,20 +209,23 @@ function toCanvas(e) {
 }
 
 /* ---------- packages ---------- */
-async function loadPackages() {
+async function loadPackages(want) {
   try {
-    const list = await (await fetch('/api/packages')).json();
+    const list = [].concat(await (await fetch('/api/packages')).json());
     const sel = $('pkg');
     sel.innerHTML = '';
     list.forEach((p, i) => sel.add(new Option(p.name + '  (' + p.folder + ')', i)));
     sel.packages = list;
-    if (list.length) openPackage(list[0]); else msg('No HTML packages (mod.json "type": "html") in mods/presentations');
+    const i = Math.max(0, list.findIndex(p => p.folder === want));
+    sel.value = i;
+    if (list.length) openPackage(list[i]); else msg('No HTML packages (mod.json "type": "html") in mods/presentations');
   } catch (e) { msg('Open this page through serve.ps1 (http://127.0.0.1:8735/...)'); }
 }
 $('pkg').onchange = () => openPackage($('pkg').packages[$('pkg').value]);
 $('reload').onclick = () => pkg && openPackage(pkg, true);
 
 async function openPackage(p, keepEdits) {
+  if (!keepEdits && pkg !== p) { codeFile = null; codeOrig = ''; if (document.body.classList.contains('codeview')) setTimeout(loadFileList); }
   pkg = p;
   select(null);
   if (!keepEdits) { edits = new Map(); history = []; }
@@ -206,15 +251,31 @@ async function openPackage(p, keepEdits) {
 }
 
 /* ---------- edits (saved as layout.css) ---------- */
+/* The CSS selector an edit is saved under. It must match exactly this one
+ * element: a data-element name, an id, or a unique class; otherwise a
+ * child path anchored at the nearest uniquely named ancestor or <body>. */
+function uniqueName(n) {
+  if (n.dataset && n.dataset.element) return `[data-element="${n.dataset.element}"]`;
+  if (n.id && /^[A-Za-z][\w-]*$/.test(n.id)) return '#' + n.id;
+  for (const c of n.classList) {
+    if (!/^[A-Za-z_][\w-]*$/.test(c)) continue;
+    const sel = `${n.tagName.toLowerCase()}.${c}`;
+    if (doc.querySelectorAll(sel).length === 1) return sel;
+  }
+  return null;
+}
 function keyOf(el) {
-  if (el.dataset && el.dataset.element) return `[data-element="${el.dataset.element}"]`;
-  if (el.id) return '#' + el.id;
+  const own = uniqueName(el);
+  if (own) return own;
   const parts = [];
-  for (let n = el; n && n !== doc.body; n = n.parentElement) {
-    if (n.id) { parts.unshift('#' + n.id); break; }
+  let n = el;
+  for (; n && n !== doc.body; n = n.parentElement) {
+    const name = n !== el && uniqueName(n);
+    if (name) { parts.unshift(name); break; }
     const i = Array.prototype.indexOf.call(n.parentElement.children, n) + 1;
     parts.unshift(`${n.tagName.toLowerCase()}:nth-child(${i})`);
   }
+  if (n === doc.body || !n) parts.unshift('body');
   return parts.join(' > ');
 }
 function parseLayout(css) {
@@ -293,9 +354,16 @@ function buildList(onlyHighlight) {
   if (!doc) return;
   if (!onlyHighlight) {
     list.innerHTML = '';
-    doc.querySelectorAll('[data-element]').forEach(el => {
+    /* Pages without data-element names (imported HTML): list elements with
+     * an id or class instead, and let a click select any element. */
+    let els = [...doc.querySelectorAll('[data-element]')];
+    const named = els.length > 0;
+    if (!named) els = [...doc.body.querySelectorAll('[id], [class]')].filter(e => !['SCRIPT', 'STYLE', 'LINK'].includes(e.tagName)).slice(0, 300);
+    $('anyEl').checked = !named;
+    els.forEach(el => {
       const d = document.createElement('div');
-      d.textContent = el.dataset.element; d.el = el;
+      d.textContent = named ? el.dataset.element : (el.tagName.toLowerCase() + (el.id ? '#' + el.id : '') + (el.classList.length ? '.' + [...el.classList].join('.') : ''));
+      d.el = el;
       d.onclick = () => select(el);
       list.appendChild(d);
     });
@@ -509,6 +577,127 @@ overlay.addEventListener('wheel', e => {
   ref.x = p.x - (p.x - ref.x) * k; ref.y = p.y - (p.y - ref.y) * k; ref.scale *= k;
   drawRef();
 }, { passive: false });
+
+/* ---------- import HTML ---------- */
+let impList = [];   /* { path, file } */
+$('importBtn').onclick = () => { impList = []; $('impFolder').value = ''; $('impFiles').value = ''; impRefresh(); $('importDlg').showModal(); };
+$('impCancel').onclick = () => $('importDlg').close();
+function impTake(files, fromFolder) {
+  impList = [...files].map(f => {
+    let p = fromFolder && f.webkitRelativePath ? f.webkitRelativePath.split('/').slice(1).join('/') : f.name;
+    return { path: p, file: f };
+  }).filter(x => x.path && !x.path.split('/').some(s => s.startsWith('.')));
+  if (fromFolder && files.length && files[0].webkitRelativePath) $('impName').value = files[0].webkitRelativePath.split('/')[0];
+  impRefresh();
+}
+$('impFolder').onchange = () => impTake($('impFolder').files, true);
+$('impFiles').onchange = () => impTake($('impFiles').files, false);
+function impRefresh() {
+  const pages = impList.filter(x => /\.html?$/i.test(x.path)).sort((a, b) => a.path.split('/').length - b.path.split('/').length || a.path.localeCompare(b.path));
+  const sel = $('impEntry'); sel.innerHTML = '';
+  pages.forEach(p => sel.add(new Option(p.path, p.path)));
+  const idx = pages.findIndex(p => /(^|\/)(index|scorebug)\.html?$/i.test(p.path));
+  if (idx >= 0) sel.selectedIndex = idx;
+  if (!$('impName').value && pages.length) $('impName').value = pages[0].path.replace(/\.html?$/i, '').split('/').pop();
+  $('impInfo').textContent = impList.length ? `${impList.length} file(s), ${pages.length} HTML page(s)` : '';
+  $('impGo').disabled = !pages.length;
+}
+/* Additions to the entry page: API runtime, layout.css, transparency. Each
+ * is skipped when the page already has it. */
+function prepareEntry(html, entryPath, transparent) {
+  const up = '../'.repeat(entryPath.split('/').length - 1);
+  const headAdd = [];
+  if (!/layout\.css/.test(html)) headAdd.push(`<link rel="stylesheet" href="${up}layout.css">`);
+  if (transparent && !/nfl2k5-transparent/.test(html)) headAdd.push('<style id="nfl2k5-transparent">html, body { background: transparent !important; }</style>');
+  if (headAdd.length) {
+    const block = '<!-- added by Presentation Studio -->\n' + headAdd.join('\n') + '\n';
+    html = /<\/head>/i.test(html) ? html.replace(/<\/head>/i, block + '</head>') : block + html;
+  }
+  if (!/nfl2k5-presentation\.js/.test(html)) {
+    const tag = `<script src="${up}../_runtime/nfl2k5-presentation.js"><\/script>\n`;   /* <\/ : not the end of this block */
+    const m = html.search(/<script\b/i);
+    html = m >= 0 ? html.slice(0, m) + tag + html.slice(m) : (/<\/body>/i.test(html) ? html.replace(/<\/body>/i, tag + '</body>') : html + '\n' + tag);
+  }
+  return html;
+}
+$('impGo').onclick = async () => {
+  const name = $('impName').value.trim().replace(/[\\/:*?"<>|]/g, '').replace(/^[._]+/, '');
+  const entry = $('impEntry').value;
+  if (!name || !entry) return;
+  const mod = { schema: 1, id: name.toLowerCase().replace(/[^a-z0-9]+/g, '_'), name, type: 'html', version: '0.1.0', author: '',
+                description: 'Imported HTML presentation.', enabled: true, entry,
+                canvas: { width: 1920, height: 1080, fit: 'broadcast_safe_16x9' }, dependencies: [], assets: {},
+                compatibility: { game: 'NFL2K5-PC', presentation_api: 1 } };
+  const folder = name;
+  let r = await fetch(`/api/create-package?name=${encodeURIComponent(folder)}`, { method: 'POST', body: JSON.stringify(mod, null, 2) + '\n' });
+  if (!r.ok) { alert('Import failed: ' + await r.text()); return; }
+  for (const x of impList) {
+    let body = x.file;
+    if (x.path === entry) body = prepareEntry(await x.file.text(), entry, $('impTransparent').checked);
+    if (/^mod\.json$/i.test(x.path)) continue;       /* ours replaces any shipped one */
+    r = await fetch(`/api/write?package=${encodeURIComponent(folder)}&path=${encodeURIComponent(x.path)}`, { method: 'POST', body });
+    if (!r.ok) msg(`Skipped ${x.path}: ${await r.text()}`);
+  }
+  if (!impList.some(x => x.path === 'layout.css'))
+    await fetch(`/api/write?package=${encodeURIComponent(folder)}&path=layout.css`, { method: 'POST', body: '/* Written by Presentation Studio. */\n' });
+  $('importDlg').close();
+  await loadPackages(folder);
+  msg(`Imported ${impList.length} file(s) into mods/presentations/${folder}`);
+};
+
+/* ---------- code view ---------- */
+const TEXT = /\.(html?|css|js|json|txt|md|svg)$/i;
+let codeFile = null, codeOrig = '';
+$('viewBtn').onclick = () => {
+  const on = !document.body.classList.contains('codeview');
+  document.body.classList.toggle('codeview', on);
+  $('viewBtn').textContent = on ? 'Canvas view' : 'Code view';
+  if (on) loadFileList(); else { fit(); }
+};
+async function loadFileList() {
+  if (!pkg) return;
+  const files = await (await fetch(`/api/files?package=${encodeURIComponent(pkg.folder)}`)).json();
+  const box = $('files'); box.innerHTML = '';
+  [].concat(files).sort().forEach(f => {
+    const d = document.createElement('div');
+    d.textContent = f; d.className = TEXT.test(f) ? '' : 'bin';
+    if (TEXT.test(f)) d.onclick = () => openFile(f);
+    if (f === codeFile) d.classList.add('sel');
+    box.appendChild(d);
+  });
+  if (!codeFile) { const first = [].concat(files).find(f => f === (pkg.entry || 'index.html')) || [].concat(files).find(f => TEXT.test(f)); if (first) openFile(first); }
+}
+async function openFile(f) {
+  if (codeFile && $('codeText').value !== codeOrig && !confirm(`Discard unsaved changes to ${codeFile}?`)) return;
+  const r = await fetch(`/mods/presentations/${pkg.folder}/${f}`, { cache: 'no-store' });
+  codeOrig = r.ok ? await r.text() : '';
+  codeFile = f;
+  const t = $('codeText'); t.value = codeOrig; t.disabled = false; t.classList.remove('dirty');
+  $('codeName').textContent = `${pkg.folder}/${f}`;
+  [...$('files').children].forEach(d => d.classList.toggle('sel', d.textContent === f));
+}
+async function saveFile() {
+  if (!codeFile) return;
+  const text = $('codeText').value;
+  const r = await fetch(`/api/write?package=${encodeURIComponent(pkg.folder)}&path=${encodeURIComponent(codeFile)}`, { method: 'POST', body: text });
+  if (!r.ok) { msg('Save failed: ' + await r.text()); return; }
+  codeOrig = text; $('codeText').classList.remove('dirty');
+  if (codeFile === 'layout.css') { edits = new Map(); parseLayout(text); }
+  msg(`Saved ${codeFile}; page reloaded`);
+  openPackage(pkg, true);
+}
+$('codeSave').onclick = saveFile;
+$('codeRevert').onclick = () => { $('codeText').value = codeOrig; $('codeText').classList.remove('dirty'); };
+$('codeText').addEventListener('input', () => $('codeText').classList.toggle('dirty', $('codeText').value !== codeOrig));
+$('codeText').addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); saveFile(); return; }
+  if (e.key === 'Tab') {               /* indent instead of leaving the editor */
+    e.preventDefault();
+    const t = e.target, s = t.selectionStart;
+    t.setRangeText('  ', s, t.selectionEnd, 'end');
+    t.dispatchEvent(new Event('input'));
+  }
+});
 
 /* Animations move elements; keep the selection box on them. */
 (function track() { if (selected && !drag) drawBoxes(); requestAnimationFrame(track); })();

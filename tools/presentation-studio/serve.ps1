@@ -5,8 +5,9 @@
 #
 #   powershell -ExecutionPolicy Bypass -File tools\presentation-studio\serve.ps1
 #
-# Writes are limited to mods\presentations\<package>\layout.css and
-# mods\presentations\<package>\assets\<file>. Nothing else can be written.
+# Writes stay inside mods\presentations\<package>\ (an HTML package: a folder
+# with mod.json "type": "html"), only for web file types, never outside it.
+# New packages are created by importing HTML.
 param([int]$Port = 8735, [switch]$NoBrowser)
 $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
@@ -33,6 +34,16 @@ function PackageDir([string]$name) {
     $d = Join-Path $presentations $name
     if ((Test-Path -LiteralPath (Join-Path $d 'mod.json'))) { return $d }
     return $null
+}
+# A file path inside a package: relative, no '..', web file type only.
+function PackageFile([string]$dir, [string]$rel) {
+    if (-not $dir -or -not $rel) { return $null }
+    $rel = $rel.Replace('/', '\').TrimStart('\')
+    if ($rel -match '(^|\\)\.\.(\\|$)' -or $rel -match ':') { return $null }
+    if (-not $mime.ContainsKey([IO.Path]::GetExtension($rel).ToLower())) { return $null }
+    $full = [IO.Path]::GetFullPath((Join-Path $dir $rel))
+    if (-not $full.StartsWith($dir + '\', [StringComparison]::OrdinalIgnoreCase)) { return $null }
+    return $full
 }
 function ReadBody($ctx) {
     $ms = New-Object IO.MemoryStream
@@ -81,6 +92,37 @@ while ($listener.IsListening) {
             New-Item -ItemType Directory -Force -Path $assets | Out-Null
             [IO.File]::WriteAllBytes((Join-Path $assets $name), (ReadBody $ctx))
             SendText $ctx 200 "assets/$name"
+            continue
+        }
+        if ($path -eq '/api/files') {
+            $d = PackageDir $q['package']
+            if (-not $d) { SendText $ctx 400 'unknown package'; continue }
+            $files = @(Get-ChildItem -LiteralPath $d -Recurse -File | ForEach-Object {
+                $_.FullName.Substring($d.Length + 1).Replace('\', '/') })
+            SendText $ctx 200 (ConvertTo-Json $files) 'application/json; charset=utf-8'
+            continue
+        }
+        if ($path -eq '/api/write' -and $ctx.Request.HttpMethod -eq 'POST') {
+            $d = PackageDir $q['package']
+            $f = PackageFile $d $q['path']
+            if (-not $f) { SendText $ctx 400 'bad path'; continue }
+            New-Item -ItemType Directory -Force -Path (Split-Path $f) | Out-Null
+            [IO.File]::WriteAllBytes($f, (ReadBody $ctx))
+            SendText $ctx 200 'saved'
+            continue
+        }
+        if ($path -eq '/api/create-package' -and $ctx.Request.HttpMethod -eq 'POST') {
+            # Body: mod.json text. The folder must not exist yet.
+            $name = [string]$q['name']
+            if (-not $name -or $name -match '[\\/:*?"<>|]' -or $name -match '^[._]' -or $name.Length -gt 64) { SendText $ctx 400 'bad package name'; continue }
+            $d = Join-Path $presentations $name
+            if (Test-Path -LiteralPath $d) { SendText $ctx 409 'a package with that folder name already exists'; continue }
+            $body = ReadBody $ctx
+            try { $j = [Text.Encoding]::UTF8.GetString($body) | ConvertFrom-Json } catch { SendText $ctx 400 'mod.json is not valid JSON'; continue }
+            if ($j.type -ne 'html') { SendText $ctx 400 'mod.json type must be html'; continue }
+            New-Item -ItemType Directory -Path $d | Out-Null
+            [IO.File]::WriteAllBytes((Join-Path $d 'mod.json'), $body)
+            SendText $ctx 200 $name
             continue
         }
         # Static files from the project folder.
