@@ -2509,7 +2509,9 @@ int main(int argc, char **argv)
     if (!validate_only && getenv("RECOMP_AC97_READY")) {
         g_apu_state = mcpx_apu_init_standalone((uint8_t *)(uintptr_t)xbox_GetMemoryOffset());
         { extern int (*g_xbox_apu_irq_line)(void); extern int mcpx_apu_irq_line(void);
-          g_xbox_apu_irq_line = mcpx_apu_irq_line; }   /* deliver APU interrupts */
+          g_xbox_apu_irq_line = mcpx_apu_irq_line; }
+        { extern void (*g_apu_irq_wake)(void); extern void xbox_kernel_irq_wake(void);
+          g_apu_irq_wake = xbox_kernel_irq_wake; }   /* ...without the 10 ms poll delay */   /* deliver APU interrupts */
         if (!g_apu_state || !AddVectoredExceptionHandler(1, audio_mmio)) {
             fprintf(stderr, "[BOOT] Failed to initialize APU compatibility.\n");
             return 3;
@@ -3105,11 +3107,50 @@ void nfl2k5_diag_music(int what, uint32_t handle_ptr, uint32_t esp_)
     int k, shown = 0;
     if (on < 0) on = getenv("RECOMP_MUSIC_LOG") != NULL;
     if (!on) return;
-    fprintf(stderr, "[MUSIC] %s handle %d t=%lu stack:", what ? "play" : "stop",
-            (int)*(const uint32_t *)(m + handle_ptr), GetTickCount());
+    fprintf(stderr, "[MUSIC] %s handle %d dsflag468CD0=%u t=%lu stack:", what ? "play" : "stop",
+            (int)*(const uint32_t *)(m + handle_ptr), *(const uint32_t *)(m + 0x468CD0u), GetTickCount());
     for (k = 0; k < 64 && shown < 10; k++) {
         uint32_t w = *(const uint32_t *)(m + esp_ + k * 4u);
         if (w >= 0x00011000u && w < 0x00480000u) { fprintf(stderr, " %08X", w); shown++; }
     }
     fprintf(stderr, "\n");
+}
+
+/* 2026-10-01: sub_00040870 per channel record (esi): [esi] and [esi-4] are
+ * the positions it compares with the track cursor (0xA6D8E0 via
+ * sub_0003D3F0); delta is what it computed. end = the stop branch. */
+static void diag_music_rec(const char *what, uint32_t mgr, uint32_t rec, uint32_t delta, uint32_t chan)
+{
+    static int on = -1;
+    static DWORD last_fill;
+    const uint8_t *m = (const uint8_t *)xbox_GetMemoryOffset();
+    if (on < 0) on = getenv("RECOMP_MUSIC_LOG") != NULL;
+    if (!on) return;
+    if (what[0] == 'f' && GetTickCount() - last_fill < 500) return;
+    if (what[0] == 'f') last_fill = GetTickCount();
+    fprintf(stderr, "[MUSIC] %s mgr=%08X chan=%u delta=%d rec[-12..+12]=%d %d %d %d %d %d %d t=%lu\n", what, mgr, chan, (int)delta,
+            *(const int32_t *)(m + rec - 12), *(const int32_t *)(m + rec - 8), *(const int32_t *)(m + rec - 4),
+            *(const int32_t *)(m + rec), *(const int32_t *)(m + rec + 4), *(const int32_t *)(m + rec + 8),
+            *(const int32_t *)(m + rec + 12), GetTickCount());
+}
+void nfl2k5_diag_music_end(uint32_t mgr, uint32_t rec, uint32_t delta, uint32_t chan) { diag_music_rec("end", mgr, rec, delta, chan); }
+void nfl2k5_diag_music_fill(uint32_t mgr, uint32_t rec, uint32_t delta, uint32_t chan) { diag_music_rec("fill", mgr, rec, delta, chan); }
+
+/* 2026-10-01: sub_0003DBC0's track cursor check: cursor >= limit leaves the
+ * track position at 0 (= finished). Logs every rejection and one sample a
+ * second per slot. */
+void nfl2k5_diag_music_cursor(uint32_t slot_off, uint32_t cursor, uint32_t limit)
+{
+    static int on = -1;
+    static DWORD last[16];
+    const uint8_t *m = (const uint8_t *)xbox_GetMemoryOffset();
+    unsigned slot = slot_off / 192u;
+    if (on < 0) on = getenv("RECOMP_MUSIC_LOG") != NULL;
+    if (!on) return;
+    if (cursor < limit && slot < 16 && GetTickCount() - last[slot] < (slot < 2 ? 250u : 1000u)) return;
+    if (slot < 16) last[slot] = GetTickCount();
+    fprintf(stderr, "[MUSIC] cursor slot %u cursor %u limit %u %s playing %d state %d handle %d t=%lu\n", slot, cursor, limit,
+            cursor < limit ? "ok" : "REJECTED",
+            *(const int32_t *)(m + slot_off + 0xA6D844u), *(const int32_t *)(m + slot_off + 0xA6D85Cu),
+            *(const int32_t *)(m + slot_off + 0xA6D834u), GetTickCount());
 }

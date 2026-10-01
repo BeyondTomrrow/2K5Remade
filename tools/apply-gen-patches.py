@@ -283,6 +283,34 @@ PATCHES = [
 """),
     ("DIAG_MUSICSTOP", "sub_0003CEE0", "loc_0003CEE0: ;", "after", """    { extern void nfl2k5_diag_music(int what, uint32_t handle_ptr, uint32_t esp_); nfl2k5_diag_music(0, ecx, esp); }
 """),
+    # The music manager's end-of-track test (sub_00040870): log the values it
+    # compared when it decides a track has finished. RECOMP_MUSIC_LOG=1.
+    ("DIAG_MUSICEND", "sub_00040870", "loc_000408D8: ;", "after", """    { extern void nfl2k5_diag_music_end(uint32_t mgr, uint32_t rec, uint32_t delta, uint32_t chan); nfl2k5_diag_music_end(ebx, esi, ecx, ebp); }
+"""),
+    ("DIAG_MUSICFILL", "sub_00040870", "loc_000408DF: ;", "after", """    { extern void nfl2k5_diag_music_fill(uint32_t mgr, uint32_t rec, uint32_t delta, uint32_t chan); nfl2k5_diag_music_fill(ebx, esi, ecx, ebp); }
+"""),
+    # Track cursor read in the music state machine (sub_0003DBC0): the play
+    # cursor DirectSound returned and the limit it must be under, else the
+    # track position stays 0. RECOMP_MUSIC_LOG=1.
+    ("DIAG_MUSICCURSOR", "sub_0003DBC0", "loc_0003DD4F: ;", "after", """    { extern void nfl2k5_diag_music_cursor(uint32_t slot_off, uint32_t cursor, uint32_t limit); nfl2k5_diag_music_cursor(ebx, MEM32(esp + 0x84), MEM32(esp + 0x24)); }
+"""),
+    # MUSIC TRACK POSITION RACE (2026-10-01). Each tick the music state
+    # machine zeroes a track's position (0xA6D8E0), asks DirectSound for the
+    # play cursor, then stores it. The music manager reads that field from
+    # another guest thread; on the single-core Xbox it practically never saw
+    # the transient 0, but with host threads in parallel it saw it all the
+    # time, took "cursor 0 behind the write cursor" as the end of the song and
+    # skipped to the next one (menu music fast-forwarding, worse while moving
+    # through menus; announcer streams cut short). Keep the old value during
+    # the update and store the result once.
+    ("MUSICPOS_KEEP", "sub_0003DBC0", "MEM32(ebx + 0xA6D8E0) = 0;", "before", """    uint32_t nfl2k5_pos_old = MEM32(ebx + 0xA6D8E0); int nfl2k5_pos_set = 0;
+"""),
+    ("MUSICPOS_RESTORE", "sub_0003DBC0", "MEM32(ebx + 0xA6D8E0) = 0;", "after", """    MEM32(ebx + 0xA6D8E0) = nfl2k5_pos_old;   /* MUSICPOS: no transient 0 */
+"""),
+    ("MUSICPOS_SET", "sub_0003DBC0", "MEM32(ebx + 0xA6D8E0) = eax;", "after", """    nfl2k5_pos_set = 1;
+"""),
+    ("MUSICPOS_FINAL", "sub_0003DBC0", "loc_0003DD62: ;", "after", """    if (!nfl2k5_pos_set) MEM32(ebx + 0xA6D8E0) = 0;   /* MUSICPOS: final value, stored once */
+"""),
     ("DIAG_MUSICSTREAM", "sub_0003F860", "loc_0003F860: ;", "after", """    { extern void nfl2k5_diag_stream(uint32_t dst, uint32_t src, uint32_t len, uint32_t eax_, uint32_t arg); nfl2k5_diag_stream(ebx, edx, edi, eax, MEM32(esp + 4)); }
 """),
     # Gamecast Live table rows (2026-09-28). Capture each distinct row-render
