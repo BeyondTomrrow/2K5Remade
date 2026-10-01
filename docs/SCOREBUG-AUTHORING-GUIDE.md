@@ -279,7 +279,9 @@ Start it with:
 powershell -ExecutionPolicy Bypass -File tools\presentation-studio\serve.ps1
 ```
 
-It opens `http://127.0.0.1:8735/tools/presentation-studio/index.html`.
+or double-click `Presentation Studio.cmd` in the project folder. It opens
+`http://127.0.0.1:8735/` in the browser (keep its window open while editing).
+If it is already running, starting it again just opens the page.
 
 **Image import options in the editor:**
 

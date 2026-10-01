@@ -51,10 +51,24 @@ function ReadBody($ctx) {
     return $ms.ToArray()
 }
 
-$listener = New-Object Net.HttpListener
-$listener.Prefixes.Add("http://127.0.0.1:$Port/")
-$listener.Start()
-$url = "http://127.0.0.1:$Port/tools/presentation-studio/index.html"
+$page = 'tools/presentation-studio/index.html'
+# Already running (another window)? Just open it.
+try {
+    $null = Invoke-WebRequest "http://127.0.0.1:$Port/api/packages" -UseBasicParsing -TimeoutSec 2
+    $url = "http://127.0.0.1:$Port/$page"
+    "Presentation Studio is already running: $url"
+    if (-not $NoBrowser) { Start-Process $url }
+    return
+} catch { }
+# Otherwise take the first free port from $Port up.
+$listener = $null
+for ($p = $Port; $p -lt $Port + 20; $p++) {
+    $l = New-Object Net.HttpListener
+    $l.Prefixes.Add("http://127.0.0.1:$p/")
+    try { $l.Start(); $listener = $l; $Port = $p; break } catch { $l.Close() }
+}
+if (-not $listener) { throw "No free port between $Port and $($Port + 19)." }
+$url = "http://127.0.0.1:$Port/$page"
 "Presentation Studio: $url  (Ctrl+C to stop)"
 if (-not $NoBrowser) { Start-Process $url }
 
@@ -63,6 +77,11 @@ while ($listener.IsListening) {
     try {
         $path = [Uri]::UnescapeDataString($ctx.Request.Url.AbsolutePath)
         $q = $ctx.Request.QueryString
+        if ($path -eq '/' -or $path -eq '/tools/presentation-studio' -or $path -eq '/tools/presentation-studio/') {
+            $ctx.Response.Redirect("/$page")
+            $ctx.Response.Close()
+            continue
+        }
         if ($path -eq '/api/packages') {
             $list = @()
             Get-ChildItem -LiteralPath $presentations -Directory | ForEach-Object {
