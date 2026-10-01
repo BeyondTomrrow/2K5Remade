@@ -1096,16 +1096,39 @@ static void nfl2k5_peek_fsms(void)
      * 0x14 bytes): an event is ready when every requested bit in the low 12
      * of its +8 word is also set in the high 12 (sub_000254C0). */
     {
-        uint32_t tl = *(const uint32_t *)(m + 0xA92890u);
-        if (tl >= 0x10000u && tl < 0x84000000u) {
-            uint32_t n = *(const uint32_t *)(m + tl + 0xCu), ev = *(const uint32_t *)(m + tl + 0x10u);
-            fprintf(stderr, "  [MATCHTL] time=%g flags=%08X events=%u:", *(const float *)(m + tl + 4u),
-                    *(const uint32_t *)(m + tl + 8u), n);
-            for (uint32_t k = 0; k < n && k < 12u && ev >= 0x10000u && ev < 0x84000000u; k++)
-                fprintf(stderr, " [%08X %08X %08X]", *(const uint32_t *)(m + ev + k * 0x14u),
-                        *(const uint32_t *)(m + ev + k * 0x14u + 4u),
-                        *(const uint32_t *)(m + ev + k * 0x14u + 8u));
+        uint32_t tl = 0, n = 0, ev = 0, flags = 0, count = 0;
+        uint32_t events[12][3];
+        float time = 0;
+        int readable = 0;
+        /* This diagnostic runs with the guest lock dropped. Leaving the
+         * demo can retire/reuse the timeline between samples, and the broad
+         * guest-VA check does not establish that its event pointer is mapped.
+         * Snapshot only diagnostic reads under SEH; never alter guest state
+         * or catch exceptions from execution of the game itself. */
+        __try {
+            tl = *(const uint32_t *)(m + 0xA92890u);
+            if (tl >= 0x10000u && tl <= 0x84000000u - 0x14u) {
+                time = *(const float *)(m + tl + 4u);
+                flags = *(const uint32_t *)(m + tl + 8u);
+                n = *(const uint32_t *)(m + tl + 0xCu);
+                ev = *(const uint32_t *)(m + tl + 0x10u);
+                count = n < 12u ? n : 12u;
+                if (count && (ev < 0x10000u || ev > 0x84000000u - count * 0x14u))
+                    __leave;
+                for (uint32_t k = 0; k < count; k++)
+                    memcpy(events[k], m + ev + k * 0x14u, sizeof events[k]);
+                readable = 1;
+            }
+        } __except (EXCEPTION_EXECUTE_HANDLER) {
+            /* An obsolete debug pointer must not crash a running match. */
+        }
+        if (readable) {
+            fprintf(stderr, "  [MATCHTL] time=%g flags=%08X events=%u:", time, flags, n);
+            for (uint32_t k = 0; k < count; k++)
+                fprintf(stderr, " [%08X %08X %08X]", events[k][0], events[k][1], events[k][2]);
             fprintf(stderr, "\n");
+        } else if (tl >= 0x10000u && tl < 0x84000000u) {
+            fprintf(stderr, "  [MATCHTL] unreadable diagnostic snapshot timeline=%08X events=%08X\n", tl, ev);
         }
     }
 }
@@ -3171,4 +3194,44 @@ void nfl2k5_diag_wma3(const char *what, uint32_t a, uint32_t b, uint32_t c)
     if (on < 0) on = getenv("RECOMP_WMA_LOG") != NULL;
     if (!on) return;
     fprintf(stderr, "[WMA] %s %08X %08X %08X\n", what, a, b, c);
+}
+
+/* Jukebox album art: the TXTR resource sub_000449E0 returned for an album's
+ * collection_NN name, dumped with the objects it points to (RECOMP_ART_LOG). */
+void nfl2k5_diag_txtr(uint32_t res, uint32_t album)
+{
+    const uint8_t *gm = (const uint8_t *)xbox_GetMemoryOffset();
+#define MEM32(a) (*(const uint32_t *)(gm + (uint32_t)(a)))
+    static int on = -1;
+    if (on < 0) on = getenv("RECOMP_ART_LOG") != NULL;
+    if (!on) return;
+    static uint32_t last_res;
+    if (res == last_res) return;   /* once per album change */
+    last_res = res;
+    fprintf(stderr, "[ART] album %u res %08X\n", album, res);
+    if (!res) return;
+    for (int i = 0; i < 0x60; i += 16)
+        fprintf(stderr, "[ART]   +%02X %08X %08X %08X %08X\n", i, MEM32(res + i), MEM32(res + i + 4),
+                MEM32(res + i + 8), MEM32(res + i + 12));
+    for (int k = 0; k < 0x30; k += 4) {
+        uint32_t p = MEM32(res + k);
+        if (p > 0x10000 && (p < 0x04000000u || (p >= 0x80000000u && p < 0x84000000u)))
+            fprintf(stderr, "[ART]   [+%02X]->%08X: %08X %08X %08X %08X %08X %08X %08X %08X\n", k, p,
+                    MEM32(p), MEM32(p + 4), MEM32(p + 8), MEM32(p + 12), MEM32(p + 16), MEM32(p + 20),
+                    MEM32(p + 24), MEM32(p + 28));
+    }
+}
+#undef MEM32
+
+/* The frontend task scheduler (sub_00038CD0) found a function slot that is
+ * not code: dump its table (0xB04D1C count, 0xB04D20 {busy, fn} x 32). */
+void nfl2k5_diag_sched(uint32_t idx)
+{
+    const uint8_t *gm = (const uint8_t *)xbox_GetMemoryOffset();
+    static int n;
+    if (n++ > 3) return;
+    fprintf(stderr, "[SCHED] bad task %u: count %u\n", idx, *(const uint32_t *)(gm + 0xB04D1Cu));
+    for (uint32_t i = 0; i < 40; i++)
+        fprintf(stderr, "[SCHED]   %2u busy %08X fn %08X\n", i, *(const uint32_t *)(gm + 0xB04D20u + i * 8),
+                *(const uint32_t *)(gm + 0xB04D24u + i * 8));
 }

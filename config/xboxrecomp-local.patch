@@ -436,10 +436,35 @@ index dd6bec1..b97d940 100644
  
  /* Stub address space - just passed to ldl_le_phys etc. (ignored) */
 diff --git a/src/apu/apu_vp.c b/src/apu/apu_vp.c
-index b9f429e..5d2f3d5 100644
+index b9f429e..7246f36 100644
 --- a/src/apu/apu_vp.c
 +++ b/src/apu/apu_vp.c
-@@ -66,11 +66,17 @@ static void set_notify_status(MCPXAPUState *d, uint32_t v, int notifier,
+@@ -46,6 +46,15 @@ static const struct {
+  * Notify status helper
+  * ============================================================ */
+ 
++/* RECOMP_APU_SSL_LOG=1: stream packet bookkeeping -- each segment list the
++ * title hands a voice (SSL A/B) and each "done" the voice reports. */
++static int ssl_log_on(void)
++{
++    static int on = -1;
++    if (on < 0) on = getenv("RECOMP_APU_SSL_LOG") != NULL;
++    return on;
++}
++
+ static void set_notify_status(MCPXAPUState *d, uint32_t v, int notifier,
+                               int status)
+ {
+@@ -56,6 +65,8 @@ static void set_notify_status(MCPXAPUState *d, uint32_t v, int notifier,
+ 
+     stb_phys(address_space_memory, notify_offset, (uint8_t)status);
+     stb_phys(address_space_memory, notify_offset - 1, 1);
++    if (ssl_log_on() && (notifier == MCPX_HW_NOTIFIER_SSLA_DONE || notifier == MCPX_HW_NOTIFIER_SSLA_DONE + 1))
++        fprintf(stderr, "[SSL] %03X done %c t=%lu\n", v, 'A' + notifier - MCPX_HW_NOTIFIER_SSLA_DONE, GetTickCount());
+ 
+     qatomic_or(&d->regs[NV_PAPU_ISTS],
+                NV_PAPU_ISTS_FEVINTSTS | NV_PAPU_ISTS_FENINTSTS);
+@@ -66,11 +77,17 @@ static void set_notify_status(MCPXAPUState *d, uint32_t v, int notifier,
   * Filter helpers
   * ============================================================ */
  
@@ -457,7 +482,7 @@ index b9f429e..5d2f3d5 100644
      if (d->vp.filters[v].resampler) {
          src_reset(d->vp.filters[v].resampler);
      }
-@@ -185,6 +191,20 @@ static void fe_method(MCPXAPUState *d, uint32_t method, uint32_t argument)
+@@ -185,6 +202,20 @@ static void fe_method(MCPXAPUState *d, uint32_t method, uint32_t argument)
      d->regs[NV_PAPU_FEDECMETH] = method;
      d->regs[NV_PAPU_FEDECPARAM] = argument;
      unsigned int selected_handle, list;
@@ -478,7 +503,7 @@ index b9f429e..5d2f3d5 100644
  
      switch (method) {
      case NV1BA0_PIO_VOICE_LOCK:
-@@ -273,6 +293,15 @@ static void fe_method(MCPXAPUState *d, uint32_t method, uint32_t argument)
+@@ -273,6 +304,15 @@ static void fe_method(MCPXAPUState *d, uint32_t method, uint32_t argument)
          }
  
          voice_reset_filters(d, (uint16_t)selected_handle);
@@ -494,7 +519,7 @@ index b9f429e..5d2f3d5 100644
          voice_set_mask(d, (uint16_t)selected_handle, NV_PAVS_VOICE_PAR_STATE,
                         NV_PAVS_VOICE_PAR_STATE_ACTIVE_VOICE, 1);
  
-@@ -312,6 +341,27 @@ static void fe_method(MCPXAPUState *d, uint32_t method, uint32_t argument)
+@@ -312,6 +352,27 @@ static void fe_method(MCPXAPUState *d, uint32_t method, uint32_t argument)
          break;
  
      case NV1BA0_PIO_VOICE_PAUSE:
@@ -522,7 +547,7 @@ index b9f429e..5d2f3d5 100644
          voice_set_mask(d, (uint16_t)(argument & NV1BA0_PIO_VOICE_PAUSE_HANDLE),
                         NV_PAVS_VOICE_PAR_STATE, NV_PAVS_VOICE_PAR_STATE_PAUSED,
                         (argument & NV1BA0_PIO_VOICE_PAUSE_ACTION) != 0);
-@@ -412,6 +462,10 @@ static void fe_method(MCPXAPUState *d, uint32_t method, uint32_t argument)
+@@ -412,6 +473,10 @@ static void fe_method(MCPXAPUState *d, uint32_t method, uint32_t argument)
                         NV_PAVS_VOICE_CUR_PSH_SAMPLE_LBO, argument);
          break;
      case NV1BA0_PIO_SET_VOICE_BUF_CBO:
@@ -533,7 +558,31 @@ index b9f429e..5d2f3d5 100644
          voice_set_mask(d, (uint16_t)d->regs[NV_PAPU_FECV],
                         NV_PAVS_VOICE_PAR_OFFSET,
                         NV_PAVS_VOICE_PAR_OFFSET_CBO, argument);
-@@ -727,6 +781,74 @@ static float voice_step_envelope(MCPXAPUState *d, uint16_t v, uint32_t reg_0,
+@@ -451,6 +516,11 @@ static void fe_method(MCPXAPUState *d, uint32_t method, uint32_t argument)
+         int ssl = 0;
+         int current_voice = d->regs[NV_PAPU_FECV];
+         assert(current_voice < MCPX_HW_MAX_VOICES);
++        if (ssl_log_on())
++            fprintf(stderr, "[SSL] %03X set A base %u count %u (playing %c seg %d) t=%lu\n", current_voice,
++                    (unsigned)GET_MASK(argument, NV1BA0_PIO_SET_VOICE_SSL_A_BASE),
++                    (unsigned)GET_MASK(argument, NV1BA0_PIO_SET_VOICE_SSL_A_COUNT),
++                    'A' + d->vp.ssl[current_voice].ssl_index, d->vp.ssl[current_voice].ssl_seg, GetTickCount());
+         d->vp.ssl[current_voice].base[ssl] =
+             GET_MASK(argument, NV1BA0_PIO_SET_VOICE_SSL_A_BASE);
+         d->vp.ssl[current_voice].count[ssl] =
+@@ -461,6 +531,11 @@ static void fe_method(MCPXAPUState *d, uint32_t method, uint32_t argument)
+         int ssl = 1;
+         int current_voice = d->regs[NV_PAPU_FECV];
+         assert(current_voice < MCPX_HW_MAX_VOICES);
++        if (ssl_log_on())
++            fprintf(stderr, "[SSL] %03X set B base %u count %u (playing %c seg %d) t=%lu\n", current_voice,
++                    (unsigned)GET_MASK(argument, NV1BA0_PIO_SET_VOICE_SSL_A_BASE),
++                    (unsigned)GET_MASK(argument, NV1BA0_PIO_SET_VOICE_SSL_A_COUNT),
++                    'A' + d->vp.ssl[current_voice].ssl_index, d->vp.ssl[current_voice].ssl_seg, GetTickCount());
+         d->vp.ssl[current_voice].base[ssl] =
+             GET_MASK(argument, NV1BA0_PIO_SET_VOICE_SSL_A_BASE);
+         d->vp.ssl[current_voice].count[ssl] =
+@@ -727,6 +802,74 @@ static float voice_step_envelope(MCPXAPUState *d, uint16_t v, uint32_t reg_0,
   * Sample fetching from voice buffers
   * ============================================================ */
  
@@ -608,7 +657,7 @@ index b9f429e..5d2f3d5 100644
  static int voice_get_samples(MCPXAPUState *d, uint32_t v, float samples[][2],
                         int num_samples_requested)
  {
-@@ -825,6 +947,8 @@ static int voice_get_samples(MCPXAPUState *d, uint32_t v, float samples[][2],
+@@ -825,6 +968,8 @@ static int voice_get_samples(MCPXAPUState *d, uint32_t v, float samples[][2],
  
      bool adpcm =
          (container_size_index == NV_PAVS_VOICE_CFG_FMT_CONTAINER_SIZE_ADPCM);
@@ -617,7 +666,7 @@ index b9f429e..5d2f3d5 100644
  
      if (adpcm) {
          block_size = 36;
-@@ -841,9 +965,14 @@ static int voice_get_samples(MCPXAPUState *d, uint32_t v, float samples[][2],
+@@ -841,9 +986,14 @@ static int voice_get_samples(MCPXAPUState *d, uint32_t v, float samples[][2],
              unsigned int block_position = cbo % ADPCM_SAMPLES_PER_BLOCK;
              if (adpcm_block_index != (int)block_index) {
                  uint32_t linear_addr = block_index * (uint32_t)block_size;
@@ -633,7 +682,7 @@ index b9f429e..5d2f3d5 100644
                             block_size);
                  } else {
                      linear_addr += ba;
-@@ -911,6 +1040,26 @@ static int voice_get_samples(MCPXAPUState *d, uint32_t v, float samples[][2],
+@@ -911,6 +1061,26 @@ static int voice_get_samples(MCPXAPUState *d, uint32_t v, float samples[][2],
          }
      }
  
@@ -660,7 +709,7 @@ index b9f429e..5d2f3d5 100644
      if (cbo >= ebo) {
          if (stream) {
              d->vp.ssl[v].ssl_seg += 1;
-@@ -934,6 +1083,15 @@ static int voice_get_samples(MCPXAPUState *d, uint32_t v, float samples[][2],
+@@ -934,6 +1104,15 @@ static int voice_get_samples(MCPXAPUState *d, uint32_t v, float samples[][2],
          }
      }
  
@@ -676,7 +725,7 @@ index b9f429e..5d2f3d5 100644
      voice_set_mask(d, (uint16_t)v, NV_PAVS_VOICE_PAR_OFFSET,
                     NV_PAVS_VOICE_PAR_OFFSET_CBO, cbo);
      return sample_count;
-@@ -946,26 +1104,83 @@ static int voice_get_samples(MCPXAPUState *d, uint32_t v, float samples[][2],
+@@ -946,26 +1125,83 @@ static int voice_get_samples(MCPXAPUState *d, uint32_t v, float samples[][2],
   * resample. This gives us functional audio at the cost of quality.
   * ============================================================ */
  
@@ -776,7 +825,7 @@ index b9f429e..5d2f3d5 100644
  }
  
  /* ============================================================
-@@ -1006,6 +1221,96 @@ static void voice_process(MCPXAPUState *d,
+@@ -1006,6 +1242,96 @@ static void voice_process(MCPXAPUState *d,
                                          NV_PAVS_VOICE_CFG_ENV0_EF_PITCHSCALE);
      float rate = 1.0f / powf(2.0f, (p + ps * 32 * ef_value) / 4096.0f);
      dbg->rate = rate;
@@ -873,7 +922,7 @@ index b9f429e..5d2f3d5 100644
  
      /* Step amplitude envelope */
      float ea_value = voice_step_envelope(
-@@ -1089,9 +1394,53 @@ static void voice_process(MCPXAPUState *d,
+@@ -1089,9 +1415,53 @@ static void voice_process(MCPXAPUState *d,
          dbg->bin[i] = (uint8_t)bin[i];
          dbg->vol[i] = vol[i];
      }
@@ -927,7 +976,7 @@ index b9f429e..5d2f3d5 100644
      /* Low-pass filter */
      int fmode = voice_get_mask(d, v, NV_PAVS_VOICE_CFG_MISC,
                                 NV_PAVS_VOICE_CFG_MISC_FMODE);
-@@ -1169,10 +1518,43 @@ static void voice_process(MCPXAPUState *d,
+@@ -1169,10 +1539,43 @@ static void voice_process(MCPXAPUState *d,
   * Simplified single-threaded version (no worker threads initially)
   * ============================================================ */
  
@@ -971,7 +1020,7 @@ index b9f429e..5d2f3d5 100644
  
      for (int list = 0; list < 3; list++) {
          hwaddr top, current, next;
-@@ -1194,10 +1576,36 @@ void mcpx_apu_vp_frame(MCPXAPUState *d,
+@@ -1194,10 +1597,36 @@ void mcpx_apu_vp_frame(MCPXAPUState *d,
  
              if (!voice_get_mask(d, v, NV_PAVS_VOICE_PAR_STATE,
                                  NV_PAVS_VOICE_PAR_STATE_ACTIVE_VOICE)) {
@@ -1307,7 +1356,7 @@ index e515377..3988359 100644
 +
  #endif /* XBOX_KERNEL_H */
 diff --git a/src/kernel/kernel_bridge.c b/src/kernel/kernel_bridge.c
-index 5b56513..ac94d9a 100644
+index 5b56513..779dae9 100644
 --- a/src/kernel/kernel_bridge.c
 +++ b/src/kernel/kernel_bridge.c
 @@ -49,6 +49,7 @@
@@ -1764,7 +1813,20 @@ index 5b56513..ac94d9a 100644
                      if (xbox_handle_ptr && th) {
                          bridge_write_handle(xbox_handle_ptr, th);
                      }
-@@ -710,6 +1088,12 @@ static void bridge_MmAllocateContiguousMemoryEx(void)
+@@ -606,8 +984,11 @@ static void bridge_NtClose(void)
+     /* Close real handles but skip fake/synthetic ones */
+     if (raw_handle && raw_handle != 0xDEAD0001u && raw_handle != 0xBEEF0010u) {
+         HANDLE h = bridge_take_handle(raw_handle);
+-        if (h && h != INVALID_HANDLE_VALUE)
++        if (h && h != INVALID_HANDLE_VALUE) {
++            extern void xbox_release_dir_context(HANDLE FileHandle);
++            xbox_release_dir_context(h);   /* a directory listing ends with its handle */
+             CloseHandle(h);
++        }
+     }
+     g_eax = 0; /* STATUS_SUCCESS */
+ }
+@@ -710,6 +1091,12 @@ static void bridge_MmAllocateContiguousMemoryEx(void)
           * are "allocated" but full of garbage. */
          memset((void *)((uintptr_t)xbox_va + g_xbox_mem_offset), 0, size);
  
@@ -1777,7 +1839,7 @@ index 5b56513..ac94d9a 100644
          if (KERNEL_LOG_ON_HALF()) {
              fprintf(stderr, "  [KERNEL] MmAllocateContiguousMemoryEx: size=%u "
                      "pinned phys 0x%08X -> Xbox VA 0x%08X (zeroed)\n",
-@@ -738,7 +1122,7 @@ static void bridge_MmAllocateContiguousMemoryEx(void)
+@@ -738,7 +1125,7 @@ static void bridge_MmAllocateContiguousMemoryEx(void)
  static void bridge_MmFreeContiguousMemory(void)
  {
      uint32_t addr = STACK_ARG(0);
@@ -1786,7 +1848,7 @@ index 5b56513..ac94d9a 100644
      g_eax = 0;
  }
  
-@@ -1328,23 +1712,24 @@ static void bridge_KeSetEvent(void)
+@@ -1328,23 +1715,24 @@ static void bridge_KeSetEvent(void)
      uint32_t wait = STACK_ARG(2);
      HANDLE h;
  
@@ -1821,7 +1883,7 @@ index 5b56513..ac94d9a 100644
      uint32_t object = STACK_ARG(0);
      uint32_t wait_reason = STACK_ARG(1);
      uint32_t wait_mode = STACK_ARG(2);
-@@ -1358,9 +1743,28 @@ static void bridge_KeWaitForSingleObject(void)
+@@ -1358,9 +1746,28 @@ static void bridge_KeWaitForSingleObject(void)
      if (!h)
          h = XBOX_TO_NATIVE(object);
  
@@ -1853,7 +1915,7 @@ index 5b56513..ac94d9a 100644
  }
  
  /* ── NtWaitForSingleObject (ordinal 233) ─────────────────── */
-@@ -1372,6 +1776,7 @@ static void bridge_KeWaitForSingleObject(void)
+@@ -1372,6 +1779,7 @@ static void bridge_KeWaitForSingleObject(void)
   */
  static void bridge_NtWaitForSingleObject(void)
  {
@@ -1861,7 +1923,7 @@ index 5b56513..ac94d9a 100644
      HANDLE   handle      = bridge_resolve_handle(STACK_ARG(0));
      uint32_t alertable   = STACK_ARG(1);
      uint32_t timeout_ptr = STACK_ARG(2);
-@@ -1425,6 +1830,7 @@ static HANDLE bridge_resolve_handle(uint32_t token);
+@@ -1425,6 +1833,7 @@ static HANDLE bridge_resolve_handle(uint32_t token);
  
  static void bridge_NtWaitForSingleObjectEx(void)
  {
@@ -1869,7 +1931,7 @@ index 5b56513..ac94d9a 100644
      HANDLE   handle      = bridge_resolve_handle(STACK_ARG(0));
      uint32_t wait_mode   = STACK_ARG(1);
      uint32_t alertable   = STACK_ARG(2);
-@@ -1480,6 +1886,7 @@ static void bridge_NtWaitForSingleObjectEx(void)
+@@ -1480,6 +1889,7 @@ static void bridge_NtWaitForSingleObjectEx(void)
   */
  static void bridge_NtWaitForMultipleObjectsEx(void)
  {
@@ -1877,7 +1939,7 @@ index 5b56513..ac94d9a 100644
      uint32_t count       = STACK_ARG(0);
      uint32_t handles_va  = STACK_ARG(1);
      uint32_t wait_type   = STACK_ARG(2);
-@@ -1575,19 +1982,159 @@ static void bridge_NtUserIoApcDispatcher(void)
+@@ -1575,19 +1985,159 @@ static void bridge_NtUserIoApcDispatcher(void)
      g_eax = 0;
  }
  
@@ -2037,7 +2099,7 @@ index 5b56513..ac94d9a 100644
  }
  
  /* ── KeBugCheck (ordinal 95) / KeBugCheckEx (96) ─────────── */
-@@ -1618,6 +2165,7 @@ static void bridge_KeBugCheckEx(void)
+@@ -1618,6 +2168,7 @@ static void bridge_KeBugCheckEx(void)
  /* ── NtYieldExecution (ordinal 238) ──────────────────────── */
  static void bridge_NtYieldExecution(void)
  {
@@ -2045,7 +2107,7 @@ index 5b56513..ac94d9a 100644
      g_eax = (uint32_t)xbox_NtYieldExecution();
  }
  
-@@ -1731,6 +2279,7 @@ static void bridge_PsTerminateSystemThread(void)
+@@ -1731,6 +2282,7 @@ static void bridge_PsTerminateSystemThread(void)
           * to do it. */
          xbox_FreeThreadStack(g_thread_stack_top);
          g_thread_stack_top = 0;
@@ -2053,7 +2115,7 @@ index 5b56513..ac94d9a 100644
          ExitThread(exit_status);
      }
  }
-@@ -1763,54 +2312,13 @@ static void bridge_HalReadSMCTrayState(void)
+@@ -1763,54 +2315,13 @@ static void bridge_HalReadSMCTrayState(void)
   * interrupt enable and queues here, and the enumeration it should have started
   * lives entirely in the deferred routine.
   *
@@ -2114,7 +2176,7 @@ index 5b56513..ac94d9a 100644
  
  /* -- KeSynchronizeExecution (ordinal 153) ------------------
   * BOOLEAN KeSynchronizeExecution(PKINTERRUPT Interrupt,
-@@ -1865,52 +2373,6 @@ static void bridge_KeRemoveQueueDpc(void)
+@@ -1865,52 +2376,6 @@ static void bridge_KeRemoveQueueDpc(void)
      g_eax = 0;
  }
  
@@ -2167,7 +2229,7 @@ index 5b56513..ac94d9a 100644
  /* Call a connected interrupt service routine.
   *
   * BOOLEAN ServiceRoutine(PKINTERRUPT, PVOID ServiceContext), __stdcall: its
-@@ -1923,6 +2385,22 @@ static void bridge_KeInsertQueueDpc(void)
+@@ -1923,6 +2388,22 @@ static void bridge_KeInsertQueueDpc(void)
   */
  uint32_t xbox_GetConnectedInterrupt(uint32_t vector);   /* defined below */
  
@@ -2190,7 +2252,7 @@ index 5b56513..ac94d9a 100644
  static int kernel_raise_interrupt(uint32_t vector)
  {
      uint32_t kint = xbox_GetConnectedInterrupt(vector);
-@@ -1976,47 +2454,68 @@ static int kernel_raise_interrupt(uint32_t vector)
+@@ -1976,47 +2457,68 @@ static int kernel_raise_interrupt(uint32_t vector)
  static void kernel_vblank_tick(void)
  {
      static int enabled = -1;
@@ -2280,7 +2342,7 @@ index 5b56513..ac94d9a 100644
  
  /* ── KeInitializeDpc (ordinal 107) ────────────────────────
   * VOID KeInitializeDpc(PKDPC Dpc, PKDEFERRED_ROUTINE DeferredRoutine,
-@@ -2084,6 +2583,13 @@ static void bridge_KeInitializeInterrupt(void)
+@@ -2084,6 +2586,13 @@ static void bridge_KeInitializeInterrupt(void)
      BRIDGE_MEM32(interrupt_va + 0)  = routine;
      BRIDGE_MEM32(interrupt_va + 4)  = context;
      BRIDGE_MEM32(interrupt_va + 8)  = vector;
@@ -2294,7 +2356,7 @@ index 5b56513..ac94d9a 100644
      g_eax = 0;
  }
  
-@@ -2225,17 +2731,6 @@ static void bridge_KeInitializeTimerEx(void)
+@@ -2225,17 +2734,6 @@ static void bridge_KeInitializeTimerEx(void)
   * audio off a timer. A title that needs better wants the host's timer queue,
   * not a smaller sleep.
   */
@@ -2312,7 +2374,7 @@ index 5b56513..ac94d9a 100644
  static DWORD WINAPI kernel_timer_thread(LPVOID unused)
  {
      int slot = xbox_worker_stack_alloc();
-@@ -2263,114 +2758,100 @@ static DWORD WINAPI kernel_timer_thread(LPVOID unused)
+@@ -2263,114 +2761,100 @@ static DWORD WINAPI kernel_timer_thread(LPVOID unused)
          g_fs_base = tib;
      }
  
@@ -2505,7 +2567,7 @@ index 5b56513..ac94d9a 100644
  }
  
  /* ── ExQueryPoolBlockSize (ordinal 24) ────────────────────
-@@ -2792,13 +3273,17 @@ static void bridge_NtCreateFile(void)
+@@ -2792,13 +3276,17 @@ static void bridge_NtCreateFile(void)
      {
          extern uint32_t xbox_LastFileError(void);
          uint32_t _e = g_eax ? xbox_LastFileError() : 0u;
@@ -2525,7 +2587,7 @@ index 5b56513..ac94d9a 100644
              fprintf(stderr, "  [FILE] -> 0x%08X\n", g_eax);
      }
      fflush(stderr);
-@@ -2846,16 +3331,34 @@ static void deliver_one_apc(uint32_t apc_routine, uint32_t apc_context,
+@@ -2846,16 +3334,34 @@ static void deliver_one_apc(uint32_t apc_routine, uint32_t apc_context,
       * dispatch correctly fails to find it and the kernel fallback is the one
       * that matters. Checking only recomp_lookup left it undelivered. */
      recomp_func_t fn = recomp_lookup(apc_routine);
@@ -2563,7 +2625,7 @@ index 5b56513..ac94d9a 100644
      } else {
          uint32_t ord = 0;
          if (apc_routine >= KERNEL_VA_BASE && apc_routine < KERNEL_VA_END) {
-@@ -3041,6 +3544,38 @@ static void bridge_NtReadFile(void)
+@@ -3041,6 +3547,38 @@ static void bridge_NtReadFile(void)
          off.HighPart = (LONG)BRIDGE_MEM32(offset_va + 4);
          poff = &off;
      }
@@ -2602,7 +2664,7 @@ index 5b56513..ac94d9a 100644
      g_eax = (uint32_t)xbox_NtReadFile(handle, NULL, NULL, NULL, &ios,
                  XBOX_TO_NATIVE(buffer_va), length, poff);
  
-@@ -3056,11 +3591,11 @@ static void bridge_NtReadFile(void)
+@@ -3056,11 +3594,11 @@ static void bridge_NtReadFile(void)
           * early looks identical to one that never started -- until you can
           * see where each one landed. */
          if (poff)
@@ -2616,7 +2678,7 @@ index 5b56513..ac94d9a 100644
          else
              fprintf(stderr, "  [READ] @seq want=%u got=%u st=0x%08X  %02X %02X %02X %02X\n",
                      length, got, (uint32_t)ios.Status,
-@@ -3515,6 +4050,12 @@ static void bridge_IoCreateSymbolicLink(void)
+@@ -3515,6 +4053,12 @@ static void bridge_IoCreateSymbolicLink(void)
  }
  
  /* ── ObReferenceObjectByHandle (ordinal 246) ─────────────── */
@@ -2629,7 +2691,7 @@ index 5b56513..ac94d9a 100644
  static void bridge_ObReferenceObjectByHandle(void)
  {
      /* Xbox: NTSTATUS ObReferenceObjectByHandle(HANDLE Handle, PVOID ObjectType, PVOID* Object)
-@@ -3524,6 +4065,12 @@ static void bridge_ObReferenceObjectByHandle(void)
+@@ -3524,6 +4068,12 @@ static void bridge_ObReferenceObjectByHandle(void)
      uint32_t object_ptr = STACK_ARG(2);
      if (object_ptr) BRIDGE_MEM32(object_ptr) = 0;
      g_eax = 0;  /* STATUS_SUCCESS */
@@ -2642,7 +2704,7 @@ index 5b56513..ac94d9a 100644
  }
  
  /* ── RtlRaiseException (ordinal 302) ─────────────────────
-@@ -3736,6 +4283,20 @@ static void bridge_KeQueryBasePriorityThread(void)
+@@ -3736,6 +4286,20 @@ static void bridge_KeQueryBasePriorityThread(void)
  
  static void bridge_KeSetBasePriorityThread(void)
  {
@@ -2663,7 +2725,7 @@ index 5b56513..ac94d9a 100644
      g_eax = (uint32_t)xbox_KeSetBasePriorityThread(
          XBOX_TO_NATIVE(STACK_ARG(0)), (LONG)STACK_ARG(1));
  }
-@@ -3766,7 +4327,8 @@ static void bridge_MmLockUnlockBufferPages(void)
+@@ -3766,7 +4330,8 @@ static void bridge_MmLockUnlockBufferPages(void)
   */
  static void bridge_MmQueryAllocationSize(void)
  {
@@ -2673,7 +2735,7 @@ index 5b56513..ac94d9a 100644
  }
  
  /* ── NtCreateMutant (ordinal 192, 3 args) */
-@@ -3825,18 +4387,33 @@ static void bridge_NtReleaseMutant(void)
+@@ -3825,18 +4390,33 @@ static void bridge_NtReleaseMutant(void)
  static void bridge_NtSuspendThread(void)
  {
      uint32_t count_va = STACK_ARG(1);
@@ -2710,7 +2772,7 @@ index 5b56513..ac94d9a 100644
  }
  
  /* ── ObfDereferenceObject (ordinal 250, fastcall: object in ecx)
-@@ -4034,6 +4611,7 @@ static void bridge_KeAlertThread(void)
+@@ -4034,6 +4614,7 @@ static void bridge_KeAlertThread(void)
  
  static void bridge_KeWaitForMultipleObjects(void)
  {
@@ -2718,7 +2780,7 @@ index 5b56513..ac94d9a 100644
      uint32_t count      = STACK_ARG(0);
      uint32_t objects_va = STACK_ARG(1);
      uint32_t wait_type  = STACK_ARG(2);
-@@ -4042,6 +4620,8 @@ static void bridge_KeWaitForMultipleObjects(void)
+@@ -4042,6 +4623,8 @@ static void bridge_KeWaitForMultipleObjects(void)
      HANDLE handles[BRIDGE_MAXIMUM_WAIT_OBJECTS];
      uint32_t i;
  
@@ -2727,7 +2789,7 @@ index 5b56513..ac94d9a 100644
      if (count == 0) {
          g_eax = (uint32_t)STATUS_INVALID_PARAMETER;
          return;
-@@ -4052,11 +4632,23 @@ static void bridge_KeWaitForMultipleObjects(void)
+@@ -4052,11 +4635,23 @@ static void bridge_KeWaitForMultipleObjects(void)
          handles[i] = bridge_resolve_handle(
              objects_va ? BRIDGE_MEM32(objects_va + i * 4) : 0);
  
@@ -2756,7 +2818,7 @@ index 5b56513..ac94d9a 100644
  }
  
  #undef BRIDGE_MAXIMUM_WAIT_OBJECTS
-@@ -8816,6 +9408,7 @@ static void kernel_thunk_dispatch(void)
+@@ -8816,6 +9411,7 @@ static void kernel_thunk_dispatch(void)
      int slot = g_kernel_dispatch_slot;
      bridge_func_t bridge;
      ULONG ordinal;
@@ -2764,7 +2826,7 @@ index 5b56513..ac94d9a 100644
  
      if (slot < 0 || slot >= XBOX_KERNEL_THUNK_TABLE_SIZE) {
          fprintf(stderr, "  [KERNEL] bad slot %d\n", slot);
-@@ -8824,8 +9417,14 @@ static void kernel_thunk_dispatch(void)
+@@ -8824,8 +9420,14 @@ static void kernel_thunk_dispatch(void)
          return;
      }
  
@@ -2779,7 +2841,7 @@ index 5b56513..ac94d9a 100644
  
      g_kernel_call_count++;
      if (ordinal < XBOX_KERNEL_THUNK_TABLE_SIZE)
-@@ -8848,8 +9447,14 @@ static void kernel_thunk_dispatch(void)
+@@ -8848,8 +9450,14 @@ static void kernel_thunk_dispatch(void)
          DWORD now = GetTickCount();
          if (last_summary_tick == 0) last_summary_tick = now;
          if (now - last_summary_tick >= 2000 && g_kernel_call_count > 200) {
@@ -2796,7 +2858,7 @@ index 5b56513..ac94d9a 100644
              /* And which ones, ranked. "Latest" names whatever the sample
               * happened to land on; the question behind this line is what a
               * title sitting still is actually asking the kernel for, and
-@@ -8872,8 +9477,124 @@ static void kernel_thunk_dispatch(void)
+@@ -8872,8 +9480,124 @@ static void kernel_thunk_dispatch(void)
                              (unsigned long long)g_ordinal_calls[best]);
                  }
              }
@@ -2922,7 +2984,7 @@ index 5b56513..ac94d9a 100644
          }
      }
  
-@@ -8951,8 +9672,58 @@ static void kernel_thunk_dispatch(void)
+@@ -8951,8 +9675,58 @@ static void kernel_thunk_dispatch(void)
       * On real x86, stdcall callee does "ret N" to pop the return address
       * and N bytes of arguments. We already popped the dummy return address
       * above; now pop the args. */
@@ -2981,7 +3043,7 @@ index 5b56513..ac94d9a 100644
      if (g_kernel_watch_va) {
          uint32_t _after = BRIDGE_MEM32(g_kernel_watch_va);
          if (_after != _watch_before) {
-@@ -8988,6 +9759,35 @@ recomp_func_t recomp_lookup_kernel(uint32_t xbox_va)
+@@ -8988,6 +9762,35 @@ recomp_func_t recomp_lookup_kernel(uint32_t xbox_va)
      return NULL;
  }
  
@@ -3017,7 +3079,7 @@ index 5b56513..ac94d9a 100644
  /* ── Initialization ─────────────────────────────────────── */
  
  /*
-@@ -9076,6 +9876,13 @@ void xbox_kernel_bridge_init(void)
+@@ -9076,6 +9879,13 @@ void xbox_kernel_bridge_init(void)
  
      /* Initialize kernel data export values first */
      kernel_data_init();
@@ -3031,7 +3093,7 @@ index 5b56513..ac94d9a 100644
  
      for (i = 0; i < g_thunk_table_count; i++) {
          uint32_t va = g_thunk_table_base + i * 4;
-@@ -9192,4 +9999,33 @@ void xbox_kernel_bridge_init(void)
+@@ -9192,4 +10002,33 @@ void xbox_kernel_bridge_init(void)
      fprintf(stderr, "  Synthetic VA range: 0x%08X-0x%08X\n",
              KERNEL_VA_BASE, KERNEL_VA_BASE + (resolved - 1) * 4);
  
@@ -3065,6 +3127,54 @@ index 5b56513..ac94d9a 100644
 +    InterlockedExchange(&g_title_scheduler_active, 0);
 +    InterlockedExchange(&g_scheduler_guest_thread, 0);
  }
+diff --git a/src/kernel/kernel_file.c b/src/kernel/kernel_file.c
+index 7e90005..932ff1a 100644
+--- a/src/kernel/kernel_file.c
++++ b/src/kernel/kernel_file.c
+@@ -305,10 +305,13 @@ NTSTATUS __stdcall xbox_NtWriteFile(
+     return STATUS_UNSUCCESSFUL;
+ }
+ 
++void xbox_release_dir_context(HANDLE FileHandle);
++
+ NTSTATUS __stdcall xbox_NtClose(HANDLE Handle)
+ {
+     XBOX_TRACE(XBOX_LOG_FILE, "NtClose(handle=%p)", Handle);
+     if (Handle && Handle != INVALID_HANDLE_VALUE) {
++        xbox_release_dir_context(Handle);
+         CloseHandle(Handle);
+         return STATUS_SUCCESS;
+     }
+@@ -591,6 +594,29 @@ static DIR_CONTEXT s_dir_contexts[MAX_DIR_CONTEXTS];
+ static CRITICAL_SECTION s_dir_cs;
+ static BOOL s_dir_cs_init = FALSE;
+ 
++/* A directory handle is closing: end its enumeration. The title often stops
++ * listing a directory before the end (a save lookup returns at its match),
++ * and the search handle used to stay open. It kept the directory busy, so
++ * deleting a save to overwrite it left the folder delete-pending and every
++ * later create in it failed with access denied ("Cannot create save on Xbox
++ * Hard Disk", 2026-10-01). It also outlived the handle value, which Windows
++ * reuses: a later directory could continue another one's listing. */
++void xbox_release_dir_context(HANDLE FileHandle)
++{
++    if (!s_dir_cs_init || !FileHandle) return;
++    EnterCriticalSection(&s_dir_cs);
++    for (int i = 0; i < MAX_DIR_CONTEXTS; i++) {
++        if (s_dir_contexts[i].file_handle == FileHandle) {
++            if (s_dir_contexts[i].find_handle && s_dir_contexts[i].find_handle != INVALID_HANDLE_VALUE)
++                FindClose(s_dir_contexts[i].find_handle);
++            s_dir_contexts[i].find_handle = NULL;
++            s_dir_contexts[i].file_handle = NULL;
++            s_dir_contexts[i].first_done = FALSE;
++        }
++    }
++    LeaveCriticalSection(&s_dir_cs);
++}
++
+ static DIR_CONTEXT* find_or_create_dir_context(HANDLE FileHandle, BOOL create)
+ {
+     if (!s_dir_cs_init) { InitializeCriticalSection(&s_dir_cs); s_dir_cs_init = TRUE; }
 diff --git a/src/kernel/kernel_memory.c b/src/kernel/kernel_memory.c
 index e49a219..2f1bc56 100644
 --- a/src/kernel/kernel_memory.c
@@ -3340,10 +3450,10 @@ index 17cb31f..172d860 100644
          *PreviousSuspendCount = (ULONG)prev;
 diff --git a/src/kernel/nv2a_gpu_d3d11.hlsl b/src/kernel/nv2a_gpu_d3d11.hlsl
 new file mode 100644
-index 0000000..85d7275
+index 0000000..55d31a1
 --- /dev/null
 +++ b/src/kernel/nv2a_gpu_d3d11.hlsl
-@@ -0,0 +1,298 @@
+@@ -0,0 +1,384 @@
 +// NV2A pixel pipeline for the Direct3D 11 renderer (nv2a_gpu_d3d11.inc.c).
 +//
 +// Edit this file, then run tools/gen-gpu-hlsl.py to regenerate
@@ -3358,11 +3468,17 @@ index 0000000..85d7275
 +    float4 pos : POSITION; float4 d0 : COLOR0; float4 d1 : COLOR1;
 +    float4 t0 : TEXCOORD0; float4 t1 : TEXCOORD1; float4 t2 : TEXCOORD2; float4 t3 : TEXCOORD3;
 +    float4 wz : TEXCOORD4;   // x: oPos.w, for w-buffered depth
++    float4 rawscreen : TEXCOORD5;
 +};
 +struct PIn {
 +    float4 pos : SV_Position; float4 d0 : COLOR0; float4 d1 : COLOR1;
 +    float4 t0 : TEXCOORD0; float4 t1 : TEXCOORD1; float4 t2 : TEXCOORD2; float4 t3 : TEXCOORD3;
 +    float4 wz : TEXCOORD4;
++    float4 rawscreen : TEXCOORD5;
++    nointerpolation float4 tri0 : TEXCOORD6;
++    nointerpolation float4 tri1 : TEXCOORD7;
++    nointerpolation float4 tri2 : TEXCOORD8;
++    nointerpolation float2 depthmeta : TEXCOORD9;
 +};
 +struct POut {
 +    float4 c : SV_Target;
@@ -3375,6 +3491,9 @@ index 0000000..85d7275
 +    o.pos = v.pos; o.d0 = v.d0; o.d1 = v.d1;
 +    o.t0 = v.t0; o.t1 = v.t1; o.t2 = v.t2; o.t3 = v.t3;
 +    o.wz = v.wz;
++    o.rawscreen = v.rawscreen;
++    o.tri0 = o.tri1 = o.tri2 = 0;
++    o.depthmeta = 0;
 +    return o;
 +}
 +
@@ -3396,7 +3515,54 @@ index 0000000..85d7275
 +    uint4  show;          // RECOMP_GPU_SHOW debug view (x): 0 normal, 1-4 t0-t3, 5 d0, 6 alpha
 +    float4 depthp;        // x: w-buffer (Z perspective), y: zmax, z/w: clip min/max
 +    float4 fogc;          // fog colour; the factor arrives in wz.y
++    uint4 depthfmt;       // x: 0 floating depth, or integer depth bit count
++    float4 depthofs;      // x: polygon bias, y: slope factor, z: render scale
 +};
++
++// The geometry input consumes only the VS values, not the triangle metadata
++// it creates. Keep that signature independent of the line fallback outputs.
++struct GIn {
++    float4 pos : SV_Position; float4 d0 : COLOR0; float4 d1 : COLOR1;
++    float4 t0 : TEXCOORD0; float4 t1 : TEXCOORD1; float4 t2 : TEXCOORD2; float4 t3 : TEXCOORD3;
++    float4 wz : TEXCOORD4; float4 rawscreen : TEXCOORD5;
++};
++
++precise float triangle_area(float2 a, float2 b, float2 c)
++{
++    precise float2 e = b - a;
++    precise float2 f = c - a;
++    return e.x * f.y - e.y * f.x;
++}
++
++// Preserve the original Xbox triangle through host clipping. Reconstructing
++// its depth in the pixel shader avoids the host's different plane rounding
++// on equal-depth field/model overlays (xemu geom.c and psh.c).
++[maxvertexcount(3)]
++void gs_main(triangle GIn v[3], inout TriangleStream<PIn> stream)
++{
++    float4 p0 = v[0].rawscreen, p1 = v[1].rawscreen, p2 = v[2].rawscreen;
++    precise float2 e1 = p1.xy - p0.xy, e2 = p2.xy - p0.xy;
++    precise float b1 = p1.z - p0.z, b2 = p2.z - p0.z;
++    if (depthp.x != 0.0) {
++        b1 = (p0.w - p1.w) / (p1.w * p0.w);
++        b2 = (p0.w - p2.w) / (p2.w * p0.w);
++    }
++    precise float det = e1.x * e2.y - e1.y * e2.x;
++    precise float dx = (b1 * e2.y - b2 * e1.y) / det;
++    precise float dy = (b2 * e1.x - b1 * e2.x) / det;
++    float slope = max(abs(dx), abs(dy));
++    if (isnan(slope) || isinf(slope)) slope = 0;
++    [unroll] for (uint k = 0; k < 3; ++k) {
++        PIn o;
++        o.pos = v[k].pos; o.d0 = v[k].d0; o.d1 = v[k].d1;
++        o.t0 = v[k].t0; o.t1 = v[k].t1; o.t2 = v[k].t2; o.t3 = v[k].t3;
++        o.wz = v[k].wz; o.rawscreen = v[k].rawscreen;
++        o.tri0 = p0; o.tri1 = p1; o.tri2 = p2;
++        o.depthmeta = float2(slope, 1);
++        stream.Append(o);
++    }
++    stream.RestartStrip();
++}
 +
 +Texture2D   T0 : register(t0); Texture2D   T1 : register(t1);
 +Texture2D   T2 : register(t2); Texture2D   T3 : register(t3);
@@ -3499,16 +3665,46 @@ index 0000000..85d7275
 +{
 +    POut r;
 +    // Depth in depth-buffer units: w with Z perspective, else z.
-+    float zd = depthp.x != 0.0 ? i.wz.x : i.pos.z * depthp.y;
++    precise float zd = depthp.x != 0.0 ? i.wz.x : i.pos.z * depthp.y;
++    float slope = max(abs(ddx(zd)), abs(ddy(zd))) * depthofs.z;
++    if (i.depthmeta.y != 0.0) {
++        float2 p = i.pos.xy / depthofs.z;
++        precise float bc0 = triangle_area(p, i.tri1.xy, i.tri2.xy);
++        precise float bc1 = triangle_area(p, i.tri2.xy, i.tri0.xy);
++        precise float bc2 = triangle_area(p, i.tri0.xy, i.tri1.xy);
++        if (depthp.x != 0.0) {
++            bc0 /= i.tri0.w; bc1 /= i.tri1.w; bc2 /= i.tri2.w;
++        }
++        float inv = 1.0 / (bc0 + bc1 + bc2);
++        if (isinf(inv)) inv = 0.0;
++        bc1 *= inv; bc2 *= inv;
++        if (depthp.x != 0.0)
++            zd = i.tri0.w + (bc1 * (i.tri1.w - i.tri0.w) + bc2 * (i.tri2.w - i.tri0.w));
++        else
++            zd = i.tri0.z + (bc1 * (i.tri1.z - i.tri0.z) + bc2 * (i.tri2.z - i.tri0.z));
++        slope = i.depthmeta.x;
++    }
++    if (depthp.x != 0.0) {
++        if (zd > 0.0) {
++            precise float slope_offset = depthofs.y * slope * zd * zd;
++            zd += depthofs.x;
++            zd += slope_offset;
++        }
++        else zd = asfloat(0x7F7FFFFFu);
++        if (isnan(zd)) zd = asfloat(0x7F7FFFFFu);
++    } else zd += depthofs.x + depthofs.y * slope;
 +    // Outside the clip range: discarded, unless SET_ZMIN_MAX_CONTROL says
 +    // clamp (show.y = 0). xemu psh.c "Depth clipping".
 +    if (show.y != 0u && (zd < depthp.z || zd > depthp.w))
 +        discard;
++    zd = clamp(zd, depthp.z, depthp.w);
 +    r.c = shade(i);
-+    if (depthp.x != 0.0)
-+        r.d = clamp(zd, depthp.z, depthp.w) / depthp.y;
-+    else
-+        r.d = i.pos.z;
++    // The host uses a float depth surface for all guest formats. Explicitly
++    // floor Xbox integer depth before storing it: retaining fractional
++    // values changes coplanar/equal-depth tests (decals and model overlays).
++    // Floating Xbox depth keeps its fractional value.
++    if (depthfmt.x != 0u) zd = floor(zd);
++    r.d = zd / depthp.y;
 +    return r;
 +}
 +
@@ -3644,10 +3840,10 @@ index 0000000..85d7275
 +}
 diff --git a/src/kernel/nv2a_gpu_d3d11.inc.c b/src/kernel/nv2a_gpu_d3d11.inc.c
 new file mode 100644
-index 0000000..404c80f
+index 0000000..213d3a0
 --- /dev/null
 +++ b/src/kernel/nv2a_gpu_d3d11.inc.c
-@@ -0,0 +1,1656 @@
+@@ -0,0 +1,1740 @@
 +/* ── Hardware rendering (Direct3D 11) ─────────────────────────────────────
 + *
 + * Included into nv2a_pb_exec.c (it reads that file's state directly), after
@@ -3689,6 +3885,7 @@ index 0000000..404c80f
 +    float d1[4];
 +    float t[4][4];                       /* oT0..oT3 as written */
 +    float wz[4];                         /* x: oPos.w, for w-buffered depth */
++    float rawscreen[4];                  /* guest XY/Z/W before host clip conversion */
 +} GpuVertex;
 +
 +typedef struct {
@@ -3738,6 +3935,7 @@ index 0000000..404c80f
 +    ID3D11DeviceContext *ctx;
 +    ID3D11VertexShader *vs;
 +    ID3D11PixelShader *ps;
++    ID3D11GeometryShader *gs;
 +    ID3D11InputLayout *layout;
 +    ID3D11Buffer *vb, *cb;
 +    ID3D11RasterizerState *rs;
@@ -3770,6 +3968,8 @@ index 0000000..404c80f
 +    uint32_t show[4];                    /* RECOMP_GPU_SHOW debug view */
 +    float    depthp[4];                  /* w-buffer, zmax, clip min, clip max */
 +    float    fogc[4];                    /* fog colour (RGB) */
++    uint32_t depthfmt[4];                /* integer depth bits: 0 floating, 16 or 24 */
++    float    depthofs[4];                /* polygon bias, slope factor, render scale */
 +} GpuConsts;
 +
 +#include "nv2a_gpu_d3d11_hlsl.inc"   /* k_gpu_hlsl, from nv2a_gpu_d3d11.hlsl */
@@ -3813,7 +4013,7 @@ index 0000000..404c80f
 +static int gpu_init(void)
 +{
 +    HRESULT hr;
-+    ID3DBlob *vsb = NULL, *psb = NULL, *err = NULL;
++    ID3DBlob *vsb = NULL, *psb = NULL, *gsb = NULL, *err = NULL;
 +    D3D_FEATURE_LEVEL fl;
 +
 +    if (s_gpu11.tried)
@@ -3845,6 +4045,21 @@ index 0000000..404c80f
 +    }
 +    ID3D11Device_CreateVertexShader(s_gpu11.dev, ID3D10Blob_GetBufferPointer(vsb), ID3D10Blob_GetBufferSize(vsb), NULL, &s_gpu11.vs);
 +    ID3D11Device_CreatePixelShader(s_gpu11.dev, ID3D10Blob_GetBufferPointer(psb), ID3D10Blob_GetBufferSize(psb), NULL, &s_gpu11.ps);
++    if (!env_cached("RECOMP_GPU_PLANE_DEPTH") || *env_cached("RECOMP_GPU_PLANE_DEPTH") != '0') {
++        hr = D3DCompile(k_gpu_hlsl, strlen(k_gpu_hlsl), "nv2a", NULL, NULL, "gs_main", "gs_4_0",
++                        D3DCOMPILE_IEEE_STRICTNESS, 0, &gsb, &err);
++        if (SUCCEEDED(hr)) {
++            hr = ID3D11Device_CreateGeometryShader(s_gpu11.dev, ID3D10Blob_GetBufferPointer(gsb),
++                                                   ID3D10Blob_GetBufferSize(gsb), NULL, &s_gpu11.gs);
++            ID3D10Blob_Release(gsb);
++        }
++        if (FAILED(hr)) {
++            fprintf(stderr, "  [GPU11] original-plane depth shader failed: %s\n",
++                    err ? (const char *)ID3D10Blob_GetBufferPointer(err) : "device creation");
++            return 0;
++        }
++        fprintf(stderr, "  [GPU11] original-triangle depth reconstruction enabled\n");
++    }
 +    {
 +        D3D11_INPUT_ELEMENT_DESC el[] = {
 +            { "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, (UINT)offsetof(GpuVertex, pos), D3D11_INPUT_PER_VERTEX_DATA, 0 },
@@ -3855,8 +4070,9 @@ index 0000000..404c80f
 +            { "TEXCOORD", 2, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, (UINT)offsetof(GpuVertex, t[2]), D3D11_INPUT_PER_VERTEX_DATA, 0 },
 +            { "TEXCOORD", 3, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, (UINT)offsetof(GpuVertex, t[3]), D3D11_INPUT_PER_VERTEX_DATA, 0 },
 +            { "TEXCOORD", 4, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, (UINT)offsetof(GpuVertex, wz), D3D11_INPUT_PER_VERTEX_DATA, 0 },
++            { "TEXCOORD", 5, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, (UINT)offsetof(GpuVertex, rawscreen), D3D11_INPUT_PER_VERTEX_DATA, 0 },
 +        };
-+        ID3D11Device_CreateInputLayout(s_gpu11.dev, el, 8, ID3D10Blob_GetBufferPointer(vsb),
++        ID3D11Device_CreateInputLayout(s_gpu11.dev, el, 9, ID3D10Blob_GetBufferPointer(vsb),
 +                                       ID3D10Blob_GetBufferSize(vsb), &s_gpu11.layout);
 +    }
 +    {
@@ -4188,6 +4404,22 @@ index 0000000..404c80f
 +                    ID3D11Device_CreateShaderResourceView(s_gpu11.dev, (ID3D11Resource *)sf->copy, NULL, &sf->copy_srv);
 +                }
 +                if (sf->copy_srv) {
++                    /* A CPU access can invalidate the GPU copy without this
++                     * surface being rebound as a render target. Sampling it
++                     * must observe those guest RAM writes, just as rebinding
++                     * it in gpu_bind_surface does. */
++                    if (sf->stale) {
++                        if (env_cached("RECOMP_RTT_TRACE")) {
++                            static uint32_t stale_samples;
++                            if (stale_samples < 32) {
++                                fprintf(stderr, "  [RTT] stale sample #%u frame %u stage %d surface %08X %ux%u pitch %u dirty %d -> guest upload\n",
++                                        ++stale_samples, s_gpu11.frame, st, sf->guest,
++                                        sf->w, sf->h, sf->pitch, sf->dirty);
++                            }
++                        }
++                        gpu_surface_upload(sf);
++                        sf->stale = 0;
++                    }
 +                    ID3D11DeviceContext_CopyResource(s_gpu11.ctx, (ID3D11Resource *)sf->copy, (ID3D11Resource *)sf->tex);
 +                    return sf->copy_srv;
 +                }
@@ -4349,7 +4581,19 @@ index 0000000..404c80f
 +                for (v = 0; v < t->height; v++)
 +                    for (u = 0; u < t->width; u++) {
 +                        uint32_t c = 0;
-+                        sample_stage(st, u, v, &c);
++                        if (!sample_stage(st, u, v, &c) && u == 0 && v == 0 && f == 0 &&
++                            env_cached("RECOMP_TEX_FORMAT_TRACE")) {
++                            static uint64_t seen[32];
++                            static unsigned used;
++                            uint64_t key = ((uint64_t)t->color << 32) | s_comb.stage_prog;
++                            unsigned k;
++                            for (k = 0; k < used && seen[k] != key; ++k) {}
++                            if (k == used && used < 32) {
++                                seen[used++] = key;
++                                fprintf(stderr, "  [TEXFORMAT] unsupported stage=%u fmt=%02X addr=%08X %ux%u prog=%08X\n",
++                                        st, t->color, base, t->width, t->height, s_comb.stage_prog);
++                            }
++                        }
 +                        pix[(size_t)f * n + (size_t)v * t->width + u] = c;
 +                    }
 +            }
@@ -4650,18 +4894,19 @@ index 0000000..404c80f
 +    /* oPos is in screen space, already divided by w; undo the divide so the
 +     * GPU clips and interpolates perspective-correctly (as xemu does). */
 +    float zfull = gpu_zmax(), zc = x->z;
-+    float nx = x->x / (float)rw * 2.0f - 1.0f;
-+    float ny = 1.0f - x->y / (float)rh * 2.0f;
++    float nx = vp_screen_coord(x->x) / (float)rw * 2.0f - 1.0f;
++    float ny = 1.0f - vp_screen_coord(x->y) / (float)rh * 2.0f;
 +    float nz;
 +    /* No clamp to the clip range here: fragments outside it are discarded
 +     * (or clamped) per pixel, see ps_main. */
 +    nz = zc / zfull;
-+    float w = x->w;
++    float w = vp_clamp_w(x->w);
 +    int k;
-+    if (w > -5.192093e-39f && w < 5.192093e-39f) w = 5.192093e-39f;
 +    if (nz < 0.0f) nz = 0.0f;
 +    if (nz > 1.0f) nz = 1.0f;
 +    o->pos[0] = nx * w; o->pos[1] = ny * w; o->pos[2] = nz * w; o->pos[3] = w;
++    o->rawscreen[0] = vp_screen_coord(x->x); o->rawscreen[1] = vp_screen_coord(x->y);
++    o->rawscreen[2] = x->z; o->rawscreen[3] = w;
 +    memcpy(o->d0, x->col, sizeof o->d0);
 +    memcpy(o->d1, x->spec, sizeof o->d1);
 +    /* As the program wrote them; the shader applies each stage's convention. */
@@ -4953,6 +5198,38 @@ index 0000000..404c80f
 +    c.depthp[1] = gpu_zmax();
 +    c.depthp[2] = s_vp.clip_max > s_vp.clip_min ? s_vp.clip_min : 0.0f;
 +    c.depthp[3] = s_vp.clip_max > s_vp.clip_min ? s_vp.clip_max : c.depthp[1];
++    c.depthfmt[0] = (s_vp.control0 & 0x1000u) ? 0u :
++                   (((s_gpu.format >> 4) & 0xFu) == 1u ? 16u : 24u);
++    /* Offset applies to filled polygons, not line-list play art. Shader
++     * derivatives are in scaled pixels; convert the slope to guest pixels. */
++    if (!lines && s_gpu.prim >= NV_PRIM_TRIANGLES && s_vp.poly_offset_fill) {
++        c.depthofs[0] = s_vp.poly_offset_bias;
++        c.depthofs[1] = s_vp.poly_offset_scale;
++    }
++    c.depthofs[2] = (float)surf->scale;
++    if (env_cached("RECOMP_GPU_DEPTH_TRACE")) {
++        static uint32_t seen[64];
++        static unsigned used;
++        uint32_t biasbits, scalebits, key;
++        unsigned k;
++        memcpy(&biasbits, &c.depthofs[0], sizeof biasbits);
++        memcpy(&scalebits, &c.depthofs[1], sizeof scalebits);
++        key = s_vp.control0 ^ (s_gpu.format * 16777619u) ^
++              (s_vp.depth_func << 12) ^ (s_vp.start << 20) ^
++              (s_gpu.prim << 4) ^ biasbits ^ (scalebits * 31u);
++        for (k = 0; k < used && seen[k] != key; ++k) {}
++        if (k == used && used < 64) {
++            seen[used++] = key;
++            fprintf(stderr, "  [GPUDEPTH] frame=%u vp=%u prim=%u ctl=%08X fmt=%08X "
++                    "integer=%u test=%u/%04X mask=%u clip=%g/%g offset=%g/%g "
++                    "cull=%u/%04X front=%04X tex=%08X prog=%08X\n",
++                    s_gpu11.frame, s_vp.start, s_gpu.prim, s_vp.control0, s_gpu.format,
++                    c.depthfmt[0], s_vp.depth_test, s_vp.depth_func, s_vp.depth_mask,
++                    c.depthp[2], c.depthp[3], c.depthofs[0], c.depthofs[1],
++                    s_vp.cull, s_vp.cull_face, s_vp.front_face,
++                    s_gpu.tex.offset, s_comb.stage_prog);
++        }
++    }
 +    /* Fragments outside [clip min, clip max] are discarded unless
 +     * SET_ZMIN_MAX_CONTROL selects clamping (xemu: ZCLAMP_EN == CULL, the
 +     * reset value). NFL 2K5 redraws the stadium with CLIP_MIN at half the
@@ -5077,6 +5354,8 @@ index 0000000..404c80f
 +            ID3D11DeviceContext_VSSetShader(s_gpu11.ctx, s_gpu11.vs, NULL, 0);
 +        }
 +        ID3D11DeviceContext_PSSetShader(s_gpu11.ctx, s_gpu11.ps, NULL, 0);
++        ID3D11DeviceContext_GSSetShader(s_gpu11.ctx, !flat2d && !lines ? s_gpu11.gs : NULL, NULL, 0);
++        ID3D11DeviceContext_GSSetConstantBuffers(s_gpu11.ctx, 0, 1, &s_gpu11.cb);
 +        ID3D11DeviceContext_PSSetConstantBuffers(s_gpu11.ctx, 0, 1, &s_gpu11.cb);
 +        ID3D11DeviceContext_PSSetShaderResources(s_gpu11.ctx, 0, 4, srv);
 +        ID3D11DeviceContext_PSSetShaderResources(s_gpu11.ctx, 4, 4, cubes);
@@ -5103,7 +5382,8 @@ index 0000000..404c80f
 +            unsigned px = 0, py = 0;
 +            if (sscanf(env_cached("RECOMP_GPU_PICK"), "%u,%u", &px, &py) == 2 && px < rw && py < rh) {
 +                D3D11_MAPPED_SUBRESOURCE pm;
-+                D3D11_BOX box = { px, py, 0, px + 1, py + 1, 1 };
++                UINT sx = px * surf->scale, sy = py * surf->scale;
++                D3D11_BOX box = { sx, sy, 0, sx + 1, sy + 1, 1 };
 +                if (!pick) {
 +                    D3D11_TEXTURE2D_DESC td;
 +                    memset(&td, 0, sizeof td);
@@ -5306,10 +5586,10 @@ index 0000000..404c80f
 +}
 diff --git a/src/kernel/nv2a_gpu_d3d11_hlsl.inc b/src/kernel/nv2a_gpu_d3d11_hlsl.inc
 new file mode 100644
-index 0000000..09057ec
+index 0000000..2555aac
 --- /dev/null
 +++ b/src/kernel/nv2a_gpu_d3d11_hlsl.inc
-@@ -0,0 +1,300 @@
+@@ -0,0 +1,386 @@
 +/* Generated from nv2a_gpu_d3d11.hlsl by tools/gen-gpu-hlsl.py -- do not edit. */
 +static const char k_gpu_hlsl[] =
 +    "// NV2A pixel pipeline for the Direct3D 11 renderer (nv2a_gpu_d3d11.inc.c).\n"
@@ -5326,11 +5606,17 @@ index 0000000..09057ec
 +    "    float4 pos : POSITION; float4 d0 : COLOR0; float4 d1 : COLOR1;\n"
 +    "    float4 t0 : TEXCOORD0; float4 t1 : TEXCOORD1; float4 t2 : TEXCOORD2; float4 t3 : TEXCOORD3;\n"
 +    "    float4 wz : TEXCOORD4;   // x: oPos.w, for w-buffered depth\n"
++    "    float4 rawscreen : TEXCOORD5;\n"
 +    "};\n"
 +    "struct PIn {\n"
 +    "    float4 pos : SV_Position; float4 d0 : COLOR0; float4 d1 : COLOR1;\n"
 +    "    float4 t0 : TEXCOORD0; float4 t1 : TEXCOORD1; float4 t2 : TEXCOORD2; float4 t3 : TEXCOORD3;\n"
 +    "    float4 wz : TEXCOORD4;\n"
++    "    float4 rawscreen : TEXCOORD5;\n"
++    "    nointerpolation float4 tri0 : TEXCOORD6;\n"
++    "    nointerpolation float4 tri1 : TEXCOORD7;\n"
++    "    nointerpolation float4 tri2 : TEXCOORD8;\n"
++    "    nointerpolation float2 depthmeta : TEXCOORD9;\n"
 +    "};\n"
 +    "struct POut {\n"
 +    "    float4 c : SV_Target;\n"
@@ -5343,6 +5629,9 @@ index 0000000..09057ec
 +    "    o.pos = v.pos; o.d0 = v.d0; o.d1 = v.d1;\n"
 +    "    o.t0 = v.t0; o.t1 = v.t1; o.t2 = v.t2; o.t3 = v.t3;\n"
 +    "    o.wz = v.wz;\n"
++    "    o.rawscreen = v.rawscreen;\n"
++    "    o.tri0 = o.tri1 = o.tri2 = 0;\n"
++    "    o.depthmeta = 0;\n"
 +    "    return o;\n"
 +    "}\n"
 +    "\n"
@@ -5364,7 +5653,54 @@ index 0000000..09057ec
 +    "    uint4  show;          // RECOMP_GPU_SHOW debug view (x): 0 normal, 1-4 t0-t3, 5 d0, 6 alpha\n"
 +    "    float4 depthp;        // x: w-buffer (Z perspective), y: zmax, z/w: clip min/max\n"
 +    "    float4 fogc;          // fog colour; the factor arrives in wz.y\n"
++    "    uint4 depthfmt;       // x: 0 floating depth, or integer depth bit count\n"
++    "    float4 depthofs;      // x: polygon bias, y: slope factor, z: render scale\n"
 +    "};\n"
++    "\n"
++    "// The geometry input consumes only the VS values, not the triangle metadata\n"
++    "// it creates. Keep that signature independent of the line fallback outputs.\n"
++    "struct GIn {\n"
++    "    float4 pos : SV_Position; float4 d0 : COLOR0; float4 d1 : COLOR1;\n"
++    "    float4 t0 : TEXCOORD0; float4 t1 : TEXCOORD1; float4 t2 : TEXCOORD2; float4 t3 : TEXCOORD3;\n"
++    "    float4 wz : TEXCOORD4; float4 rawscreen : TEXCOORD5;\n"
++    "};\n"
++    "\n"
++    "precise float triangle_area(float2 a, float2 b, float2 c)\n"
++    "{\n"
++    "    precise float2 e = b - a;\n"
++    "    precise float2 f = c - a;\n"
++    "    return e.x * f.y - e.y * f.x;\n"
++    "}\n"
++    "\n"
++    "// Preserve the original Xbox triangle through host clipping. Reconstructing\n"
++    "// its depth in the pixel shader avoids the host's different plane rounding\n"
++    "// on equal-depth field/model overlays (xemu geom.c and psh.c).\n"
++    "[maxvertexcount(3)]\n"
++    "void gs_main(triangle GIn v[3], inout TriangleStream<PIn> stream)\n"
++    "{\n"
++    "    float4 p0 = v[0].rawscreen, p1 = v[1].rawscreen, p2 = v[2].rawscreen;\n"
++    "    precise float2 e1 = p1.xy - p0.xy, e2 = p2.xy - p0.xy;\n"
++    "    precise float b1 = p1.z - p0.z, b2 = p2.z - p0.z;\n"
++    "    if (depthp.x != 0.0) {\n"
++    "        b1 = (p0.w - p1.w) / (p1.w * p0.w);\n"
++    "        b2 = (p0.w - p2.w) / (p2.w * p0.w);\n"
++    "    }\n"
++    "    precise float det = e1.x * e2.y - e1.y * e2.x;\n"
++    "    precise float dx = (b1 * e2.y - b2 * e1.y) / det;\n"
++    "    precise float dy = (b2 * e1.x - b1 * e2.x) / det;\n"
++    "    float slope = max(abs(dx), abs(dy));\n"
++    "    if (isnan(slope) || isinf(slope)) slope = 0;\n"
++    "    [unroll] for (uint k = 0; k < 3; ++k) {\n"
++    "        PIn o;\n"
++    "        o.pos = v[k].pos; o.d0 = v[k].d0; o.d1 = v[k].d1;\n"
++    "        o.t0 = v[k].t0; o.t1 = v[k].t1; o.t2 = v[k].t2; o.t3 = v[k].t3;\n"
++    "        o.wz = v[k].wz; o.rawscreen = v[k].rawscreen;\n"
++    "        o.tri0 = p0; o.tri1 = p1; o.tri2 = p2;\n"
++    "        o.depthmeta = float2(slope, 1);\n"
++    "        stream.Append(o);\n"
++    "    }\n"
++    "    stream.RestartStrip();\n"
++    "}\n"
 +    "\n"
 +    "Texture2D   T0 : register(t0); Texture2D   T1 : register(t1);\n"
 +    "Texture2D   T2 : register(t2); Texture2D   T3 : register(t3);\n"
@@ -5467,16 +5803,46 @@ index 0000000..09057ec
 +    "{\n"
 +    "    POut r;\n"
 +    "    // Depth in depth-buffer units: w with Z perspective, else z.\n"
-+    "    float zd = depthp.x != 0.0 ? i.wz.x : i.pos.z * depthp.y;\n"
++    "    precise float zd = depthp.x != 0.0 ? i.wz.x : i.pos.z * depthp.y;\n"
++    "    float slope = max(abs(ddx(zd)), abs(ddy(zd))) * depthofs.z;\n"
++    "    if (i.depthmeta.y != 0.0) {\n"
++    "        float2 p = i.pos.xy / depthofs.z;\n"
++    "        precise float bc0 = triangle_area(p, i.tri1.xy, i.tri2.xy);\n"
++    "        precise float bc1 = triangle_area(p, i.tri2.xy, i.tri0.xy);\n"
++    "        precise float bc2 = triangle_area(p, i.tri0.xy, i.tri1.xy);\n"
++    "        if (depthp.x != 0.0) {\n"
++    "            bc0 /= i.tri0.w; bc1 /= i.tri1.w; bc2 /= i.tri2.w;\n"
++    "        }\n"
++    "        float inv = 1.0 / (bc0 + bc1 + bc2);\n"
++    "        if (isinf(inv)) inv = 0.0;\n"
++    "        bc1 *= inv; bc2 *= inv;\n"
++    "        if (depthp.x != 0.0)\n"
++    "            zd = i.tri0.w + (bc1 * (i.tri1.w - i.tri0.w) + bc2 * (i.tri2.w - i.tri0.w));\n"
++    "        else\n"
++    "            zd = i.tri0.z + (bc1 * (i.tri1.z - i.tri0.z) + bc2 * (i.tri2.z - i.tri0.z));\n"
++    "        slope = i.depthmeta.x;\n"
++    "    }\n"
++    "    if (depthp.x != 0.0) {\n"
++    "        if (zd > 0.0) {\n"
++    "            precise float slope_offset = depthofs.y * slope * zd * zd;\n"
++    "            zd += depthofs.x;\n"
++    "            zd += slope_offset;\n"
++    "        }\n"
++    "        else zd = asfloat(0x7F7FFFFFu);\n"
++    "        if (isnan(zd)) zd = asfloat(0x7F7FFFFFu);\n"
++    "    } else zd += depthofs.x + depthofs.y * slope;\n"
 +    "    // Outside the clip range: discarded, unless SET_ZMIN_MAX_CONTROL says\n"
 +    "    // clamp (show.y = 0). xemu psh.c \"Depth clipping\".\n"
 +    "    if (show.y != 0u && (zd < depthp.z || zd > depthp.w))\n"
 +    "        discard;\n"
++    "    zd = clamp(zd, depthp.z, depthp.w);\n"
 +    "    r.c = shade(i);\n"
-+    "    if (depthp.x != 0.0)\n"
-+    "        r.d = clamp(zd, depthp.z, depthp.w) / depthp.y;\n"
-+    "    else\n"
-+    "        r.d = i.pos.z;\n"
++    "    // The host uses a float depth surface for all guest formats. Explicitly\n"
++    "    // floor Xbox integer depth before storing it: retaining fractional\n"
++    "    // values changes coplanar/equal-depth tests (decals and model overlays).\n"
++    "    // Floating Xbox depth keeps its fractional value.\n"
++    "    if (depthfmt.x != 0u) zd = floor(zd);\n"
++    "    r.d = zd / depthp.y;\n"
 +    "    return r;\n"
 +    "}\n"
 +    "\n"
@@ -5612,10 +5978,10 @@ index 0000000..09057ec
 +    "}\n";
 diff --git a/src/kernel/nv2a_gpu_present.inc.c b/src/kernel/nv2a_gpu_present.inc.c
 new file mode 100644
-index 0000000..8f5d34a
+index 0000000..6951738
 --- /dev/null
 +++ b/src/kernel/nv2a_gpu_present.inc.c
-@@ -0,0 +1,1027 @@
+@@ -0,0 +1,1160 @@
 +/* ── Presentation and video settings (2026-09-26) ────────────────────────
 + *
 + * Included into nv2a_gpu_d3d11.inc.c.
@@ -5780,6 +6146,9 @@ index 0000000..8f5d34a
 +    ID3D11Texture2D *ovl;
 +    ID3D11ShaderResourceView *ovl_srv;
 +    int ovl_w, ovl_h, ovl_valid;
++    ID3D11Texture2D *toast;
++    ID3D11ShaderResourceView *toast_srv;
++    int toast_w, toast_h, toast_built;
 +    int fullscreen_state;
 +    /* fps */
 +    LARGE_INTEGER t0, freq;
@@ -5898,6 +6267,7 @@ index 0000000..8f5d34a
 +    ID3D11DeviceContext_IASetInputLayout(s_gpu11.ctx, NULL);
 +    ID3D11DeviceContext_IASetPrimitiveTopology(s_gpu11.ctx, D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 +    ID3D11DeviceContext_VSSetShader(s_gpu11.ctx, s_pr.vs, NULL, 0);
++    ID3D11DeviceContext_GSSetShader(s_gpu11.ctx, NULL, NULL, 0);
 +    ID3D11DeviceContext_PSSetConstantBuffers(s_gpu11.ctx, 0, 1, &s_pr.cb);
 +}
 +
@@ -6496,6 +6866,133 @@ index 0000000..8f5d34a
 +    s_pr.ovl_valid = 1;
 +}
 +
++/* ── Toast: a short banner in the bottom-left corner ──────────────────
++ * xbox_PresentToast(header, line1, line2, ms): "NOW PLAYING" for the local
++ * music library, drawn in the style of the game's own panels. Any thread may
++ * call it; the presenter rebuilds the texture when the text changes. */
++static SRWLOCK s_toast_lock = SRWLOCK_INIT;
++static volatile LONG s_toast_version;
++static char s_toast_text[3][128];
++static DWORD s_toast_until;
++
++void xbox_PresentToast(const char *header, const char *line1, const char *line2, unsigned ms)
++{
++    AcquireSRWLockExclusive(&s_toast_lock);
++    strncpy_s(s_toast_text[0], sizeof s_toast_text[0], header ? header : "", _TRUNCATE);
++    strncpy_s(s_toast_text[1], sizeof s_toast_text[1], line1 ? line1 : "", _TRUNCATE);
++    strncpy_s(s_toast_text[2], sizeof s_toast_text[2], line2 ? line2 : "", _TRUNCATE);
++    s_toast_until = GetTickCount() + ms;
++    InterlockedIncrement(&s_toast_version);
++    ReleaseSRWLockExclusive(&s_toast_lock);
++}
++
++static void pr_build_toast(void)
++{
++    const int W = 640, H = 132;
++    const COLORREF key = RGB(255, 0, 255);
++    BITMAPINFO bi;
++    void *bits = NULL;
++    HDC dc;
++    HBITMAP bmp, old;
++    HFONT fh, ft, fs, of;
++    char text[3][128];
++    int i;
++    AcquireSRWLockShared(&s_toast_lock);
++    memcpy(text, s_toast_text, sizeof text);
++    ReleaseSRWLockShared(&s_toast_lock);
++    if (s_pr.toast) { ID3D11Texture2D_Release(s_pr.toast); s_pr.toast = NULL; }
++    if (s_pr.toast_srv) { ID3D11ShaderResourceView_Release(s_pr.toast_srv); s_pr.toast_srv = NULL; }
++    memset(&bi, 0, sizeof bi);
++    bi.bmiHeader.biSize = sizeof bi.bmiHeader;
++    bi.bmiHeader.biWidth = W; bi.bmiHeader.biHeight = -H;
++    bi.bmiHeader.biPlanes = 1; bi.bmiHeader.biBitCount = 32; bi.bmiHeader.biCompression = BI_RGB;
++    dc = CreateCompatibleDC(NULL);
++    bmp = CreateDIBSection(dc, &bi, DIB_RGB_COLORS, &bits, NULL, 0);
++    if (!bmp || !bits) { DeleteDC(dc); return; }
++    old = (HBITMAP)SelectObject(dc, bmp);
++    {
++        HBRUSH kb = CreateSolidBrush(key), panel = CreateSolidBrush(RGB(14, 20, 34));
++        HBRUSH bar = CreateSolidBrush(RGB(196, 18, 30)), edge = CreateSolidBrush(RGB(200, 205, 215));
++        RECT all = { 0, 0, W, H }, pr = { 0, 0, W, H }, br = { 0, 0, W, 34 }, er = { 0, H - 4, W, H };
++        FillRect(dc, &all, kb);
++        FillRect(dc, &pr, panel);
++        FillRect(dc, &br, bar);
++        FillRect(dc, &er, edge);
++        DeleteObject(kb); DeleteObject(panel); DeleteObject(bar); DeleteObject(edge);
++    }
++    fh = CreateFontA(26, 0, 0, 0, FW_HEAVY, 0, 0, 0, ANSI_CHARSET, 0, 0, ANTIALIASED_QUALITY, 0, "Arial Black");
++    ft = CreateFontA(36, 0, 0, 0, FW_BOLD, 0, 0, 0, ANSI_CHARSET, 0, 0, ANTIALIASED_QUALITY, 0, "Arial");
++    fs = CreateFontA(26, 0, 0, 0, FW_BOLD, 0, 0, 0, ANSI_CHARSET, 0, 0, ANTIALIASED_QUALITY, 0, "Arial");
++    SetBkMode(dc, TRANSPARENT);
++    of = (HFONT)SelectObject(dc, fh);
++    SetTextColor(dc, RGB(255, 255, 255));
++    TextOutA(dc, 16, 3, text[0], (int)strlen(text[0]));
++    SelectObject(dc, ft);
++    SetTextColor(dc, RGB(255, 255, 255));
++    {
++        RECT r = { 16, 40, W - 16, 82 };
++        DrawTextA(dc, text[1], -1, &r, DT_LEFT | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX);
++    }
++    SelectObject(dc, fs);
++    SetTextColor(dc, RGB(120, 220, 120));
++    {
++        RECT r = { 16, 86, W - 16, 122 };
++        DrawTextA(dc, text[2], -1, &r, DT_LEFT | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX);
++    }
++    SelectObject(dc, of);
++    GdiFlush();
++    {
++        uint32_t *p = (uint32_t *)bits;
++        int n = W * H;
++        for (i = 0; i < n; i++) {
++            uint32_t c = p[i] & 0x00FFFFFFu;
++            p[i] = c == 0x00FF00FFu ? 0u : (c | (c == 0x000E1422u ? 0xEB000000u : 0xFF000000u));
++        }
++    }
++    {
++        D3D11_TEXTURE2D_DESC td;
++        D3D11_SUBRESOURCE_DATA sd;
++        memset(&td, 0, sizeof td);
++        td.Width = W; td.Height = H; td.MipLevels = td.ArraySize = 1;
++        td.Format = DXGI_FORMAT_B8G8R8A8_UNORM; td.SampleDesc.Count = 1;
++        td.Usage = D3D11_USAGE_IMMUTABLE; td.BindFlags = D3D11_BIND_SHADER_RESOURCE;
++        sd.pSysMem = bits; sd.SysMemPitch = W * 4; sd.SysMemSlicePitch = 0;
++        if (SUCCEEDED(ID3D11Device_CreateTexture2D(s_gpu11.dev, &td, &sd, &s_pr.toast)))
++            ID3D11Device_CreateShaderResourceView(s_gpu11.dev, (ID3D11Resource *)s_pr.toast, NULL, &s_pr.toast_srv);
++    }
++    s_pr.toast_w = W; s_pr.toast_h = H;
++    SelectObject(dc, old);
++    DeleteObject(bmp);
++    DeleteObject(fh); DeleteObject(ft); DeleteObject(fs);
++    DeleteDC(dc);
++}
++
++/* Draw the toast while it is due, in the bottom-left corner. */
++static void pr_draw_toast(void)
++{
++    D3D11_VIEWPORT vp;
++    float scale;
++    if (!s_toast_version || (LONG)(s_toast_until - GetTickCount()) <= 0)
++        return;
++    if (s_pr.toast_built != s_toast_version) {
++        pr_build_toast();
++        s_pr.toast_built = s_toast_version;
++    }
++    if (!s_pr.toast_srv) return;
++    scale = (float)s_pr.bb_h / 1080.0f;
++    if (scale < 0.5f) scale = 0.5f;
++    memset(&vp, 0, sizeof vp);
++    vp.Width = s_pr.toast_w * scale; vp.Height = s_pr.toast_h * scale;
++    vp.TopLeftX = s_pr.bb_w * 0.04f;
++    vp.TopLeftY = s_pr.bb_h - vp.Height - s_pr.bb_h * 0.07f;
++    vp.MaxDepth = 1.0f;
++    ID3D11DeviceContext_RSSetViewports(s_gpu11.ctx, 1, &vp);
++    ID3D11DeviceContext_OMSetBlendState(s_gpu11.ctx, s_pr.blend, NULL, 0xFFFFFFFFu);
++    ID3D11DeviceContext_PSSetShader(s_gpu11.ctx, s_pr.ps_ovl, NULL, 0);
++    ID3D11DeviceContext_PSSetShaderResources(s_gpu11.ctx, 0, 1, &s_pr.toast_srv);
++    ID3D11DeviceContext_Draw(s_gpu11.ctx, 3, 0);
++}
++
 +/* Where the picture goes in the back buffer, for the aspect setting. The
 + * surface is shown as 4:3 (NTSC 720x480 has non-square pixels). */
 +static void pr_dest_rect(float *x, float *y, float *w, float *h)
@@ -6584,6 +7081,7 @@ index 0000000..8f5d34a
 +    ID3D11DeviceContext_IASetInputLayout(s_gpu11.ctx, NULL);
 +    ID3D11DeviceContext_IASetPrimitiveTopology(s_gpu11.ctx, D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 +    ID3D11DeviceContext_VSSetShader(s_gpu11.ctx, s_pr.vs, NULL, 0);
++    ID3D11DeviceContext_GSSetShader(s_gpu11.ctx, NULL, NULL, 0);
 +    ID3D11DeviceContext_PSSetShader(s_gpu11.ctx, s_pr.ps, NULL, 0);
 +    ID3D11DeviceContext_PSSetConstantBuffers(s_gpu11.ctx, 0, 1, &s_pr.cb);
 +    ID3D11DeviceContext_PSSetShaderResources(s_gpu11.ctx, 0, 1, &srv);
@@ -6625,6 +7123,7 @@ index 0000000..8f5d34a
 +            ID3D11DeviceContext_Draw(s_gpu11.ctx, 3, 0);
 +        }
 +    }
++    pr_draw_toast();
 +    {
 +        ID3D11ShaderResourceView *none = NULL;
 +        ID3D11DeviceContext_PSSetShaderResources(s_gpu11.ctx, 0, 1, &none);
@@ -6645,10 +7144,10 @@ index 0000000..8f5d34a
 +}
 diff --git a/src/kernel/nv2a_gpu_vp.inc.c b/src/kernel/nv2a_gpu_vp.inc.c
 new file mode 100644
-index 0000000..ea9882d
+index 0000000..bd7bffe
 --- /dev/null
 +++ b/src/kernel/nv2a_gpu_vp.inc.c
-@@ -0,0 +1,628 @@
+@@ -0,0 +1,643 @@
 +/* ── NV2A vertex programs on the GPU ─────────────────────────────────────
 + *
 + * Included into nv2a_gpu_d3d11.inc.c. Opt-in with RECOMP_GPU_VP=1 while it is
@@ -6691,6 +7190,7 @@ index 0000000..ea9882d
 +    float info[4];                       /* surface width, height, zmax */
 +    float clip[4];                       /* clip min, max, 1 when set */
 +    float fog[4];                        /* enable, mode, param0, param1 */
++    float light[4];                      /* specular enable, material specular alpha */
 +} GpuVpConsts;
 +
 +static uint32_t gpu_vp_vertex(uint32_t index, uint32_t *nv);
@@ -6706,16 +7206,22 @@ index 0000000..ea9882d
 +}
 +
 +static const char *k_vp_prelude =
-+    "cbuffer VC : register(b1) { float4 c[192]; float4 info; float4 clipr; float4 fogp; };\n"
++    "cbuffer VC : register(b1) { float4 c[192]; float4 info; float4 clipr; float4 fogp; float4 lightp; };\n"
 +    "struct VSIn {\n"
 +    "  float4 a0:V0; float4 a1:V1; float4 a2:V2; float4 a3:V3; float4 a4:V4; float4 a5:V5; float4 a6:V6; float4 a7:V7;\n"
 +    "  float4 a8:V8; float4 a9:V9; float4 a10:V10; float4 a11:V11; float4 a12:V12; float4 a13:V13; float4 a14:V14; float4 a15:V15; };\n"
 +    "struct PIn { float4 pos:SV_Position; float4 d0:COLOR0; float4 d1:COLOR1;\n"
-+    "  float4 t0:TEXCOORD0; float4 t1:TEXCOORD1; float4 t2:TEXCOORD2; float4 t3:TEXCOORD3; float4 wz:TEXCOORD4; };\n"
++    "  float4 t0:TEXCOORD0; float4 t1:TEXCOORD1; float4 t2:TEXCOORD2; float4 t3:TEXCOORD3; float4 wz:TEXCOORD4; float4 rawscreen:TEXCOORD5;\n"
++    "  nointerpolation float4 tri0:TEXCOORD6; nointerpolation float4 tri1:TEXCOORD7; nointerpolation float4 tri2:TEXCOORD8;\n"
++    "  nointerpolation float2 depthmeta:TEXCOORD9; };\n"
 +    "float vrcp(float x) { return x == 1.0 ? 1.0 : 1.0 / x; }\n"
 +    "float vrcc(float x) { float r = x == 0.0 ? 1.8446743e19 : 1.0 / x;\n"
 +    "  if (r > 0) r = clamp(r, 5.42101e-20, 1.8446743e19); else r = clamp(r, -1.8446743e19, -5.42101e-20); return r; }\n"
 +    "float vrsq(float x) { x = abs(x); return x == 1.0 ? 1.0 : rsqrt(x); }\n"
++    "float vclampw(float w) {\n"
++    "  if (w > 0.0 || asuint(w) == 0u) return clamp(w, asfloat(0x1F800000u), asfloat(0x5F800000u));\n"
++    "  return clamp(w, asfloat(0xDF800000u), asfloat(0x9F800000u));\n"
++    "}\n"
 +    "float4 vexp(float x) { float f = floor(x); return float4(exp2(f), x - f, exp2(x), 1.0); }\n"
 +    "float4 vlog(float x) { x = abs(x); if (x == 0.0) return float4(-asfloat(0x7F800000u), 1.0, -asfloat(0x7F800000u), 1.0);\n"
 +    "  float e = floor(log2(x)); return float4(e, x / exp2(e), log2(x), 1.0); }\n"
@@ -6730,11 +7236,11 @@ index 0000000..ea9882d
 +static const char *k_vp_epilogue =
 +    "  PIn o;\n"
 +    "  float4 P = O[0];\n"
++    "  P.xy = trunc(P.xy * 16.0) / 16.0;\n"
++    "  P.w = vclampw(P.w);\n"
 +    "  float w = P.w;\n"
-+    /* Match gpu_vertex/the reference interpreter.  The old 1e-6 guard was
-+     * large enough to rewrite valid near-plane w values in program 46,
-+     * collapsing projected field vertices into long wedges. */
-+    "  if (!(w > 5.192093e-39 || w < -5.192093e-39)) w = 5.192093e-39;\n"
++    "  o.rawscreen = P;\n"
++    "  o.tri0 = o.tri1 = o.tri2 = 0; o.depthmeta = 0;\n"
 +    "  float nx = P.x / info.x * 2.0 - 1.0, ny = 1.0 - P.y / info.y * 2.0;\n"
 +    "  float zc = P.z;\n"
 +    "  float nz = saturate(zc / info.z);\n"
@@ -6743,15 +7249,20 @@ index 0000000..ea9882d
 +    "  float4 d0 = O[3], d1 = O[4];\n"
 +    "  [unroll] for (k = 0; k < 4; k++) { if (isnan(d0[k])) d0[k] = 1.0; if (isnan(d1[k])) d1[k] = 1.0; }\n"
 +    "  o.d0 = saturate(d0); o.d1 = saturate(d1);\n"
++    "  if (lightp.x == 0.0) o.d1 = float4(0,0,0,1);\n"
++    "  else if (lightp.y == 0.0) o.d1.w = 1.0;\n"
 +    "  o.t0 = O[9]; o.t1 = O[10]; o.t2 = O[11]; o.t3 = O[12];\n"
-+    "  float fd = O[5].x, ff = 1.0; uint fm = asuint(fogp.y);\n"
++    "  float fd = O[5].x, ff = 1.0, exceptional = 0.0; uint fm = asuint(fogp.y);\n"
 +    "  if (fogp.x != 0.0) {\n"
-+    "    if (fm == 0x804u || fm == 0x802u || fm == 0x803u) fd = abs(fd);\n"
 +    "    if (fm == 0x2601u || fm == 0x804u) ff = fogp.z + fd * fogp.w - 1.0;\n"
 +    "    else if (fm == 0x800u || fm == 0x802u) ff = fogp.z + exp2(fd * fogp.w * 16.0) - 1.5;\n"
 +    "    else if (fm == 0x801u || fm == 0x803u) ff = fogp.z + exp2(-fd * fd * fogp.w * fogp.w * 32.0) - 1.5;\n"
++    "    if (fm == 0x2601u || fm == 0x804u || fm == 0x800u) exceptional = 1.0;\n"
++    "    if (fm == 0x804u || fm == 0x802u || fm == 0x803u) ff = abs(ff);\n"
++    "    if (isinf(fd) || isnan(ff)) ff = exceptional;\n"
++    "    else ff = clamp(ff, -asfloat(0x7F7FFFFFu), asfloat(0x7F7FFFFFu));\n"
 +    "  }\n"
-+    "  o.wz = float4(w, saturate(ff), 0, 1);\n"
++    "  o.wz = float4(w, ff, 0, 1);\n"
 +    "  return o;\n"
 +    "}\n";
 +
@@ -6885,7 +7396,7 @@ index 0000000..ea9882d
 +            vpb(&b, "    %s%s = il%s;\n", mac ? "R[1]" : dst, mk, mk);
 +        }
 +        if (o_mask && orb && ((out_mux == 0 && mac && mac != 13) || (out_mux == 1 && ilu))) {
-+            vp_mask(mk, o_mask);
++            vp_mask(mk, (out_addr & 15u) == 5 ? vp_fog_write_mask(o_mask) : o_mask);
 +            vpb(&b, "    O[%u]%s = %s%s;\n", out_addr & 15u, mk, out_mux ? "il" : "m", mk);
 +        }
 +        if (mac == 13)
@@ -7259,6 +7770,9 @@ index 0000000..ea9882d
 +    k.fog[0] = s_fog.enable ? 1.0f : 0.0f;
 +    memcpy(&k.fog[1], &s_fog.mode, 4);
 +    k.fog[2] = s_fog.p[0]; k.fog[3] = s_fog.p[1];
++    k.light[0] = s_vp.specular_enable ? 1.0f : 0.0f;
++    k.light[1] = (s_vp.light_control & (1u << 17)) ? 1.0f : 0.0f;
++    k.light[2] = k.light[3] = 0.0f;
 +    if (!s_vp_consts_valid || memcmp(&k, &s_vp_last_consts, sizeof k) != 0) {
 +        if (FAILED(ID3D11DeviceContext_Map(s_gpu11.ctx, (ID3D11Resource *)s_vp_cb, 0, D3D11_MAP_WRITE_DISCARD, 0, &m)))
 +            return 0;
@@ -7278,21 +7792,22 @@ index 0000000..ea9882d
 +    return 1;
 +}
 diff --git a/src/kernel/nv2a_pb_exec.c b/src/kernel/nv2a_pb_exec.c
-index b3dcbf7..c4d9c15 100644
+index b3dcbf7..5b37dcf 100644
 --- a/src/kernel/nv2a_pb_exec.c
 +++ b/src/kernel/nv2a_pb_exec.c
-@@ -24,8 +24,10 @@
+@@ -24,8 +24,11 @@
   * has not given us any vertices". RECOMP_FB_DUMP=<prefix> writes the surface to
   * <prefix>NNN.bmp, so the result can be looked at without a display.
   */
 +#include <windows.h>
++#include <float.h>
  #include <math.h>
  #include <stdio.h>
 +#include <stddef.h>
  #include <stdint.h>
  #include <stdlib.h>
  #include <string.h>
-@@ -35,9 +37,42 @@
+@@ -35,9 +38,42 @@
   * Morton order, not a second one that can disagree with it. */
  #include "../d3d/d3d8_swizzle.h"
  
@@ -7335,7 +7850,7 @@ index b3dcbf7..c4d9c15 100644
  extern uint32_t g_xbox_image_lo, g_xbox_image_hi;
  
  /* Would writing this surface land on the title's own image?
-@@ -103,6 +138,8 @@ static uint32_t dma_resolve(uint32_t offset)
+@@ -103,6 +139,8 @@ static uint32_t dma_resolve(uint32_t offset)
       * black straight through the guest heap -- which faulted the title three
       * frames later on a pointer that had been overwritten, while the real
       * framebuffer at 0x80A6C000 stayed untouched and the screen stayed black. */
@@ -7344,7 +7859,7 @@ index b3dcbf7..c4d9c15 100644
      if (offset < xbox_ContiguousAllocatedBytes())
          return XBOX_CONTIG_BASE + offset;
      if (!surface_hits_image(offset, 1))
-@@ -135,16 +172,29 @@ static int surface_write_refused(uint32_t base, uint32_t bytes, const char *what
+@@ -135,16 +173,30 @@ static int surface_write_refused(uint32_t base, uint32_t bytes, const char *what
  /* NV097 methods this executor acts on. */
  #define NV097_SET_SURFACE_CLIP_HORIZONTAL 0x0200
  #define NV097_SET_SURFACE_CLIP_VERTICAL   0x0204
@@ -7354,6 +7869,7 @@ index b3dcbf7..c4d9c15 100644
  #define NV097_SET_SURFACE_FORMAT          0x0208
  #define NV097_SET_SURFACE_PITCH           0x020C
  #define NV097_SET_SURFACE_COLOR_OFFSET    0x0210
++#define NV097_SET_SURFACE_ZETA_OFFSET     0x0214
  #define NV097_SET_COLOR_CLEAR_VALUE       0x1D90
 +#define NV097_SET_ALPHA_TEST_ENABLE       0x0300
 +#define NV097_SET_BLEND_ENABLE            0x0304
@@ -7374,7 +7890,7 @@ index b3dcbf7..c4d9c15 100644
  #define NV097_SET_TEXTURE_ADDRESS         0x1B08
  #define NV097_SET_TEXTURE_CONTROL1        0x1B10
  #define NV097_SET_TEXTURE_IMAGE_RECT      0x1B1C
-@@ -214,6 +264,8 @@ typedef struct {
+@@ -214,6 +266,8 @@ typedef struct {
      uint32_t pitch;                     /* bytes per row, from CONTROL1  */
      uint32_t color;                     /* NV097 colour-format code      */
      uint32_t addr_u, addr_v;            /* wrap mode per axis            */
@@ -7383,7 +7899,7 @@ index b3dcbf7..c4d9c15 100644
      int      valid;
  } Texture;
  
-@@ -222,6 +274,11 @@ static struct {
+@@ -222,6 +276,11 @@ static struct {
      uint32_t   prim;                    /* SET_BEGIN_END parameter, 0 = ended */
      uint16_t   idx[NV_MAX_INDICES];
      uint32_t   idx_count;
@@ -7395,7 +7911,15 @@ index b3dcbf7..c4d9c15 100644
      /* INLINE_ARRAY payload: vertices written straight into the pushbuffer
       * instead of into a buffer the title points at. Same vertex format, a
       * different place to read them from. */
-@@ -246,7 +303,13 @@ static struct {
+@@ -237,6 +296,7 @@ static struct {
+     uint32_t   draws, verts, nonzero_draws;
+     float      min_x, max_x, min_y, max_y;
+     uint32_t color_offset, color_base, pitch, format;
++    uint32_t zeta_offset, zeta_pitch;    /* independent NV097 depth/stencil surface */
+     /* The surface the last batch actually drew into. A double-buffered title
+      * has already pointed color_offset at the next buffer and cleared it by
+      * the time the flip arrives, so dumping the current one dumps the frame
+@@ -246,7 +306,13 @@ static struct {
      uint64_t pixels;
      uint32_t pixel_max;   /* brightest value any pixel write carried */
      uint32_t clip_x, clip_w, clip_y, clip_h;
@@ -7409,7 +7933,7 @@ index b3dcbf7..c4d9c15 100644
      uint32_t clears, unhandled_total;
      uint32_t flip_read, flip_write, flip_modulo, flips;
      uint32_t tris_drawn, tris_skipped_offscreen, batches_untransformed;
-@@ -257,6 +320,18 @@ static struct {
+@@ -257,6 +323,18 @@ static struct {
      Texture  tex;
  } s_gpu;
  
@@ -7428,7 +7952,7 @@ index b3dcbf7..c4d9c15 100644
  /* Unhandled methods, ranked. The interesting output is not that something was
   * skipped but which things dominate, because that is the order to implement
   * them in. */
-@@ -291,9 +366,22 @@ static void record_tex_reg(uint32_t method, uint32_t param)
+@@ -291,9 +369,22 @@ static void record_tex_reg(uint32_t method, uint32_t param)
       * which is nearly all of them, since swizzled is the Xbox default. That
       * left the title's own textures unsampled and every textured quad drawn in
       * flat vertex colour. */
@@ -7451,7 +7975,7 @@ index b3dcbf7..c4d9c15 100644
  }
  
  /* Every distinct texture a batch was drawn with, and how many batches used it.
-@@ -349,6 +437,11 @@ static void note_unhandled(uint32_t method, uint32_t param)
+@@ -349,6 +440,11 @@ static void note_unhandled(uint32_t method, uint32_t param)
          }
      }
      if (s_unhandled_count < PB_EXEC_MAX_UNHANDLED) {
@@ -7463,12 +7987,12 @@ index b3dcbf7..c4d9c15 100644
          s_unhandled[s_unhandled_count].method = method;
          s_unhandled[s_unhandled_count].count = 1;
          s_unhandled[s_unhandled_count].last_param = param;
-@@ -367,8 +460,12 @@ static int fetch_attr(const VertexAttr *a, uint32_t index, float out[4])
+@@ -367,8 +463,12 @@ static int fetch_attr(const VertexAttr *a, uint32_t index, float out[4])
  
      out[0] = out[1] = out[2] = 0.0f;
      out[3] = 1.0f;
 -    if (!a->size || !a->stride)
-+    if (!a->size || !a->stride) {
++    if (!a->size) {
 +        ptrdiff_t k = a - s_gpu.attr;
 +        if (k >= 0 && k < NV_VERTEX_ATTRS)
 +            memcpy(out, s_attr_inline[k], sizeof s_attr_inline[k]);
@@ -7477,7 +8001,22 @@ index b3dcbf7..c4d9c15 100644
      if (s_gpu.inline_active) {
          /* The batch arrived as INLINE_ARRAY, so `offset` is a byte offset into
           * the buffered payload rather than a guest address -- and 0 is a legal
-@@ -402,6 +499,29 @@ static int fetch_attr(const VertexAttr *a, uint32_t index, float out[4])
+@@ -389,9 +489,12 @@ static int fetch_attr(const VertexAttr *a, uint32_t index, float out[4])
+         /* A DWORD 0xAARRGGBB, so little-endian bytes are B,G,R,A -- not the
+          * component order of every other format here. Returned as R,G,B,A so
+          * callers need not know which format the title chose. */
+-        out[0] = (float)p[2] / 255.0f;
++        /* A zero-stride array supplies a constant inline value, decoded in
++         * byte order just like SET_VERTEX_DATA4UB (xemu vertex.c and
++         * gl/vertex.c). BGRA conversion applies only to array fetches. */
++        out[0] = (float)p[a->stride ? 2 : 0] / 255.0f;
+         out[1] = (float)p[1] / 255.0f;
+-        out[2] = (float)p[0] / 255.0f;
++        out[2] = (float)p[a->stride ? 0 : 2] / 255.0f;
+         out[3] = (float)p[3] / 255.0f;
+         return 1;
+     case 2:                                  /* float */
+@@ -402,6 +505,36 @@ static int fetch_attr(const VertexAttr *a, uint32_t index, float out[4])
          for (i = 0; i < a->size && i < 4; i++)
              out[i] = (float)p[i] / 255.0f;
          return 1;
@@ -7502,12 +8041,19 @@ index b3dcbf7..c4d9c15 100644
 +        out[0] = (float)x / 1023.0f;
 +        out[1] = (float)y / 1023.0f;
 +        out[2] = (float)z / 511.0f;
++        if (!a->stride) {
++            /* Constant arrays pass through pgraph_update_inline_value,
++             * which clamps the negative endpoint of signed normal formats. */
++            if (out[0] < -1.0f) out[0] = -1.0f;
++            if (out[1] < -1.0f) out[1] = -1.0f;
++            if (out[2] < -1.0f) out[2] = -1.0f;
++        }
 +        return 1;
 +    }
      default:
          return 0;
      }
-@@ -501,6 +621,11 @@ static void raster_triangle(const float a[2], const float b[2],
+@@ -501,6 +634,11 @@ static void raster_triangle(const float a[2], const float b[2],
                              const float c[2], uint32_t argb,
                              const float uv[3][2]);
  
@@ -7519,7 +8065,7 @@ index b3dcbf7..c4d9c15 100644
  static void clear_surface(uint32_t param)
  {
      uint8_t *mem = (uint8_t *)xbox_GetMemoryOffset();
-@@ -520,6 +645,30 @@ static void clear_surface(uint32_t param)
+@@ -520,6 +658,30 @@ static void clear_surface(uint32_t param)
          s_gpu.color_base = base;
      }
  
@@ -7550,7 +8096,7 @@ index b3dcbf7..c4d9c15 100644
      for (y = 0; y < s_gpu.clip_h; y++) {
          uint8_t *row = mem + s_gpu.color_base
                       + (size_t)(s_gpu.clip_y + y) * s_gpu.pitch;
-@@ -538,6 +687,7 @@ static void clear_surface(uint32_t param)
+@@ -538,6 +700,7 @@ static void clear_surface(uint32_t param)
                  p[x] = v;
          }
      }
@@ -7558,7 +8104,7 @@ index b3dcbf7..c4d9c15 100644
      s_gpu.clears++;
      /* Progress markers, interleaved with everything else in the log. The
       * summary says drawing stopped; only a marker next to the surrounding
-@@ -597,7 +747,12 @@ static void clear_surface(uint32_t param)
+@@ -597,7 +760,12 @@ static void clear_surface(uint32_t param)
       * would show the one nothing is writing. */
      /* The window has to read where the pixels actually are, which is the
       * resolved address rather than the DMA-object offset. */
@@ -7572,7 +8118,7 @@ index b3dcbf7..c4d9c15 100644
  
      /* And open the window, rather than waiting for AvSetDisplayMode to do it.
       *
-@@ -710,6 +865,17 @@ static int sample_texture(uint32_t u, uint32_t v, uint32_t *argb)
+@@ -710,6 +878,17 @@ static int sample_texture(uint32_t u, uint32_t v, uint32_t *argb)
      if (d3d8_format_dxt_block_bytes(fmt))
          return d3d8_dxt_decode_texel(mem + s_gpu.tex.offset, fmt, u, v,
                                       s_gpu.tex.width, argb);
@@ -7590,7 +8136,7 @@ index b3dcbf7..c4d9c15 100644
      if (d3d8_format_is_swizzled(fmt)) {
          /* Morton order: a texel's index is interleaved from x and y instead of
           * v*pitch + u, so index from the base of the image. The switch below
-@@ -830,8 +996,9 @@ static void dump_texture_bmp(uint32_t seq)
+@@ -830,8 +1009,9 @@ static void dump_texture_bmp(uint32_t seq)
      pad = (4 - (row_bytes & 3)) & 3;
      filesz = 54 + (row_bytes + pad) * h;
  
@@ -7602,7 +8148,7 @@ index b3dcbf7..c4d9c15 100644
      f = fopen(path, "wb");
      if (!f)
          return;
-@@ -913,6 +1080,112 @@ static void put_pixel(uint8_t *mem, uint32_t bpp, int x, int y, uint32_t argb)
+@@ -913,6 +1093,112 @@ static void put_pixel(uint8_t *mem, uint32_t bpp, int x, int y, uint32_t argb)
      }
  }
  
@@ -7715,7 +8261,7 @@ index b3dcbf7..c4d9c15 100644
  /* Half-space fill. Barycentric edge functions rather than scanline slopes:
   * the same test decides both windings, so a title that emits clockwise
   * triangles does not silently render nothing. */
-@@ -976,11 +1249,11 @@ static void raster_triangle(const float a[2], const float b[2],
+@@ -976,11 +1262,11 @@ static void raster_triangle(const float a[2], const float b[2],
                  if (su < 0.0f) su = 0.0f;
                  if (sv < 0.0f) sv = 0.0f;
                  if (sample_texture((uint32_t)su, (uint32_t)sv, &texel)) {
@@ -7729,7 +8275,7 @@ index b3dcbf7..c4d9c15 100644
          }
      }
      s_gpu.tris_drawn++;
-@@ -1136,11 +1409,18 @@ static int batch_is_screen_space(void)
+@@ -1136,11 +1422,18 @@ static int batch_is_screen_space(void)
  }
  
  /* NV097 primitive types that are triangles under some winding. */
@@ -7753,7 +8299,7 @@ index b3dcbf7..c4d9c15 100644
  
  /* How many post-draw captures to keep: enough to see whether the geometry
   * is stable from frame to frame, few enough not to fill a directory. */
-@@ -1210,14 +1490,30 @@ static void raster_batch(void)
+@@ -1210,14 +1503,30 @@ static void raster_batch(void)
                             vertex_color(s_gpu.idx[i]));
          break;
      case NV_PRIM_TRIANGLE_FAN:
@@ -7788,7 +8334,7 @@ index b3dcbf7..c4d9c15 100644
      default:
          break;                             /* points and lines: not yet */
      }
-@@ -1242,6 +1538,1183 @@ static void raster_batch(void)
+@@ -1242,6 +1551,1299 @@ static void raster_batch(void)
   * question is what space attribute 0 arrives in: a title running a vertex
   * program hands over object-space positions that mean nothing without running
   * it, while pre-transformed screen-space coordinates can be drawn directly. */
@@ -8139,19 +8685,34 @@ index b3dcbf7..c4d9c15 100644
 +
 +static float fog_factor(float dist)
 +{
-+    float f;
++    float f, exceptional = 0.0f;
 +    if (!s_fog.enable)
 +        return 1.0f;
 +    switch (s_fog.mode) {
-+    case 0x0804: dist = fabsf(dist);   /* LINEAR_ABS */ /* fall through */
-+    case 0x2601: f = s_fog.p[0] + dist * s_fog.p[1] - 1.0f; break;                       /* LINEAR */
-+    case 0x0802: dist = fabsf(dist);   /* EXP_ABS */ /* fall through */
-+    case 0x0800: f = s_fog.p[0] + exp2f(dist * s_fog.p[1] * 16.0f) - 1.5f; break;          /* EXP */
-+    case 0x0803: dist = fabsf(dist);   /* EXP2_ABS */ /* fall through */
-+    case 0x0801: f = s_fog.p[0] + exp2f(-dist * dist * s_fog.p[1] * s_fog.p[1] * 32.0f) - 1.5f; break;
++    case 0x0804:                      /* LINEAR_ABS */
++    case 0x2601:                      /* LINEAR */
++        exceptional = 1.0f;
++        f = s_fog.p[0] + dist * s_fog.p[1] - 1.0f;
++        break;
++    case 0x0800:                      /* EXP */
++        exceptional = 1.0f;
++        /* fall through */
++    case 0x0802:                      /* EXP_ABS */
++        f = s_fog.p[0] + exp2f(dist * s_fog.p[1] * 16.0f) - 1.5f;
++        break;
++    case 0x0803:                      /* EXP2_ABS */
++    case 0x0801:                      /* EXP2 */
++        f = s_fog.p[0] + exp2f(-dist * dist * s_fog.p[1] * s_fog.p[1] * 32.0f) - 1.5f;
++        break;
 +    default:     f = 1.0f; break;
 +    }
-+    return f < 0.0f ? 0.0f : (f > 1.0f ? 1.0f : f);
++    /* xemu vsh.c: ABS modes apply to the factor, not the distance. Keep
++     * out-of-range factors for interpolation; the combiner clamps per pixel. */
++    if (s_fog.mode == 0x0804 || s_fog.mode == 0x0802 || s_fog.mode == 0x0803)
++        f = fabsf(f);
++    if (isinf(dist) || f != f)
++        return exceptional;
++    return f < -FLT_MAX ? -FLT_MAX : (f > FLT_MAX ? FLT_MAX : f);
 +}
 +
 +#define VP_PROG_LEN   136
@@ -8168,6 +8729,9 @@ index b3dcbf7..c4d9c15 100644
 +    /* output merge state the 3D path needs */
 +    uint32_t depth_test, depth_func, depth_mask;
 +    uint32_t cull, cull_face, front_face;
++    uint32_t specular_enable, light_control;
++    uint32_t poly_offset_point, poly_offset_line, poly_offset_fill;
++    float    poly_offset_scale, poly_offset_bias;
 +    uint32_t zclear;
 +    /* Stencil and colour write mask. NFL 2K5's menus mask their skewed
 +     * panels with the stencil: a colour-masked pass writes the panel shape,
@@ -8231,6 +8795,11 @@ index b3dcbf7..c4d9c15 100644
 +    case NV097_SET_CULL_FACE_ENABLE:         s_vp.cull = param; return 1;
 +    case NV097_SET_CULL_FACE:                s_vp.cull_face = param; return 1;
 +    case NV097_SET_FRONT_FACE:               s_vp.front_face = param; return 1;
++    case 0x0330: s_vp.poly_offset_point = param; return 1; /* SET_POLY_OFFSET_POINT_ENABLE */
++    case 0x0334: s_vp.poly_offset_line  = param; return 1; /* SET_POLY_OFFSET_LINE_ENABLE */
++    case 0x0338: s_vp.poly_offset_fill  = param; return 1; /* SET_POLY_OFFSET_FILL_ENABLE */
++    case 0x0384: s_vp.poly_offset_scale = f; return 1;     /* SET_POLYGON_OFFSET_SCALE_FACTOR */
++    case 0x0388: s_vp.poly_offset_bias  = f; return 1;     /* SET_POLYGON_OFFSET_BIAS */
 +    case NV097_SET_ZSTENCIL_CLEAR_VALUE:     s_vp.zclear = param; return 1;
 +    case 0x032C: s_vp.stencil_test  = param; return 1;   /* SET_STENCIL_TEST_ENABLE */
 +    case 0x0358: s_vp.color_mask = g_color_mask = param; return 1;   /* SET_COLOR_MASK */
@@ -8242,6 +8811,8 @@ index b3dcbf7..c4d9c15 100644
 +    case 0x0374: s_vp.op_zfail      = param; return 1;
 +    case 0x0378: s_vp.op_zpass      = param; return 1;
 +    case 0x0290: s_vp.control0 = param; return 1;  /* SET_CONTROL0 */
++    case 0x0294: s_vp.light_control = param; return 1; /* SET_LIGHT_CONTROL */
++    case 0x03B8: s_vp.specular_enable = param; return 1; /* SET_SPECULAR_ENABLE */
 +    case 0x0394: s_vp.clip_min = f; return 1;   /* SET_CLIP_MIN */
 +    case 0x0398: s_vp.clip_max = f; return 1;   /* SET_CLIP_MAX */
 +    case 0x1D78: s_vp.zminmax = param; return 1; /* SET_ZMIN_MAX_CONTROL */
@@ -8305,6 +8876,41 @@ index b3dcbf7..c4d9c15 100644
 +    if (mask & 4) dst[1] = v[1];
 +    if (mask & 2) dst[2] = v[2];
 +    if (mask & 1) dst[3] = v[3];
++}
++
++static uint32_t vp_fog_write_mask(uint32_t mask)
++{
++    /* xemu fog_mask_str: every n-component oFog write maps to the first n
++     * components, making x the scalar fog output even for an oFog.w write. */
++    static const uint8_t masks[16] = {
++        0, 8, 8, 12, 8, 12, 12, 14, 8, 12, 12, 14, 12, 14, 14, 15
++    };
++    return masks[mask & 15u];
++}
++
++/* NV2A raster setup parity with xemu vsh.c: screen coordinates have four
++ * fractional bits and truncate toward zero, including negative positions. */
++static float vp_screen_coord(float value)
++{
++    return truncf(value * 16.0f) / 16.0f;
++}
++
++/* xemu clampAwayZeroInf: preserve signed zero while clamping W to the exact
++ * signed [2^-64, 2^64] interval. Exceptional NaN values remain NaN. */
++static float vp_clamp_w(float value)
++{
++    const float minimum = 5.421010862427522e-20f;
++    const float maximum = 1.8446744073709552e19f;
++    uint32_t bits;
++    memcpy(&bits, &value, sizeof bits);
++    if (value > 0.0f || bits == 0) {
++        if (value < minimum) return minimum;
++        if (value > maximum) return maximum;
++    } else {
++        if (value > -minimum) return -minimum;
++        if (value < -maximum) return -maximum;
++    }
++    return value;
 +}
 +
 +/* Run the loaded program for one vertex. V: inputs v0..v15.
@@ -8416,7 +9022,8 @@ index b3dcbf7..c4d9c15 100644
 +            const float *v = out_mux ? ires : mres;
 +            if ((out_mux == 0 && mac && mac != 13) || (out_mux == 1 && ilu)) {
 +                if (orb) {
-+                    vp_write(O[out_addr & 15], v, o_mask);
++                    uint32_t reg = out_addr & 15;
++                    vp_write(O[reg], v, reg == 5 ? vp_fog_write_mask(o_mask) : o_mask);
 +                } else if (out_addr < VP_CONSTS) {
 +                    vp_write(s_vp.c[out_addr], v, o_mask);
 +                }
@@ -8499,15 +9106,17 @@ index b3dcbf7..c4d9c15 100644
 +        }
 +    }
 +    x->x = O[0][0]; x->y = O[0][1]; x->z = O[0][2]; x->w = O[0][3];
-+    if (!(x->w > 1e-6f || x->w < -1e-6f)) x->w = 1e-6f;
++    x->w = vp_clamp_w(x->w);
 +    for (k = 0; k < 4; k++) {
 +        float c = O[3][k];
 +        if (c != c) c = 1.0f;                    /* NaN reads as 1, like xemu */
 +        x->col[k] = c < 0 ? 0 : (c > 1 ? 1 : c);
-+        c = O[4][k];
++        c = s_vp.specular_enable ? O[4][k] : (k == 3 ? 1.0f : 0.0f);
 +        if (c != c) c = 1.0f;
 +        x->spec[k] = c < 0 ? 0 : (c > 1 ? 1 : c);
 +    }
++    if (!(s_vp.light_control & (1u << 17)))
++        x->spec[3] = 1.0f;
 +    memcpy(x->tc, O[9], sizeof x->tc);
 +    x->fog = fog_factor(O[5][0]);
 +    x->uv[0] = O[9][0];
@@ -8969,13 +9578,68 @@ index b3dcbf7..c4d9c15 100644
 +#undef XV
 +}
 +
++/* Count constant arrays once per batch, never from the per-vertex fetch path.
++ * This is deliberately opt-in and bounded so input diagnostics do not change
++ * normal match pacing. */
++static void trace_constant_arrays(void)
++{
++    static uint32_t batches, counts[NV_VERTEX_ATTRS], reports;
++    uint32_t a, mask = 0;
++    if (!env_cached("RECOMP_ATTR_TRACE"))
++        return;
++    for (a = 0; a < NV_VERTEX_ATTRS; a++) {
++        if (s_gpu.attr[a].size && !s_gpu.attr[a].stride) {
++            mask |= 1u << a;
++            counts[a]++;
++        }
++    }
++    if (!mask)
++        return;
++    batches++;
++    if (reports >= 12 || (batches > 4 && (batches % 2000) != 0))
++        return;
++    reports++;
++    fprintf(stderr, "[ATTR] stride0 batches=%u draw=%u mask=%04X first=%u last=%u",
++            batches, s_gpu.draws, mask, s_gpu.idx[0], s_gpu.idx[s_gpu.idx_count - 1]);
++    for (a = 0; a < NV_VERTEX_ATTRS; a++)
++        if (counts[a])
++            fprintf(stderr, " a%u=%u(off=%08X fmt=%u/%u)", a, counts[a],
++                    s_gpu.attr[a].offset, s_gpu.attr[a].type, s_gpu.attr[a].size);
++    fprintf(stderr, "\n");
++}
++
++static void trace_zeta_surface(void)
++{
++    static uint32_t seen[32][9], count;
++    uint32_t i;
++    uint32_t key[9] = {
++        s_gpu.color_offset, s_gpu.zeta_offset, s_gpu.pitch, s_gpu.zeta_pitch,
++        s_gpu.format, s_gpu.clip_x, s_gpu.clip_y, s_gpu.clip_w, s_gpu.clip_h
++    };
++    if (!env_cached("RECOMP_ZETA_TRACE") || count == 32)
++        return;
++    for (i = 0; i < count; i++)
++        if (memcmp(seen[i], key, sizeof key) == 0)
++            return;
++    memcpy(seen[count++], key, sizeof key);
++    fprintf(stderr,
++            "[ZETA] pair=%u draw=%u prim=%u color=%08X zeta=%08X pitch=%u/%u "
++            "clip=%ux%u+%u+%u fmt=%08X depth=%u/%04X/%u control0=%08X\n",
++            count, s_gpu.draws, s_gpu.prim, s_gpu.color_offset, s_gpu.zeta_offset,
++            s_gpu.pitch, s_gpu.zeta_pitch, s_gpu.clip_w, s_gpu.clip_h,
++            s_gpu.clip_x, s_gpu.clip_y, s_gpu.format,
++            s_vp.depth_test, s_vp.depth_func, s_vp.depth_mask, s_vp.control0);
++}
++
  static void draw_primitive(void)
  {
      float v[4];
-@@ -1250,6 +2723,22 @@ static void draw_primitive(void)
+@@ -1250,6 +2852,24 @@ static void draw_primitive(void)
      if (!s_gpu.prim || !s_gpu.idx_count)
          return;
      s_gpu.draws++;
++    trace_constant_arrays();
++    trace_zeta_surface();
 +    /* RECOMP_PRIM_LOG: how many batches of each NV097 primitive type (points
 +     * and lines are not rasterised yet), every 2000 draws. */
 +    if (getenv("RECOMP_PRIM_LOG")) {
@@ -8995,7 +9659,7 @@ index b3dcbf7..c4d9c15 100644
      if ((s_gpu.draws % 200) == 0)
          fprintf(stderr, "  [GPU] draw #%u\n", s_gpu.draws);
      s_gpu.verts += s_gpu.idx_count;
-@@ -1270,7 +2759,44 @@ static void draw_primitive(void)
+@@ -1270,7 +2890,49 @@ static void draw_primitive(void)
          }
      }
  
@@ -9029,9 +9693,14 @@ index b3dcbf7..c4d9c15 100644
 +        uint32_t a, last = s_gpu.idx[s_gpu.idx_count - 1];
 +        for (a = 0; a < NV_VERTEX_ATTRS; a++) {
 +            float v[4];
-+            if (s_gpu.attr[a].size && s_gpu.attr[a].stride && fetch_attr(&s_gpu.attr[a], last, v)) {
-+                if (s_gpu.attr[a].type == 0) {
++            if (s_gpu.attr[a].size && fetch_attr(&s_gpu.attr[a], last, v)) {
++                if (s_gpu.attr[a].type == 0 && s_gpu.attr[a].stride) {
 +                    float t = v[0]; v[0] = v[2]; v[2] = t;
++                }
++                if (s_gpu.attr[a].type == 6) {
++                    uint32_t c;
++                    for (c = 0; c < 3; c++)
++                        if (v[c] < -1.0f) v[c] = -1.0f;
 +                }
 +                memcpy(s_attr_inline[a], v, sizeof v);
 +            }
@@ -9041,7 +9710,7 @@ index b3dcbf7..c4d9c15 100644
  
      if (getenv("RECOMP_PB_EXEC_VERBOSE")) {
          static int shown;
-@@ -1390,6 +2916,12 @@ static void draw_inline_array(void)
+@@ -1390,6 +3052,12 @@ static void draw_inline_array(void)
          case 0:  bytes = 4;                        break;  /* D3DCOLOR   */
          case 2:  bytes = 4 * s_gpu.attr[a].size;   break;  /* float      */
          case 4:  bytes = s_gpu.attr[a].size;       break;  /* ubyte norm */
@@ -9054,7 +9723,7 @@ index b3dcbf7..c4d9c15 100644
          default: bytes = 4 * s_gpu.attr[a].size;   break;
          }
          s_gpu.attr[a].offset = off;
-@@ -1493,6 +3025,37 @@ static int imm_vertex_method(uint32_t method, uint32_t param)
+@@ -1493,6 +3161,37 @@ static int imm_vertex_method(uint32_t method, uint32_t param)
      union { uint32_t u; float f; } v;
      v.u = param;
  
@@ -9092,7 +9761,7 @@ index b3dcbf7..c4d9c15 100644
      if (method >= NV097_SET_VERTEX4F && method < NV097_SET_VERTEX4F + 16) {
          uint32_t c = (method - NV097_SET_VERTEX4F) / 4;
          s_gpu.imm_pos[c] = v.f;
-@@ -1566,11 +3129,126 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1566,11 +3265,126 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
                      subch, method, param);
      }
  
@@ -9219,8 +9888,11 @@ index b3dcbf7..c4d9c15 100644
      case NV097_SET_SURFACE_CLIP_HORIZONTAL:
          s_gpu.clip_x = param & 0xFFFF;
          s_gpu.clip_w = (param >> 16) & 0xFFFF;
-@@ -1586,19 +3264,36 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1584,21 +3398,42 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+         break;
+     case NV097_SET_SURFACE_PITCH:
          s_gpu.pitch = param & 0xFFFF;      /* colour pitch; zeta is the top half */
++        s_gpu.zeta_pitch = param >> 16;
          break;
      case NV097_SET_SURFACE_COLOR_OFFSET:
 +        if (getenv("RECOMP_SURF_TRACE") && param != s_gpu.color_offset) {
@@ -9232,6 +9904,9 @@ index b3dcbf7..c4d9c15 100644
 +        }
          s_gpu.color_offset = param;
          break;
++    case NV097_SET_SURFACE_ZETA_OFFSET:
++        s_gpu.zeta_offset = param;
++        break;
      case NV097_SET_COLOR_CLEAR_VALUE:
          s_gpu.clear_color = param;
          break;
@@ -9256,7 +9931,7 @@ index b3dcbf7..c4d9c15 100644
              s_gpu.inline_count = 0;
              s_gpu.imm_count = 0;
          } else {
-@@ -1612,6 +3307,7 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1612,6 +3447,7 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
              else
                  draw_primitive();
              s_gpu.prim = 0;
@@ -9264,7 +9939,7 @@ index b3dcbf7..c4d9c15 100644
              s_gpu.inline_count = 0;
              s_gpu.imm_count = 0;
          }
-@@ -1620,8 +3316,20 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1620,8 +3456,20 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
      case NV097_INLINE_ARRAY:
          /* Vertex data, not a pointer to it. Buffered rather than decoded here
           * because the format is only fully known at END. */
@@ -9286,7 +9961,7 @@ index b3dcbf7..c4d9c15 100644
          break;
  
      case NV097_DRAW_ARRAYS: {
-@@ -1639,13 +3347,41 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1639,13 +3487,41 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
  
          if (!s_gpu.prim)
              break;
@@ -9328,7 +10003,7 @@ index b3dcbf7..c4d9c15 100644
          if (s_gpu.prim && s_gpu.idx_count + 2 <= NV_MAX_INDICES) {
              s_gpu.idx[s_gpu.idx_count++] = (uint16_t)(param & 0xFFFF);
              s_gpu.idx[s_gpu.idx_count++] = (uint16_t)(param >> 16);
-@@ -1659,6 +3395,23 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1659,6 +3535,23 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
          record_tex_reg(method, param);
          break;
  
@@ -9352,7 +10027,7 @@ index b3dcbf7..c4d9c15 100644
      case NV097_SET_FLIP_READ:
          s_gpu.flip_read = param;
          return;
-@@ -1682,6 +3435,47 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1682,6 +3575,47 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
          /* The stall ends when the buffer being read is the one just finished.
           * There is no scanout here to wait for, so that is now. */
          s_gpu.flip_read = s_gpu.flip_write;
@@ -9400,7 +10075,7 @@ index b3dcbf7..c4d9c15 100644
          /* And this is a completed swap, which is what a title's own swap
           * counter counts -- see xbox_Nv2aFrameCounterFlip. */
          xbox_Nv2aFrameCounterFlip();
-@@ -1696,6 +3490,11 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1696,6 +3630,11 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
          return;
  
      case NV097_SET_TEXTURE_FORMAT:
@@ -9412,7 +10087,7 @@ index b3dcbf7..c4d9c15 100644
          s_gpu.tex.color = (param >> 8) & 0xFF;
          /* A swizzled texture carries its own dimensions here, as log2 in
           * BASE_SIZE_U/V (nv2a_regs.h: 0x00F00000 / 0x0F000000). It has to:
-@@ -1729,6 +3528,9 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1729,6 +3668,9 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
      case NV097_SET_TEXTURE_IMAGE_RECT:
          s_gpu.tex.width  = param >> 16;
          s_gpu.tex.height = param & 0xFFFF;
@@ -9422,7 +10097,7 @@ index b3dcbf7..c4d9c15 100644
          record_tex_reg(method, param);
          break;
  
-@@ -1948,9 +3750,12 @@ void nv2a_pb_exec_report(void)
+@@ -1948,9 +3890,12 @@ void nv2a_pb_exec_report(void)
              dma_resolve(s_gpu.drawn_offset), s_gpu.color_offset,
              dma_resolve(s_gpu.color_offset));
      fprintf(stderr, "[GPU] rasterised %u triangles; %u batches skipped as not"

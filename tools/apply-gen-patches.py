@@ -316,6 +316,17 @@ PATCHES = [
       if (_n) memmove(XBOX_PTR(_d), XBOX_PTR(_s), _n);
       eax = _d; esp += 4; return; }
 """),
+    ("DIAG_JUKEBOXART", "sub_0032A8A0", "loc_0032A911: ;", "after", """    { extern void nfl2k5_diag_txtr(uint32_t res, uint32_t album); nfl2k5_diag_txtr(eax, MEM32(0xCB69F4)); }
+"""),
+    # Local music: NOW PLAYING banner when a soundtrack song opens (with the
+    # player object, whose "finished" flag R3 sets to skip), and the current
+    # song cleared when the player shuts down (nfl2k5_local_music.cpp).
+    ("LOCALMUSIC_OPEN2", "sub_00328130", "loc_00328176: ;", "after", """    { extern void nfl2k5_local_music_opening(uint32_t song_id, uint32_t player); nfl2k5_local_music_opening(MEM32(esp + 0x18), esi); }
+"""),
+    ("LOCALMUSIC_CLOSE", "sub_00327FA0", "loc_00327FA0: ;", "after", """    { extern void nfl2k5_local_music_closed(void); nfl2k5_local_music_closed(); }
+"""),
+    ("DIAG_SCHEDTABLE", "sub_00038CD0", "loc_00038CEB: ;", "after", """    { extern void nfl2k5_diag_sched(uint32_t idx); uint32_t _f = MEM32(esi * 8 + 0xB04D24); if (_f < 0x10000u || _f >= 0x01000000u) nfl2k5_diag_sched(esi); }
+"""),
     ("DIAG_MUSICPLAY", "sub_0003CEA0", "loc_0003CEA0: ;", "after", """    { extern void nfl2k5_diag_music(int what, uint32_t handle_ptr, uint32_t esp_); nfl2k5_diag_music(1, ecx, esp); }
 """),
     ("DIAG_MUSICSTOP", "sub_0003CEE0", "loc_0003CEE0: ;", "after", """    { extern void nfl2k5_diag_music(int what, uint32_t handle_ptr, uint32_t esp_); nfl2k5_diag_music(0, ecx, esp); }

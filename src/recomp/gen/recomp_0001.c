@@ -21726,6 +21726,8 @@ loc_00038CE0: ;
     if (TEST_NZ(_fa, _fb)) goto loc_00038D08; /* jne: not equal / not zero */
 
 loc_00038CEB: ;
+    /* NFL2K5-GENPATCH:DIAG_SCHEDTABLE */
+    { extern void nfl2k5_diag_sched(uint32_t idx); uint32_t _f = MEM32(esi * 8 + 0xB04D24); if (_f < 0x10000u || _f >= 0x01000000u) nfl2k5_diag_sched(esi); }
     MEM32(esi * 8 + 0xB04D20) = 1;
     { uint32_t _icall_esp = g_esp;
     { uint32_t _icall_target = MEM32(esi * 8 + 0xB04D24); PUSH32(esp, 0x00038CFDu); RECOMP_ICALL_SAFE(_icall_target, _icall_esp); } /* indirect call */

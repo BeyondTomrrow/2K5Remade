@@ -277,3 +277,139 @@ extern "C" void nfl2k5_local_music_start(const char *root, const char *save_dir)
         CloseHandle(t);
     }
 }
+
+/* ── Now playing / skip ──────────────────────────────────────────────────
+ * The game's soundtrack player (sub_00328130) opens song ids we handed out:
+ * (playlist << 16) | track. Opening shows NOW PLAYING; R3 skips by moving
+ * the song's end point to the start, so the player ends it exactly as it
+ * ends a song or a clip preview and the game's own playlist moves on,
+ * shuffle and repeat included. Two earlier tries hung: starving the decoder
+ * read as an I/O error, and raising the "finished" flag directly skipped the
+ * stream discontinuity, so entering a game mode waited on the stream forever
+ * (2026-10-01). L3 shows NOW PLAYING again. */
+extern "C" void xbox_PresentToast(const char *header, const char *line1, const char *line2, unsigned ms);
+extern "C" ptrdiff_t xbox_GetMemoryOffset(void);
+
+static volatile LONG g_cur_id = -1;
+static volatile uint32_t g_player;
+
+/* NOW PLAYING in the game's own ESPN header bar. When a menu opens,
+ * sub_000F3D60 stores its title at header + 0x598 (header = MEM32(menu FSM
+ * 0xA84B18 + 0x10C)); + 0x59C is the subtitle in the grey strip (the
+ * playbook screens put "Offense" there); setting 0xA83F14 makes the game
+ * rebuild the bar from both on its own thread, with its own animation. We
+ * swap in "Now Playing" / "<song> - <playlist>" and put the screen's own
+ * title back after a few seconds -- unless the player has moved to another
+ * screen meanwhile, which retitles the bar itself. Outside the menus (no
+ * header) the overlay banner is used instead. */
+extern "C" uint32_t xbox_HeapAlloc(uint32_t size, uint32_t alignment);
+
+static struct {
+    uint32_t title_buf, sub_buf;           /* guest UTF-16 buffers */
+    uint32_t hdr, saved_title, saved_sub;
+    DWORD until;
+    bool active;
+} g_banner;
+
+static uint8_t *guest(void) { return (uint8_t *)xbox_GetMemoryOffset(); }
+static volatile uint32_t &g32(uint32_t va) { return *(volatile uint32_t *)(guest() + va); }
+
+static void put_guest_wstr(uint32_t va, const std::wstring &w, size_t max_chars)
+{
+    size_t n = std::min(w.size(), max_chars - 1);
+    uint16_t *d = (uint16_t *)(guest() + va);
+    for (size_t i = 0; i < n; i++) d[i] = (uint16_t)w[i];
+    d[n] = 0;
+}
+
+static bool banner_show(const std::wstring &title, const std::wstring &sub)
+{
+    uint32_t hdr = g32(0xA84B18u + 0x10Cu);
+    if (!hdr || hdr >= 0x04000000u || !g32(hdr + 0x598u)) return false;
+    if (!g_banner.title_buf) {
+        g_banner.title_buf = xbox_HeapAlloc(64 * 2, 4);
+        g_banner.sub_buf = xbox_HeapAlloc(96 * 2, 4);
+        if (!g_banner.title_buf || !g_banner.sub_buf) return false;
+    }
+    if (!g_banner.active || g_banner.hdr != hdr) {
+        g_banner.hdr = hdr;
+        g_banner.saved_title = g32(hdr + 0x598u);
+        g_banner.saved_sub = g32(hdr + 0x59Cu);
+    }
+    put_guest_wstr(g_banner.title_buf, title, 64);
+    put_guest_wstr(g_banner.sub_buf, sub, 96);
+    g32(hdr + 0x598u) = g_banner.title_buf;
+    g32(hdr + 0x59Cu) = g_banner.sub_buf;
+    g32(0xA83F14u) = 1;
+    g_banner.active = true;
+    g_banner.until = GetTickCount() + 5000;
+    return true;
+}
+
+static void banner_tick(void)
+{
+    if (!g_banner.active || (LONG)(GetTickCount() - g_banner.until) < 0) return;
+    g_banner.active = false;
+    uint32_t hdr = g32(0xA84B18u + 0x10Cu);
+    if (hdr != g_banner.hdr || g32(hdr + 0x598u) != g_banner.title_buf)
+        return;                      /* another screen has its own title now */
+    g32(hdr + 0x598u) = g_banner.saved_title;
+    g32(hdr + 0x59Cu) = g_banner.saved_sub;
+    g32(0xA83F14u) = 1;
+}
+
+static void show_now_playing(uint32_t id)
+{
+    size_t a = id >> 16, k = id & 0xFFFF;
+    if (a >= g_albums.size() || k >= g_albums[a].songs.size()) return;
+    const std::wstring &title = g_albums[a].songs[k].title, &album = g_albums[a].name;
+    /* The grey strip holds about 28 characters before it runs off the
+     * screen (the main menu's bar is right-aligned). */
+    std::wstring sub = title + L" - " + album;
+    if (sub.size() > 28) sub = title;
+    if (sub.size() > 28) sub = sub.substr(0, 26) + L"...";
+    if (banner_show(L"Now Playing", sub)) return;
+    char t8[128], a8[128];
+    WideCharToMultiByte(CP_ACP, 0, title.c_str(), -1, t8, sizeof t8, "?", nullptr);
+    WideCharToMultiByte(CP_ACP, 0, album.c_str(), -1, a8, sizeof a8, "?", nullptr);
+    xbox_PresentToast("NOW PLAYING", t8, a8, 5000);
+}
+
+extern "C" void nfl2k5_local_music_opening(uint32_t song_id, uint32_t player)
+{
+    g_player = player;
+    InterlockedExchange(&g_cur_id, (LONG)song_id);
+    show_now_playing(song_id);
+}
+
+extern "C" void nfl2k5_local_music_closed(void)
+{
+    InterlockedExchange(&g_cur_id, -1);
+}
+
+/* Host pad buttons, every poll: L3 and R3 act on their press. */
+extern "C" void nfl2k5_local_music_buttons(int l3, int r3)
+{
+    static int prev_l3, prev_r3;
+    LONG cur = g_cur_id;
+    banner_tick();
+    uint32_t player = g_player;
+    if (cur >= 0 && player && r3 && !prev_r3) {
+        /* Pull the song's end point (player + 0x1004C) in to the start.
+         * sub_00328460 compares it with the play position before every
+         * decode and, once past it, ends the song the way it ends a clip
+         * preview: last packet, stream discontinuity, then "finished". */
+        volatile uint32_t *end_pos =
+            (volatile uint32_t *)((uint8_t *)xbox_GetMemoryOffset() + player + 0x1004Cu);
+        *end_pos = 1;
+        if (!banner_show(L"Next Song", L""))
+            xbox_PresentToast("NEXT SONG", "", "", 1200);
+    }
+    if (cur >= 0 && l3 && !prev_l3)
+        show_now_playing((uint32_t)cur);
+    else if (l3 && !prev_l3 && getenv("NFL2K5_BANNER_TEST"))   /* debug: banner without a song */
+        banner_show(L"Now Playing", L"Ramblin' Man From Gramblin - Sam Spence & Da Riffs");
+    prev_l3 = l3;
+    prev_r3 = r3;
+}
+

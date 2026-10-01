@@ -283,6 +283,10 @@ static void host_gamepad(XBOX_GAMEPAD *g)
     }
     g->wButtons |= auto_press(g->bAnalogButtons);
     g->wButtons |= file_press(g->bAnalogButtons);
+    {   /* L3: show what is playing; R3: next song (local music library). */
+        extern void nfl2k5_local_music_buttons(int l3, int r3);
+        nfl2k5_local_music_buttons((g->wButtons & 0x40) != 0, (g->wButtons & 0x80) != 0);
+    }
     if (GetTickCount() < s_inject_a_until) g->bAnalogButtons[0] = 255;
 }
 

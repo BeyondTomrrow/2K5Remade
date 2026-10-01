@@ -32216,6 +32216,8 @@ void sub_00327FA0(void)
     (void)_fa; (void)_fb; (void)_fas; (void)_fbs;
 
 loc_00327FA0: ;
+    /* NFL2K5-GENPATCH:LOCALMUSIC_CLOSE */
+    { extern void nfl2k5_local_music_closed(void); nfl2k5_local_music_closed(); }
     eax = MEM32(esi + 0x100B8);
     PUSH32(esp, edi);
     edi = 0; /* xor self */
@@ -32472,6 +32474,8 @@ loc_0032816F: ;
     PUSH32(esp, 0x00328176u); RECOMP_ABI_CALL(0x0001B79Fu, sub_0001B79F); /* call 0x0001B79F */
 
 loc_00328176: ;
+    /* NFL2K5-GENPATCH:LOCALMUSIC_OPEN2 */
+    { extern void nfl2k5_local_music_opening(uint32_t song_id, uint32_t player); nfl2k5_local_music_opening(MEM32(esp + 0x18), esi); }
     edx = MEM32(esp + 0x18);
     PUSH32(esp, 1);
     PUSH32(esp, edx);
@@ -49662,6 +49666,8 @@ loc_0032A904: ;
     PUSH32(esp, 0x0032A911u); RECOMP_ABI_CALL(0x000449E0u, sub_000449E0); /* call 0x000449E0 */
 
 loc_0032A911: ;
+    /* NFL2K5-GENPATCH:DIAG_JUKEBOXART */
+    { extern void nfl2k5_diag_txtr(uint32_t res, uint32_t album); nfl2k5_diag_txtr(eax, MEM32(0xCB69F4)); }
     esi = eax;
     _fa = (uint32_t)(esi) & 0xFFFFFFFFu; _fb = (uint32_t)(ebx) & 0xFFFFFFFFu;
     _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp esi, ebx (32-bit) */
