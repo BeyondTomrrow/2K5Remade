@@ -326,14 +326,28 @@ It opens `http://127.0.0.1:8735/tools/presentation-studio/index.html`.
 
 ---
 
-## 10. Checklist before handing over a package
+## 10. Common mistake: a standalone demo page
+
+Do not deliver a demo page: a dark full-window background, the bug centred
+with `min-height: 100vh` / `place-items: center`, demo buttons ("Swap Teams",
+"Away TD"), and hardcoded sample teams and scores. It imports fine but shows
+fixed values and covers the game. The game page must be the transparent
+1920x1080 canvas described above, with every value coming from
+`NFL2K5.onState`. Presentation Studio warns "not connected to game data" when
+a page never calls `NFL2K5.onState`.
+
+Also make sure no two elements overlap by accident (for example score text
+running under a centre clock pod); check every value with two-digit scores.
+
+## 11. Checklist before handing over a package
 
 - [ ] Folder in `mods/presentations/`, `mod.json` with `"type": "html"`
 - [ ] Runtime script included before the package's own script
 - [ ] `layout.css` linked after the main CSS, file present
 - [ ] Transparent page background, 1920x1080 canvas, absolute positioning
 - [ ] `data-element` names on every adjustable element
-- [ ] All data from `NFL2K5.onState`, nothing hardcoded
+- [ ] All data from `NFL2K5.onState`, nothing hardcoded; no demo background or demo buttons
+- [ ] Two-digit scores fit and nothing overlaps by accident
 - [ ] Hides when `context.scorebugVisible` is false
 - [ ] Animations queued, interruption-safe, ending in a correct state
 - [ ] No remote resources; images in `assets/`, fonts in `fonts/`
