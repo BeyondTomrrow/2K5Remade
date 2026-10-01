@@ -8,13 +8,14 @@
 </head>
 <body>
 <div id="canvas">
-  <!-- Pure HTML/CSS/SVG. Inside #bug, units are design pixels of a
-       576x120 box (the reference bug is 576x94; the down-and-distance tab
-       hangs below it). The whole bug is scaled with --bug-scale. -->
+  <!-- Pure HTML/CSS/SVG. Inside #bug, units are design pixels: the bug is
+       576x94 (reference/reference.png); the down & distance tab hangs below
+       it and the scoring-drive layout reaches past both sides. The whole
+       bug is scaled with --bug-scale. -->
   <div id="bug" data-element="bug">
     <div class="half away" data-element="away-half">
-      <div class="panel"><div class="texture"></div></div>
-      <div class="logo-window" data-element="away-logo"><img class="logo" alt=""><div class="glass"></div><div class="sweep"></div></div>
+      <div class="panel"></div>
+      <div class="logo-window" data-element="away-logo"><img class="logo" alt=""></div>
       <div class="abbr" data-element="away-abbr">AWY</div>
       <div class="record" data-element="away-record"></div>
       <div class="divider"></div>
@@ -22,8 +23,8 @@
       <div class="timeouts" data-element="away-timeouts"><i></i><i></i><i></i></div>
     </div>
     <div class="half home" data-element="home-half">
-      <div class="panel"><div class="texture"></div></div>
-      <div class="logo-window" data-element="home-logo"><img class="logo" alt=""><div class="glass"></div><div class="sweep"></div></div>
+      <div class="panel"></div>
+      <div class="logo-window" data-element="home-logo"><img class="logo" alt=""></div>
       <div class="abbr" data-element="home-abbr">HOM</div>
       <div class="record" data-element="home-record"></div>
       <div class="divider"></div>
@@ -32,26 +33,29 @@
     </div>
     <div class="rail" data-element="rail"></div>
 
-    <!-- down & distance tab, under the team with the ball -->
+    <!-- down & distance, under the team with the ball -->
     <div class="tab" data-element="down-tab">
-      <svg class="tab-shape" viewBox="0 0 300 20" preserveAspectRatio="none" aria-hidden="true">
-        <defs>
-          <linearGradient id="tabGlass" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stop-color="#2b323c"/><stop offset="1" stop-color="#11151b"/>
-          </linearGradient>
-        </defs>
-        <!-- "the curve": the tab grows out of the pod with an S-curve -->
-        <path d="M0 0 C 10 0, 12 20, 26 20 L 300 20 L 300 0 Z" fill="url(#tabGlass)"/>
-      </svg>
       <div class="tab-fill"></div>
       <div class="chev left"><b></b><b></b></div>
       <div class="tab-text" data-element="down-text"></div>
       <div class="chev right"><b></b><b></b></div>
-      <div class="cross">&times;</div>
+    </div>
+
+    <!-- scoring drive: team stack, then the drive bar -->
+    <div class="drive-stack" data-element="drive-stack">
+      <div class="row away"><img class="logo" alt=""><span class="pts"></span></div>
+      <div class="row home"><img class="logo" alt=""><span class="pts"></span></div>
+    </div>
+    <div class="drive-bar" data-element="drive-bar">
+      <div class="drive-logo"><img class="logo" alt=""></div>
+      <div class="drive-title">SCORING DRIVE</div>
+      <div class="stat plays"><span class="lbl">PLAYS</span><span class="val"></span></div>
+      <div class="stat yds"><span class="lbl">YDS</span><span class="val"></span></div>
+      <div class="stat top"><span class="lbl">T.O.P</span><span class="val"></span></div>
+      <div class="corner"></div>
     </div>
 
     <div class="pod" data-element="pod">
-      <div class="ring"></div>
       <div class="pulse"></div><div class="pulse p2"></div>
       <svg class="peacock" viewBox="-23 -23 46 24" aria-hidden="true">
         <defs><linearGradient id="feather" x1="0" y1="-1" x2="0" y2="0.2" gradientUnits="objectBoundingBox"><stop offset="0" stop-color="#eef3f8"/><stop offset="1" stop-color="#a9b4c1"/></linearGradient></defs>
@@ -64,12 +68,11 @@
       <div class="pod-line bottom"></div>
       <div class="quarter" data-element="quarter"><span class="num">1</span><span class="ord">ST</span></div>
     </div>
-
     <div class="playclock" data-element="play-clock"></div>
 
-    <!-- touchdown takeover (vapor lights) -->
+    <!-- touchdown / field goal word over the team's neon logo -->
     <div class="takeover" data-element="takeover">
-      <img class="neon-logo" alt="">
+      <div class="neon-logo"></div>
       <div class="big-word"></div>
     </div>
   </div>

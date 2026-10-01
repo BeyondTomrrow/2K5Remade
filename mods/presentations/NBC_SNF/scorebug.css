@@ -1,9 +1,9 @@
 /* NBC Sunday Night Football scorebug: pure HTML/CSS/SVG.
  *
  * Layout follows the broadcast reference (reference/reference.png, the bug
- * at 576x94 design pixels); the look follows NBC's 2022 SNF package: glass,
- * texture & contrast, "the curve", vapor lights, motion. Nothing is a
- * bitmap except team logos, so it stays sharp at any resolution.
+ * at 576x94 design pixels). Panels are full team colour from behind the
+ * logo through the score and darken into the clock pod. Team logos are the
+ * only bitmaps, so it stays sharp at any resolution.
  *
  * Typeface: drop the broadcast font in fonts/nbc-snf.otf or .ttf; the
  * stand-in is Arial Black. scorebug.js fits text to the measured sizes. */
@@ -25,65 +25,44 @@ html, body { margin: 0; background: transparent; overflow: hidden; }
   width: 576px; height: 120px;
   transform: scale(var(--bug-scale)); transform-origin: 0 0;
   transition: opacity 0.4s ease;
-  --away: #1f4fae; --home: #da541b;
+  --away: #1f4fae; --home: #da541b; --g: #4d7cff;
   --ease: cubic-bezier(0.22, 0.9, 0.24, 1);
 }
 #bug.off-air { opacity: 0; }
 #bug * { box-sizing: border-box; }
 #bug .half, #bug .half > *, #bug > * { position: absolute; }
-#bug .half { left: 0; top: 0; width: 576px; height: 94px; transform-origin: 287px 50%;
-  transition: transform 0.45s var(--ease), opacity 0.35s ease; }
+#bug .half { left: 0; top: 0; width: 576px; height: 94px;
+  transition: transform 0.55s var(--ease), opacity 0.4s ease; }
 .half.away { --c: var(--away); }
 .half.home { --c: var(--home); }
 
-/* ---- panels: team colour, lit near the score, dark into the pod ---- */
-.panel { top: 23px; height: 52px; overflow: hidden; }
+/* ---- panels: full team colour, darkening into the pod ---- */
+.panel { top: 23px; height: 52px; }
 .away .panel { left: 2px; width: 248px; border-top-left-radius: 5px;
   background:
-    linear-gradient(to bottom, rgba(255,255,255,0.20) 0, rgba(255,255,255,0.05) 7%, rgba(255,255,255,0) 32%, rgba(0,0,0,0.10) 70%, rgba(0,0,0,0.32) 100%),
-    linear-gradient(90deg, color-mix(in srgb, var(--c) 62%, #070a12) 0%, color-mix(in srgb, var(--c) 88%, #070a12) 30%,
-                    var(--c) 58%, color-mix(in srgb, var(--c) 72%, #0b0e16) 72%, color-mix(in srgb, var(--c) 18%, #12151c) 92%, #13161d 100%); }
+    linear-gradient(to bottom, rgba(255,255,255,0.18) 0, rgba(255,255,255,0.04) 8%, rgba(255,255,255,0) 35%, rgba(0,0,0,0.08) 72%, rgba(0,0,0,0.26) 100%),
+    linear-gradient(90deg, var(--c) 0%, var(--c) 50%, color-mix(in srgb, var(--c) 72%, #0a0d15) 66%,
+                    color-mix(in srgb, var(--c) 30%, #10131a) 84%, #12151c 100%); }
 .home .panel { left: 326px; width: 248px; border-top-right-radius: 5px;
   background:
-    linear-gradient(to bottom, rgba(255,255,255,0.20) 0, rgba(255,255,255,0.05) 7%, rgba(255,255,255,0) 32%, rgba(0,0,0,0.10) 70%, rgba(0,0,0,0.32) 100%),
-    linear-gradient(90deg, #15141a 0%, color-mix(in srgb, var(--c) 22%, #15141a) 14%, color-mix(in srgb, var(--c) 55%, #120f12) 40%,
-                    color-mix(in srgb, var(--c) 82%, #0c0a0c) 62%, var(--c) 86%, color-mix(in srgb, var(--c) 92%, white) 100%); }
-.panel::before { content: ""; position: absolute; inset: 0; box-shadow: inset 0 1px 0 rgba(255,255,255,0.32); }
-/* texture & contrast: a fine diagonal grain */
-.panel .texture { position: absolute; inset: 0; opacity: 0.55; mix-blend-mode: soft-light;
-  background: repeating-linear-gradient(118deg, rgba(255,255,255,0.10) 0 1px, rgba(0,0,0,0.10) 1px 2px, transparent 2px 5px); }
+    linear-gradient(to bottom, rgba(255,255,255,0.18) 0, rgba(255,255,255,0.04) 8%, rgba(255,255,255,0) 35%, rgba(0,0,0,0.08) 72%, rgba(0,0,0,0.26) 100%),
+    linear-gradient(90deg, #12151c 0%, color-mix(in srgb, var(--c) 30%, #10131a) 16%, color-mix(in srgb, var(--c) 72%, #0a0d15) 34%,
+                    var(--c) 50%, var(--c) 100%); }
+.panel::before { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 1px 0 rgba(255,255,255,0.3); }
 
 .divider { top: 24px; width: 1.5px; height: 50px;
-  background: linear-gradient(to bottom, rgba(255,255,255,0.08), rgba(255,255,255,0.55) 45%, rgba(255,255,255,0.18)); }
+  background: linear-gradient(to bottom, rgba(255,255,255,0.10), rgba(255,255,255,0.55) 45%, rgba(255,255,255,0.20)); }
 .away .divider { left: 151px; }
 .home .divider { left: 419.5px; }
 
-/* ---- logo windows: glass + the curve ---- */
-.logo-window { top: 23px; height: 52px; overflow: hidden; }
-.away .logo-window { left: 2px; width: 63px; border-top-left-radius: 5px; background: color-mix(in srgb, var(--c) 45%, #0a0d14); }
-.home .logo-window { left: 511px; width: 63px; border-top-right-radius: 5px; background: color-mix(in srgb, var(--c) 45%, #0a0d14); }
-.logo-window .logo { height: 72px; top: -10px; position: absolute; filter: drop-shadow(1px 2px 2px rgba(0,0,0,0.55)) saturate(1.05); }
+/* ---- logos: cut off by the window, like the broadcast ---- */
+.logo-window { top: 23px; height: 52px; overflow: hidden; background: var(--c); }
+.away .logo-window { left: 2px; width: 63px; border-top-left-radius: 5px; }
+.home .logo-window { left: 511px; width: 63px; border-top-right-radius: 5px; }
+.logo-window .logo { position: absolute; height: 70px; top: -9px; filter: drop-shadow(1px 2px 2px rgba(0,0,0,0.5)); }
 .away .logo-window .logo { right: -6px; }
 .home .logo-window .logo { left: -6px; }
-.logo-window .logo[src=""], .logo-window .logo:not([src]) { visibility: hidden; }
-/* glass sheet across the logo, cut by a diagonal edge */
-.logo-window .glass { position: absolute; inset: 0; pointer-events: none;
-  background:
-    radial-gradient(120% 90% at 0% 0%, rgba(255,255,255,0.26), rgba(255,255,255,0.06) 45%, transparent 60%),
-    linear-gradient(to bottom, rgba(255,255,255,0.10), transparent 40%, rgba(0,0,0,0.25)); }
-.away .logo-window .glass { -webkit-mask: linear-gradient(118deg, #000 0 52%, transparent 52.6%); mask: linear-gradient(118deg, #000 0 52%, transparent 52.6%); }
-.home .logo-window .glass { -webkit-mask: linear-gradient(-118deg, #000 0 52%, transparent 52.6%); mask: linear-gradient(-118deg, #000 0 52%, transparent 52.6%); }
-.logo-window::after { content: ""; position: absolute; inset: 0; pointer-events: none; }
-.away .logo-window::after { background: linear-gradient(118deg, transparent calc(52% - 0.6px), rgba(255,255,255,0.75) 52.3%, transparent calc(52.6% + 0.6px));
-  box-shadow: inset 1.5px 1px 0 rgba(232,228,222,0.9); border-top-left-radius: 5px; }
-.home .logo-window::after { background: linear-gradient(-118deg, transparent calc(52% - 0.6px), rgba(255,255,255,0.75) 52.3%, transparent calc(52.6% + 0.6px));
-  box-shadow: inset -1.5px 1px 0 rgba(232,228,222,0.9); border-top-right-radius: 5px; }
-/* a light sweep crosses each logo now and then */
-.logo-window .sweep { position: absolute; top: -20px; bottom: -20px; width: 22px; left: -40px; pointer-events: none;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.55), transparent); transform: skewX(-28deg);
-  animation: sweep 11s var(--ease) infinite; }
-.home .logo-window .sweep { animation-delay: 0.7s; }
-@keyframes sweep { 0%, 82% { left: -40px; } 92%, 100% { left: 90px; } }
+img.logo[src=""], img.logo:not([src]) { visibility: hidden; }
 
 /* ---- text ---- */
 .abbr, .record, .score, .clock, .quarter span { font-family: var(--nbc-font); font-weight: 900; white-space: nowrap; line-height: 1; }
@@ -99,7 +78,7 @@ html, body { margin: 0; background: transparent; overflow: hidden; }
   100% { filter: drop-shadow(0.7px 1px 0.7px rgba(0,0,0,0.6)); } }
 
 /* ---- rail and timeouts ---- */
-.rail { left: 2px; top: 75px; width: 572px; height: 5px;
+.rail { left: 2px; top: 75px; width: 572px; height: 5px; transition: opacity 0.3s ease;
   background: linear-gradient(90deg, #23262c, #343c47 22%, #2d353f 45%, #2b323b 55%, #353d47 78%, #23262c);
   box-shadow: 0 1px 0 rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.06); }
 .timeouts i { position: absolute; top: 75.6px; width: 26px; height: 3.2px; border-radius: 0.5px; background: #fbfdff; transition: background 0.4s ease; }
@@ -108,13 +87,13 @@ html, body { margin: 0; background: transparent; overflow: hidden; }
 .home .timeouts i:nth-child(1) { left: 431px; } .home .timeouts i:nth-child(2) { left: 464px; } .home .timeouts i:nth-child(3) { left: 497px; }
 
 /* ---- pod ---- */
-.pod { left: 240px; top: 2.5px; width: 94px; height: 88px; border-radius: 50%;
+.pod { left: 240px; top: 2.5px; width: 94px; height: 88px; border-radius: 50%; z-index: 3;
   background:
     radial-gradient(70% 40% at 50% 12%, rgba(255,255,255,0.20), transparent 70%),
     radial-gradient(circle at 50% 42%, #384350 0%, #222a33 42%, #11161c 70%, #07090c 100%);
   box-shadow: 0 0 0 1.6px #5f6b78, 0 0 0 2.4px #1b2028, 0 3px 6px rgba(0,0,0,0.65),
               inset 0 0 0 3px #161b22, inset 0 0 0 4px rgba(200,215,230,0.32), inset 0 -6px 10px rgba(0,0,0,0.5);
-  transition: transform 0.45s var(--ease), opacity 0.35s ease, background 0.35s ease, box-shadow 0.35s ease; }
+  transition: transform 0.6s var(--ease), opacity 0.4s ease, background 0.35s ease, box-shadow 0.35s ease; }
 .pod::before, .pod::after { content: ""; position: absolute; left: 43px; width: 8px; height: 5px; background: #06080b; border-radius: 1px; }
 .pod::before { top: -1px; }
 .pod::after { bottom: -1px; }
@@ -129,6 +108,9 @@ html, body { margin: 0; background: transparent; overflow: hidden; }
 .pod .flag-word { left: 0; right: 0; top: 9px; text-align: center; font: 900 12px/1 var(--nbc-font); letter-spacing: 3px;
   color: #2a1e00; opacity: 0; transform: scale(1.6); transition: opacity 0.25s ease, transform 0.35s var(--ease), letter-spacing 0.35s var(--ease); }
 .pod .pulse { inset: -2px; border-radius: 50%; border: 1.5px solid rgba(255,214,60,0); pointer-events: none; }
+/* team-colour neon ring (scoring sequence) */
+.pod.glow { box-shadow: 0 0 0 1.6px color-mix(in srgb, var(--g) 60%, white), 0 0 0 2.4px #0b0e14, 0 0 10px var(--g), 0 0 22px var(--g),
+            inset 0 0 0 3px #161b22, inset 0 0 0 4px color-mix(in srgb, var(--g) 50%, white), inset 0 -6px 10px rgba(0,0,0,0.5); }
 
 /* FLAG: the pod turns gold, the word replaces the peacock, rings pulse */
 .pod.flag { background:
@@ -146,59 +128,106 @@ html, body { margin: 0; background: transparent; overflow: hidden; }
                    100% { transform: scale(1.9); border-color: rgba(255,214,60,0); box-shadow: 0 0 2px rgba(255,214,60,0); } }
 
 /* ---- down & distance tab ---- */
-.tab { top: 77px; width: 296px; height: 19px; opacity: 0; transition: opacity 0.3s ease; --t: var(--home); }
-.tab.home { left: 278px; --t: var(--home); }
-.tab.away { left: 0; --t: var(--away); transform: scaleX(-1); }
-.tab.away > .tab-text, .tab.away > .cross, .tab.away .chev { transform: scaleX(-1); }
+.tab { top: 78px; width: 274px; height: 18px; opacity: 0; transition: opacity 0.3s ease; --t: var(--home);
+  background: linear-gradient(to bottom, #2a313b, #12161c); box-shadow: 0 1px 2px rgba(0,0,0,0.6); }
+.tab.home { left: 300px; --t: var(--home); }
+.tab.away { left: 2px; --t: var(--away); }
 .tab.on { opacity: 1; }
-.tab .tab-shape { position: absolute; left: 0; top: 0; width: 100%; height: 100%; filter: drop-shadow(0 1px 1px rgba(0,0,0,0.6)); }
-.tab .tab-fill { position: absolute; left: 20px; right: 0; top: 0; bottom: 0; clip-path: inset(0 100% 0 0);
+.tab .tab-fill { position: absolute; inset: 0; clip-path: inset(0 100% 0 0);
   background: linear-gradient(to bottom, rgba(255,255,255,0.12), rgba(0,0,0,0.25)),
-              linear-gradient(90deg, color-mix(in srgb, var(--t) 30%, #12151b), color-mix(in srgb, var(--t) 78%, #12151b) 55%, color-mix(in srgb, var(--t) 55%, #12151b));
+              linear-gradient(90deg, color-mix(in srgb, var(--t) 45%, #12151b), color-mix(in srgb, var(--t) 85%, #12151b) 50%, color-mix(in srgb, var(--t) 60%, #12151b));
   transition: clip-path 0.55s var(--ease); }
+.tab.away .tab-fill { clip-path: inset(0 0 0 100%); }
 .tab.on .tab-fill { clip-path: inset(0 0 0 0); }
 .tab .tab-fill::after { content: ""; position: absolute; inset: 0; box-shadow: inset 0 1px 0 rgba(255,255,255,0.18); }
-.tab .tab-text { position: absolute; left: 20px; right: 0; top: 0; height: 19px; text-align: center;
-  font: 700 15px/19px var(--tab-font); color: #fff; letter-spacing: 0.2px; text-shadow: 0 1px 1px rgba(0,0,0,0.6);
+.tab .tab-text { position: absolute; left: 0; right: 0; top: 0; height: 18px; text-align: center;
+  font: 700 15px/18px var(--tab-font); color: #fff; letter-spacing: 0.2px; text-shadow: 0 1px 1px rgba(0,0,0,0.6);
   transition: opacity 0.22s ease, transform 0.3s var(--ease); }
 .tab .tab-text.out { opacity: 0; transform: translateY(4px); }
-.tab.away .tab-text.out { transform: scaleX(-1) translateY(4px); }
-/* chevrons march outward on both sides of the text */
-.chev { position: absolute; top: 5.5px; width: 22px; height: 8px; }
-.chev.left { left: 62px; } .chev.right { right: 44px; }
+.chev { position: absolute; top: 5px; width: 22px; height: 8px; }
+.chev.left { left: 50px; } .chev.right { right: 30px; }
 .chev b { position: absolute; top: 0; left: 0; width: 7px; height: 8px; background: color-mix(in srgb, var(--t) 45%, white);
   clip-path: polygon(0 0, 100% 50%, 0 100%); animation: march 1.6s linear infinite; opacity: 0; }
 .chev b:nth-child(2) { animation-delay: 0.8s; }
 @keyframes march { 0% { transform: translateX(0); opacity: 0; } 25% { opacity: 0.9; } 75% { opacity: 0.9; } 100% { transform: translateX(15px); opacity: 0; } }
-/* motion theory: a cross flashes where the tab is about to open */
-.tab .cross { position: absolute; left: 140px; top: -1px; font: 300 18px/19px var(--tab-font); color: rgba(220,230,240,0.9); opacity: 0; }
-.tab.opening .cross { animation: cross 0.6s ease-out; }
-@keyframes cross { 0% { opacity: 0; transform: scale(0.6) rotate(-45deg); } 40% { opacity: 1; } 100% { opacity: 0; transform: scale(1.1) rotate(0); } }
 
-.playclock { top: 80px; left: 273px; width: 28px; height: 15px; border-radius: 2px; opacity: 0;
+.playclock { top: 80px; left: 273px; width: 28px; height: 15px; border-radius: 2px; opacity: 0; z-index: 4;
   font: 800 12px/15px var(--tab-font); text-align: center; color: #fff;
   background: linear-gradient(to bottom, #6f8299, #33435a); box-shadow: 0 0 0 1px rgba(190,205,222,0.85), 0 1px 2px rgba(0,0,0,0.6);
   transition: opacity 0.3s ease; }
 .playclock.on { opacity: 1; }
 .playclock.low { background: linear-gradient(to bottom, #d6343b, #7d1218); }
 
-/* ---- touchdown takeover: the bug folds into the pod, the word lights up ---- */
-.takeover { left: -40px; top: -34px; width: 656px; height: 140px; pointer-events: none; opacity: 0; }
-.takeover .neon-logo { position: absolute; left: 50%; top: 50%; height: 150px; transform: translate(-50%, -50%) scale(0.85); opacity: 0;
-  filter: brightness(1.6) saturate(1.4) drop-shadow(0 0 6px var(--glow)) drop-shadow(0 0 16px var(--glow)); }
+/* ---- scoring drive (after a touchdown or field goal) ---- */
+.drive-stack { left: -192px; top: 19px; width: 150px; height: 60px; opacity: 0; z-index: 2;
+  clip-path: inset(0 0 0 100%); transition: clip-path 0.5s var(--ease), opacity 0.2s ease; }
+.drive-stack .row { position: absolute; left: 0; width: 150px; height: 30px; overflow: hidden; }
+.drive-stack .row.away { top: 0; --c: var(--away); border-top-left-radius: 4px; }
+.drive-stack .row.home { top: 30px; --c: var(--home); }
+.drive-stack .row { background: linear-gradient(90deg, var(--c) 0%, var(--c) 55%, color-mix(in srgb, var(--c) 45%, #10131a) 100%); }
+.drive-stack .row::after { content: ""; position: absolute; inset: 0; box-shadow: inset 0 1px 0 rgba(255,255,255,0.25); }
+.drive-stack .row.home::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 1px; background: rgba(0,0,0,0.45); z-index: 1; }
+.drive-stack .row .logo { position: absolute; left: -6px; top: -8px; height: 44px; filter: drop-shadow(1px 1px 1px rgba(0,0,0,0.5)); }
+.drive-stack .pts { position: absolute; right: 46px; top: 2px; font: 900 22px/26px var(--nbc-font); color: #fff;
+  text-shadow: 0.7px 1px 1px rgba(0,0,0,0.6); transition: transform 0.4s var(--ease); }
+.drive-stack .pts.tick { animation: tick 0.7s var(--ease); }
+@keyframes tick { 0% { transform: translateY(10px); opacity: 0; } 100% { transform: translateY(0); opacity: 1; } }
+
+.drive-bar { left: 30px; top: 19px; width: 750px; height: 60px; opacity: 0; z-index: 2; overflow: hidden; --c: var(--g);
+  border-top-right-radius: 4px; clip-path: inset(0 100% 0 0); transition: clip-path 0.65s var(--ease), opacity 0.2s ease;
+  background:
+    linear-gradient(to bottom, rgba(255,255,255,0.20) 0, rgba(255,255,255,0.04) 10%, rgba(255,255,255,0) 40%, rgba(0,0,0,0.25) 100%),
+    linear-gradient(90deg, color-mix(in srgb, var(--c) 55%, #0a0d15) 0%, var(--c) 18%, var(--c) 82%, color-mix(in srgb, var(--c) 85%, white) 100%); }
+.drive-bar::after { content: ""; position: absolute; inset: 0; box-shadow: inset 0 1px 0 rgba(255,255,255,0.3); pointer-events: none; }
+.drive-bar > * { position: absolute; transition: opacity 0.35s ease, filter 0.35s ease, transform 0.45s var(--ease); }
+.drive-bar .drive-logo { left: 20px; top: 0; width: 84px; height: 60px; overflow: hidden; }
+.drive-bar .drive-logo .logo { position: absolute; height: 78px; top: -9px; right: -10px; filter: drop-shadow(1px 2px 2px rgba(0,0,0,0.5)); }
+.drive-bar .drive-title { left: 118px; top: 0; height: 60px; font: italic 900 25px/60px var(--nbc-font); color: #fff; letter-spacing: 0.5px;
+  text-shadow: 0.7px 1px 1px rgba(0,0,0,0.6); }
+.drive-bar .stat { top: 0; width: 86px; height: 60px; text-align: center; border-left: 1.5px solid rgba(255,255,255,0.35); }
+.drive-bar .stat.plays { left: 430px; } .drive-bar .stat.yds { left: 516px; } .drive-bar .stat.top { left: 602px; }
+.drive-bar .lbl { position: absolute; left: 0; right: 0; top: 10px; font: 600 11px/1 var(--tab-font); color: #dfe7f1; letter-spacing: 0.4px; }
+.drive-bar .val { position: absolute; left: 0; right: 0; top: 26px; font: 900 21px/1 var(--nbc-font); color: #fff; text-shadow: 0.7px 1px 1px rgba(0,0,0,0.6); }
+.drive-bar .stat .lbl, .drive-bar .stat .val, .drive-bar .drive-title { opacity: 0; transform: translateX(-8px); transition: opacity 0.35s ease, transform 0.45s var(--ease), filter 0.35s ease; }
+.drive-bar .corner { right: 0; top: 0; width: 60px; height: 60px; pointer-events: none;
+  background: linear-gradient(135deg, transparent 0 47%, rgba(255,255,255,0.85) 48.5%, rgba(255,255,255,0.18) 50%, rgba(255,255,255,0.06) 100%); }
+
+/* ---- touchdown / field goal word ---- */
+.takeover { left: -40px; top: -34px; width: 656px; height: 140px; pointer-events: none; opacity: 0; z-index: 5; transition: opacity 0.35s ease; }
+.takeover .neon-logo { position: absolute; left: 50%; top: 50%; width: 220px; height: 150px; transform: translate(-50%, -50%) scale(0.8); opacity: 0;
+  /* the team logo's silhouette, lit in team colour (vapor light) */
+  background: radial-gradient(circle at 50% 40%, color-mix(in srgb, var(--g) 35%, white), var(--g) 70%);
+  -webkit-mask: var(--logo) center / contain no-repeat; mask: var(--logo) center / contain no-repeat;
+  filter: drop-shadow(0 0 4px var(--g)) drop-shadow(0 0 14px var(--g));
+  transition: opacity 0.6s ease, transform 2.6s var(--ease); }
 .takeover .big-word { position: absolute; left: 0; right: 0; top: 46px; text-align: center; white-space: nowrap;
-  font: 900 54px/1 var(--nbc-font); letter-spacing: 1px;
+  font: 900 54px/1 var(--nbc-font); letter-spacing: 14px; opacity: 0; transform: scale(1.3);
+  transition: opacity 0.35s ease, transform 0.6s var(--ease), letter-spacing 0.6s var(--ease), color 0.5s ease, filter 0.5s ease; }
+/* 1: neon letters in team colour */
+.takeover.neon .big-word { opacity: 1; transform: scale(1); letter-spacing: 1px; color: var(--g);
+  -webkit-text-stroke: 1px color-mix(in srgb, var(--g) 40%, white);
+  filter: drop-shadow(0 0 3px var(--g)) drop-shadow(0 0 12px var(--g)); }
+/* 2: chrome letters with a neon edge */
+.takeover.chrome .big-word { color: transparent; -webkit-text-stroke: 0;
   background: linear-gradient(to bottom, #ffffff 0%, #e7ebf2 40%, #9aa3ae 55%, #f4f6f9 70%, #c4cbd4 100%);
-  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
-  filter: drop-shadow(0 0 2px var(--glow)) drop-shadow(0 0 10px var(--glow)) drop-shadow(0 2px 2px rgba(0,0,0,0.8)); }
-#bug.takeover-on .half { transform: scaleX(0.02); opacity: 0; }
-#bug.takeover-on .tab, #bug.takeover-on .playclock, #bug.takeover-on .rail { opacity: 0; }
-#bug.takeover-on .pod { transform: scale(0.01); opacity: 0; }
-#bug.takeover-on .takeover { animation: takeover 3.6s var(--ease) forwards; }
-#bug.takeover-on .takeover .neon-logo { animation: neon 3.6s ease forwards; }
-#bug.takeover-on .takeover .big-word { animation: word 3.6s var(--ease) forwards; }
-@keyframes takeover { 0% { opacity: 0; } 8% { opacity: 1; } 88% { opacity: 1; } 100% { opacity: 0; } }
-@keyframes neon { 0% { opacity: 0; transform: translate(-50%, -50%) scale(0.7); } 18% { opacity: 0.9; } 60% { opacity: 0.55; }
-                  100% { opacity: 0; transform: translate(-50%, -50%) scale(1.05); } }
-@keyframes word { 0% { opacity: 0; transform: scale(1.35); letter-spacing: 14px; } 22% { opacity: 1; transform: scale(1); letter-spacing: 1px; }
-                  80% { opacity: 1; transform: scale(1.02); } 100% { opacity: 0; transform: scale(1.12); } }
+  -webkit-background-clip: text; background-clip: text;
+  filter: drop-shadow(0 0 2px var(--g)) drop-shadow(0 0 10px var(--g)) drop-shadow(0 2px 2px rgba(0,0,0,0.8)); }
+.takeover.on { opacity: 1; }
+.takeover.on .neon-logo { opacity: 0.55; transform: translate(-50%, -50%) scale(1); }
+.takeover.leaving .big-word { opacity: 0; transform: scale(1.15); filter: blur(4px); }
+.takeover.leaving .neon-logo { opacity: 0; }
+
+/* ---- sequence states, set by scorebug.js ---- */
+#bug.split .half.away { transform: translateX(-90px); opacity: 0; }
+#bug.split .half.home { transform: translateX(90px); opacity: 0; }
+#bug.split .rail, #bug.split .tab, #bug.split .playclock { opacity: 0; }
+#bug.wordphase .pod { opacity: 0; transform: scale(0.6); }
+#bug.compact .pod { opacity: 1; transform: translateX(-287px) translateY(2px) scale(0.86); }
+#bug.compact .drive-stack, #bug.compact .drive-bar { opacity: 1; clip-path: inset(0 0 0 0); }
+#bug.stats .drive-bar .drive-title { opacity: 1; transform: none; }
+#bug.stats .drive-bar .stat .lbl, #bug.stats .drive-bar .stat .val { opacity: 1; transform: none; }
+#bug.stats .drive-bar .stat.yds .lbl, #bug.stats .drive-bar .stat.yds .val { transition-delay: 0.15s; }
+#bug.stats .drive-bar .stat.top .lbl, #bug.stats .drive-bar .stat.top .val { transition-delay: 0.3s; }
+#bug.closing .drive-bar > * { opacity: 0 !important; filter: blur(5px); }
+#bug.closing .drive-bar { clip-path: inset(0 100% 0 0); transition-delay: 0.25s; }
+#bug.closing .drive-stack { clip-path: inset(0 0 0 100%); transition-delay: 0.25s; }

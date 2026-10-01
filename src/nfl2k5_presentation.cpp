@@ -2073,9 +2073,119 @@ static void html_post(const std::string &event_json)
     if (s_log) fprintf(stderr, "[HTMLPRES] event %s\n", event_json.c_str());
 }
 
+/* Drive tracking for "scoring drive" graphics: plays, yards and time of
+ * possession of the current drive, from the live state. A drive starts with
+ * a new possession and is measured from its first scrimmage snap; each new
+ * down/spot is a play. The game's own Drive Summary (popup text) replaces
+ * these numbers when it appears (DRIVE_SUMMARY). */
+struct DriveTrack {
+    int side = -1;                  /* AWAY / HOME */
+    bool scrimmage = false;         /* first snap seen */
+    float start_ball = 0, last_ball = 0, last_line = 0, start_clock = 0;
+    int start_period = 0, last_down = 0, plays = 0;
+};
+static DriveTrack s_drive;
+
+static int drive_seconds(const GameState &g)
+{
+    if (!s_drive.scrimmage) return 0;
+    float len = g.period_len > 0 ? g.period_len : 900.0f;
+    float used = g.period == s_drive.start_period ? s_drive.start_clock - g.clock
+               : s_drive.start_clock + (g.period - s_drive.start_period - 1) * len + (len - g.clock);
+    return std::max(0, (int)lroundf(used));
+}
+
+/* ,"drive":{...} for a scoring event by `side` (touchdown: to the goal line;
+ * field goal: to the kick spot). */
+static std::string drive_json(const GameState &g, int side, bool touchdown)
+{
+    if (s_drive.side != side || !s_drive.scrimmage) return "";
+    float end = s_drive.last_ball;
+    if (touchdown) end = s_drive.last_ball >= s_drive.start_ball ? 9144.0f : 0.0f;
+    int yards = (int)lroundf(fabsf(end - s_drive.start_ball) / 91.44f);
+    int plays = s_drive.plays + 1;                      /* the scoring play */
+    return ",\"drive\":{\"plays\":" + std::to_string(plays) + ",\"yards\":" + std::to_string(yards) +
+           ",\"timeOfPossession\":" + std::to_string(drive_seconds(g)) + ",\"source\":\"tracked\"}";
+}
+
+static void drive_update(const GameState &p, const GameState &g)
+{
+    if (!g.valid || !g.poss) return;
+    int side = g.poss - 1;
+    if (side != s_drive.side) {                         /* new possession: new drive */
+        s_drive = DriveTrack();
+        s_drive.side = side;
+    }
+    if (g.phase != 4) return;
+    if (!s_drive.scrimmage) {
+        s_drive.scrimmage = true;
+        s_drive.start_ball = s_drive.last_ball = g.ball;
+        s_drive.last_line = g.line; s_drive.last_down = g.down;
+        s_drive.start_clock = g.clock; s_drive.start_period = g.period;
+        return;
+    }
+    if (p.phase == 4 && (g.ball != s_drive.last_ball || g.down != s_drive.last_down || g.line != s_drive.last_line)) {
+        s_drive.plays++;
+        s_drive.last_ball = g.ball; s_drive.last_line = g.line; s_drive.last_down = g.down;
+    }
+}
+
+/* Popup text from src/main.c. Drive Summary: labels and values in order,
+ * e.g. "Drive Summary|Plays|4|Yards|49|Time|0:52". */
+static std::mutex s_popup_lock;
+static std::vector<std::string> s_popup_events;
+extern "C" void nfl2k5_presentation_popup_text(const char *title, const char *text)
+{
+    if (!title || !text) return;
+    std::string t = upper(title);
+    if (t.find("DRIVE SUMMARY") == std::string::npos) return;
+    std::vector<std::string> tok;
+    std::string cur;
+    for (const char *c = text;; c++) {
+        if (*c == '\x1f' || !*c) { if (!cur.empty()) tok.push_back(cur); cur.clear(); if (!*c) break; }
+        else cur += *c;
+    }
+    auto value_after = [&](const char *label, bool time) -> std::string {
+        for (size_t i = 0; i + 1 < tok.size(); i++)
+            if (upper(tok[i]) == label)
+                for (size_t k = i + 1; k < tok.size() && k < i + 6; k++) {
+                    const std::string &v = tok[k];
+                    bool ok = !v.empty();
+                    for (char ch : v) if (!(isdigit((unsigned char)ch) || (time && ch == ':') || ch == '-')) ok = false;
+                    if (ok) return v;
+                }
+        return "";
+    };
+    std::string plays = value_after("PLAYS", false), yards = value_after("YARDS", false), time = value_after("TIME", true);
+    if (s_log) {
+        std::string joined;
+        for (auto &x : tok) joined += (joined.empty() ? "" : "|") + x;
+        fprintf(stderr, "[PRES] drive summary popup: %s -> plays %s yards %s time %s\n",
+                joined.c_str(), plays.c_str(), yards.c_str(), time.c_str());
+    }
+    if (plays.empty() && yards.empty() && time.empty()) return;
+    int secs = 0;
+    if (!time.empty()) {
+        size_t colon = time.find(':');
+        secs = colon == std::string::npos ? atoi(time.c_str()) : atoi(time.substr(0, colon).c_str()) * 60 + atoi(time.substr(colon + 1).c_str());
+    }
+    std::string j = ",\"drive\":{\"plays\":" + (plays.empty() ? std::string("null") : plays) +
+                    ",\"yards\":" + (yards.empty() ? std::string("null") : yards) +
+                    ",\"timeOfPossession\":" + std::to_string(secs) + ",\"source\":\"game\"}";
+    std::lock_guard<std::mutex> lock(s_popup_lock);
+    s_popup_events.push_back(j);
+}
+
 /* Generic events that follow from two consecutive states. */
 static void html_state_events(const GameState &p, const GameState &g)
 {
+    drive_update(p, g);
+    {
+        std::vector<std::string> pending;
+        { std::lock_guard<std::mutex> lock(s_popup_lock); pending.swap(s_popup_events); }
+        for (auto &j : pending)
+            html_post(html_event_json("DRIVE_SUMMARY", s_drive.side >= 0 ? s_drive.side : -1, j));
+    }
     if (!g.valid) return;
     if (!s_html.started_game && g.period >= 1) {
         s_html.started_game = true;
@@ -2182,7 +2292,12 @@ static int html_hud(const XboxHudFrame *f, XboxHudImage *img, const GameState &g
     s_html.prev_valid = g.valid;
     Event ev;
     while (pop_event(ev))
-        if (const char *name = html_event_name(ev.name)) html_post(html_event_json(name, ev.team));
+        if (const char *name = html_event_name(ev.name)) {
+            std::string extra;
+            if (ev.name == "touchdown") extra = drive_json(g, ev.team, true);
+            else if (ev.name == "field_goal") extra = drive_json(g, ev.team, false);
+            html_post(html_event_json(name, ev.team, extra));
+        }
 
     nfl2k5::PresentationSurface surf;
     if (!s_html.host->acquire_surface(surf)) return 0;

@@ -61,30 +61,31 @@
   };
   var missing = {};
   function code(t) { var a = (t && t.abbreviation || '').toUpperCase(); return ALIAS[a] || a; }
-  function logoSrc(t) { var c = code(t); return (!c || missing[c]) ? (t.logo || '') : 'assets/logos/' + c + '.png'; }
+  function color(t) { return COLORS[code(t)] || (t && t.primaryColor) || '#444a55'; }
+  function logoSrc(t) { var c = code(t); return (!c || missing[c]) ? ((t && t.logo) || '') : 'assets/logos/' + c + '.png'; }
+  function setLogo(img, t) {
+    var src = logoSrc(t), c = code(t);
+    if (img.getAttribute('src') !== src) img.setAttribute('src', src);
+    img.onerror = function () { if (!missing[c]) { missing[c] = true; img.setAttribute('src', (t && t.logo) || ''); } };
+  }
 
   var dirty = false;
   function setText(sel, text) {
     var el = q(sel);
     if (el && el.textContent !== text) { el.textContent = text; dirty = true; }
   }
-  function setLogo(img, t) {
-    var src = logoSrc(t), c = code(t);
-    if (img.getAttribute('src') !== src) img.setAttribute('src', src);
-    img.onerror = function () { if (!missing[c]) { missing[c] = true; img.setAttribute('src', t.logo || ''); } };
-  }
   function setTeam(side, t, prev) {
-    bug.style.setProperty('--' + side, COLORS[code(t)] || t.primaryColor || '#444a55');
+    bug.style.setProperty('--' + side, color(t));
     setText('.' + side + ' .abbr', code(t) || '---');
     setText('.' + side + ' .record', t.record || '');
     setText('.' + side + ' .score', t.score == null ? '' : String(t.score));
-    if (prev && prev.score !== t.score) pop(side);
-    setLogo(q('.' + side + ' .logo'), t);
+    if (prev && prev.score !== t.score && !busy) pop(side);
+    setLogo(q('.half.' + side + ' .logo'), t);
     var bars = bug.querySelectorAll('.' + side + ' .timeouts i');
     for (var i = 0; i < bars.length; i++) bars[i].classList.toggle('used', i >= (t.timeouts == null ? 3 : t.timeouts));
   }
   function pop(side) {
-    var el = q('.' + side + ' .score');
+    var el = q('.half.' + side + ' .score');
     el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop');
   }
 
@@ -106,13 +107,12 @@
   function setTab(side, text, show) {
     if (!show) { tab.classList.remove('on'); tabSide = null; tabValue = ''; return; }
     if (side !== tabSide) {
-      tab.classList.remove('on', 'opening', 'home', 'away');
+      tab.classList.remove('on', 'home', 'away');
       void tab.offsetWidth;
-      tab.classList.add(side, 'opening');
+      tab.classList.add(side);
       tabSide = side;
       tabText.textContent = text; tabValue = text;
       requestAnimationFrame(function () { tab.classList.add('on'); });
-      setTimeout(function () { tab.classList.remove('opening'); }, 700);
       return;
     }
     if (text !== tabValue) {            /* new down: fade the text out and back in */
@@ -126,20 +126,57 @@
   var pod = q('.pod'), flagUntil = 0;
   function updateFlag(on) { pod.classList.toggle('flag', on || Date.now() < flagUntil); }
 
-  /* ---- takeover (touchdown, field goal) ---- */
-  var takeoverBusy = false;
-  function takeover(word, side) {
-    if (takeoverBusy || !NFL2K5.state) return;
-    var t = NFL2K5.state[side] || {};
-    takeoverBusy = true;
-    var box = q('.takeover');
-    box.style.setProperty('--glow', COLORS[code(t)] || '#4d7cff');
+  /* ---- scoring sequence (touchdown / field goal / safety) ----
+   * split -> neon word -> chrome word -> collapse into the pod -> scoring
+   * drive bar (score ticks up) -> back to the scorebug. ~10.5 s; the
+   * scorebug stays on screen for all of it. */
+  var busy = false, timers = [], recentPoints = { away: 0, home: 0 }, lastDrive = null;
+  var takeoverEl = q('.takeover');
+  function at(ms, fn) { timers.push(setTimeout(fn, ms)); }
+  function fmtTop(s) { if (s == null) return '–'; s = Math.round(s); return Math.floor(s / 60) + ':' + ('0' + (s % 60)).slice(-2); }
+  function showDrive(d) {
+    q('.drive-bar .plays .val').textContent = d && d.plays != null ? String(d.plays) : '–';
+    q('.drive-bar .yds .val').textContent = d && d.yards != null ? String(d.yards) : '–';
+    q('.drive-bar .top .val').textContent = d ? fmtTop(d.timeOfPossession) : '–';
+  }
+  function scoring(word, side, drive) {
+    var s = NFL2K5.state;
+    if (busy || !s || !s[side]) return;
+    busy = true;
+    var t = s[side], other = side === 'away' ? 'home' : 'away';
+    bug.style.setProperty('--g', color(t));
     q('.takeover .big-word').textContent = word;
-    var neon = q('.takeover .neon-logo');
-    neon.setAttribute('src', logoSrc(t));
-    bug.classList.remove('takeover-on'); void bug.offsetWidth;
-    bug.classList.add('takeover-on');
-    setTimeout(function () { bug.classList.remove('takeover-on'); takeoverBusy = false; }, 3700);
+    q('.takeover .neon-logo').style.setProperty('--logo', 'url("' + logoSrc(t) + '")');
+    /* stack: the scoring team's old score first, it ticks up later */
+    ['away', 'home'].forEach(function (k) {
+      setLogo(q('.drive-stack .row.' + k + ' .logo'), s[k]);
+      var pts = s[k].score - (k === side ? recentPoints[side] : 0);
+      q('.drive-stack .row.' + k + ' .pts').textContent = String(pts);
+    });
+    setLogo(q('.drive-bar .drive-logo .logo'), t);
+    showDrive(drive);
+    var withDrive = word !== 'SAFETY';
+
+    pod.classList.add('glow');
+    bug.classList.add('split');
+    at(450, function () { bug.classList.add('wordphase'); takeoverEl.classList.add('on', 'neon'); });
+    at(1500, function () { takeoverEl.classList.add('chrome'); });
+    at(3300, function () { takeoverEl.classList.add('leaving'); });
+    if (withDrive) {
+      at(3700, function () { takeoverEl.className = 'takeover'; bug.classList.remove('wordphase'); bug.classList.add('compact'); });
+      at(4300, function () { bug.classList.add('stats'); });
+      at(5400, function () {
+        var el = q('.drive-stack .row.' + side + ' .pts');
+        el.textContent = String(NFL2K5.state[side].score);
+        el.classList.remove('tick'); void el.offsetWidth; el.classList.add('tick');
+      });
+      at(9000, function () { bug.classList.add('closing'); });
+      at(9900, function () { bug.classList.remove('compact', 'stats', 'closing'); pod.classList.remove('glow'); bug.classList.remove('split'); });
+      at(10600, function () { busy = false; recentPoints[side] = 0; });
+    } else {
+      at(3700, function () { takeoverEl.className = 'takeover'; bug.classList.remove('wordphase', 'split'); pod.classList.remove('glow'); });
+      at(4300, function () { busy = false; recentPoints[side] = 0; });
+    }
   }
 
   NFL2K5.onState(function (s, prev) {
@@ -152,33 +189,37 @@
     setText('.pod .quarter .ord', n >= 1 && n <= 4 ? ORD[n] : '');
     if (dirty) { layout(); dirty = false; }
 
-    var live = !!(s.context && s.context.scorebugVisible);
-    bug.classList.toggle('off-air', !live);
+    /* The bug stays up; it steps aside only for the play-calling screen
+     * (it would cover the play art) and the pause menu, never during a
+     * scoring sequence. */
+    var cx = s.context || {};
+    bug.classList.toggle('off-air', (!busy && !!(cx.playSelection || cx.paused)) || s.valid === false);
     var down = niceDown(s.downDistanceText);
-    setTab(s.possession, down, live && !!s.possession && !!down);
+    setTab(s.possession, down, !!s.possession && !!down);
     var pc = s.playClock;
     clockBox.textContent = pc >= 0 ? String(pc) : '';
-    clockBox.classList.toggle('on', live && pc >= 0 && !!s.possession);
+    clockBox.classList.toggle('on', pc >= 0 && !!s.possession);
     clockBox.classList.toggle('low', pc >= 0 && pc <= 5);
-    updateFlag(!!(s.context && s.context.flag));
+    updateFlag(!!cx.flag);
   });
 
   NFL2K5.onEvent(function (e) {
     switch (e.name) {
-    case 'TOUCHDOWN': takeover('TOUCHDOWN', e.team); break;
-    case 'FIELD_GOAL': takeover('FIELD GOAL', e.team); break;
-    case 'SAFETY': takeover('SAFETY', e.team); break;
+    case 'SCORE_CHANGED': if (e.team) recentPoints[e.team] = (busy ? recentPoints[e.team] : 0) + (e.points || 0); break;
+    case 'TOUCHDOWN': scoring('TOUCHDOWN', e.team, e.drive); break;
+    case 'FIELD_GOAL': scoring('FIELD GOAL', e.team, e.drive); break;
+    case 'SAFETY': scoring('SAFETY', e.team, null); break;
+    case 'DRIVE_SUMMARY': lastDrive = e.drive; if (busy && e.drive) showDrive(e.drive); break;
     case 'PENALTY': flagUntil = Date.now() + 8000; updateFlag(true); setTimeout(function () { updateFlag(false); }, 8100); break;
     }
   });
 
-  /* ---- previews: scorebug.html?preview=<state> ----
-   * reference: the bug exactly where it sits in reference/reference.png
-   * (1400x268, scale 1); home-ball / away-ball / flag / touchdown: states
-   * for checking the package, on the 1920x1080 canvas. */
+  /* ---- previews: scorebug.html?preview=<state>[&t=ms] ----
+   * home-ball / away-ball / flag / touchdown (the scoring sequence; with
+   * t=ms it is frozen that far in, for screenshots) / reference. */
   var pv = (/[?&]preview=([\w-]+)/.exec(location.search) || [])[1];
   if (pv) {
-    var st = { quarter: 2, gameClock: 900, playClock: 39, possession: 'home', downDistanceText: '3RD & 8',
+    var st = { valid: true, quarter: 2, gameClock: 900, playClock: 39, possession: 'home', downDistanceText: '3RD & 8',
                context: { scorebugVisible: true, flag: false },
                away: { abbreviation: 'LAR', record: '10-6', score: 42, timeouts: 3 },
                home: { abbreviation: 'CIN', record: '9-7', score: 27, timeouts: 2 } };
@@ -191,8 +232,17 @@
     }
     if (pv === 'away-ball') { st.possession = 'away'; st.downDistanceText = '4TH & INCHES'; st.playClock = 35; }
     if (pv === 'flag') st.context.flag = true;
+    if (pv === 'touchdown') { st.away.score = 48; st.possession = 'away'; st.downDistanceText = 'PAT'; }
     NFL2K5.dispatch({ type: 'state', state: st });
-    if (pv === 'touchdown') setTimeout(function () { NFL2K5.dispatch({ type: 'event', event: { name: 'TOUCHDOWN', team: 'away' } }); }, 300);
+    if (pv === 'touchdown') {
+      setTimeout(function () {
+        NFL2K5.dispatch({ type: 'event', event: { name: 'SCORE_CHANGED', team: 'away', points: 6, score: 48 } });
+        NFL2K5.dispatch({ type: 'event', event: { name: 'TOUCHDOWN', team: 'away',
+          drive: { plays: 11, yards: 37, timeOfPossession: 373, source: 'preview' } } });
+      }, 200);
+      var freeze = (/[?&]t=(\d+)/.exec(location.search) || [])[1];
+      if (freeze) setTimeout(function () { document.getAnimations().forEach(function (a) { a.pause(); }); }, 200 + +freeze);
+    }
   }
 
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(layout);

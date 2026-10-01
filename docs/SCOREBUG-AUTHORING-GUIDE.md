@@ -167,11 +167,13 @@ NFL2K5.onEvent(function (event) {
 | `INTERCEPTION`, `FUMBLE`, `TURNOVER` | turnovers | |
 | `PENALTY` | flag | |
 | `TIMEOUT` | timeout used | `team` |
+| `DRIVE_SUMMARY` | the game shows its Drive Summary | `drive` (exact numbers from the game) |
 | `TWO_MINUTE_WARNING` | 2:00 in Q2/Q4 | |
 | `QUARTER_ENDED`, `QUARTER_STARTED` | period change | `quarter` |
 | `HALFTIME`, `OVERTIME`, `GAME_ENDED` | | |
 | `INJURY`, `REPLAY_STARTED` | | |
 
+`TOUCHDOWN` and `FIELD_GOAL` carry `drive`: `{ plays, yards, timeOfPossession (seconds), source }`. `source` is `"tracked"` (measured from the live state during the drive) or `"game"` (from the game's Drive Summary, sent later as `DRIVE_SUMMARY`; prefer it when it arrives).
 Defined but not sent yet: `DRIVE_STARTED`, `PLAY_STARTED`, `PLAY_ENDED`,
 `SACK`, `REPLAY_ENDED`. Handle them if useful; they will start arriving later.
 Ignore event names you do not know.

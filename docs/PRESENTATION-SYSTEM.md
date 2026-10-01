@@ -161,11 +161,13 @@ Reported now:
 | `OVERTIME` | | state |
 | `TOUCHDOWN`, `FIELD_GOAL`, `EXTRA_POINT`, `TWO_POINT_CONVERSION`, `SAFETY` | | scoring change |
 | `TIMEOUT` | | timeout count |
+| `DRIVE_SUMMARY` | `drive` | the game's Drive Summary popup (exact plays, yards, time) |
 | `FIRST_DOWN` | | down reset on the same possession |
 | `TWO_MINUTE_WARNING` | | clock |
 | `GAME_ENDED` | | clock and period |
 | `PENALTY`, `INTERCEPTION`, `FUMBLE`, `TURNOVER`, `INJURY`, `REPLAY_STARTED` | | the title's own popup text |
 
+`TOUCHDOWN` and `FIELD_GOAL` carry `drive`: `{ plays, yards, timeOfPossession (seconds), source }`. `source` is `"tracked"` (measured from the live state during the drive) or `"game"` (from the game's Drive Summary, sent later as `DRIVE_SUMMARY`; prefer it when it arrives).
 Defined but not produced yet (no verified source in the title): `DRIVE_STARTED`, `PLAY_STARTED`,
 `PLAY_ENDED`, `SACK`, `REPLAY_ENDED`, `PLAYER_STAT` (the FOX QB card still uses
 the JSON path).

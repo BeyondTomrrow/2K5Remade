@@ -991,6 +991,32 @@ void nfl2k5_diag_popup(uint32_t obj, int what)
             extern void nfl2k5_presentation_popup(const char *title);
             nfl2k5_presentation_popup(title);
         }
+        {
+            /* Every UTF-16 string in the popup object (0xF20 bytes), joined
+             * with '\x1f': popups such as Drive Summary keep their table
+             * (labels and values) outside the title/message fields. */
+            extern void nfl2k5_presentation_popup_text(const char *title, const char *text);
+            char all[1024];
+            size_t n = 0;
+            uint32_t off = 0;
+            while (off + 2 <= 0xF20u && n + 70 < sizeof all) {
+                uint32_t start = off, len = 0;
+                while (off + 2 <= 0xF20u) {
+                    uint16_t ch = *(const uint16_t *)(m + obj + off);
+                    if (ch < 32 || ch > 126) break;
+                    len++;
+                    off += 2;
+                }
+                if (len >= 1 && len < 64 && (start & 1u) == 0) {
+                    uint32_t k;
+                    if (n) all[n++] = '\x1f';
+                    for (k = 0; k < len; k++) all[n++] = (char)*(const uint16_t *)(m + obj + start + k * 2u);
+                }
+                off += 2;
+            }
+            all[n] = 0;
+            nfl2k5_presentation_popup_text(title, all);
+        }
     } else if (what == 1) {
         uint32_t sl = 0xB61B50u + obj * 0xF20u;
         fprintf(stderr, "  [POPUPOP] close slot=%d active=%u closing=%u cb=%08X ret=%08X\n", (int)obj,
