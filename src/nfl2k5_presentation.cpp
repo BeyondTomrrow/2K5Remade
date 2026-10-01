@@ -28,6 +28,7 @@
 #include <dwrite.h>
 #include <wincodec.h>
 #include "nfl2k5_broadcast.h"
+#include "presentation/presentation_host.h"
 #include <mfapi.h>
 #include <mfidl.h>
 #include <mfreadwrite.h>
@@ -417,8 +418,13 @@ extern "C" int nfl2k5_broadcast_get_state(Nfl2k5BroadcastState *state)
 struct Song { std::string title, file; };
 struct Package {
     std::string name, dir;
-    JVal root;
+    JVal root;                    /* presentation.json, or mod.json for an HTML package */
     std::vector<Song> intro, outro;
+    /* HTML/CSS/JS package (mod.json "type": "html"): drawn by the
+     * PresentationHost instead of the JSON element renderer. */
+    bool html = false;
+    std::string entry;
+    int canvas_w = 1920, canvas_h = 1080;
 };
 
 static std::vector<Package> s_pkgs;           /* [0] is the game's own ESPN presentation */
@@ -453,9 +459,25 @@ static void load_packages()
         if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) || fd.cFileName[0] == L'.') continue;
         char dir8[MAX_PATH];
         WideCharToMultiByte(CP_UTF8, 0, fd.cFileName, -1, dir8, sizeof dir8, nullptr, nullptr);
+        if (dir8[0] == '_') continue;     /* shared folders such as _runtime */
         Package p;
         p.dir = std::string("mods/presentations/") + dir8;
-        if (!load_json(p.dir + "/presentation.json", p.root)) continue;
+        if (!load_json(p.dir + "/presentation.json", p.root)) {
+            /* An HTML package describes itself in mod.json; its look lives in
+             * the entry page, not in JSON. */
+            if (!load_json(p.dir + "/mod.json", p.root) || p.root.str("type") != "html") continue;
+            if (!p.root.flag("enabled", true)) continue;
+            p.html = true;
+            p.entry = p.root.str("entry", "index.html");
+            if (const JVal *c = p.root.get("canvas")) {
+                p.canvas_w = (int)c->num("width", 1920);
+                p.canvas_h = (int)c->num("height", 1080);
+            }
+            if (!file_exists(p.dir + "/" + p.entry)) {
+                fprintf(stderr, "[PRES] HTML package %s: entry %s missing, skipped\n", dir8, p.entry.c_str());
+                continue;
+            }
+        }
         p.name = p.root.str("name", dir8);
         if (const JVal *m = p.root.get("music")) {
             for (int k = 0; k < 2; k++)
@@ -466,8 +488,8 @@ static void load_packages()
                         (k ? p.outro : p.intro).push_back(song);
                     }
         }
-        fprintf(stderr, "[PRES] package \"%s\" (%zu intro, %zu outro themes)\n",
-                p.name.c_str(), p.intro.size(), p.outro.size());
+        fprintf(stderr, "[PRES] package \"%s\" (%s, %zu intro, %zu outro themes)\n",
+                p.name.c_str(), p.html ? "html" : "json", p.intro.size(), p.outro.size());
         register_package_fonts(p);
         s_pkgs.push_back(std::move(p));
     } while (FindNextFileW(h, &fd));
@@ -1907,6 +1929,257 @@ static void music_logic(const GameState &g, bool native_on)
     }
 }
 
+/* ======================================================================
+ * HTML presentation bridge (Presentation API v1, docs/PRESENTATION-SYSTEM.md)
+ *
+ * The game side reports football STATE and EVENTS as JSON; an HTML package
+ * running in the PresentationHost decides how they look. Nothing here is
+ * specific to a network. The host's transparent frame goes out through the
+ * same HUD image as the JSON renderer, so no graphics backend is involved.
+ * ====================================================================== */
+static std::string json_str(const std::string &s)
+{
+    std::string o = "\"";
+    for (unsigned char c : s) {
+        if (c == '"' || c == '\\') { o += '\\'; o += (char)c; }
+        else if (c < 0x20) { char b[8]; snprintf(b, sizeof b, "\\u%04x", c); o += b; }
+        else o += (char)c;
+    }
+    return o + "\"";
+}
+
+static std::string json_color(const D2D1_COLOR_F &c)
+{
+    char b[16];
+    snprintf(b, sizeof b, "\"#%02X%02X%02X\"", (int)lroundf(c.r * 255), (int)lroundf(c.g * 255), (int)lroundf(c.b * 255));
+    return b;
+}
+
+/* mods/teams/SF/logos/scorebug.png -> https://teams.local/SF/logos/scorebug.png */
+static std::string team_asset_url(const std::string &path)
+{
+    const std::string prefix = "mods/teams/";
+    if (path.compare(0, prefix.size(), prefix) == 0) return "https://teams.local/" + path.substr(prefix.size());
+    return "";
+}
+
+static const char *side_name(int side) { return side == AWAY ? "away" : "home"; }
+
+struct HtmlContext { bool scorebug_visible, play_selection, paused, native_scorebug; };
+
+static std::string html_state_json(const GameState &g, const HtmlContext &cx)
+{
+    std::string j = "{\"apiVersion\":1";
+    j += ",\"valid\":" + std::string(g.valid ? "true" : "false");
+    const char *status = !g.valid ? "inactive" : g.period == 0 ? "pregame" : is_final(g) ? "final" : "in_progress";
+    j += ",\"gameStatus\":" + json_str(status);
+    j += ",\"phase\":" + std::to_string(g.phase);
+    j += ",\"quarter\":" + std::to_string(g.period);
+    char num[64];
+    snprintf(num, sizeof num, "%.2f", g.clock); j += ",\"gameClock\":" + std::string(num);
+    snprintf(num, sizeof num, "%.0f", g.period_len); j += ",\"periodLength\":" + std::string(num);
+    j += ",\"playClock\":" + std::to_string(g.play_clock);
+    bool scrimmage = g.valid && g.phase == 4 && g.down >= 1 && g.down <= 4;
+    j += ",\"down\":" + std::to_string(scrimmage ? g.down : 0);
+    j += ",\"distance\":" + (scrimmage ? std::to_string((int)lroundf(fabsf(g.line - g.ball) / 91.44f)) : std::string("null"));
+    j += ",\"goalToGo\":" + std::string(scrimmage && fabsf(g.line) >= 4572.0f - 1.0f ? "true" : "false");
+    j += ",\"downDistanceText\":" + json_str(down_distance(g));
+    /* Which half of the field the ball is in needs the drive direction,
+     * which is not mapped yet: side and redZone stay null, not guessed. */
+    int yard = std::isfinite(g.ball) ? (int)lroundf(std::max(0.0f, std::min(100.0f, g.ball / 91.44f))) : -1;
+    j += ",\"ballPosition\":{\"yardLine\":" + (scrimmage && yard >= 0 ? std::to_string(std::min(yard, 100 - yard)) : std::string("null"));
+    j += ",\"side\":null,\"text\":" + json_str(ball_position(g)) + "}";
+    j += ",\"redZone\":null";
+    j += ",\"possession\":" + (g.poss == 1 ? std::string("\"away\"") : g.poss == 2 ? std::string("\"home\"") : std::string("null"));
+    for (int side = 0; side < 2; side++) {
+        TeamInfo t = team_info(g.t[side].abbr);
+        j += ",\"" + std::string(side_name(side)) + "\":{";
+        j += "\"abbreviation\":" + json_str(upper(g.t[side].abbr));
+        j += ",\"city\":" + json_str(t.city) + ",\"name\":" + json_str(t.name);
+        j += ",\"logo\":" + json_str(team_asset_url(t.logo));
+        j += ",\"record\":" + json_str(t.record);
+        j += ",\"score\":" + std::to_string(g.t[side].score);
+        j += ",\"timeouts\":" + std::to_string(g.t[side].timeouts);
+        j += ",\"primaryColor\":" + json_color(t.primary) + ",\"secondaryColor\":" + json_color(t.secondary);
+        j += "}";
+    }
+    j += ",\"context\":{\"scorebugVisible\":" + std::string(cx.scorebug_visible ? "true" : "false");
+    j += ",\"playSelection\":" + std::string(cx.play_selection ? "true" : "false");
+    j += ",\"paused\":" + std::string(cx.paused ? "true" : "false");
+    j += ",\"nativeScorebug\":" + std::string(cx.native_scorebug ? "true" : "false");
+    j += ",\"flag\":" + std::string(GetTickCount64() < s_flag_until ? "true" : "false") + "}";
+    return j + "}";
+}
+
+static std::string html_event_json(const char *name, int side, const std::string &extra = "")
+{
+    std::string j = "{\"name\":" + json_str(name);
+    j += ",\"team\":" + (side == AWAY || side == HOME ? json_str(side_name(side)) : std::string("null"));
+    char t[32];
+    snprintf(t, sizeof t, "%.3f", now_s());
+    j += ",\"time\":" + std::string(t) + extra;
+    return j + "}";
+}
+
+/* The JSON renderer's event names -> Presentation API names. Quarter
+ * boundaries are derived from state instead (html_state_events). */
+static const char *html_event_name(const std::string &n)
+{
+    static const std::pair<const char *, const char *> map[] = {
+        { "touchdown", "TOUCHDOWN" }, { "field_goal", "FIELD_GOAL" }, { "extra_point", "EXTRA_POINT" },
+        { "two_point", "TWO_POINT_CONVERSION" }, { "safety", "SAFETY" }, { "timeout", "TIMEOUT" },
+        { "first_down", "FIRST_DOWN" }, { "two_minute_warning", "TWO_MINUTE_WARNING" },
+        { "final", "GAME_ENDED" }, { "final_overtime", "GAME_ENDED" }, { "game_end", "GAME_ENDED" },
+        { "penalty", "PENALTY" }, { "interception", "INTERCEPTION" }, { "fumble", "FUMBLE" },
+        { "turnover", "TURNOVER" }, { "sack", "SACK" }, { "injury", "INJURY" },
+        { "replay_begin", "REPLAY_STARTED" }, { "replay_end", "REPLAY_ENDED" },
+        { "game_start", "GAME_STARTED" }, { "drive_start", "DRIVE_STARTED" }, { "player_stat", "PLAYER_STAT" },
+    };
+    for (auto &m : map) if (n == m.first) return m.second;
+    return nullptr;     /* end_q1/end_q3/halftime/quarter_start: from state */
+}
+
+struct HtmlPresentation {
+    std::unique_ptr<nfl2k5::PresentationHost> host;
+    int package = -1;
+    float scale = 1.0f;
+    std::string last_state;
+    double last_state_t = 0;
+    GameState prev;
+    bool prev_valid = false, started_game = false;
+};
+static HtmlPresentation s_html;
+
+static void html_post(const std::string &event_json)
+{
+    if (s_html.host) s_html.host->post_event(event_json);
+    if (s_log) fprintf(stderr, "[HTMLPRES] event %s\n", event_json.c_str());
+}
+
+/* Generic events that follow from two consecutive states. */
+static void html_state_events(const GameState &p, const GameState &g)
+{
+    if (!g.valid) return;
+    if (!s_html.started_game && g.period >= 1) {
+        s_html.started_game = true;
+        html_post(html_event_json("GAME_STARTED", -1));
+    }
+    if (!s_html.prev_valid) return;
+    for (int s = 0; s < 2; s++)
+        if (g.t[s].score != p.t[s].score)
+            html_post(html_event_json("SCORE_CHANGED", s, ",\"points\":" + std::to_string(g.t[s].score - p.t[s].score) +
+                                      ",\"score\":" + std::to_string(g.t[s].score)));
+    if (g.poss != p.poss && g.poss)
+        html_post(html_event_json("POSSESSION_CHANGED", g.poss - 1));
+    if (g.phase == 4 && (g.down != p.down || p.phase != 4) && g.down >= 1 && g.down <= 4)
+        html_post(html_event_json("DOWN_CHANGED", g.poss ? g.poss - 1 : -1, ",\"down\":" + std::to_string(g.down)));
+    if (g.period > p.period && p.period >= 1) {
+        html_post(html_event_json("QUARTER_ENDED", -1, ",\"quarter\":" + std::to_string(p.period)));
+        if (p.period == 2) html_post(html_event_json("HALFTIME", -1));
+        if (g.period == 5) html_post(html_event_json("OVERTIME", -1));
+        html_post(html_event_json("QUARTER_STARTED", -1, ",\"quarter\":" + std::to_string(g.period)));
+    }
+}
+
+static void html_stop()
+{
+    if (s_html.host) {
+        s_html.host->stop();
+        s_html.host.reset();
+        fprintf(stderr, "[HTMLPRES] host stopped\n");
+    }
+    s_html.package = -1;
+    s_html.last_state.clear();
+}
+
+/* Draws the active HTML package. The page's 1920x1080 canvas maps onto the
+ * largest 16:9 rectangle inside the game picture (broadcast safe): it keeps
+ * its proportions at any resolution and is not stretched across ultrawide. */
+static int html_hud(const XboxHudFrame *f, XboxHudImage *img, const GameState &g, const HtmlContext &cx)
+{
+    int pk = s_sel_pkg;
+    const Package &pkg = s_pkgs[pk];
+    float gw = f->game_w, gh = f->game_h;
+    float dh = std::min(gh, gw * pkg.canvas_h / pkg.canvas_w), dw = dh * pkg.canvas_w / pkg.canvas_h;
+    /* Rasterise at about the size it is shown (1080p: 1, 1440p: 1.33,
+     * 4K: 2). The window can still be settling when the host starts, so a
+     * shown size that stays well off the current scale for a second
+     * restarts the page at the right one. */
+    float want_scale = std::max(1.0f, std::min(2.0f, dh / pkg.canvas_h));
+    static double scale_off_since;
+    if (s_html.package == pk && fabsf(want_scale - s_html.scale) > 0.2f) {
+        if (!scale_off_since) scale_off_since = now_s();
+        else if (now_s() - scale_off_since > 1.0) { html_stop(); scale_off_since = 0; }
+    } else scale_off_since = 0;
+    if (s_html.package != pk) {
+        html_stop();
+        nfl2k5::PresentationHostConfig c;
+        c.package_dir = pkg.dir;
+        c.entry = pkg.entry;
+        c.root_dir = "mods/presentations";
+        c.teams_dir = "mods/teams";
+        c.canvas_width = pkg.canvas_w;
+        c.canvas_height = pkg.canvas_h;
+        c.raster_scale = want_scale;
+        s_html.scale = want_scale;
+        s_html.host = nfl2k5::create_webview2_presentation_host();
+        s_html.host->start(c);
+        s_html.package = pk;
+        s_html.prev_valid = false;
+        s_html.started_game = false;
+        fprintf(stderr, "[HTMLPRES] package \"%s\" at raster scale %.2f\n", pkg.name.c_str(), c.raster_scale);
+    }
+
+    /* State: whenever it changes, and at least twice a second. */
+    std::string st = html_state_json(g, cx);
+    double t = now_s();
+    if (st != s_html.last_state || t - s_html.last_state_t > 0.5) {
+        s_html.host->post_state(st);
+        s_html.last_state = st;
+        s_html.last_state_t = t;
+    }
+
+    /* Test hook: NFL2K5_PRES_EVENT=TOUCHDOWN,FIRST_DOWN,... cycles them every
+     * 5 s. Upper-case names go out as Presentation API events as written;
+     * lower-case ones go through the normal event queue (touchdown, ...). */
+    if (!s_test_event.empty() && g.valid) {
+        static double next;
+        static size_t idx;
+        if (t >= next) {
+            std::vector<std::string> names;
+            size_t a = 0, b;
+            while ((b = s_test_event.find(',', a)) != std::string::npos) { names.push_back(s_test_event.substr(a, b - a)); a = b + 1; }
+            names.push_back(s_test_event.substr(a));
+            const std::string &n = names[idx++ % names.size()];
+            int team = g.poss ? g.poss - 1 : HOME;
+            if (!n.empty() && isupper((unsigned char)n[0]))
+                html_post(html_event_json(n.c_str(), team, ",\"quarter\":" + std::to_string(g.period) + ",\"test\":true"));
+            else
+                queue_event({ n, team, "" });
+            next = t + 5.0;
+        }
+    }
+
+    html_state_events(s_html.prev, g);
+    s_html.prev = g;
+    s_html.prev_valid = g.valid;
+    Event ev;
+    while (pop_event(ev))
+        if (const char *name = html_event_name(ev.name)) html_post(html_event_json(name, ev.team));
+
+    nfl2k5::PresentationSurface surf;
+    if (!s_html.host->acquire_surface(surf)) return 0;
+    static uint64_t shown;
+    img->pixels = surf.pixels;
+    img->w = surf.width; img->h = surf.height; img->stride = surf.stride;
+    img->x = (int)lroundf(f->game_x + (gw - dw) / 2);
+    img->y = (int)lroundf(f->game_y + (gh - dh) / 2);
+    img->dw = (int)lroundf(dw); img->dh = (int)lroundf(dh);
+    img->changed = surf.serial != shown;
+    shown = surf.serial;
+    return 1;
+}
+
 static int hud_callback(const XboxHudFrame *f, XboxHudImage *img)
 {
     double t = now_s();
@@ -2020,6 +2293,15 @@ static int hud_callback(const XboxHudFrame *f, XboxHudImage *img)
         dirty = false;
         return 1;
     }
+    if (custom_active() && s_pkgs[s_sel_pkg].html) {
+        HtmlContext cx;
+        cx.play_selection = playcall_on;
+        cx.paused = pause_on;
+        cx.native_scorebug = native_on;
+        cx.scorebug_visible = g.valid && !playcall_on && !pause_on && (g.phase == 4 || native_on);
+        return html_hud(f, img, g, cx);
+    }
+    if (s_html.host) html_stop();       /* switched back to a JSON package or ESPN */
     if (!custom_active() || !renderer_init()) return 0;
     const Package &pkg = s_pkgs[s_sel_pkg];
     const JVal *sb = pkg.root.get("scorebug");

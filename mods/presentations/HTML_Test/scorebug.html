@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>HTML Test presentation</title>
+<link rel="stylesheet" href="scorebug.css">
+<!-- Presentation Studio writes its visual edits here (overrides scorebug.css). -->
+<link rel="stylesheet" href="layout.css">
+</head>
+<body>
+<!-- 1920x1080 broadcast canvas. Elements carry data-element names so the
+     editor can select, move and resize them. -->
+<div id="canvas">
+  <div id="bug" data-element="bug">
+    <div class="tag" data-element="dev-tag">HTML TEST</div>
+    <div class="team away" data-element="away">
+      <img class="logo" data-element="away-logo" alt="">
+      <span class="abbr" data-element="away-abbr">AWY</span>
+      <span class="score" data-element="away-score">0</span>
+      <div class="timeouts" data-element="away-timeouts"><i></i><i></i><i></i></div>
+    </div>
+    <div class="team home" data-element="home">
+      <img class="logo" data-element="home-logo" alt="">
+      <span class="abbr" data-element="home-abbr">HOM</span>
+      <span class="score" data-element="home-score">0</span>
+      <div class="timeouts" data-element="home-timeouts"><i></i><i></i><i></i></div>
+    </div>
+    <div class="game" data-element="game">
+      <span class="quarter" data-element="quarter">1ST</span>
+      <span class="clock" data-element="clock">15:00</span>
+      <span class="down" data-element="down">1ST &amp; 10</span>
+    </div>
+  </div>
+  <div id="banner" data-element="banner"><span></span></div>
+  <div id="status" data-element="status">waiting for game data</div>
+</div>
+<script src="../_runtime/nfl2k5-presentation.js"></script>
+<script src="scorebug.js"></script>
+</body>
+</html>

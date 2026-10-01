@@ -2,8 +2,22 @@ file(GLOB NFL2K5_GENERATED CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/src/recomp/g
 if(NOT NFL2K5_GENERATED)
   message(FATAL_ERROR "Run tools/analyze.ps1 -Recompile before building the game.")
 endif()
-add_executable(NFL2K5 WIN32 src/main.c src/recomp_manual.c src/nfl2k5_input_hle.c src/nfl2k5_video_menu.c src/nfl2k5_presentation.cpp src/nfl2k5.rc ${NFL2K5_GENERATED})
-target_include_directories(NFL2K5 PRIVATE src/recomp/gen)
+add_executable(NFL2K5 WIN32 src/main.c src/recomp_manual.c src/nfl2k5_input_hle.c src/nfl2k5_video_menu.c src/nfl2k5_presentation.cpp src/presentation/webview2_host.cpp src/nfl2k5.rc ${NFL2K5_GENERATED})
+target_include_directories(NFL2K5 PRIVATE src/recomp/gen src)
+# HTML presentation host (src/presentation): WebView2 SDK headers and static
+# loader. The engine itself is the WebView2 runtime that ships with Windows.
+set(NFL2K5_WEBVIEW2_SDK "${PROJECT_SOURCE_DIR}/dependencies/webview2/sdk/build/native")
+if(NOT EXISTS "${NFL2K5_WEBVIEW2_SDK}/include/WebView2.h")
+  message(FATAL_ERROR "WebView2 SDK missing: run tools/get-webview2-sdk.ps1")
+endif()
+target_include_directories(NFL2K5 PRIVATE "${NFL2K5_WEBVIEW2_SDK}/include")
+# C++/WinRT (Windows.Graphics.Capture, Windows.UI.Composition) from the
+# Windows SDK the developer prompt selected.
+if(DEFINED ENV{WindowsSdkDir} AND DEFINED ENV{WindowsSDKVersion})
+  string(REPLACE "\\" "/" _nfl2k5_sdk "$ENV{WindowsSdkDir}Include/$ENV{WindowsSDKVersion}cppwinrt")
+  target_include_directories(NFL2K5 PRIVATE "${_nfl2k5_sdk}")
+endif()
+target_link_libraries(NFL2K5 PRIVATE "${NFL2K5_WEBVIEW2_SDK}/x64/WebView2LoaderStatic.lib" version)
 option(NFL2K5_ABI_CHECK "Diagnostic: verify ebx/esi/edi preservation across every recompiled call" OFF)
 option(NFL2K5_COVERAGE "Diagnostic: record which recompiled functions are ever entered via a direct call, to measure what fraction of the program actually runs (see PROJECT_STATUS.md, 2026-09-22)" OFF)
 option(NFL2K5_FORCE_UNBLOCK_B09584 "EXPERIMENTAL: force the MEM32(0xB09584) poll in sub_000432C0 to always succeed (see PROJECT_STATUS.md, 2026-09-21) -- bypasses a real, not-yet-understood stall instead of fixing it" OFF)
