@@ -23,6 +23,8 @@
         version: 1,
         host: window.NFL2K5_HOST || (window.parent !== window ? 'editor' : 'browser'),
         state: null,
+        /* True once the page has registered for game data (editor check). */
+        get listening() { return stateHandlers.length > 0; },
         onState: function (fn) {
             stateHandlers.push(fn);
             if (api.state) safe(fn, api.state, null);

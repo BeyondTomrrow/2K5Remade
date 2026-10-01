@@ -244,7 +244,10 @@ async function openPackage(p, keepEdits) {
     applyAll();
     sendState();
     buildList();
-    msg(`${p.name}: ${edits.size} edited element(s)`);
+    const api = frame.contentWindow.NFL2K5;
+    if (!api) msg(`${p.name}: the page does not load the Presentation API runtime (_runtime/nfl2k5-presentation.js), so it cannot receive game data`);
+    else if (!api.listening) msg(`${p.name}: not connected to game data. The page never calls NFL2K5.onState, so it shows fixed values and ignores the sample data and events. See docs/SCOREBUG-AUTHORING-GUIDE.md`);
+    else msg(`${p.name}: connected to game data; ${edits.size} edited element(s)`);
     loadRefSettings();
   };
   frame.src = `/mods/presentations/${p.folder}/${p.entry || 'index.html'}?t=${Date.now()}`;
@@ -629,20 +632,39 @@ $('impGo').onclick = async () => {
                 canvas: { width: 1920, height: 1080, fit: 'broadcast_safe_16x9' }, dependencies: [], assets: {},
                 compatibility: { game: 'NFL2K5-PC', presentation_api: 1 } };
   const folder = name;
-  let r = await fetch(`/api/create-package?name=${encodeURIComponent(folder)}`, { method: 'POST', body: JSON.stringify(mod, null, 2) + '\n' });
-  if (!r.ok) { alert('Import failed: ' + await r.text()); return; }
+  const info = $('impInfo');
+  $('impGo').disabled = true;
+  info.textContent = 'Creating package…';
+  let r;
+  try {
+    r = await fetch(`/api/create-package?name=${encodeURIComponent(folder)}`, { method: 'POST', body: JSON.stringify(mod, null, 2) + '\n' });
+  } catch (e) {
+    info.textContent = 'Cannot reach the editor server. Start it with tools\\presentation-studio\\serve.ps1 and open the page it prints.';
+    $('impGo').disabled = false;
+    return;
+  }
+  if (!r.ok) {
+    const why = await r.text();
+    info.textContent = r.status === 409 ? `A package folder named "${folder}" already exists. Change the package name.` : 'Import failed: ' + why;
+    $('impGo').disabled = false;
+    return;
+  }
+  let done = 0, skipped = [];
   for (const x of impList) {
+    info.textContent = `Copying ${++done}/${impList.length}: ${x.path}`;
     let body = x.file;
     if (x.path === entry) body = prepareEntry(await x.file.text(), entry, $('impTransparent').checked);
     if (/^mod\.json$/i.test(x.path)) continue;       /* ours replaces any shipped one */
     r = await fetch(`/api/write?package=${encodeURIComponent(folder)}&path=${encodeURIComponent(x.path)}`, { method: 'POST', body });
-    if (!r.ok) msg(`Skipped ${x.path}: ${await r.text()}`);
+    if (!r.ok) skipped.push(x.path);
   }
   if (!impList.some(x => x.path === 'layout.css'))
     await fetch(`/api/write?package=${encodeURIComponent(folder)}&path=layout.css`, { method: 'POST', body: '/* Written by Presentation Studio. */\n' });
   $('importDlg').close();
+  $('impGo').disabled = false;
   await loadPackages(folder);
-  msg(`Imported ${impList.length} file(s) into mods/presentations/${folder}`);
+  /* openPackage reports whether the page is connected to game data. */
+  if (skipped.length) setTimeout(() => msg(`Imported into mods/presentations/${folder}; skipped (file type not allowed): ${skipped.join(', ')}`), 2500);
 };
 
 /* ---------- code view ---------- */
