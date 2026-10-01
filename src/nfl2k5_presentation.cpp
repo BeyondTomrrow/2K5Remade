@@ -2354,6 +2354,30 @@ static int hud_callback(const XboxHudFrame *f, XboxHudImage *img)
             fprintf(stderr, "\n");
         }
     }
+    /* Audio test switch: NFL2K5_AUDIO_SLIDERS=v0,v1,... overrides the game's
+     * volume sliders (floats at E601B4.., TV broadcast first) without
+     * touching the saved settings; NFL2K5_PRES_LOG prints their values. */
+    {
+        static DWORD last;
+        if (GetTickCount() - last > 1000) {
+            last = GetTickCount();
+            if (const char *sl = getenv("NFL2K5_AUDIO_SLIDERS")) {
+                const char *c = sl;
+                for (uint32_t a = 0x00E601B4u; *c && a <= 0x00E601CCu; a += 4) {
+                    char *end;
+                    float f = strtof(c, &end);
+                    if (end == c) break;
+                    gwritef(a, f);
+                    c = *end == ',' ? end + 1 : end;
+                }
+            }
+            if (s_log) {
+                fprintf(stderr, "[PRES] sliders E601B4..:");
+                for (uint32_t a = 0x00E601B4u; a <= 0x00E601CCu; a += 4) fprintf(stderr, " %.2f", rdf(a));
+                fprintf(stderr, "\n");
+            }
+        }
+    }
     bool native_on = s_native_visible && GetTickCount() - s_native_tick < 300;
     /* NFL 2K5's play-call overlay has its own four-state controller.  The
      * state is written by sub_00071B50 and consumed every frame by

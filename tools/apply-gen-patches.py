@@ -277,6 +277,12 @@ PATCHES = [
     }
 #endif
 """),
+    # Music player commands (2026-10-01): who plays / stops a music track.
+    # RECOMP_MUSIC_LOG=1. Menu music kept restarting every 1-5 s.
+    ("DIAG_MUSICPLAY", "sub_0003CEA0", "loc_0003CEA0: ;", "after", """    { extern void nfl2k5_diag_music(int what, uint32_t handle_ptr, uint32_t esp_); nfl2k5_diag_music(1, ecx, esp); }
+"""),
+    ("DIAG_MUSICSTOP", "sub_0003CEE0", "loc_0003CEE0: ;", "after", """    { extern void nfl2k5_diag_music(int what, uint32_t handle_ptr, uint32_t esp_); nfl2k5_diag_music(0, ecx, esp); }
+"""),
     ("DIAG_MUSICSTREAM", "sub_0003F860", "loc_0003F860: ;", "after", """    { extern void nfl2k5_diag_stream(uint32_t dst, uint32_t src, uint32_t len, uint32_t eax_, uint32_t arg); nfl2k5_diag_stream(ebx, edx, edi, eax, MEM32(esp + 4)); }
 """),
     # Gamecast Live table rows (2026-09-28). Capture each distinct row-render

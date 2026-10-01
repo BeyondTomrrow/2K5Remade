@@ -3094,3 +3094,22 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous, LPSTR command_line, i
     (void)instance; (void)previous; (void)command_line; (void)show;
     return main(__argc, __argv);
 }
+
+/* 2026-10-01: music player play (1) / stop (0) commands, gen patches
+ * DIAG_MUSICPLAY / DIAG_MUSICSTOP. RECOMP_MUSIC_LOG=1 prints the track
+ * handle and the guest return addresses on the stack. */
+void nfl2k5_diag_music(int what, uint32_t handle_ptr, uint32_t esp_)
+{
+    static int on = -1;
+    const uint8_t *m = (const uint8_t *)xbox_GetMemoryOffset();
+    int k, shown = 0;
+    if (on < 0) on = getenv("RECOMP_MUSIC_LOG") != NULL;
+    if (!on) return;
+    fprintf(stderr, "[MUSIC] %s handle %d t=%lu stack:", what ? "play" : "stop",
+            (int)*(const uint32_t *)(m + handle_ptr), GetTickCount());
+    for (k = 0; k < 64 && shown < 10; k++) {
+        uint32_t w = *(const uint32_t *)(m + esp_ + k * 4u);
+        if (w >= 0x00011000u && w < 0x00480000u) { fprintf(stderr, " %08X", w); shown++; }
+    }
+    fprintf(stderr, "\n");
+}

@@ -1,4 +1,4 @@
-diff --git a/CMakeLists.txt b/CMakeLists.txt
+﻿diff --git a/CMakeLists.txt b/CMakeLists.txt
 index e4cd232..d97f7c9 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
@@ -11,7 +11,7 @@ index e4cd232..d97f7c9 100644
  
  # Option to build examples
 diff --git a/src/apu/apu_core.c b/src/apu/apu_core.c
-index 459be77..97b8662 100644
+index 459be77..6889416 100644
 --- a/src/apu/apu_core.c
 +++ b/src/apu/apu_core.c
 @@ -58,6 +58,16 @@ void mcpx_debug_end_frame(void) {}
@@ -174,6 +174,22 @@ index 459be77..97b8662 100644
              /* Lightweight: just monitor frame (test tone + software mixer) */
              mcpx_apu_monitor_frame(d);
              d->ep_frame_div++;
+@@ -637,7 +700,15 @@ uint64_t mcpx_apu_mmio_read(MCPXAPUState *d, uint64_t addr, unsigned int size)
+ void mcpx_apu_mmio_write(MCPXAPUState *d, uint64_t addr, uint64_t val, unsigned int size)
+ {
+     if (!d) return;
++    /* Serialise with the frame thread, which processes voices holding
++     * d->lock (as xemu does). Unlocked, the title's voice commands (set
++     * position, start, pause/resume, buffer pointers) landed mid-frame and
++     * were overwritten by the voice processor: NFL 2K5's music streamer saw
++     * its positions jump and restarted the song every 1-5 s, and announcer
++     * lines were cut (2026-10-01). The lock is a recursive critical section. */
++    qemu_mutex_lock(&d->lock);
+     mcpx_apu_dispatch_mmio(d, (hwaddr)addr, val, size, true);
++    qemu_mutex_unlock(&d->lock);
+ }
+ 
+ /* ============================================================
 diff --git a/src/apu/apu_dsp.c b/src/apu/apu_dsp.c
 index de14f26..9235202 100644
 --- a/src/apu/apu_dsp.c
@@ -365,7 +381,7 @@ index dd6bec1..a7cd974 100644
  
  /* Stub address space - just passed to ldl_le_phys etc. (ignored) */
 diff --git a/src/apu/apu_vp.c b/src/apu/apu_vp.c
-index b9f429e..3014a37 100644
+index b9f429e..9b0733b 100644
 --- a/src/apu/apu_vp.c
 +++ b/src/apu/apu_vp.c
 @@ -66,11 +66,17 @@ static void set_notify_status(MCPXAPUState *d, uint32_t v, int notifier,
@@ -407,19 +423,35 @@ index b9f429e..3014a37 100644
  
      switch (method) {
      case NV1BA0_PIO_VOICE_LOCK:
-@@ -312,6 +332,11 @@ static void fe_method(MCPXAPUState *d, uint32_t method, uint32_t argument)
+@@ -312,6 +332,27 @@ static void fe_method(MCPXAPUState *d, uint32_t method, uint32_t argument)
          break;
  
      case NV1BA0_PIO_VOICE_PAUSE:
-+        if (getenv("RECOMP_APU_VOICE_LOG"))
++        if (getenv("RECOMP_APU_VOICE_LOG")) {
 +            fprintf(stderr, "[VOICE] %03X %s at cbo %06X (t=%lu)\n", argument & NV1BA0_PIO_VOICE_PAUSE_HANDLE,
 +                    (argument & NV1BA0_PIO_VOICE_PAUSE_ACTION) ? "pause" : "resume",
 +                    voice_get_mask(d, (uint16_t)(argument & NV1BA0_PIO_VOICE_PAUSE_HANDLE), NV_PAVS_VOICE_PAR_OFFSET,
 +                                   NV_PAVS_VOICE_PAR_OFFSET_CBO), GetTickCount());
++            if (getenv("RECOMP_APU_PAUSE_STACK")) {
++                /* Guest return addresses on the calling thread's stack: who
++                 * pauses/resumes the voice (the FE method runs on the guest
++                 * thread that wrote the MMIO register). */
++                extern __declspec(thread) uint32_t g_esp;
++                extern ptrdiff_t xbox_GetMemoryOffset(void);
++                const uint8_t *gm = (const uint8_t *)xbox_GetMemoryOffset();
++                int shown = 0;
++                fprintf(stderr, "[VOICE]   stack:");
++                for (uint32_t k = 0; k < 96 && shown < 14; k++) {
++                    uint32_t w = *(const uint32_t *)(gm + g_esp + k * 4);
++                    if (w >= 0x00011000u && w < 0x00480000u) { fprintf(stderr, " %08X", w); shown++; }
++                }
++                fprintf(stderr, "\n");
++            }
++        }
          voice_set_mask(d, (uint16_t)(argument & NV1BA0_PIO_VOICE_PAUSE_HANDLE),
                         NV_PAVS_VOICE_PAR_STATE, NV_PAVS_VOICE_PAR_STATE_PAUSED,
                         (argument & NV1BA0_PIO_VOICE_PAUSE_ACTION) != 0);
-@@ -412,6 +437,10 @@ static void fe_method(MCPXAPUState *d, uint32_t method, uint32_t argument)
+@@ -412,6 +453,10 @@ static void fe_method(MCPXAPUState *d, uint32_t method, uint32_t argument)
                         NV_PAVS_VOICE_CUR_PSH_SAMPLE_LBO, argument);
          break;
      case NV1BA0_PIO_SET_VOICE_BUF_CBO:
@@ -430,7 +462,7 @@ index b9f429e..3014a37 100644
          voice_set_mask(d, (uint16_t)d->regs[NV_PAPU_FECV],
                         NV_PAVS_VOICE_PAR_OFFSET,
                         NV_PAVS_VOICE_PAR_OFFSET_CBO, argument);
-@@ -727,6 +756,74 @@ static float voice_step_envelope(MCPXAPUState *d, uint16_t v, uint32_t reg_0,
+@@ -727,6 +772,74 @@ static float voice_step_envelope(MCPXAPUState *d, uint16_t v, uint32_t reg_0,
   * Sample fetching from voice buffers
   * ============================================================ */
  
@@ -505,7 +537,7 @@ index b9f429e..3014a37 100644
  static int voice_get_samples(MCPXAPUState *d, uint32_t v, float samples[][2],
                         int num_samples_requested)
  {
-@@ -825,6 +922,8 @@ static int voice_get_samples(MCPXAPUState *d, uint32_t v, float samples[][2],
+@@ -825,6 +938,8 @@ static int voice_get_samples(MCPXAPUState *d, uint32_t v, float samples[][2],
  
      bool adpcm =
          (container_size_index == NV_PAVS_VOICE_CFG_FMT_CONTAINER_SIZE_ADPCM);
@@ -514,7 +546,7 @@ index b9f429e..3014a37 100644
  
      if (adpcm) {
          block_size = 36;
-@@ -841,9 +940,14 @@ static int voice_get_samples(MCPXAPUState *d, uint32_t v, float samples[][2],
+@@ -841,9 +956,14 @@ static int voice_get_samples(MCPXAPUState *d, uint32_t v, float samples[][2],
              unsigned int block_position = cbo % ADPCM_SAMPLES_PER_BLOCK;
              if (adpcm_block_index != (int)block_index) {
                  uint32_t linear_addr = block_index * (uint32_t)block_size;
@@ -530,7 +562,7 @@ index b9f429e..3014a37 100644
                             block_size);
                  } else {
                      linear_addr += ba;
-@@ -934,6 +1038,15 @@ static int voice_get_samples(MCPXAPUState *d, uint32_t v, float samples[][2],
+@@ -934,6 +1054,15 @@ static int voice_get_samples(MCPXAPUState *d, uint32_t v, float samples[][2],
          }
      }
  
@@ -546,7 +578,7 @@ index b9f429e..3014a37 100644
      voice_set_mask(d, (uint16_t)v, NV_PAVS_VOICE_PAR_OFFSET,
                     NV_PAVS_VOICE_PAR_OFFSET_CBO, cbo);
      return sample_count;
-@@ -946,26 +1059,83 @@ static int voice_get_samples(MCPXAPUState *d, uint32_t v, float samples[][2],
+@@ -946,26 +1075,83 @@ static int voice_get_samples(MCPXAPUState *d, uint32_t v, float samples[][2],
   * resample. This gives us functional audio at the cost of quality.
   * ============================================================ */
  
@@ -646,7 +678,7 @@ index b9f429e..3014a37 100644
  }
  
  /* ============================================================
-@@ -1006,6 +1176,96 @@ static void voice_process(MCPXAPUState *d,
+@@ -1006,6 +1192,96 @@ static void voice_process(MCPXAPUState *d,
                                          NV_PAVS_VOICE_CFG_ENV0_EF_PITCHSCALE);
      float rate = 1.0f / powf(2.0f, (p + ps * 32 * ef_value) / 4096.0f);
      dbg->rate = rate;
@@ -743,7 +775,7 @@ index b9f429e..3014a37 100644
  
      /* Step amplitude envelope */
      float ea_value = voice_step_envelope(
-@@ -1089,9 +1349,53 @@ static void voice_process(MCPXAPUState *d,
+@@ -1089,9 +1365,53 @@ static void voice_process(MCPXAPUState *d,
          dbg->bin[i] = (uint8_t)bin[i];
          dbg->vol[i] = vol[i];
      }
@@ -797,7 +829,7 @@ index b9f429e..3014a37 100644
      /* Low-pass filter */
      int fmode = voice_get_mask(d, v, NV_PAVS_VOICE_CFG_MISC,
                                 NV_PAVS_VOICE_CFG_MISC_FMODE);
-@@ -1169,10 +1473,43 @@ static void voice_process(MCPXAPUState *d,
+@@ -1169,10 +1489,43 @@ static void voice_process(MCPXAPUState *d,
   * Simplified single-threaded version (no worker threads initially)
   * ============================================================ */
  
@@ -841,7 +873,7 @@ index b9f429e..3014a37 100644
  
      for (int list = 0; list < 3; list++) {
          hwaddr top, current, next;
-@@ -1194,9 +1531,11 @@ void mcpx_apu_vp_frame(MCPXAPUState *d,
+@@ -1194,9 +1547,11 @@ void mcpx_apu_vp_frame(MCPXAPUState *d,
  
              if (!voice_get_mask(d, v, NV_PAVS_VOICE_PAR_STATE,
                                  NV_PAVS_VOICE_PAR_STATE_ACTIVE_VOICE)) {
