@@ -8,31 +8,70 @@
 </head>
 <body>
 <div id="canvas">
-  <!-- All coordinates inside #bug are reference pixels: the 576x94 box at
-       x 413, y 90 of reference/reference.png. -->
+  <!-- Pure HTML/CSS/SVG. Inside #bug, units are design pixels of a
+       576x120 box (the reference bug is 576x94; the down-and-distance tab
+       hangs below it). The whole bug is scaled with --bug-scale. -->
   <div id="bug" data-element="bug">
-    <div class="panel away" data-element="away-panel"><div class="team-color"></div></div>
-    <div class="panel home" data-element="home-panel"><div class="team-color"></div></div>
-    <div class="divider away" data-element="away-divider"></div>
-    <div class="divider home" data-element="home-divider"></div>
+    <div class="half away" data-element="away-half">
+      <div class="panel"><div class="texture"></div></div>
+      <div class="logo-window" data-element="away-logo"><img class="logo" alt=""><div class="glass"></div><div class="sweep"></div></div>
+      <div class="abbr" data-element="away-abbr">AWY</div>
+      <div class="record" data-element="away-record"></div>
+      <div class="divider"></div>
+      <div class="score" data-element="away-score">0</div>
+      <div class="timeouts" data-element="away-timeouts"><i></i><i></i><i></i></div>
+    </div>
+    <div class="half home" data-element="home-half">
+      <div class="panel"><div class="texture"></div></div>
+      <div class="logo-window" data-element="home-logo"><img class="logo" alt=""><div class="glass"></div><div class="sweep"></div></div>
+      <div class="abbr" data-element="home-abbr">HOM</div>
+      <div class="record" data-element="home-record"></div>
+      <div class="divider"></div>
+      <div class="score" data-element="home-score">0</div>
+      <div class="timeouts" data-element="home-timeouts"><i></i><i></i><i></i></div>
+    </div>
+    <div class="rail" data-element="rail"></div>
 
-    <div class="logo-window away" data-element="away-logo"><img class="plate" alt=""><img class="logo" alt=""><div class="glass"></div></div>
-    <div class="logo-window home" data-element="home-logo"><img class="plate" alt=""><img class="logo" alt=""><div class="glass"></div></div>
+    <!-- down & distance tab, under the team with the ball -->
+    <div class="tab" data-element="down-tab">
+      <svg class="tab-shape" viewBox="0 0 300 20" preserveAspectRatio="none" aria-hidden="true">
+        <defs>
+          <linearGradient id="tabGlass" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#2b323c"/><stop offset="1" stop-color="#11151b"/>
+          </linearGradient>
+        </defs>
+        <!-- "the curve": the tab grows out of the pod with an S-curve -->
+        <path d="M0 0 C 10 0, 12 20, 26 20 L 300 20 L 300 0 Z" fill="url(#tabGlass)"/>
+      </svg>
+      <div class="tab-fill"></div>
+      <div class="chev left"><b></b><b></b></div>
+      <div class="tab-text" data-element="down-text"></div>
+      <div class="chev right"><b></b><b></b></div>
+      <div class="cross">&times;</div>
+    </div>
 
-    <div class="text abbr away" data-element="away-abbr">LAR</div>
-    <div class="text record away" data-element="away-record">10-6</div>
-    <div class="text score away" data-element="away-score">42</div>
-    <div class="text score home" data-element="home-score">27</div>
-    <div class="text abbr home" data-element="home-abbr">CIN</div>
-    <div class="text record home" data-element="home-record">9-7</div>
+    <div class="pod" data-element="pod">
+      <div class="ring"></div>
+      <div class="pulse"></div><div class="pulse p2"></div>
+      <svg class="peacock" viewBox="-23 -23 46 24" aria-hidden="true">
+        <defs><linearGradient id="feather" x1="0" y1="-1" x2="0" y2="0.2" gradientUnits="objectBoundingBox"><stop offset="0" stop-color="#eef3f8"/><stop offset="1" stop-color="#a9b4c1"/></linearGradient></defs>
+        <g fill="url(#feather)" stroke="#1a2129" stroke-width="0.9" stroke-linejoin="round"><path d="M0 0 C -5.2 -3.5, -6.4 -15.5, 0 -20.5 C 6.4 -15.5, 5.2 -3.5, 0 0 Z" transform="rotate(-75)"/><path d="M0 0 C -5.2 -3.5, -6.4 -15.5, 0 -20.5 C 6.4 -15.5, 5.2 -3.5, 0 0 Z" transform="rotate(-45)"/><path d="M0 0 C -5.2 -3.5, -6.4 -15.5, 0 -20.5 C 6.4 -15.5, 5.2 -3.5, 0 0 Z" transform="rotate(-15)"/><path d="M0 0 C -5.2 -3.5, -6.4 -15.5, 0 -20.5 C 6.4 -15.5, 5.2 -3.5, 0 0 Z" transform="rotate(15)"/><path d="M0 0 C -5.2 -3.5, -6.4 -15.5, 0 -20.5 C 6.4 -15.5, 5.2 -3.5, 0 0 Z" transform="rotate(45)"/><path d="M0 0 C -5.2 -3.5, -6.4 -15.5, 0 -20.5 C 6.4 -15.5, 5.2 -3.5, 0 0 Z" transform="rotate(75)"/></g>
+        <path d="M0 -7 L -3 0.6 L 3 0.6 Z" fill="#eef3f8" stroke="#1a2129" stroke-width="0.7"/>
+      </svg>
+      <div class="flag-word">FLAG</div>
+      <div class="pod-line top"></div>
+      <div class="clock" data-element="clock">15:00</div>
+      <div class="pod-line bottom"></div>
+      <div class="quarter" data-element="quarter"><span class="num">1</span><span class="ord">ST</span></div>
+    </div>
 
-    <img class="rail" src="assets/plates/rail.png" alt="" data-element="rail">
-    <div class="timeouts away" data-element="away-timeouts"><i></i><i></i><i></i></div>
-    <div class="timeouts home" data-element="home-timeouts"><i></i><i></i><i></i></div>
+    <div class="playclock" data-element="play-clock"></div>
 
-    <img class="pod" src="assets/plates/pod.png" alt="" data-element="pod">
-    <div class="text clock" data-element="clock">15:00</div>
-    <div class="quarter" data-element="quarter"><span class="num">2</span><span class="ord">ND</span></div>
+    <!-- touchdown takeover (vapor lights) -->
+    <div class="takeover" data-element="takeover">
+      <img class="neon-logo" alt="">
+      <div class="big-word"></div>
+    </div>
   </div>
 </div>
 <script src="../_runtime/nfl2k5-presentation.js"></script>

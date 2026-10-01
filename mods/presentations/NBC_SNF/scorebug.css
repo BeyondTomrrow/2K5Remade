@@ -1,25 +1,20 @@
-/* NBC Sunday Night Football scorebug.
+/* NBC Sunday Night Football scorebug: pure HTML/CSS/SVG.
  *
- * Every number inside #bug is a pixel of reference/reference.png, measured
- * there (the bug's 576x94 box starts at x 413, y 90 of that image). The bug
- * is scaled as a whole (--bug-scale) to its broadcast size.
+ * Layout follows the broadcast reference (reference/reference.png, the bug
+ * at 576x94 design pixels); the look follows NBC's 2022 SNF package: glass,
+ * texture & contrast, "the curve", vapor lights, motion. Nothing is a
+ * bitmap except team logos, so it stays sharp at any resolution.
  *
- * Fixed art (clock pod with peacock, timeout rail, the reference teams'
- * logo windows) is cut from the reference itself: assets/plates, made by
- * tools/nbc-snf/build_plates.py. Team colours use the panel masks from the
- * same script: dark tone + mask x (team colour - dark tone).
- *
- * Typeface: put the broadcast font in fonts/nbc-snf.ttf (or .otf) to replace
- * the stand-in. scorebug.js fits every text block to the measured cap
- * heights and widths whichever font is used. */
+ * Typeface: drop the broadcast font in fonts/nbc-snf.otf or .ttf; the
+ * stand-in is Arial Black. scorebug.js fits text to the measured sizes. */
 @font-face { font-family: "NBC SNF"; src: url("fonts/nbc-snf.otf"), url("fonts/nbc-snf.ttf"); font-weight: 900; }
 
 :root {
   --nbc-font: "NBC SNF", "Arial Black", sans-serif;
-  /* placement on the 1920x1080 broadcast canvas */
-  --bug-scale: 1.45;
-  --bug-x: 542px;            /* left edge of the 576x94 box */
-  --bug-y: 904px;            /* top edge (bottom of the bug about 40 px above the frame edge) */
+  --tab-font: "Segoe UI", "Arial", sans-serif;
+  --bug-scale: 1.45;           /* 576 design px -> 835 px on the 1920 canvas */
+  --bug-x: 542px;
+  --bug-y: 904px;
 }
 
 html, body { margin: 0; background: transparent; overflow: hidden; }
@@ -27,74 +22,183 @@ html, body { margin: 0; background: transparent; overflow: hidden; }
 
 #bug {
   position: absolute; left: var(--bug-x); top: var(--bug-y);
-  width: 576px; height: 94px;
+  width: 576px; height: 120px;
   transform: scale(var(--bug-scale)); transform-origin: 0 0;
-  transition: opacity 0.35s ease;
-  --away-team: #1f4fae; --away-dark: #1a1e2e;
-  --home-team: #da541b; --home-dark: #2a2127;
+  transition: opacity 0.4s ease;
+  --away: #1f4fae; --home: #da541b;
+  --ease: cubic-bezier(0.22, 0.9, 0.24, 1);
 }
 #bug.off-air { opacity: 0; }
-#bug > * { position: absolute; }
+#bug * { box-sizing: border-box; }
+#bug .half, #bug .half > *, #bug > * { position: absolute; }
+#bug .half { left: 0; top: 0; width: 576px; height: 94px; transform-origin: 287px 50%;
+  transition: transform 0.45s var(--ease), opacity 0.35s ease; }
+.half.away { --c: var(--away); }
+.half.home { --c: var(--home); }
 
-/* ---- panels: dark tone + team colour through the measured mask ---- */
-.panel { top: 23px; height: 52px; }
-.panel.away { left: 63px; width: 176px; background: var(--away-dark); }
-.panel.home { left: 336px; width: 183px; background: var(--home-dark); }
-.panel .team-color { position: absolute; inset: 0; }
-.panel.away .team-color { background: var(--away-team); -webkit-mask: url("assets/plates/away_mask.png") 0 0 / 100% 100%; mask: url("assets/plates/away_mask.png") 0 0 / 100% 100%; }
-.panel.home .team-color { background: var(--home-team); -webkit-mask: url("assets/plates/home_mask.png") 0 0 / 100% 100%; mask: url("assets/plates/home_mask.png") 0 0 / 100% 100%; }
-
-/* dividers between abbreviation and score (x 564 and 832 in the reference) */
-.divider { top: 23px; width: 2px; height: 52px;
-  background: linear-gradient(to bottom, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.28) 12%,
-              rgba(255,255,255,0.42) 30%, rgba(255,255,255,0.52) 52%, rgba(255,255,255,0.30) 70%,
-              rgba(255,255,255,0.16) 90%, rgba(255,255,255,0.10) 100%); }
-.divider.away { left: 151px; }
-.divider.home { left: 419px; }
-
-/* ---- logo windows ---- */
-.logo-window { top: 23px; height: 52px; overflow: hidden; }
-.logo-window.away { left: 2px; width: 63px; border-top-left-radius: 5px; }
-.logo-window.home { left: 517px; width: 56px; border-top-right-radius: 5px; }
-.logo-window > * { position: absolute; }
-.logo-window .plate { left: 0; top: 0; width: 100%; height: 100%; display: none; }
-.logo-window.exact .plate { display: block; }
-.logo-window.exact .logo, .logo-window.exact .glass { display: none; }
-/* Fitted to the reference: logo 1.25x the window height, cropped. */
-.logo-window.away .logo { height: 65px; top: -1px; right: 3px; }
-.logo-window.home .logo { height: 55px; top: 0; left: -3px; }
-.logo-window .glass { inset: 0;
+/* ---- panels: team colour, lit near the score, dark into the pod ---- */
+.panel { top: 23px; height: 52px; overflow: hidden; }
+.away .panel { left: 2px; width: 248px; border-top-left-radius: 5px;
   background:
-    linear-gradient(to bottom right, rgba(255,255,255,0.32), rgba(255,255,255,0) 45%),
-    linear-gradient(var(--glass-angle, 40deg), transparent calc(50% - 0.6px), rgba(255,255,255,0.75) 50%, transparent calc(50% + 0.6px)); }
-.logo-window.home .glass { --glass-angle: -40deg; }
-/* silver rim on the outer edge */
-.logo-window::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
-  box-shadow: inset 1px 1px 0 rgba(235,232,228,0.85); }
-.logo-window.home::after { box-shadow: inset -1px 1px 0 rgba(235,232,228,0.85); }
-.logo-window.exact::after { display: none; }
+    linear-gradient(to bottom, rgba(255,255,255,0.20) 0, rgba(255,255,255,0.05) 7%, rgba(255,255,255,0) 32%, rgba(0,0,0,0.10) 70%, rgba(0,0,0,0.32) 100%),
+    linear-gradient(90deg, color-mix(in srgb, var(--c) 62%, #070a12) 0%, color-mix(in srgb, var(--c) 88%, #070a12) 30%,
+                    var(--c) 58%, color-mix(in srgb, var(--c) 72%, #0b0e16) 72%, color-mix(in srgb, var(--c) 18%, #12151c) 92%, #13161d 100%); }
+.home .panel { left: 326px; width: 248px; border-top-right-radius: 5px;
+  background:
+    linear-gradient(to bottom, rgba(255,255,255,0.20) 0, rgba(255,255,255,0.05) 7%, rgba(255,255,255,0) 32%, rgba(0,0,0,0.10) 70%, rgba(0,0,0,0.32) 100%),
+    linear-gradient(90deg, #15141a 0%, color-mix(in srgb, var(--c) 22%, #15141a) 14%, color-mix(in srgb, var(--c) 55%, #120f12) 40%,
+                    color-mix(in srgb, var(--c) 82%, #0c0a0c) 62%, var(--c) 86%, color-mix(in srgb, var(--c) 92%, white) 100%); }
+.panel::before { content: ""; position: absolute; inset: 0; box-shadow: inset 0 1px 0 rgba(255,255,255,0.32); }
+/* texture & contrast: a fine diagonal grain */
+.panel .texture { position: absolute; inset: 0; opacity: 0.55; mix-blend-mode: soft-light;
+  background: repeating-linear-gradient(118deg, rgba(255,255,255,0.10) 0 1px, rgba(0,0,0,0.10) 1px 2px, transparent 2px 5px); }
+
+.divider { top: 24px; width: 1.5px; height: 50px;
+  background: linear-gradient(to bottom, rgba(255,255,255,0.08), rgba(255,255,255,0.55) 45%, rgba(255,255,255,0.18)); }
+.away .divider { left: 151px; }
+.home .divider { left: 419.5px; }
+
+/* ---- logo windows: glass + the curve ---- */
+.logo-window { top: 23px; height: 52px; overflow: hidden; }
+.away .logo-window { left: 2px; width: 63px; border-top-left-radius: 5px; background: color-mix(in srgb, var(--c) 45%, #0a0d14); }
+.home .logo-window { left: 511px; width: 63px; border-top-right-radius: 5px; background: color-mix(in srgb, var(--c) 45%, #0a0d14); }
+.logo-window .logo { height: 72px; top: -10px; position: absolute; filter: drop-shadow(1px 2px 2px rgba(0,0,0,0.55)) saturate(1.05); }
+.away .logo-window .logo { right: -6px; }
+.home .logo-window .logo { left: -6px; }
+.logo-window .logo[src=""], .logo-window .logo:not([src]) { visibility: hidden; }
+/* glass sheet across the logo, cut by a diagonal edge */
+.logo-window .glass { position: absolute; inset: 0; pointer-events: none;
+  background:
+    radial-gradient(120% 90% at 0% 0%, rgba(255,255,255,0.26), rgba(255,255,255,0.06) 45%, transparent 60%),
+    linear-gradient(to bottom, rgba(255,255,255,0.10), transparent 40%, rgba(0,0,0,0.25)); }
+.away .logo-window .glass { -webkit-mask: linear-gradient(118deg, #000 0 52%, transparent 52.6%); mask: linear-gradient(118deg, #000 0 52%, transparent 52.6%); }
+.home .logo-window .glass { -webkit-mask: linear-gradient(-118deg, #000 0 52%, transparent 52.6%); mask: linear-gradient(-118deg, #000 0 52%, transparent 52.6%); }
+.logo-window::after { content: ""; position: absolute; inset: 0; pointer-events: none; }
+.away .logo-window::after { background: linear-gradient(118deg, transparent calc(52% - 0.6px), rgba(255,255,255,0.75) 52.3%, transparent calc(52.6% + 0.6px));
+  box-shadow: inset 1.5px 1px 0 rgba(232,228,222,0.9); border-top-left-radius: 5px; }
+.home .logo-window::after { background: linear-gradient(-118deg, transparent calc(52% - 0.6px), rgba(255,255,255,0.75) 52.3%, transparent calc(52.6% + 0.6px));
+  box-shadow: inset -1.5px 1px 0 rgba(232,228,222,0.9); border-top-right-radius: 5px; }
+/* a light sweep crosses each logo now and then */
+.logo-window .sweep { position: absolute; top: -20px; bottom: -20px; width: 22px; left: -40px; pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.55), transparent); transform: skewX(-28deg);
+  animation: sweep 11s var(--ease) infinite; }
+.home .logo-window .sweep { animation-delay: 0.7s; }
+@keyframes sweep { 0%, 82% { left: -40px; } 92%, 100% { left: 90px; } }
+
+/* ---- text ---- */
+.abbr, .record, .score, .clock, .quarter span { font-family: var(--nbc-font); font-weight: 900; white-space: nowrap; line-height: 1; }
+.abbr, .record { color: #f4f6f9; text-shadow: 0.7px 1px 1px rgba(0,0,0,0.6); }
+.record { color: #e7eaee; }
+.score, .clock { background: linear-gradient(to bottom, #ffffff 0%, #fdfdff 52%, #d8dce2 82%, #c3c8cf 100%);
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0.7px 1px 0.7px rgba(0,0,0,0.6)); }
+.score.pop { animation: pop 1s var(--ease); }
+@keyframes pop {
+  0% { filter: drop-shadow(0.7px 1px 0.7px rgba(0,0,0,0.6)); }
+  25% { filter: drop-shadow(0 0 5px color-mix(in srgb, var(--c) 60%, white)) drop-shadow(0 0 2px #fff); }
+  100% { filter: drop-shadow(0.7px 1px 0.7px rgba(0,0,0,0.6)); } }
 
 /* ---- rail and timeouts ---- */
-.rail { left: 2px; top: 73px; width: 571px; height: 8px; }
-/* Bars are 3.3 px tall in the reference (rows 165-168, the first and last
- * partly covered); drawn per row so they land on the same pixels. */
-.timeouts i { position: absolute; top: 75px; width: 26px; height: 4px;
-  background: linear-gradient(to bottom, rgba(253,255,255,0.45) 0 1px, #fdffff 1px 3px, rgba(253,255,255,0.8) 3px 4px); }
-.timeouts i.used { background: linear-gradient(to bottom, rgba(111,117,125,0.45) 0 1px, #6f757d 1px 3px, rgba(100,104,111,0.85) 3px 4px); }
-.timeouts.away i:nth-child(1) { left: 50px; }  .timeouts.away i:nth-child(2) { left: 83px; }  .timeouts.away i:nth-child(3) { left: 116px; }
-.timeouts.home i:nth-child(1) { left: 431px; } .timeouts.home i:nth-child(2) { left: 464px; } .timeouts.home i:nth-child(3) { left: 497px; }
+.rail { left: 2px; top: 75px; width: 572px; height: 5px;
+  background: linear-gradient(90deg, #23262c, #343c47 22%, #2d353f 45%, #2b323b 55%, #353d47 78%, #23262c);
+  box-shadow: 0 1px 0 rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.06); }
+.timeouts i { position: absolute; top: 75.6px; width: 26px; height: 3.2px; border-radius: 0.5px; background: #fbfdff; transition: background 0.4s ease; }
+.timeouts i.used { background: #6f757d; }
+.away .timeouts i:nth-child(1) { left: 50px; }  .away .timeouts i:nth-child(2) { left: 83px; }  .away .timeouts i:nth-child(3) { left: 116px; }
+.home .timeouts i:nth-child(1) { left: 431px; } .home .timeouts i:nth-child(2) { left: 464px; } .home .timeouts i:nth-child(3) { left: 497px; }
 
 /* ---- pod ---- */
-.pod { left: 237px; top: 0; width: 101px; height: 94px; }
+.pod { left: 240px; top: 2.5px; width: 94px; height: 88px; border-radius: 50%;
+  background:
+    radial-gradient(70% 40% at 50% 12%, rgba(255,255,255,0.20), transparent 70%),
+    radial-gradient(circle at 50% 42%, #384350 0%, #222a33 42%, #11161c 70%, #07090c 100%);
+  box-shadow: 0 0 0 1.6px #5f6b78, 0 0 0 2.4px #1b2028, 0 3px 6px rgba(0,0,0,0.65),
+              inset 0 0 0 3px #161b22, inset 0 0 0 4px rgba(200,215,230,0.32), inset 0 -6px 10px rgba(0,0,0,0.5);
+  transition: transform 0.45s var(--ease), opacity 0.35s ease, background 0.35s ease, box-shadow 0.35s ease; }
+.pod::before, .pod::after { content: ""; position: absolute; left: 43px; width: 8px; height: 5px; background: #06080b; border-radius: 1px; }
+.pod::before { top: -1px; }
+.pod::after { bottom: -1px; }
+.pod > * { position: absolute; }
+.pod .peacock { left: 27px; top: 6px; width: 40px; height: 21px; transition: opacity 0.25s ease, transform 0.35s var(--ease); }
+.pod .pod-line { left: 10px; right: 10px; height: 1px; background: linear-gradient(90deg, transparent, rgba(200,215,230,0.45) 15%, rgba(200,215,230,0.45) 85%, transparent); }
+.pod .pod-line.top { top: 31.5px; }
+.pod .pod-line.bottom { top: 57.5px; }
+.pod .quarter { left: 0; top: 0; }
+.pod .quarter span { position: absolute; color: #f6f9fc; }
+.pod .quarter .ord::after { content: ""; position: absolute; left: 0; right: 0; height: 1.6px; background: #e1e4e7; top: var(--ul-top, 10px); }
+.pod .flag-word { left: 0; right: 0; top: 9px; text-align: center; font: 900 12px/1 var(--nbc-font); letter-spacing: 3px;
+  color: #2a1e00; opacity: 0; transform: scale(1.6); transition: opacity 0.25s ease, transform 0.35s var(--ease), letter-spacing 0.35s var(--ease); }
+.pod .pulse { inset: -2px; border-radius: 50%; border: 1.5px solid rgba(255,214,60,0); pointer-events: none; }
 
-/* ---- text (positions and sizes set by scorebug.js from the measurements) ---- */
-.text, .quarter span { font-family: var(--nbc-font); font-weight: 900; white-space: nowrap;
-  color: #fefdfe; line-height: 1; }
-.text { text-shadow: 0.6px 0.8px 0.8px rgba(0, 0, 0, 0.55); }
-.score, .clock { background: linear-gradient(to bottom, #fefdfe 0%, #fefdfe 55%, #dadde1 85%, #c9ccd1 100%);
+/* FLAG: the pod turns gold, the word replaces the peacock, rings pulse */
+.pod.flag { background:
+    radial-gradient(70% 40% at 50% 12%, rgba(255,255,255,0.55), transparent 70%),
+    radial-gradient(circle at 50% 42%, #ffe36b 0%, #f2c414 40%, #b98800 72%, #5e4300 100%);
+  box-shadow: 0 0 0 1.6px #ffe27a, 0 0 0 2.4px #5a4100, 0 0 14px rgba(255,210,40,0.75),
+              inset 0 0 0 3px #7c5a00, inset 0 0 0 4px rgba(255,240,180,0.6), inset 0 -6px 10px rgba(0,0,0,0.35); }
+.pod.flag .peacock { opacity: 0; transform: translateY(-6px); }
+.pod.flag .flag-word { opacity: 1; transform: scale(1); letter-spacing: 1.5px; }
+.pod.flag .clock, .pod.flag .quarter span { filter: drop-shadow(0 0 1.5px rgba(70,45,0,0.9)); }
+.pod.flag .pod-line { background: rgba(90,60,0,0.45); }
+.pod.flag .pulse { animation: pulse 1.6s ease-out infinite; }
+.pod.flag .pulse.p2 { animation-delay: 0.8s; }
+@keyframes pulse { 0% { transform: scale(1); border-color: rgba(255,214,60,0.9); box-shadow: 0 0 8px rgba(255,214,60,0.8); }
+                   100% { transform: scale(1.9); border-color: rgba(255,214,60,0); box-shadow: 0 0 2px rgba(255,214,60,0); } }
+
+/* ---- down & distance tab ---- */
+.tab { top: 77px; width: 296px; height: 19px; opacity: 0; transition: opacity 0.3s ease; --t: var(--home); }
+.tab.home { left: 278px; --t: var(--home); }
+.tab.away { left: 0; --t: var(--away); transform: scaleX(-1); }
+.tab.away > .tab-text, .tab.away > .cross, .tab.away .chev { transform: scaleX(-1); }
+.tab.on { opacity: 1; }
+.tab .tab-shape { position: absolute; left: 0; top: 0; width: 100%; height: 100%; filter: drop-shadow(0 1px 1px rgba(0,0,0,0.6)); }
+.tab .tab-fill { position: absolute; left: 20px; right: 0; top: 0; bottom: 0; clip-path: inset(0 100% 0 0);
+  background: linear-gradient(to bottom, rgba(255,255,255,0.12), rgba(0,0,0,0.25)),
+              linear-gradient(90deg, color-mix(in srgb, var(--t) 30%, #12151b), color-mix(in srgb, var(--t) 78%, #12151b) 55%, color-mix(in srgb, var(--t) 55%, #12151b));
+  transition: clip-path 0.55s var(--ease); }
+.tab.on .tab-fill { clip-path: inset(0 0 0 0); }
+.tab .tab-fill::after { content: ""; position: absolute; inset: 0; box-shadow: inset 0 1px 0 rgba(255,255,255,0.18); }
+.tab .tab-text { position: absolute; left: 20px; right: 0; top: 0; height: 19px; text-align: center;
+  font: 700 15px/19px var(--tab-font); color: #fff; letter-spacing: 0.2px; text-shadow: 0 1px 1px rgba(0,0,0,0.6);
+  transition: opacity 0.22s ease, transform 0.3s var(--ease); }
+.tab .tab-text.out { opacity: 0; transform: translateY(4px); }
+.tab.away .tab-text.out { transform: scaleX(-1) translateY(4px); }
+/* chevrons march outward on both sides of the text */
+.chev { position: absolute; top: 5.5px; width: 22px; height: 8px; }
+.chev.left { left: 62px; } .chev.right { right: 44px; }
+.chev b { position: absolute; top: 0; left: 0; width: 7px; height: 8px; background: color-mix(in srgb, var(--t) 45%, white);
+  clip-path: polygon(0 0, 100% 50%, 0 100%); animation: march 1.6s linear infinite; opacity: 0; }
+.chev b:nth-child(2) { animation-delay: 0.8s; }
+@keyframes march { 0% { transform: translateX(0); opacity: 0; } 25% { opacity: 0.9; } 75% { opacity: 0.9; } 100% { transform: translateX(15px); opacity: 0; } }
+/* motion theory: a cross flashes where the tab is about to open */
+.tab .cross { position: absolute; left: 140px; top: -1px; font: 300 18px/19px var(--tab-font); color: rgba(220,230,240,0.9); opacity: 0; }
+.tab.opening .cross { animation: cross 0.6s ease-out; }
+@keyframes cross { 0% { opacity: 0; transform: scale(0.6) rotate(-45deg); } 40% { opacity: 1; } 100% { opacity: 0; transform: scale(1.1) rotate(0); } }
+
+.playclock { top: 80px; left: 273px; width: 28px; height: 15px; border-radius: 2px; opacity: 0;
+  font: 800 12px/15px var(--tab-font); text-align: center; color: #fff;
+  background: linear-gradient(to bottom, #6f8299, #33435a); box-shadow: 0 0 0 1px rgba(190,205,222,0.85), 0 1px 2px rgba(0,0,0,0.6);
+  transition: opacity 0.3s ease; }
+.playclock.on { opacity: 1; }
+.playclock.low { background: linear-gradient(to bottom, #d6343b, #7d1218); }
+
+/* ---- touchdown takeover: the bug folds into the pod, the word lights up ---- */
+.takeover { left: -40px; top: -34px; width: 656px; height: 140px; pointer-events: none; opacity: 0; }
+.takeover .neon-logo { position: absolute; left: 50%; top: 50%; height: 150px; transform: translate(-50%, -50%) scale(0.85); opacity: 0;
+  filter: brightness(1.6) saturate(1.4) drop-shadow(0 0 6px var(--glow)) drop-shadow(0 0 16px var(--glow)); }
+.takeover .big-word { position: absolute; left: 0; right: 0; top: 46px; text-align: center; white-space: nowrap;
+  font: 900 54px/1 var(--nbc-font); letter-spacing: 1px;
+  background: linear-gradient(to bottom, #ffffff 0%, #e7ebf2 40%, #9aa3ae 55%, #f4f6f9 70%, #c4cbd4 100%);
   -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
-  filter: drop-shadow(0.6px 0.9px 0.6px rgba(0,0,0,0.55)); text-shadow: none; }
-.record { color: #eef0f3; }
-.quarter { left: 0; top: 0; }
-.quarter span { position: absolute; color: #f6f9fc; }
-.quarter .ord::after { content: ""; position: absolute; left: 0; right: 0; height: 2px; background: #e1e4e7; top: var(--ul-top, 10px); }
+  filter: drop-shadow(0 0 2px var(--glow)) drop-shadow(0 0 10px var(--glow)) drop-shadow(0 2px 2px rgba(0,0,0,0.8)); }
+#bug.takeover-on .half { transform: scaleX(0.02); opacity: 0; }
+#bug.takeover-on .tab, #bug.takeover-on .playclock, #bug.takeover-on .rail { opacity: 0; }
+#bug.takeover-on .pod { transform: scale(0.01); opacity: 0; }
+#bug.takeover-on .takeover { animation: takeover 3.6s var(--ease) forwards; }
+#bug.takeover-on .takeover .neon-logo { animation: neon 3.6s ease forwards; }
+#bug.takeover-on .takeover .big-word { animation: word 3.6s var(--ease) forwards; }
+@keyframes takeover { 0% { opacity: 0; } 8% { opacity: 1; } 88% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes neon { 0% { opacity: 0; transform: translate(-50%, -50%) scale(0.7); } 18% { opacity: 0.9; } 60% { opacity: 0.55; }
+                  100% { opacity: 0; transform: translate(-50%, -50%) scale(1.05); } }
+@keyframes word { 0% { opacity: 0; transform: scale(1.35); letter-spacing: 14px; } 22% { opacity: 1; transform: scale(1); letter-spacing: 1px; }
+                  80% { opacity: 1; transform: scale(1.02); } 100% { opacity: 0; transform: scale(1.12); } }

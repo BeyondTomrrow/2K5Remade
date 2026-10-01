@@ -147,6 +147,14 @@ static void vm_row_fn(void)
         sc->name(row, v, name, sizeof name);
         vm_put_wstr(sc->cur[row], name, VM_STR_CHARS);
         g_eax = sc->cur[row];
+        if (getenv("NFL2K5_MENU_LOG")) {
+            static DWORD last[8][8];
+            if (GetTickCount() - last[off / 0x1000u & 7][row & 7] > 2000) {
+                last[off / 0x1000u & 7][row & 7] = GetTickCount();
+                fprintf(stderr, "[VIDEOMENU] %s row %d value %d/%d \"%s\" -> %08X\n",
+                        sc->title, row, v, n, name, (unsigned)g_eax);
+            }
+        }
         break;
     case 6: {
         /* Same as the game's own rows: widest string of table[0..n-1] in
@@ -163,6 +171,8 @@ static void vm_row_fn(void)
         g_edx = 0;
         PUSH32(g_esp, VM_FN_BASE);
         sub_000771A0();
+        if (getenv("NFL2K5_MENU_LOG"))
+            fprintf(stderr, "[VIDEOMENU] %s row %d width of %d values -> %u\n", sc->title, row, n, (unsigned)g_eax);
         break;
     }
     default: g_eax = 0; break;

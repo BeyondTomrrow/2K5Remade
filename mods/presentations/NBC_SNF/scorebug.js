@@ -1,162 +1,198 @@
-/* NBC Sunday Night Football: live data binding and measured text fitting.
+/* NBC Sunday Night Football: live data, states and animations.
  *
- * Text blocks are placed from measurements of reference/reference.png
- * (reference pixels, relative to the bug box at x 413, y 90): the top and
- * height of the capitals/figures, the anchor x, and the ink width the
- * reference string has. Font size is solved from the font's own cap height,
- * and the horizontal scale from the reference string's width, so the layout
- * stays exact when the stand-in font is replaced by the real one. */
+ * Text blocks are placed from the reference's measurements (design pixels:
+ * capital/figure top and height, anchor x, and the width the reference
+ * string has there). Font size comes from the font's own cap height and the
+ * horizontal scale from the reference string, so the layout holds when the
+ * stand-in font is replaced by the broadcast font. */
 (function () {
   'use strict';
   var bug = document.getElementById('bug');
   var q = function (s) { return bug.querySelector(s); };
 
-  /* anchor: 'left' | 'right' | 'center'; x: anchor position; top/cap:
-   * capital (or figure) top and height; ref: reference string and its ink
-   * width, which sets the horizontal scale for every string in that style. */
-  var SPEC = {
-    'away-abbr':   { el: '.abbr.away',   anchor: 'right',  x: 143, top: 32, cap: 21, ref: ['LAR', 75] },
-    'away-record': { el: '.record.away', anchor: 'right',  x: 142.5, top: 57, cap: 10, ref: ['10-6', 37] },
-    'away-score':  { el: '.score.away',  anchor: 'center', x: 193, top: 31.5, cap: 35, ref: ['42', 62.5] },
-    'home-score':  { el: '.score.home',  anchor: 'center', x: 379, top: 31.5, cap: 35, ref: ['27', 58.5] },
-    'home-abbr':   { el: '.abbr.home',   anchor: 'left',   x: 431, top: 31.5, cap: 21.5, ref: ['CIN', 65] },
-    'home-record': { el: '.record.home', anchor: 'left',   x: 432, top: 57, cap: 10, ref: ['9-7', 29] },
-    'clock':       { el: '.clock',       anchor: 'center', x: 288.5, top: 39, cap: 17, ref: ['15:00', 76] },
-    'q-num':       { el: '.quarter .num', anchor: 'right', x: 286.5, top: 64.5, cap: 16, ref: ['2', 16] },
-    'q-ord':       { el: '.quarter .ord', anchor: 'left',  x: 286, top: 65.3, cap: 8.7,  ref: ['ND', 19.5] }
-  };
+  var SPEC = [
+    { el: '.away .abbr',   anchor: 'right',  x: 143,   top: 32,   cap: 21,   ref: ['LAR', 75] },
+    { el: '.away .record', anchor: 'right',  x: 142.5, top: 57,   cap: 10,   ref: ['10-6', 37] },
+    { el: '.away .score',  anchor: 'center', x: 193,   top: 31.5, cap: 35,   ref: ['42', 62.5] },
+    { el: '.home .score',  anchor: 'center', x: 379,   top: 31.5, cap: 35,   ref: ['27', 58.5] },
+    { el: '.home .abbr',   anchor: 'left',   x: 431,   top: 31.5, cap: 21.5, ref: ['CIN', 65] },
+    { el: '.home .record', anchor: 'left',   x: 432,   top: 57,   cap: 10,   ref: ['9-7', 29] },
+    /* inside the pod (its box starts at 240, 2.5) */
+    { el: '.pod .clock',         anchor: 'center', x: 48.5, top: 36.5, cap: 17,  ref: ['15:00', 76] },
+    { el: '.pod .quarter .num',  anchor: 'right',  x: 46.5, top: 62,   cap: 16,  ref: ['2', 16] },
+    { el: '.pod .quarter .ord',  anchor: 'left',   x: 46,   top: 62.8, cap: 8.7, ref: ['ND', 19.5], underline: true }
+  ];
 
   var ctx = document.createElement('canvas').getContext('2d');
-  function fontOf(el) {
+  function measure(el, size, text) {
     var cs = getComputedStyle(el);
-    return { family: cs.fontFamily, weight: cs.fontWeight };
-  }
-  function metrics(f, size, text) {
-    ctx.font = f.weight + ' ' + size + 'px ' + f.family;
+    ctx.font = cs.fontWeight + ' ' + size + 'px ' + cs.fontFamily;
     return ctx.measureText(text);
   }
   function fit(spec) {
     var el = q(spec.el);
     if (!el) return;
-    var f = fontOf(el);
-    /* cap height per px of font size, from the figures/capitals of the
-     * reference string itself */
-    var m100 = metrics(f, 100, spec.ref[0]);
-    var capPer = m100.actualBoundingBoxAscent / 100;
+    var capPer = measure(el, 100, spec.ref[0]).actualBoundingBoxAscent / 100;
     var size = spec.cap / capPer;
-    var mRef = metrics(f, size, spec.ref[0]);
-    var refInk = mRef.actualBoundingBoxLeft + mRef.actualBoundingBoxRight;
-    var sx = spec.ref[1] / refInk;
-    var text = el.textContent;
-    var m = metrics(f, size, text);
+    var r = measure(el, size, spec.ref[0]);
+    var sx = spec.ref[1] / (r.actualBoundingBoxLeft + r.actualBoundingBoxRight);
+    var m = measure(el, size, el.textContent || ' ');
     var ink = (m.actualBoundingBoxLeft + m.actualBoundingBoxRight) * sx;
-    /* element box: line-height 1 => the baseline sits fontAscent below the
-     * box top when the line box is the font's ascent+descent; place the box
-     * so the cap top lands on spec.top. */
-    var fm = metrics(f, size, 'H');
-    var asc = fm.fontBoundingBoxAscent, desc = fm.fontBoundingBoxDescent;
-    var lineTop = (size - (asc + desc)) / 2;          /* half-leading for line-height 1 */
-    var baseline = lineTop + asc;
-    var capTop = baseline - m.actualBoundingBoxAscent * (spec.ref[0] === text ? 1 : mRef.actualBoundingBoxAscent / Math.max(1e-6, m.actualBoundingBoxAscent));
+    var fm = measure(el, size, 'H');
+    var baseline = (size - (fm.fontBoundingBoxAscent + fm.fontBoundingBoxDescent)) / 2 + fm.fontBoundingBoxAscent;
     el.style.fontSize = size + 'px';
-    el.style.top = (spec.top - (baseline - spec.cap)) + 'px';
-    var inkLeft = -m.actualBoundingBoxLeft * sx;        /* ink start relative to the pen */
+    el.style.top = (spec.top + spec.cap - baseline) + 'px';
     var left = spec.anchor === 'left' ? spec.x : spec.anchor === 'right' ? spec.x - ink : spec.x - ink / 2;
-    el.style.left = (left - inkLeft) + 'px';
+    el.style.left = (left + m.actualBoundingBoxLeft * sx) + 'px';
     el.style.transformOrigin = '0 0';
     el.style.transform = 'scaleX(' + sx + ')';
-    if (spec.el === '.quarter .ord') el.style.setProperty('--ul-top', (baseline + 1) + 'px');
-    return capTop;
+    if (spec.underline) el.style.setProperty('--ul-top', (baseline + 1) + 'px');
   }
-  function layout() { Object.keys(SPEC).forEach(function (k) { fit(SPEC[k]); }); }
+  function layout() { SPEC.forEach(fit); }
 
   /* ---- teams ---- */
   var ALIAS = { STL: 'LAR', SD: 'LAC', OAK: 'LV', JAC: 'JAX', WSH: 'WAS' };
-  /* Panel colours. LAR and CIN were measured from the reference (full
-   * colour and dark tone); the rest use the clubs' primary colours with the
-   * same dark tone rule. */
   var COLORS = {
-    LAR: ['#1f4fae', '#1a1e2e'], CIN: ['#da541b', '#2a2127'],
-    ARI: ['#97233f'], ATL: ['#a71930'], BAL: ['#241773'], BUF: ['#00338d'], CAR: ['#0085ca'], CHI: ['#c83803'],
-    CLE: ['#ff3c00'], DAL: ['#003594'], DEN: ['#fb4f14'], DET: ['#0076b6'], GB: ['#203731'], HOU: ['#a71930'],
-    IND: ['#002c5f'], JAX: ['#006778'], KC: ['#e31837'], LV: ['#5a5a5a'], LAC: ['#0080c6'], MIA: ['#008e97'],
-    MIN: ['#4f2683'], NE: ['#002244'], NO: ['#9f8958'], NYG: ['#0b2265'], NYJ: ['#125740'], PHI: ['#004c54'],
-    PIT: ['#ffb612'], SF: ['#aa0000'], SEA: ['#002244'], TB: ['#d50a0a'], TEN: ['#4b92db'], WAS: ['#5a1414']
+    LAR: '#1f4fae', CIN: '#da541b', ARI: '#97233f', ATL: '#a71930', BAL: '#3b2a8f', BUF: '#00338d', CAR: '#0085ca',
+    CHI: '#c83803', CLE: '#ff3c00', DAL: '#003594', DEN: '#fb4f14', DET: '#0076b6', GB: '#2f5a3e', HOU: '#a71930',
+    IND: '#0b4a8f', JAX: '#006778', KC: '#e31837', LV: '#6b6f74', LAC: '#0080c6', MIA: '#008e97', MIN: '#4f2683',
+    NE: '#0c2f5e', NO: '#9f8958', NYG: '#0b2265', NYJ: '#125740', PHI: '#004c54', PIT: '#d9a300', SF: '#aa0000',
+    SEA: '#1d4f91', TB: '#d50a0a', TEN: '#4b92db', WAS: '#7a1a1a'
   };
-  /* Logo windows that are cut from the reference (exact for those teams). */
-  var EXACT = { 'away:LAR': 'assets/plates/logo_LAR_away.png', 'home:CIN': 'assets/plates/logo_CIN_home.png' };
   var missing = {};
+  function code(t) { var a = (t && t.abbreviation || '').toUpperCase(); return ALIAS[a] || a; }
+  function logoSrc(t) { var c = code(t); return (!c || missing[c]) ? (t.logo || '') : 'assets/logos/' + c + '.png'; }
 
-  function darkTone(hex) {
-    var n = parseInt(hex.slice(1), 16), r = n >> 16, g = (n >> 8) & 255, b = n & 255;
-    function f(c) { return Math.round(c * 0.1 + 26 * 0.9); }
-    return '#' + ((1 << 24) | (f(r) << 16) | (f(g) << 8) | f(b)).toString(16).slice(1);
-  }
-  function teamCode(t) { var a = (t && t.abbreviation || '').toUpperCase(); return ALIAS[a] || a; }
-
-  function setTeam(side, t) {
-    var code = teamCode(t);
-    var c = COLORS[code] || [t.primaryColor || '#444444'];
-    bug.style.setProperty('--' + side + '-team', c[0]);
-    bug.style.setProperty('--' + side + '-dark', c[1] || darkTone(c[0]));
-    setText('.abbr.' + side, code || '---');
-    setText('.record.' + side, t.record || '');
-    setText('.score.' + side, t.score == null ? '' : String(t.score));
-    var win = q('.logo-window.' + side), plate = win.querySelector('.plate'), logo = win.querySelector('.logo');
-    var exact = EXACT[side + ':' + code];
-    win.classList.toggle('exact', !!exact);
-    if (exact) { if (plate.getAttribute('src') !== exact) plate.src = exact; }
-    else {
-      var src = missing[code] ? (t.logo || '') : 'assets/logos/' + code + '.png';
-      if (logo.getAttribute('src') !== src) logo.src = src;
-      logo.onerror = function () { missing[code] = true; if (t.logo) logo.src = t.logo; };
-    }
-    var bars = win.parentNode.querySelectorAll('.timeouts.' + side + ' i');
-    for (var i = 0; i < bars.length; i++) bars[i].classList.toggle('used', i >= (t.timeouts == null ? 3 : t.timeouts));
-  }
   var dirty = false;
   function setText(sel, text) {
     var el = q(sel);
     if (el && el.textContent !== text) { el.textContent = text; dirty = true; }
   }
-  function clock(seconds) {
-    if (seconds == null || seconds < 0) return '';
-    var s = Math.ceil(seconds);
+  function setLogo(img, t) {
+    var src = logoSrc(t), c = code(t);
+    if (img.getAttribute('src') !== src) img.setAttribute('src', src);
+    img.onerror = function () { if (!missing[c]) { missing[c] = true; img.setAttribute('src', t.logo || ''); } };
+  }
+  function setTeam(side, t, prev) {
+    bug.style.setProperty('--' + side, COLORS[code(t)] || t.primaryColor || '#444a55');
+    setText('.' + side + ' .abbr', code(t) || '---');
+    setText('.' + side + ' .record', t.record || '');
+    setText('.' + side + ' .score', t.score == null ? '' : String(t.score));
+    if (prev && prev.score !== t.score) pop(side);
+    setLogo(q('.' + side + ' .logo'), t);
+    var bars = bug.querySelectorAll('.' + side + ' .timeouts i');
+    for (var i = 0; i < bars.length; i++) bars[i].classList.toggle('used', i >= (t.timeouts == null ? 3 : t.timeouts));
+  }
+  function pop(side) {
+    var el = q('.' + side + ' .score');
+    el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop');
+  }
+
+  function clock(sec) {
+    if (sec == null || sec < 0) return '';
+    var s = Math.ceil(sec);
     return Math.floor(s / 60) + ':' + ('0' + (s % 60)).slice(-2);
   }
   var ORD = { 1: 'ST', 2: 'ND', 3: 'RD', 4: 'TH' };
-  function quarter(n) {
-    if (!n) return ['', ''];
-    if (n <= 4) return [String(n), ORD[n]];
-    return ['OT', ''];
+  /* "3RD & 8" -> "3rd & 8", "1ST & GOAL" -> "1st & Goal", "KICKOFF" -> "Kickoff" */
+  function niceDown(text) {
+    return (text || '').toLowerCase().replace(/\b([a-z])/g, function (c) { return c.toUpperCase(); })
+      .replace(/(\d)(St|Nd|Rd|Th)\b/g, function (_, d, o) { return d + o.toLowerCase(); }).replace('Pat', 'PAT');
   }
 
-  NFL2K5.onState(function (s) {
+  /* ---- down & distance tab ---- */
+  var tab = q('.tab'), tabText = q('.tab-text'), clockBox = q('.playclock');
+  var tabSide = null, tabValue = '';
+  function setTab(side, text, show) {
+    if (!show) { tab.classList.remove('on'); tabSide = null; tabValue = ''; return; }
+    if (side !== tabSide) {
+      tab.classList.remove('on', 'opening', 'home', 'away');
+      void tab.offsetWidth;
+      tab.classList.add(side, 'opening');
+      tabSide = side;
+      tabText.textContent = text; tabValue = text;
+      requestAnimationFrame(function () { tab.classList.add('on'); });
+      setTimeout(function () { tab.classList.remove('opening'); }, 700);
+      return;
+    }
+    if (text !== tabValue) {            /* new down: fade the text out and back in */
+      tabValue = text;
+      tabText.classList.add('out');
+      setTimeout(function () { tabText.textContent = text; tabText.classList.remove('out'); }, 240);
+    }
+  }
+
+  /* ---- flag ---- */
+  var pod = q('.pod'), flagUntil = 0;
+  function updateFlag(on) { pod.classList.toggle('flag', on || Date.now() < flagUntil); }
+
+  /* ---- takeover (touchdown, field goal) ---- */
+  var takeoverBusy = false;
+  function takeover(word, side) {
+    if (takeoverBusy || !NFL2K5.state) return;
+    var t = NFL2K5.state[side] || {};
+    takeoverBusy = true;
+    var box = q('.takeover');
+    box.style.setProperty('--glow', COLORS[code(t)] || '#4d7cff');
+    q('.takeover .big-word').textContent = word;
+    var neon = q('.takeover .neon-logo');
+    neon.setAttribute('src', logoSrc(t));
+    bug.classList.remove('takeover-on'); void bug.offsetWidth;
+    bug.classList.add('takeover-on');
+    setTimeout(function () { bug.classList.remove('takeover-on'); takeoverBusy = false; }, 3700);
+  }
+
+  NFL2K5.onState(function (s, prev) {
     if (!s.away || !s.home) return;
-    setTeam('away', s.away);
-    setTeam('home', s.home);
-    setText('.clock', clock(s.gameClock));
-    var qq = quarter(s.quarter);
-    setText('.quarter .num', qq[0]);
-    setText('.quarter .ord', qq[1]);
+    setTeam('away', s.away, prev && prev.away);
+    setTeam('home', s.home, prev && prev.home);
+    setText('.pod .clock', clock(s.gameClock));
+    var n = s.quarter || 0;
+    setText('.pod .quarter .num', n === 0 ? '' : n <= 4 ? String(n) : 'OT');
+    setText('.pod .quarter .ord', n >= 1 && n <= 4 ? ORD[n] : '');
     if (dirty) { layout(); dirty = false; }
-    bug.classList.toggle('off-air', !(s.context && s.context.scorebugVisible));
+
+    var live = !!(s.context && s.context.scorebugVisible);
+    bug.classList.toggle('off-air', !live);
+    var down = niceDown(s.downDistanceText);
+    setTab(s.possession, down, live && !!s.possession && !!down);
+    var pc = s.playClock;
+    clockBox.textContent = pc >= 0 ? String(pc) : '';
+    clockBox.classList.toggle('on', live && pc >= 0 && !!s.possession);
+    clockBox.classList.toggle('low', pc >= 0 && pc <= 5);
+    updateFlag(!!(s.context && s.context.flag));
   });
 
-  /* Preview against the reference: scorebug.html?preview=reference puts the
-   * bug at its place in reference/reference.png (1400x268, background
-   * #212121, scale 1) with the reference's own game values. */
-  if (/[?&]preview=reference\b/.test(location.search)) {
-    document.documentElement.style.background = '#212121';
-    document.body.style.background = '#212121';
-    bug.style.setProperty('--bug-scale', '1');
-    bug.style.setProperty('--bug-x', '413px');
-    bug.style.setProperty('--bug-y', '90px');
-    document.documentElement.classList.add('preview');
-    NFL2K5.dispatch({ type: 'state', state: {
-      quarter: 2, gameClock: 900, context: { scorebugVisible: true },
-      away: { abbreviation: 'LAR', record: '10-6', score: 42, timeouts: 3 },
-      home: { abbreviation: 'CIN', record: '9-7', score: 27, timeouts: 2 } } });
+  NFL2K5.onEvent(function (e) {
+    switch (e.name) {
+    case 'TOUCHDOWN': takeover('TOUCHDOWN', e.team); break;
+    case 'FIELD_GOAL': takeover('FIELD GOAL', e.team); break;
+    case 'SAFETY': takeover('SAFETY', e.team); break;
+    case 'PENALTY': flagUntil = Date.now() + 8000; updateFlag(true); setTimeout(function () { updateFlag(false); }, 8100); break;
+    }
+  });
+
+  /* ---- previews: scorebug.html?preview=<state> ----
+   * reference: the bug exactly where it sits in reference/reference.png
+   * (1400x268, scale 1); home-ball / away-ball / flag / touchdown: states
+   * for checking the package, on the 1920x1080 canvas. */
+  var pv = (/[?&]preview=([\w-]+)/.exec(location.search) || [])[1];
+  if (pv) {
+    var st = { quarter: 2, gameClock: 900, playClock: 39, possession: 'home', downDistanceText: '3RD & 8',
+               context: { scorebugVisible: true, flag: false },
+               away: { abbreviation: 'LAR', record: '10-6', score: 42, timeouts: 3 },
+               home: { abbreviation: 'CIN', record: '9-7', score: 27, timeouts: 2 } };
+    if (pv === 'reference') {
+      document.documentElement.style.background = document.body.style.background = '#212121';
+      bug.style.setProperty('--bug-scale', '1'); bug.style.setProperty('--bug-x', '413px'); bug.style.setProperty('--bug-y', '90px');
+      st.possession = null; st.playClock = -1;
+    } else {
+      document.documentElement.style.background = document.body.style.background = '#2d4a2f';
+    }
+    if (pv === 'away-ball') { st.possession = 'away'; st.downDistanceText = '4TH & INCHES'; st.playClock = 35; }
+    if (pv === 'flag') st.context.flag = true;
+    NFL2K5.dispatch({ type: 'state', state: st });
+    if (pv === 'touchdown') setTimeout(function () { NFL2K5.dispatch({ type: 'event', event: { name: 'TOUCHDOWN', team: 'away' } }); }, 300);
   }
 
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(layout);

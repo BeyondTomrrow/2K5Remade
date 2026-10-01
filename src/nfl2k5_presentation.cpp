@@ -559,15 +559,32 @@ extern "C" int nfl2k5_pres_values(int what)
     }
     return 1;
 }
+/* The game sizes a settings screen's value column from its longest value;
+ * when that no longer fits the box, it clips every value on the screen
+ * (2026-09-30: "Classic Broadcast Scorebug v27", 30 characters, blanked the
+ * whole Presentation screen). 23 characters is known to fit. */
+static void menu_text(char *buf, size_t n, const std::string &s)
+{
+    const size_t k_max = 23;
+    if (s.size() <= k_max) snprintf(buf, n, "%s", s.c_str());
+    else snprintf(buf, n, "%s...", s.substr(0, k_max - 3).c_str());
+}
+
 extern "C" void nfl2k5_pres_value_name(int what, int idx, char *buf, size_t n)
 {
     buf[0] = 0;
     switch (what) {
-    case 0: snprintf(buf, n, "%s", nfl2k5_pres_package_name(idx)); break;
+    case 0:
+        /* A package may give a shorter "menu_name" for this screen. */
+        if (idx > 0 && idx < (int)s_pkgs.size() && !s_pkgs[idx].root.str("menu_name").empty())
+            menu_text(buf, n, s_pkgs[idx].root.str("menu_name"));
+        else
+            menu_text(buf, n, nfl2k5_pres_package_name(idx));
+        break;
     case 1: case 2: {
         const auto &l = songs(what);
         if (idx <= 0 || idx > (int)l.size()) snprintf(buf, n, "Off");
-        else snprintf(buf, n, "%s", l[idx - 1].title.c_str());
+        else menu_text(buf, n, l[idx - 1].title);
         break;
     }
     case 3: snprintf(buf, n, "%s", idx ? "On" : "Off"); break;
