@@ -62577,6 +62577,16 @@ void sub_003739F0(void)
     int _cf = 0; /* carry flag */
 
 loc_003739F0: ;
+    /* NFL2K5-GENPATCH:MEMCPY_NATIVE_3739F0 */
+    /* MSVC memcpy (memmove semantics) run natively. Its misaligned-
+     * destination paths dispatch through jump tables the disassembler could
+     * not recover (LeadUpVec's unused slot 0, TrailUpVec reached with a
+     * negative index), so every copy to an address that is not 4-byte
+     * aligned jumped into nowhere and returned with esi and eax wrong --
+     * the WMA decoder crashed on its first ring-buffer wrap (2026-10-01). */
+    { uint32_t _d = MEM32(esp + 4), _s = MEM32(esp + 8), _n = MEM32(esp + 0xC);
+      if (_n) memmove(XBOX_PTR(_d), XBOX_PTR(_s), _n);
+      eax = _d; esp += 4; return; }
     PUSH32(esp, ebp);
     ebp = esp;
     g_ebp = ebp; /* publish frame for frameless callees */
@@ -62856,11 +62866,9 @@ loc_00373AC4: ;
     _cf = (int)(_fa < _fb);
 
 loc_00373AF0: ;
+    /* skipped 0x00373AF5 inc: overlaps the previous instruction */
     eax = MEM32(esi + ecx * 4 + -28);
     MEM32(edi + ecx * 4 + -28) = eax;
-    esp++;
-    _fa = (uint32_t)(esp) & 0xFFFFFFFFu;
-    _fas = (int32_t)(int32_t)(_fa); _fb = (_fa == 0x80000000u); /* inc result/SF/OF; CF unchanged */
 
 loc_00373AF8: ;
     eax = MEM32(esi + ecx * 4 + -24);

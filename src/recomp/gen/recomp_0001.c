@@ -60408,7 +60408,7 @@ void sub_00043D20(void)
 
 loc_00043D20: ;
     /* NFL2K5-GENPATCH:DIAG_RES43D20_IN */
-    { extern void nfl2k5_diag_res43(uint32_t obj, uint32_t load, uint32_t fre, uint32_t where); nfl2k5_diag_res43(esi, ebx, eax, 0); }
+    { extern void nfl2k5_diag_res43(uint32_t obj, uint32_t load, uint32_t fre, uint32_t where); nfl2k5_diag_res43(esi, ebx, eax, MEM32(esp)); }
     PUSH32(esp, edi);
     edi = eax;
     eax = MEM32(esi + 0x10);
@@ -63763,7 +63763,7 @@ void sub_000450B0(void)
 
 loc_000450B0: ;
     /* NFL2K5-GENPATCH:DIAG_RESLOAD */
-    { extern void nfl2k5_diag_res(uint32_t res, int load, uint32_t ret); nfl2k5_diag_res(ecx, 1, MEM32(esp)); }
+    { extern void nfl2k5_diag_res(uint32_t res, int load, uint32_t ret, uint32_t r2, uint32_t r3); nfl2k5_diag_res(ecx, 1, MEM32(esp), MEM32(esp + 8), MEM32(esp + 0x18)); }
     eax = MEM32(ecx + 0x20);
     MEM32(eax + 8) = MEM32(eax + 8) + 1;
     _fa = (uint32_t)(MEM32(eax + 8)) & 0xFFFFFFFFu;
@@ -63793,7 +63793,7 @@ void sub_000450D0(void)
 
 loc_000450D0: ;
     /* NFL2K5-GENPATCH:DIAG_RESFREE */
-    { extern void nfl2k5_diag_res(uint32_t res, int load, uint32_t ret); nfl2k5_diag_res(ecx, 0, MEM32(esp)); }
+    { extern void nfl2k5_diag_res(uint32_t res, int load, uint32_t ret, uint32_t r2, uint32_t r3); nfl2k5_diag_res(ecx, 0, MEM32(esp), MEM32(esp + 8), MEM32(esp + 0x18)); }
     PUSH32(esp, esi);
     esi = ecx;
     PUSH32(esp, 0x000450D8u); RECOMP_ABI_CALL(0x00028F40u, sub_00028F40); /* call 0x00028F40 */

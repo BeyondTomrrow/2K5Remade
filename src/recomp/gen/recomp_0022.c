@@ -32072,6 +32072,8 @@ loc_00327EBF: ;
     PUSH32(esp, 0x00327ED2u); RECOMP_ABI_CALL(0x003739F0u, sub_003739F0); /* call 0x003739F0 */
 
 loc_00327ED2: ;
+    /* NFL2K5-GENPATCH:DIAG_WMA_00327ED2 */
+    { extern void nfl2k5_diag_wma3(const char *what, uint32_t a, uint32_t b, uint32_t c); nfl2k5_diag_wma3("E20 at 00327ED2 esi/esp/eax", esi, esp, eax); }
     eax = MEM32(esi + 0x10710);
     ecx = MEM32(esp + 0x28);
     _fb = (uint32_t)(edi) & 0xFFFFFFFFu; _fbs = (int32_t)(int32_t)(_fb); /* sub source, before the write */
@@ -32109,11 +32111,15 @@ loc_00327EF1: ;
     PUSH32(esp, 0x00327F06u); RECOMP_ABI_CALL(0x003739F0u, sub_003739F0); /* call 0x003739F0 */
 
 loc_00327F06: ;
+    /* NFL2K5-GENPATCH:DIAG_WMA_00327F06 */
+    { extern void nfl2k5_diag_wma3(const char *what, uint32_t a, uint32_t b, uint32_t c); nfl2k5_diag_wma3("E20 at 00327F06 esi/esp/eax", esi, esp, eax); }
     _fb = (uint32_t)(0xC) & 0xFFFFFFFFu; _fbs = (int32_t)(int32_t)(_fb); /* add source, before the write */
     esp = esp + 0xC;
     _fa = (uint32_t)(esp) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* add result */
 
 loc_00327F09: ;
+    /* NFL2K5-GENPATCH:DIAG_WMA_00327F09 */
+    { extern void nfl2k5_diag_wma3(const char *what, uint32_t a, uint32_t b, uint32_t c); nfl2k5_diag_wma3("E20 at 00327F09 esi/esp/eax", esi, esp, eax); }
     ecx = MEM32(esi + 0x10708);
     edx = ecx + 0x200;
     _fa = (uint32_t)(ebp) & 0xFFFFFFFFu; _fb = (uint32_t)(edx) & 0xFFFFFFFFu;
@@ -32146,6 +32152,8 @@ loc_00327F19: ;
     MEM32(esi + 0x10710) = ecx;
 
 loc_00327F4C: ;
+    /* NFL2K5-GENPATCH:DIAG_WMA_00327F4C */
+    { extern void nfl2k5_diag_wma3(const char *what, uint32_t a, uint32_t b, uint32_t c); nfl2k5_diag_wma3("E20 at 00327F4C esi/esp/eax", esi, esp, eax); }
     eax = MEM32(esp + 0x1C);
     ecx = MEM32(esi + 0x10700);
     _fb = (uint32_t)(eax) & 0xFFFFFFFFu; _fbs = (int32_t)(int32_t)(_fb); /* add source, before the write */
@@ -32175,6 +32183,8 @@ void sub_00327F70(void)
 {
 
 loc_00327F70: ;
+    /* NFL2K5-GENPATCH:DIAG_WMAREADREQ */
+    { extern void nfl2k5_diag_wma3(const char *what, uint32_t a, uint32_t b, uint32_t c); nfl2k5_diag_wma3("read req off/size/ctx", MEM32(esp + 8), MEM32(esp + 0xC), MEM32(esp + 4)); }
     ecx = MEM32(esp + 0xC);
     edx = MEM32(esp + 8);
     eax = MEM32(esp + 0x10);
@@ -32186,6 +32196,8 @@ loc_00327F70: ;
     PUSH32(esp, 0x00327F92u); RECOMP_ABI_CALL(0x00327E20u, sub_00327E20); /* call 0x00327E20 */
 
 loc_00327F92: ;
+    /* NFL2K5-GENPATCH:DIAG_WMAREADRET */
+    { extern void nfl2k5_diag_wma3(const char *what, uint32_t a, uint32_t b, uint32_t c); nfl2k5_diag_wma3("read ret bytes/first4", eax, MEM32(0xC95E20), 0); }
     esp += 20; return; /* ret 16 */
 
 }
@@ -32514,6 +32526,8 @@ loc_003281D6: ;
     PUSH32(esp, 0x003281FAu); RECOMP_ABI_CALL(0x0046AAF5u, sub_0046AAF5); /* call 0x0046AAF5 */
 
 loc_003281FA: ;
+    /* NFL2K5-GENPATCH:DIAG_WMACREATE */
+    { extern void nfl2k5_diag_wma(const char *what, uint32_t v); nfl2k5_diag_wma("decoder create", eax); }
     _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(edi) & 0xFFFFFFFFu;
     _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp eax, edi (32-bit) */
     if (CMP_L(_fas, _fbs)) goto loc_0032835B; /* jl: less (signed <) */
@@ -32729,6 +32743,8 @@ loc_00328357: ;
     if (CMP_GE(_fas, _fbs)) goto loc_00328370; /* jge: greater or equal (signed >=) */
 
 loc_0032835B: ;
+    /* NFL2K5-GENPATCH:DIAG_WMAFAIL */
+    { extern void nfl2k5_diag_wma(const char *what, uint32_t v); nfl2k5_diag_wma("song start failed", eax); }
     POP32(esp, edi);
     MEM32(esi + 0x10050) = 0x80004005u;
     POP32(esp, esi);

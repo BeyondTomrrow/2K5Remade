@@ -163612,15 +163612,15 @@ void sub_000FCE70(void)
     #define fp_st1() fp_st(1)
 
 loc_000FCE70: ;
+    /* NFL2K5-GENPATCH:SCOREBUG_SKIP_TEST */
+    /* Experiment (NFL2K5_HIDE_SKIP=1): skip the ESPN scorebug update while a
+     * custom broadcast package is on, to find out whether it drives the bar. */
+    { extern int nfl2k5_scorebug_skip_update(void); if (nfl2k5_scorebug_skip_update()) { esp += 8; return; } }
     /* NFL2K5-GENPATCH:LIVE_QB_SAMPLE */
     /* Sample both title-maintained QB records on the guest execution thread. */
     { extern void nfl2k5_live_qb_guest_tick(void); nfl2k5_live_qb_guest_tick(); }
     /* NFL2K5-GENPATCH:SCOREBUG_HIDE_UPDATE */
     { extern void nfl2k5_scorebug_hide(void); nfl2k5_scorebug_hide(); }
-    /* NFL2K5-GENPATCH:SCOREBUG_SKIP_TEST */
-    /* Experiment (NFL2K5_HIDE_SKIP=1): skip the ESPN scorebug update while a
-     * custom broadcast package is on, to find out whether it drives the bar. */
-    { extern int nfl2k5_scorebug_skip_update(void); if (nfl2k5_scorebug_skip_update()) { esp += 8; return; } }
     PUSH32(esp, ebp);
     ebp = esp;
     g_ebp = ebp; /* publish frame for frameless callees */

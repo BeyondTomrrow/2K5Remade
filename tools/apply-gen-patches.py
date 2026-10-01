@@ -279,6 +279,43 @@ PATCHES = [
 """),
     # Music player commands (2026-10-01): who plays / stops a music track.
     # RECOMP_MUSIC_LOG=1. Menu music kept restarting every 1-5 s.
+    # Custom soundtrack (WMA) player: decoder create result and failure exit.
+    ("DIAG_WMACREATE", "sub_00328130", "loc_003281FA: ;", "after", """    { extern void nfl2k5_diag_wma(const char *what, uint32_t v); nfl2k5_diag_wma("decoder create", eax); }
+"""),
+    ("DIAG_WMAFAIL", "sub_00328130", "loc_0032835B: ;", "after", """    { extern void nfl2k5_diag_wma(const char *what, uint32_t v); nfl2k5_diag_wma("song start failed", eax); }
+"""),
+    ("DIAG_WMAREADREQ", "sub_00327F70", "loc_00327F70: ;", "after", """    { extern void nfl2k5_diag_wma3(const char *what, uint32_t a, uint32_t b, uint32_t c); nfl2k5_diag_wma3("read req off/size/ctx", MEM32(esp + 8), MEM32(esp + 0xC), MEM32(esp + 4)); }
+"""),
+    ("DIAG_WMAREADRET", "sub_00327F70", "loc_00327F92: ;", "after", """    { extern void nfl2k5_diag_wma3(const char *what, uint32_t a, uint32_t b, uint32_t c); nfl2k5_diag_wma3("read ret bytes/first4", eax, MEM32(0xC95E20), 0); }
+"""),
+    ("DIAG_WMA_00327ED2", "sub_00327E20", "loc_00327ED2: ;", "after", """    { extern void nfl2k5_diag_wma3(const char *what, uint32_t a, uint32_t b, uint32_t c); nfl2k5_diag_wma3("E20 at 00327ED2 esi/esp/eax", esi, esp, eax); }
+"""),
+    ("DIAG_WMA_00327F06", "sub_00327E20", "loc_00327F06: ;", "after", """    { extern void nfl2k5_diag_wma3(const char *what, uint32_t a, uint32_t b, uint32_t c); nfl2k5_diag_wma3("E20 at 00327F06 esi/esp/eax", esi, esp, eax); }
+"""),
+    ("DIAG_WMA_00327F09", "sub_00327E20", "loc_00327F09: ;", "after", """    { extern void nfl2k5_diag_wma3(const char *what, uint32_t a, uint32_t b, uint32_t c); nfl2k5_diag_wma3("E20 at 00327F09 esi/esp/eax", esi, esp, eax); }
+"""),
+    ("DIAG_WMA_00327F4C", "sub_00327E20", "loc_00327F4C: ;", "after", """    { extern void nfl2k5_diag_wma3(const char *what, uint32_t a, uint32_t b, uint32_t c); nfl2k5_diag_wma3("E20 at 00327F4C esi/esp/eax", esi, esp, eax); }
+"""),
+    ("MEMCPY_NATIVE_145B0", "sub_000145B0", "loc_000145B0: ;", "after", """    /* MSVC memcpy (memmove semantics) run natively. Its misaligned-
+     * destination paths dispatch through jump tables the disassembler could
+     * not recover (LeadUpVec's unused slot 0, TrailUpVec reached with a
+     * negative index), so every copy to an address that is not 4-byte
+     * aligned jumped into nowhere and returned with esi and eax wrong --
+     * the WMA decoder crashed on its first ring-buffer wrap (2026-10-01). */
+    { uint32_t _d = MEM32(esp + 4), _s = MEM32(esp + 8), _n = MEM32(esp + 0xC);
+      if (_n) memmove(XBOX_PTR(_d), XBOX_PTR(_s), _n);
+      eax = _d; esp += 4; return; }
+"""),
+    ("MEMCPY_NATIVE_3739F0", "sub_003739F0", "loc_003739F0: ;", "after", """    /* MSVC memcpy (memmove semantics) run natively. Its misaligned-
+     * destination paths dispatch through jump tables the disassembler could
+     * not recover (LeadUpVec's unused slot 0, TrailUpVec reached with a
+     * negative index), so every copy to an address that is not 4-byte
+     * aligned jumped into nowhere and returned with esi and eax wrong --
+     * the WMA decoder crashed on its first ring-buffer wrap (2026-10-01). */
+    { uint32_t _d = MEM32(esp + 4), _s = MEM32(esp + 8), _n = MEM32(esp + 0xC);
+      if (_n) memmove(XBOX_PTR(_d), XBOX_PTR(_s), _n);
+      eax = _d; esp += 4; return; }
+"""),
     ("DIAG_MUSICPLAY", "sub_0003CEA0", "loc_0003CEA0: ;", "after", """    { extern void nfl2k5_diag_music(int what, uint32_t handle_ptr, uint32_t esp_); nfl2k5_diag_music(1, ecx, esp); }
 """),
     ("DIAG_MUSICSTOP", "sub_0003CEE0", "loc_0003CEE0: ;", "after", """    { extern void nfl2k5_diag_music(int what, uint32_t handle_ptr, uint32_t esp_); nfl2k5_diag_music(0, ecx, esp); }

@@ -10472,6 +10472,16 @@ void sub_000145B0(void)
     #define fp_st1() fp_st(1)
 
 loc_000145B0: ;
+    /* NFL2K5-GENPATCH:MEMCPY_NATIVE_145B0 */
+    /* MSVC memcpy (memmove semantics) run natively. Its misaligned-
+     * destination paths dispatch through jump tables the disassembler could
+     * not recover (LeadUpVec's unused slot 0, TrailUpVec reached with a
+     * negative index), so every copy to an address that is not 4-byte
+     * aligned jumped into nowhere and returned with esi and eax wrong --
+     * the WMA decoder crashed on its first ring-buffer wrap (2026-10-01). */
+    { uint32_t _d = MEM32(esp + 4), _s = MEM32(esp + 8), _n = MEM32(esp + 0xC);
+      if (_n) memmove(XBOX_PTR(_d), XBOX_PTR(_s), _n);
+      eax = _d; esp += 4; return; }
     PUSH32(esp, ebp);
     ebp = esp;
     g_ebp = ebp; /* publish frame for frameless callees */
@@ -38578,7 +38588,7 @@ loc_0001C114: ;
         esi += _st; edi += _st; ecx--;
         if (!_flags) break;
     } } /* repe cmpsd */
-    if ((_fa != 0)) goto loc_0001C18F; /* jne: not equal / not zero */
+    if ((_flags == 0)) goto loc_0001C18F; /* jne: not equal / not zero */
 
 loc_0001C123: ;
     ecx = MEM32(ebp + -8);
@@ -47110,7 +47120,7 @@ loc_0001E9C8: ;
         esi += _st; edi += _st; ecx--;
         if (!_flags) break;
     } } /* repe cmpsd */
-    if ((_fa == 0)) goto loc_0001E9DB; /* je: equal / zero */
+    if ((_flags != 0)) goto loc_0001E9DB; /* je: equal / zero */
 
 loc_0001E9D7: ;
     PUSH32(esp, 5);
@@ -48594,7 +48604,7 @@ loc_0001F1B1: ;
         esi += _st; edi += _st; ecx--;
         if (!_flags) break;
     } } /* repe cmpsd */
-    if ((_fa != 0)) goto loc_0001F1D7; /* jne: not equal / not zero */
+    if ((_flags == 0)) goto loc_0001F1D7; /* jne: not equal / not zero */
 
 loc_0001F1C0: ;
     MEM32(ebx) = 0x66736378;

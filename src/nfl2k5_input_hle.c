@@ -106,6 +106,8 @@ static WORD auto_press(BYTE analog[8])
  * into it; they are pressed in order, 200 ms each with 250 ms between, and the
  * file is deleted once read. Lets a script drive the menus without the window
  * having focus, which a background process cannot reliably take. */
+static DWORD g_last_script_press;   /* GetTickCount of the last scripted press */
+
 static WORD file_press(BYTE analog[8])
 {
     static char queue[64][8];
@@ -138,6 +140,7 @@ static WORD file_press(BYTE analog[8])
     }
     if (head == tail)
         return 0;
+    g_last_script_press = now;
     if (!step_start)
         step_start = now;
     if (!pressing && now - step_start >= 250) {
@@ -247,10 +250,15 @@ static void host_gamepad(XBOX_GAMEPAD *g)
     memset(g, 0, sizeof *g);
     if (g_xbox_input_blocked)
         return;
-    /* NFL2K5_NO_HOST_PAD=1 ignores host controllers: scripted runs on a
-     * machine with a pad attached got stray d-pad presses that walked the
-     * menu cursor away from what the script selected (2026-09-25). */
-    if (!getenv("NFL2K5_NO_HOST_PAD") && xbox_InputGetState(0, &pad) == 0)
+    /* NFL2K5_NO_HOST_PAD=1 ignores host controllers while a script is
+     * driving: scripted runs on a machine with a pad attached got stray d-pad
+     * presses that walked the menu cursor away from what the script selected
+     * (2026-09-25). Only for 15 s after the last scripted press, though --
+     * ignoring the pad for the whole run left the user on the keyboard in
+     * every game a script had launched (2026-10-01). */
+    if (!(getenv("NFL2K5_NO_HOST_PAD") && g_last_script_press &&
+          GetTickCount() - g_last_script_press < 15000) &&
+        xbox_InputGetState(0, &pad) == 0)
         *g = pad.Gamepad;
     if (window_focused()) {
 #define KEY(vk) (GetAsyncKeyState(vk) & 0x8000)

@@ -370,10 +370,10 @@ index 2742fa2..b3c9305 100644
  #include <stdint.h>
  
 diff --git a/src/apu/apu_shim.h b/src/apu/apu_shim.h
-index dd6bec1..a7cd974 100644
+index dd6bec1..b97d940 100644
 --- a/src/apu/apu_shim.h
 +++ b/src/apu/apu_shim.h
-@@ -95,32 +95,50 @@ static inline void qemu_thread_join(QemuThread *t) {
+@@ -95,32 +95,55 @@ static inline void qemu_thread_join(QemuThread *t) {
  
  extern uint8_t *g_apu_ram_ptr; /* Set at init to point at Xbox 64MB RAM */
  
@@ -387,9 +387,14 @@ index dd6bec1..a7cd974 100644
 + * no voice ever played or finished, and NFL 2K5 waited forever on speech
 + * (2026-09-24). Same rule as the GPU's dma_resolve: an offset below the
 + * contiguous allocator's high-water mark is in the window. */
++#ifndef XBOX_PHYS_LOW_TAG
++#define XBOX_PHYS_LOW_TAG 0x40000000u
++#endif
 +extern uint32_t xbox_ContiguousAllocatedBytes(void);
 +static inline uint8_t *apu_phys(hwaddr addr) {
 +    uint32_t a = (uint32_t)addr & 0x03FFFFFF;
++    if ((uint32_t)addr & XBOX_PHYS_LOW_TAG)   /* low memory, see MmGetPhysicalAddress */
++        return g_apu_ram_ptr + a;
 +    if (a < xbox_ContiguousAllocatedBytes())
 +        return g_apu_ram_ptr + 0x80000000u + a;
 +    return g_apu_ram_ptr + a;
@@ -431,7 +436,7 @@ index dd6bec1..a7cd974 100644
  
  /* Stub address space - just passed to ldl_le_phys etc. (ignored) */
 diff --git a/src/apu/apu_vp.c b/src/apu/apu_vp.c
-index b9f429e..2b5a867 100644
+index b9f429e..5d2f3d5 100644
 --- a/src/apu/apu_vp.c
 +++ b/src/apu/apu_vp.c
 @@ -66,11 +66,17 @@ static void set_notify_status(MCPXAPUState *d, uint32_t v, int notifier,
@@ -628,7 +633,34 @@ index b9f429e..2b5a867 100644
                             block_size);
                  } else {
                      linear_addr += ba;
-@@ -934,6 +1063,15 @@ static int voice_get_samples(MCPXAPUState *d, uint32_t v, float samples[][2],
+@@ -911,6 +1040,26 @@ static int voice_get_samples(MCPXAPUState *d, uint32_t v, float samples[][2],
+         }
+     }
+ 
++    if (stream && getenv("RECOMP_APU_VOICE_LOG")) {
++        /* Stream voices: the segment being played and the loudest sample
++         * read from it, every 2 s -- silent data and a wrong address look
++         * the same from the speakers. */
++        static DWORD slog[MCPX_HW_MAX_VOICES];
++        static float speak[MCPX_HW_MAX_VOICES];
++        for (int i = 0; i < sample_count; i++) {
++            float a = fabsf(samples[i][0]);
++            if (a > speak[v]) speak[v] = a;
++        }
++        if (GetTickCount() - slog[v] > 2000) {
++            slog[v] = GetTickCount();
++            fprintf(stderr, "[STREAM] %03X ssl %d/%d seg %d/%d off %08X len %u cs %d ssize %d spb %d stereo %d peak %.4f first %08X\n",
++                    v, ssl_index, d->vp.ssl[v].count[ssl_index], ssl_seg, count, (uint32_t)segment_offset,
++                    (unsigned)seg_len, seg_cs, sample_size, seg_spb, stereo, speak[v],
++                    segment_offset ? ldl_le_phys(address_space_memory, segment_offset) : 0);
++            speak[v] = 0;
++        }
++    }
++
+     if (cbo >= ebo) {
+         if (stream) {
+             d->vp.ssl[v].ssl_seg += 1;
+@@ -934,6 +1083,15 @@ static int voice_get_samples(MCPXAPUState *d, uint32_t v, float samples[][2],
          }
      }
  
@@ -644,7 +676,7 @@ index b9f429e..2b5a867 100644
      voice_set_mask(d, (uint16_t)v, NV_PAVS_VOICE_PAR_OFFSET,
                     NV_PAVS_VOICE_PAR_OFFSET_CBO, cbo);
      return sample_count;
-@@ -946,26 +1084,83 @@ static int voice_get_samples(MCPXAPUState *d, uint32_t v, float samples[][2],
+@@ -946,26 +1104,83 @@ static int voice_get_samples(MCPXAPUState *d, uint32_t v, float samples[][2],
   * resample. This gives us functional audio at the cost of quality.
   * ============================================================ */
  
@@ -744,7 +776,7 @@ index b9f429e..2b5a867 100644
  }
  
  /* ============================================================
-@@ -1006,6 +1201,96 @@ static void voice_process(MCPXAPUState *d,
+@@ -1006,6 +1221,96 @@ static void voice_process(MCPXAPUState *d,
                                          NV_PAVS_VOICE_CFG_ENV0_EF_PITCHSCALE);
      float rate = 1.0f / powf(2.0f, (p + ps * 32 * ef_value) / 4096.0f);
      dbg->rate = rate;
@@ -841,7 +873,7 @@ index b9f429e..2b5a867 100644
  
      /* Step amplitude envelope */
      float ea_value = voice_step_envelope(
-@@ -1089,9 +1374,53 @@ static void voice_process(MCPXAPUState *d,
+@@ -1089,9 +1394,53 @@ static void voice_process(MCPXAPUState *d,
          dbg->bin[i] = (uint8_t)bin[i];
          dbg->vol[i] = vol[i];
      }
@@ -895,7 +927,7 @@ index b9f429e..2b5a867 100644
      /* Low-pass filter */
      int fmode = voice_get_mask(d, v, NV_PAVS_VOICE_CFG_MISC,
                                 NV_PAVS_VOICE_CFG_MISC_FMODE);
-@@ -1169,10 +1498,43 @@ static void voice_process(MCPXAPUState *d,
+@@ -1169,10 +1518,43 @@ static void voice_process(MCPXAPUState *d,
   * Simplified single-threaded version (no worker threads initially)
   * ============================================================ */
  
@@ -939,7 +971,7 @@ index b9f429e..2b5a867 100644
  
      for (int list = 0; list < 3; list++) {
          hwaddr top, current, next;
-@@ -1194,10 +1556,36 @@ void mcpx_apu_vp_frame(MCPXAPUState *d,
+@@ -1194,10 +1576,36 @@ void mcpx_apu_vp_frame(MCPXAPUState *d,
  
              if (!voice_get_mask(d, v, NV_PAVS_VOICE_PAR_STATE,
                                  NV_PAVS_VOICE_PAR_STATE_ACTIVE_VOICE)) {
@@ -1208,10 +1240,21 @@ index 90060bd..83256da 100644
 +# target itself.
 +target_compile_definitions(xbox_kernel PUBLIC RECOMP_ICALL_FEEDBACK)
 diff --git a/src/kernel/kernel.h b/src/kernel/kernel.h
-index e515377..7e97cd3 100644
+index e515377..3988359 100644
 --- a/src/kernel/kernel.h
 +++ b/src/kernel/kernel.h
-@@ -508,6 +508,7 @@ ULONG_PTR xbox_resolve_ordinal(ULONG ordinal);
+@@ -393,6 +393,10 @@ typedef VOID (__stdcall *PXBOX_SYSTEM_ROUTINE)(PVOID StartContext);
+  * MmClaimGpuInstanceMemory reports GPU instance memory at its top. Shared so
+  * the layout and the bridges cannot disagree about where it is. */
+ #define XBOX_CONTIG_BASE 0x80000000u
++/* Physical addresses of low memory (image, data, heap) carry this bit, so
++ * they cannot be mistaken for contiguous-window offsets (see
++ * xbox_MmGetPhysicalAddress). Hardware models strip it. */
++#define XBOX_PHYS_LOW_TAG 0x40000000u
+ #define XBOX_CONTIG_SIZE (64u * 1024u * 1024u)
+ 
+ /* Default GPU instance size, used when a caller asks to claim everything. */
+@@ -508,6 +512,7 @@ ULONG_PTR xbox_resolve_ordinal(ULONG ordinal);
  
  /* Kernel bridge (kernel_bridge.c) - resolve kernel thunks in Xbox memory */
  void xbox_kernel_bridge_init(void);
@@ -1219,7 +1262,7 @@ index e515377..7e97cd3 100644
  
  /**
   * Per-title kernel ordinal remap.
-@@ -591,6 +592,10 @@ void xbox_SetCrtLockTable(uint32_t table_va, uint32_t count);
+@@ -591,6 +596,10 @@ void xbox_SetCrtLockTable(uint32_t table_va, uint32_t count);
  VOID    __stdcall xbox_RtlEnterCriticalSection(PRTL_CRITICAL_SECTION CriticalSection);
  VOID    __stdcall xbox_RtlLeaveCriticalSection(PRTL_CRITICAL_SECTION CriticalSection);
  VOID    __stdcall xbox_RtlInitializeCriticalSection(PRTL_CRITICAL_SECTION CriticalSection);
@@ -1230,7 +1273,7 @@ index e515377..7e97cd3 100644
  
  ULONG   __stdcall xbox_RtlNtStatusToDosError(NTSTATUS Status);
  
-@@ -742,6 +747,7 @@ NTSTATUS __stdcall xbox_NtWaitForSingleObjectEx(HANDLE Handle, KPROCESSOR_MODE W
+@@ -742,6 +751,7 @@ NTSTATUS __stdcall xbox_NtWaitForSingleObjectEx(HANDLE Handle, KPROCESSOR_MODE W
  NTSTATUS __stdcall xbox_NtWaitForMultipleObjectsEx(ULONG Count, HANDLE Handles[], ULONG WaitType, BOOLEAN Alertable, PLARGE_INTEGER Timeout);
  NTSTATUS __stdcall xbox_NtSuspendThread(HANDLE ThreadHandle, PULONG PreviousSuspendCount);
  NTSTATUS __stdcall xbox_NtResumeThread(HANDLE ThreadHandle, PULONG PreviousSuspendCount);
@@ -1238,7 +1281,7 @@ index e515377..7e97cd3 100644
  NTSTATUS __stdcall xbox_NtClearEvent(HANDLE EventHandle);
  NTSTATUS __stdcall xbox_NtCreateMutant(PHANDLE MutantHandle, PXBOX_OBJECT_ATTRIBUTES ObjectAttributes, BOOLEAN InitialOwner);
  NTSTATUS __stdcall xbox_NtReleaseMutant(HANDLE MutantHandle, PLONG PreviousCount);
-@@ -758,6 +764,15 @@ VOID     __stdcall xbox_KeInitializeTimerEx(PXBOX_KTIMER Timer, XBOX_TIMER_TYPE
+@@ -758,6 +768,15 @@ VOID     __stdcall xbox_KeInitializeTimerEx(PXBOX_KTIMER Timer, XBOX_TIMER_TYPE
  VOID     __stdcall xbox_KeInitializeDpc(PXBOX_KDPC Dpc, PKDEFERRED_ROUTINE DeferredRoutine, PVOID DeferredContext);
  BOOLEAN  __stdcall xbox_KeInsertQueueDpc(PXBOX_KDPC Dpc, PVOID SystemArgument1, PVOID SystemArgument2);
  BOOLEAN  __stdcall xbox_KeRemoveQueueDpc(PXBOX_KDPC Dpc);
@@ -1254,7 +1297,7 @@ index e515377..7e97cd3 100644
  
  BOOLEAN  __stdcall xbox_KeSynchronizeExecution(PXBOX_KINTERRUPT Interrupt, PVOID SynchronizeRoutine, PVOID SynchronizeContext);
  
-@@ -1074,4 +1089,8 @@ void xbox_log(int level, const char* subsystem, const char* fmt, ...);
+@@ -1074,4 +1093,8 @@ void xbox_log(int level, const char* subsystem, const char* fmt, ...);
  }
  #endif
  
@@ -3022,11 +3065,51 @@ index 5b56513..ac94d9a 100644
 +    InterlockedExchange(&g_title_scheduler_active, 0);
 +    InterlockedExchange(&g_scheduler_guest_thread, 0);
  }
+diff --git a/src/kernel/kernel_memory.c b/src/kernel/kernel_memory.c
+index e49a219..2f1bc56 100644
+--- a/src/kernel/kernel_memory.c
++++ b/src/kernel/kernel_memory.c
+@@ -179,9 +179,20 @@ ULONG_PTR __stdcall xbox_MmGetPhysicalAddress(PVOID BaseAddress)
+      * nothing naming this function.
+      */
+     uint32_t va = (uint32_t)(uintptr_t)BaseAddress;
+-    return (ULONG_PTR)((va >= XBOX_CONTIG_BASE &&
+-                        (uint64_t)va < (uint64_t)XBOX_CONTIG_BASE + XBOX_CONTIG_SIZE)
+-                     ? va - XBOX_CONTIG_BASE : va);
++    if (va >= XBOX_CONTIG_BASE &&
++        (uint64_t)va < (uint64_t)XBOX_CONTIG_BASE + XBOX_CONTIG_SIZE)
++        return (ULONG_PTR)(va - XBOX_CONTIG_BASE);
++    /* Low memory (the image, its data and the title's heap). On the console
++     * it is the same physical RAM as the window, identity mapped; here it is
++     * separate storage, so its physical address must not collide with a
++     * window offset. XBOX_PHYS_LOW_TAG marks it; the APU and the GPU strip it
++     * and read low memory. Untagged, NFL 2K5's soundtrack player handed the
++     * APU its decode buffers at 0x00C17A68, which also names a window offset
++     * below the contiguous high-water mark: the stream voice read zeros from
++     * the window and custom soundtracks played silence (2026-10-01). */
++    if (va && va < 0x04000000u)
++        return (ULONG_PTR)(va | XBOX_PHYS_LOW_TAG);
++    return (ULONG_PTR)va;
+ }
+ 
+ VOID __stdcall xbox_MmPersistContiguousMemory(PVOID BaseAddress, ULONG NumberOfBytes, BOOLEAN Persist)
 diff --git a/src/kernel/kernel_path.c b/src/kernel/kernel_path.c
-index 394b275..b909679 100644
+index 394b275..f55f150 100644
 --- a/src/kernel/kernel_path.c
 +++ b/src/kernel/kernel_path.c
-@@ -418,8 +418,14 @@ BOOL xbox_translate_path(const char* xbox_path, xbox_host_char* host_path_buf, D
+@@ -43,6 +43,11 @@ typedef struct {
+ 
+ static const path_rule s_rules[] = {
+     { "\\Device\\CdRom0\\",                   0, NULL,         NULL          },
++    /* The dashboard's custom soundtracks (XAPI reads MUSIC\ST.DB and
++     * MUSIC\<soundtrack>\<song>.WMA). The host generates them from the
++     * user's <GameRoot>/Music folders, so they live with the saves rather
++     * than in the game dir. Listed before Partition1 so it wins. */
++    { "\\Device\\Harddisk0\\Partition1\\TDATA\\FFFE0000\\MUSIC\\", 1, "\\Soundtracks", "/Soundtracks" },
+     { "\\Device\\Harddisk0\\Partition1\\",    0, NULL,         NULL          },
+     /* The rest of the disk. Partition 0 is the whole raw device, 2 holds
+      * system data, and 3-5 are the per-title caches behind X:, Y: and Z:.
+@@ -418,8 +423,17 @@ BOOL xbox_translate_path(const char* xbox_path, xbox_host_char* host_path_buf, D
      return TRUE;
  
  translate:
@@ -3035,8 +3118,11 @@ index 394b275..b909679 100644
 +    /* NFL 2K5 scans hundreds of optional cache index files during startup.
 +     * Logging every miss changes scheduler timing more than the I/O itself.
 +     * Keep ordinary paths visible and make the repetitive cache scan opt-in. */
++    /* The soundtrack database is re-read on every song-info call
++     * (~100 times a second in the menus); keep it out of the log too. */
 +    if (getenv("RECOMP_FILE_TRACE") ||
-+        !(strstr(xbox_path, "Partition5") && strstr(xbox_path, ".uh"))) {
++        (!(strstr(xbox_path, "Partition5") && strstr(xbox_path, ".uh")) &&
++         !strstr(xbox_path, "\\MUSIC\\ST.DB"))) {
 +        fprintf(stderr, "  [PATH] %s\n", xbox_path);
 +        fflush(stderr);
 +    }
@@ -7192,7 +7278,7 @@ index 0000000..ea9882d
 +    return 1;
 +}
 diff --git a/src/kernel/nv2a_pb_exec.c b/src/kernel/nv2a_pb_exec.c
-index b3dcbf7..77c8163 100644
+index b3dcbf7..c4d9c15 100644
 --- a/src/kernel/nv2a_pb_exec.c
 +++ b/src/kernel/nv2a_pb_exec.c
 @@ -24,8 +24,10 @@
@@ -7249,7 +7335,16 @@ index b3dcbf7..77c8163 100644
  extern uint32_t g_xbox_image_lo, g_xbox_image_hi;
  
  /* Would writing this surface land on the title's own image?
-@@ -135,16 +170,29 @@ static int surface_write_refused(uint32_t base, uint32_t bytes, const char *what
+@@ -103,6 +138,8 @@ static uint32_t dma_resolve(uint32_t offset)
+      * black straight through the guest heap -- which faulted the title three
+      * frames later on a pointer that had been overwritten, while the real
+      * framebuffer at 0x80A6C000 stayed untouched and the screen stayed black. */
++    if (offset & XBOX_PHYS_LOW_TAG)     /* low memory, see MmGetPhysicalAddress */
++        return offset & 0x03FFFFFFu;
+     if (offset < xbox_ContiguousAllocatedBytes())
+         return XBOX_CONTIG_BASE + offset;
+     if (!surface_hits_image(offset, 1))
+@@ -135,16 +172,29 @@ static int surface_write_refused(uint32_t base, uint32_t bytes, const char *what
  /* NV097 methods this executor acts on. */
  #define NV097_SET_SURFACE_CLIP_HORIZONTAL 0x0200
  #define NV097_SET_SURFACE_CLIP_VERTICAL   0x0204
@@ -7279,7 +7374,7 @@ index b3dcbf7..77c8163 100644
  #define NV097_SET_TEXTURE_ADDRESS         0x1B08
  #define NV097_SET_TEXTURE_CONTROL1        0x1B10
  #define NV097_SET_TEXTURE_IMAGE_RECT      0x1B1C
-@@ -214,6 +262,8 @@ typedef struct {
+@@ -214,6 +264,8 @@ typedef struct {
      uint32_t pitch;                     /* bytes per row, from CONTROL1  */
      uint32_t color;                     /* NV097 colour-format code      */
      uint32_t addr_u, addr_v;            /* wrap mode per axis            */
@@ -7288,7 +7383,7 @@ index b3dcbf7..77c8163 100644
      int      valid;
  } Texture;
  
-@@ -222,6 +272,11 @@ static struct {
+@@ -222,6 +274,11 @@ static struct {
      uint32_t   prim;                    /* SET_BEGIN_END parameter, 0 = ended */
      uint16_t   idx[NV_MAX_INDICES];
      uint32_t   idx_count;
@@ -7300,7 +7395,7 @@ index b3dcbf7..77c8163 100644
      /* INLINE_ARRAY payload: vertices written straight into the pushbuffer
       * instead of into a buffer the title points at. Same vertex format, a
       * different place to read them from. */
-@@ -246,7 +301,13 @@ static struct {
+@@ -246,7 +303,13 @@ static struct {
      uint64_t pixels;
      uint32_t pixel_max;   /* brightest value any pixel write carried */
      uint32_t clip_x, clip_w, clip_y, clip_h;
@@ -7314,7 +7409,7 @@ index b3dcbf7..77c8163 100644
      uint32_t clears, unhandled_total;
      uint32_t flip_read, flip_write, flip_modulo, flips;
      uint32_t tris_drawn, tris_skipped_offscreen, batches_untransformed;
-@@ -257,6 +318,18 @@ static struct {
+@@ -257,6 +320,18 @@ static struct {
      Texture  tex;
  } s_gpu;
  
@@ -7333,7 +7428,7 @@ index b3dcbf7..77c8163 100644
  /* Unhandled methods, ranked. The interesting output is not that something was
   * skipped but which things dominate, because that is the order to implement
   * them in. */
-@@ -291,9 +364,22 @@ static void record_tex_reg(uint32_t method, uint32_t param)
+@@ -291,9 +366,22 @@ static void record_tex_reg(uint32_t method, uint32_t param)
       * which is nearly all of them, since swizzled is the Xbox default. That
       * left the title's own textures unsampled and every textured quad drawn in
       * flat vertex colour. */
@@ -7356,7 +7451,7 @@ index b3dcbf7..77c8163 100644
  }
  
  /* Every distinct texture a batch was drawn with, and how many batches used it.
-@@ -349,6 +435,11 @@ static void note_unhandled(uint32_t method, uint32_t param)
+@@ -349,6 +437,11 @@ static void note_unhandled(uint32_t method, uint32_t param)
          }
      }
      if (s_unhandled_count < PB_EXEC_MAX_UNHANDLED) {
@@ -7368,7 +7463,7 @@ index b3dcbf7..77c8163 100644
          s_unhandled[s_unhandled_count].method = method;
          s_unhandled[s_unhandled_count].count = 1;
          s_unhandled[s_unhandled_count].last_param = param;
-@@ -367,8 +458,12 @@ static int fetch_attr(const VertexAttr *a, uint32_t index, float out[4])
+@@ -367,8 +460,12 @@ static int fetch_attr(const VertexAttr *a, uint32_t index, float out[4])
  
      out[0] = out[1] = out[2] = 0.0f;
      out[3] = 1.0f;
@@ -7382,7 +7477,7 @@ index b3dcbf7..77c8163 100644
      if (s_gpu.inline_active) {
          /* The batch arrived as INLINE_ARRAY, so `offset` is a byte offset into
           * the buffered payload rather than a guest address -- and 0 is a legal
-@@ -402,6 +497,29 @@ static int fetch_attr(const VertexAttr *a, uint32_t index, float out[4])
+@@ -402,6 +499,29 @@ static int fetch_attr(const VertexAttr *a, uint32_t index, float out[4])
          for (i = 0; i < a->size && i < 4; i++)
              out[i] = (float)p[i] / 255.0f;
          return 1;
@@ -7412,7 +7507,7 @@ index b3dcbf7..77c8163 100644
      default:
          return 0;
      }
-@@ -501,6 +619,11 @@ static void raster_triangle(const float a[2], const float b[2],
+@@ -501,6 +621,11 @@ static void raster_triangle(const float a[2], const float b[2],
                              const float c[2], uint32_t argb,
                              const float uv[3][2]);
  
@@ -7424,7 +7519,7 @@ index b3dcbf7..77c8163 100644
  static void clear_surface(uint32_t param)
  {
      uint8_t *mem = (uint8_t *)xbox_GetMemoryOffset();
-@@ -520,6 +643,30 @@ static void clear_surface(uint32_t param)
+@@ -520,6 +645,30 @@ static void clear_surface(uint32_t param)
          s_gpu.color_base = base;
      }
  
@@ -7455,7 +7550,7 @@ index b3dcbf7..77c8163 100644
      for (y = 0; y < s_gpu.clip_h; y++) {
          uint8_t *row = mem + s_gpu.color_base
                       + (size_t)(s_gpu.clip_y + y) * s_gpu.pitch;
-@@ -538,6 +685,7 @@ static void clear_surface(uint32_t param)
+@@ -538,6 +687,7 @@ static void clear_surface(uint32_t param)
                  p[x] = v;
          }
      }
@@ -7463,7 +7558,7 @@ index b3dcbf7..77c8163 100644
      s_gpu.clears++;
      /* Progress markers, interleaved with everything else in the log. The
       * summary says drawing stopped; only a marker next to the surrounding
-@@ -597,7 +745,12 @@ static void clear_surface(uint32_t param)
+@@ -597,7 +747,12 @@ static void clear_surface(uint32_t param)
       * would show the one nothing is writing. */
      /* The window has to read where the pixels actually are, which is the
       * resolved address rather than the DMA-object offset. */
@@ -7477,7 +7572,7 @@ index b3dcbf7..77c8163 100644
  
      /* And open the window, rather than waiting for AvSetDisplayMode to do it.
       *
-@@ -710,6 +863,17 @@ static int sample_texture(uint32_t u, uint32_t v, uint32_t *argb)
+@@ -710,6 +865,17 @@ static int sample_texture(uint32_t u, uint32_t v, uint32_t *argb)
      if (d3d8_format_dxt_block_bytes(fmt))
          return d3d8_dxt_decode_texel(mem + s_gpu.tex.offset, fmt, u, v,
                                       s_gpu.tex.width, argb);
@@ -7495,7 +7590,7 @@ index b3dcbf7..77c8163 100644
      if (d3d8_format_is_swizzled(fmt)) {
          /* Morton order: a texel's index is interleaved from x and y instead of
           * v*pitch + u, so index from the base of the image. The switch below
-@@ -830,8 +994,9 @@ static void dump_texture_bmp(uint32_t seq)
+@@ -830,8 +996,9 @@ static void dump_texture_bmp(uint32_t seq)
      pad = (4 - (row_bytes & 3)) & 3;
      filesz = 54 + (row_bytes + pad) * h;
  
@@ -7507,7 +7602,7 @@ index b3dcbf7..77c8163 100644
      f = fopen(path, "wb");
      if (!f)
          return;
-@@ -913,6 +1078,112 @@ static void put_pixel(uint8_t *mem, uint32_t bpp, int x, int y, uint32_t argb)
+@@ -913,6 +1080,112 @@ static void put_pixel(uint8_t *mem, uint32_t bpp, int x, int y, uint32_t argb)
      }
  }
  
@@ -7620,7 +7715,7 @@ index b3dcbf7..77c8163 100644
  /* Half-space fill. Barycentric edge functions rather than scanline slopes:
   * the same test decides both windings, so a title that emits clockwise
   * triangles does not silently render nothing. */
-@@ -976,11 +1247,11 @@ static void raster_triangle(const float a[2], const float b[2],
+@@ -976,11 +1249,11 @@ static void raster_triangle(const float a[2], const float b[2],
                  if (su < 0.0f) su = 0.0f;
                  if (sv < 0.0f) sv = 0.0f;
                  if (sample_texture((uint32_t)su, (uint32_t)sv, &texel)) {
@@ -7634,7 +7729,7 @@ index b3dcbf7..77c8163 100644
          }
      }
      s_gpu.tris_drawn++;
-@@ -1136,11 +1407,18 @@ static int batch_is_screen_space(void)
+@@ -1136,11 +1409,18 @@ static int batch_is_screen_space(void)
  }
  
  /* NV097 primitive types that are triangles under some winding. */
@@ -7658,7 +7753,7 @@ index b3dcbf7..77c8163 100644
  
  /* How many post-draw captures to keep: enough to see whether the geometry
   * is stable from frame to frame, few enough not to fill a directory. */
-@@ -1210,14 +1488,30 @@ static void raster_batch(void)
+@@ -1210,14 +1490,30 @@ static void raster_batch(void)
                             vertex_color(s_gpu.idx[i]));
          break;
      case NV_PRIM_TRIANGLE_FAN:
@@ -7693,7 +7788,7 @@ index b3dcbf7..77c8163 100644
      default:
          break;                             /* points and lines: not yet */
      }
-@@ -1242,6 +1536,1183 @@ static void raster_batch(void)
+@@ -1242,6 +1538,1183 @@ static void raster_batch(void)
   * question is what space attribute 0 arrives in: a title running a vertex
   * program hands over object-space positions that mean nothing without running
   * it, while pre-transformed screen-space coordinates can be drawn directly. */
@@ -8877,7 +8972,7 @@ index b3dcbf7..77c8163 100644
  static void draw_primitive(void)
  {
      float v[4];
-@@ -1250,6 +2721,22 @@ static void draw_primitive(void)
+@@ -1250,6 +2723,22 @@ static void draw_primitive(void)
      if (!s_gpu.prim || !s_gpu.idx_count)
          return;
      s_gpu.draws++;
@@ -8900,7 +8995,7 @@ index b3dcbf7..77c8163 100644
      if ((s_gpu.draws % 200) == 0)
          fprintf(stderr, "  [GPU] draw #%u\n", s_gpu.draws);
      s_gpu.verts += s_gpu.idx_count;
-@@ -1270,7 +2757,44 @@ static void draw_primitive(void)
+@@ -1270,7 +2759,44 @@ static void draw_primitive(void)
          }
      }
  
@@ -8946,7 +9041,7 @@ index b3dcbf7..77c8163 100644
  
      if (getenv("RECOMP_PB_EXEC_VERBOSE")) {
          static int shown;
-@@ -1390,6 +2914,12 @@ static void draw_inline_array(void)
+@@ -1390,6 +2916,12 @@ static void draw_inline_array(void)
          case 0:  bytes = 4;                        break;  /* D3DCOLOR   */
          case 2:  bytes = 4 * s_gpu.attr[a].size;   break;  /* float      */
          case 4:  bytes = s_gpu.attr[a].size;       break;  /* ubyte norm */
@@ -8959,7 +9054,7 @@ index b3dcbf7..77c8163 100644
          default: bytes = 4 * s_gpu.attr[a].size;   break;
          }
          s_gpu.attr[a].offset = off;
-@@ -1493,6 +3023,37 @@ static int imm_vertex_method(uint32_t method, uint32_t param)
+@@ -1493,6 +3025,37 @@ static int imm_vertex_method(uint32_t method, uint32_t param)
      union { uint32_t u; float f; } v;
      v.u = param;
  
@@ -8997,7 +9092,7 @@ index b3dcbf7..77c8163 100644
      if (method >= NV097_SET_VERTEX4F && method < NV097_SET_VERTEX4F + 16) {
          uint32_t c = (method - NV097_SET_VERTEX4F) / 4;
          s_gpu.imm_pos[c] = v.f;
-@@ -1566,11 +3127,126 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1566,11 +3129,126 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
                      subch, method, param);
      }
  
@@ -9124,7 +9219,7 @@ index b3dcbf7..77c8163 100644
      case NV097_SET_SURFACE_CLIP_HORIZONTAL:
          s_gpu.clip_x = param & 0xFFFF;
          s_gpu.clip_w = (param >> 16) & 0xFFFF;
-@@ -1586,19 +3262,36 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1586,19 +3264,36 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
          s_gpu.pitch = param & 0xFFFF;      /* colour pitch; zeta is the top half */
          break;
      case NV097_SET_SURFACE_COLOR_OFFSET:
@@ -9161,7 +9256,7 @@ index b3dcbf7..77c8163 100644
              s_gpu.inline_count = 0;
              s_gpu.imm_count = 0;
          } else {
-@@ -1612,6 +3305,7 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1612,6 +3307,7 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
              else
                  draw_primitive();
              s_gpu.prim = 0;
@@ -9169,7 +9264,7 @@ index b3dcbf7..77c8163 100644
              s_gpu.inline_count = 0;
              s_gpu.imm_count = 0;
          }
-@@ -1620,8 +3314,20 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1620,8 +3316,20 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
      case NV097_INLINE_ARRAY:
          /* Vertex data, not a pointer to it. Buffered rather than decoded here
           * because the format is only fully known at END. */
@@ -9191,7 +9286,7 @@ index b3dcbf7..77c8163 100644
          break;
  
      case NV097_DRAW_ARRAYS: {
-@@ -1639,13 +3345,41 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1639,13 +3347,41 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
  
          if (!s_gpu.prim)
              break;
@@ -9233,7 +9328,7 @@ index b3dcbf7..77c8163 100644
          if (s_gpu.prim && s_gpu.idx_count + 2 <= NV_MAX_INDICES) {
              s_gpu.idx[s_gpu.idx_count++] = (uint16_t)(param & 0xFFFF);
              s_gpu.idx[s_gpu.idx_count++] = (uint16_t)(param >> 16);
-@@ -1659,6 +3393,23 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1659,6 +3395,23 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
          record_tex_reg(method, param);
          break;
  
@@ -9257,7 +9352,7 @@ index b3dcbf7..77c8163 100644
      case NV097_SET_FLIP_READ:
          s_gpu.flip_read = param;
          return;
-@@ -1682,6 +3433,47 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1682,6 +3435,47 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
          /* The stall ends when the buffer being read is the one just finished.
           * There is no scanout here to wait for, so that is now. */
          s_gpu.flip_read = s_gpu.flip_write;
@@ -9305,7 +9400,7 @@ index b3dcbf7..77c8163 100644
          /* And this is a completed swap, which is what a title's own swap
           * counter counts -- see xbox_Nv2aFrameCounterFlip. */
          xbox_Nv2aFrameCounterFlip();
-@@ -1696,6 +3488,11 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1696,6 +3490,11 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
          return;
  
      case NV097_SET_TEXTURE_FORMAT:
@@ -9317,7 +9412,7 @@ index b3dcbf7..77c8163 100644
          s_gpu.tex.color = (param >> 8) & 0xFF;
          /* A swizzled texture carries its own dimensions here, as log2 in
           * BASE_SIZE_U/V (nv2a_regs.h: 0x00F00000 / 0x0F000000). It has to:
-@@ -1729,6 +3526,9 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1729,6 +3528,9 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
      case NV097_SET_TEXTURE_IMAGE_RECT:
          s_gpu.tex.width  = param >> 16;
          s_gpu.tex.height = param & 0xFFFF;
@@ -9327,7 +9422,7 @@ index b3dcbf7..77c8163 100644
          record_tex_reg(method, param);
          break;
  
-@@ -1948,9 +3748,12 @@ void nv2a_pb_exec_report(void)
+@@ -1948,9 +3750,12 @@ void nv2a_pb_exec_report(void)
              dma_resolve(s_gpu.drawn_offset), s_gpu.color_offset,
              dma_resolve(s_gpu.color_offset));
      fprintf(stderr, "[GPU] rasterised %u triangles; %u batches skipped as not"
@@ -11269,7 +11364,7 @@ index 159f56c..f11e961 100644
      "FrenchXlate", "SpanishXlate", "ItalianXlate",
  }
 diff --git a/tools/recomp/lifter.py b/tools/recomp/lifter.py
-index f0ba077..f68e4a6 100644
+index f0ba077..4a72022 100644
 --- a/tools/recomp/lifter.py
 +++ b/tools/recomp/lifter.py
 @@ -487,6 +487,32 @@ def _has_xmm_operand(ops):
@@ -11517,7 +11612,29 @@ index f0ba077..f68e4a6 100644
  
      def _lift_sse(self, insn, m, ops):
          """Translate SSE instructions to C float operations."""
-@@ -3534,6 +3618,12 @@ def lift_basic_block(lifter, bb, flag_state=None):
+@@ -3503,7 +3587,20 @@ def lift_basic_block(lifter, bb, flag_state=None):
+         and flag_state is a tuple for passing to the next block.
+     """
+     stmts = []
+-    insns = bb.instructions
++    # An instruction that starts inside the one before it belongs to another
++    # decoding of the same bytes -- a sweep that wandered in from a jump
++    # table and is one byte out of step. Execution runs one of them, never
++    # both. MSVC's memcpy copies 7 dwords with "mov eax,[esi+ecx*4-1C] /
++    # mov [edi+ecx*4-1C],eax" right after its UnwindUp table; the stray
++    # decode added an "inc esp" from inside the second mov, every 28-byte
++    # copy left the stack one byte off, and the caller popped garbage
++    # (the WMA decoder's WAVEFORMATEX read, 2026-10-01).
++    insns = []
++    for insn in bb.instructions:
++        if insns and insn.address < insns[-1].address + max(insns[-1].size, 1):
++            stmts.append(f"/* skipped 0x{insn.address:08X} {insn.mnemonic}: overlaps the previous instruction */")
++            continue
++        insns.append(insn)
+     i = 0
+ 
+     # Track the last instruction that set flags
+@@ -3534,6 +3631,12 @@ def lift_basic_block(lifter, bb, flag_state=None):
              i += consumed
              continue
  
@@ -11530,6 +11647,26 @@ index f0ba077..f68e4a6 100644
          # Handle jecxz/jcxz specially (not flag-based)
          if curr.mnemonic in ("jecxz", "jcxz"):
              results = lifter._lift_jcc(curr)
+@@ -3640,10 +3743,17 @@ def lift_basic_block(lifter, bb, flag_state=None):
+             # repe cmpsb/repne scasb = comparison, sets flags
+             rest = curr.op_str.strip() if hasattr(curr, 'op_str') else ""
+             raw_m = curr.mnemonic
+-            if "cmpsb" in raw_m or "scasb" in raw_m:
++            # Every width compares, not just the byte forms. "repe cmpsd"
++            # was taken for a flag-preserving copy, so the jcc after it read
++            # whatever set the flags before (often an "xor reg, reg": always
++            # "equal"). The XDK WMA decoder matches ASF object GUIDs exactly
++            # that way and handed every object to the File Properties parser,
++            # which rejected the second one -- no custom soundtrack ever
++            # played (2026-10-01). 114 sites in NFL 2K5.
++            if "cmps" in raw_m or "scas" in raw_m:
+                 last_flag_setter = raw_m
+                 last_flag_ops = list(curr.operands)
+-            elif "cmpsb" in rest or "scasb" in rest:
++            elif "cmps" in rest or "scas" in rest:
+                 last_flag_setter = raw_m
+                 last_flag_ops = list(curr.operands)
+             else:
 diff --git a/tools/recomp/test_flag_join.py b/tools/recomp/test_flag_join.py
 index 74a9e84..ec54229 100644
 --- a/tools/recomp/test_flag_join.py
@@ -11618,6 +11755,84 @@ index 78665f4..f128a73 100644
  
  
  if __name__ == "__main__":
+diff --git a/tools/recomp/test_lifter_overlap.py b/tools/recomp/test_lifter_overlap.py
+new file mode 100644
+index 0000000..8a6a905
+--- /dev/null
++++ b/tools/recomp/test_lifter_overlap.py
+@@ -0,0 +1,36 @@
++import unittest
++
++from .disasm import BasicBlock, Instruction, Operand
++from .lifter import Lifter, lift_basic_block
++
++
++class OverlappingDecodeTest(unittest.TestCase):
++    def test_instruction_inside_the_previous_one_is_dropped(self):
++        # MSVC memcpy UnwindUp7 (0x373AF0): the real "mov [edi+ecx*4-1Ch], eax"
++        # at +4 is four bytes long; a stray decode one byte in produced
++        # "inc esp" at +5, which shifted the stack on every 28-byte copy.
++        load = Instruction(0, 4, "mov", "eax, dword ptr [esi + ecx*4 - 0x1c]", "8b448ee4")
++        load.operands = [Operand(type="reg", reg="eax"),
++                         Operand(type="mem", mem_base="esi", mem_index="ecx", mem_scale=4,
++                                 mem_disp=-0x1C, mem_size=4)]
++        store = Instruction(4, 4, "mov", "dword ptr [edi + ecx*4 - 0x1c], eax", "89448fe4")
++        store.operands = [Operand(type="mem", mem_base="edi", mem_index="ecx", mem_scale=4,
++                                  mem_disp=-0x1C, mem_size=4),
++                          Operand(type="reg", reg="eax")]
++        stray = Instruction(5, 1, "inc", "esp", "44")
++        stray.operands = [Operand(type="reg", reg="esp")]
++        lifter = Lifter()
++        lifter.func_start = 0
++        lifter.func_end = 0x20
++
++        lifted, _ = lift_basic_block(
++            lifter, BasicBlock(start=0, instructions=[load, store, stray]))
++        generated = "\n".join(lifted)
++
++        self.assertNotIn("esp++", generated)
++        self.assertIn("skipped 0x00000005", generated)
++        self.assertIn("MEM32(edi + ecx * 4 + -28) = eax;", generated)
++
++
++if __name__ == "__main__":
++    unittest.main()
+diff --git a/tools/recomp/test_lifter_string_compare.py b/tools/recomp/test_lifter_string_compare.py
+index d4bf5a3..7e2cd9a 100644
+--- a/tools/recomp/test_lifter_string_compare.py
++++ b/tools/recomp/test_lifter_string_compare.py
+@@ -77,6 +77,31 @@ class StringCompareLifterTest(unittest.TestCase):
+         self.assertIn("_flags", jcc)
+         self.assertNotIn("_fa", jcc)
+ 
++    def test_dword_compare_replaces_an_earlier_flag_setter(self):
++        # The XDK WMA decoder's GUID match: "xor edx, edx / repe cmpsd /
++        # jne". The jne used to pair with the xor (ZF from a zero result:
++        # never taken), so every ASF object looked like the first GUID.
++        clear = Instruction(0, 2, "xor", "edx, edx", "33d2")
++        clear.operands = [Operand(type="reg", reg="edx"), Operand(type="reg", reg="edx")]
++        compare = Instruction(
++            2, 2, "repe cmpsd", "dword ptr [esi], dword ptr es:[edi]",
++            "f3a7")
++        compare.operands = [
++            Operand(type="mem", mem_base="esi", mem_size=4),
++            Operand(type="mem", mem_base="edi", mem_size=4),
++        ]
++        jump = Instruction(4, 2, "jne", "0x10", "750a")
++        jump.jump_target = 0x10
++        lifter = Lifter()
++        lifter.func_start = 0
++        lifter.func_end = 0x20
++
++        lifted, _ = lift_basic_block(
++            lifter, BasicBlock(start=0, instructions=[clear, compare, jump]))
++        jcc = "\n".join(lifted).splitlines()[-1]
++        self.assertIn("(_flags == 0)", jcc)
++        self.assertNotIn("_fa", jcc)
++
+ 
+ if __name__ == "__main__":
+     unittest.main()
 diff --git a/tools/recomp/translator.py b/tools/recomp/translator.py
 index 4c840a1..c9fd389 100644
 --- a/tools/recomp/translator.py

@@ -2505,6 +2505,10 @@ int main(int argc, char **argv)
     printf("[BOOT] Game data preserved across memory initialization.\n");
     xbox_kernel_init();
     xbox_path_init(game_dir, save_dir);
+    {   /* <root>/Music folders -> Xbox custom soundtracks (saves/Soundtracks) */
+        extern void nfl2k5_local_music_start(const char *root, const char *save_dir);
+        nfl2k5_local_music_start(root, save_dir);
+    }
     xbox_kernel_bridge_init();
     if (!validate_only && getenv("RECOMP_AC97_READY")) {
         g_apu_state = mcpx_apu_init_standalone((uint8_t *)(uintptr_t)xbox_GetMemoryOffset());
@@ -3153,4 +3157,18 @@ void nfl2k5_diag_music_cursor(uint32_t slot_off, uint32_t cursor, uint32_t limit
             cursor < limit ? "ok" : "REJECTED",
             *(const int32_t *)(m + slot_off + 0xA6D844u), *(const int32_t *)(m + slot_off + 0xA6D85Cu),
             *(const int32_t *)(m + slot_off + 0xA6D834u), GetTickCount());
+}
+
+/* Custom-soundtrack (WMA) song player, sub_00328130: the result of each step
+ * (open, decoder create, ...), to see where a song is rejected. */
+void nfl2k5_diag_wma(const char *what, uint32_t v)
+{
+    fprintf(stderr, "[WMA] %s %08X t=%lu\n", what, v, GetTickCount());
+}
+void nfl2k5_diag_wma3(const char *what, uint32_t a, uint32_t b, uint32_t c)
+{
+    static int on = -1;   /* every decoder read: RECOMP_WMA_LOG=1 only */
+    if (on < 0) on = getenv("RECOMP_WMA_LOG") != NULL;
+    if (!on) return;
+    fprintf(stderr, "[WMA] %s %08X %08X %08X\n", what, a, b, c);
 }

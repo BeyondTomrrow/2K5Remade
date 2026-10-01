@@ -1882,7 +1882,7 @@ loc_004B183F: ;
         esi += _st; edi += _st; ecx--;
         if (!_flags) break;
     } } /* repe cmpsd */
-    if ((_fa == 0)) goto loc_004B186A; /* je: equal / zero */
+    if ((_flags != 0)) goto loc_004B186A; /* je: equal / zero */
 
 loc_004B184B: ;
     edi = MEM32(ebp + -8);
@@ -2006,7 +2006,7 @@ loc_004B18CD: ;
         esi += _st; edi += _st; ecx--;
         if (!_flags) break;
     } } /* repe cmpsd */
-    if ((_fa == 0)) goto loc_004B18F3; /* je: equal / zero */
+    if ((_flags != 0)) goto loc_004B18F3; /* je: equal / zero */
 
 loc_004B18DB: ;
     MEM32(ebp + -4) = MEM32(ebp + -4) + 1;
@@ -2093,7 +2093,7 @@ loc_004B18CF: ;
         esi += _st; edi += _st; ecx--;
         if (!_flags) break;
     } } /* repe cmpsd */
-    if ((_fa == 0)) goto loc_004B18F3; /* je: equal / zero */
+    if ((_flags != 0)) goto loc_004B18F3; /* je: equal / zero */
 
 loc_004B18DB: ;
     MEM32(ebp + -4) = MEM32(ebp + -4) + 1;
@@ -11680,7 +11680,7 @@ loc_004B461C: ;
         if (!_flags) break;
     } } /* repe cmpsd */
     edi = MEM32(ebp + -4);
-    if ((_fa != 0)) goto loc_004B4635; /* jne: not equal / not zero */
+    if ((_flags == 0)) goto loc_004B4635; /* jne: not equal / not zero */
 
 loc_004B4631: ;
     ecx = 0; /* xor self */
@@ -14699,7 +14699,7 @@ loc_004B56B6: ;
         esi += _st; edi += _st; ecx--;
         if (!_flags) break;
     } } /* repe cmpsd */
-    if ((_fa == 0)) goto loc_004B570C; /* je: equal / zero */
+    if ((_flags != 0)) goto loc_004B570C; /* je: equal / zero */
 
 loc_004B5705: ;
     eax = eax & 0xF7FFFFFFu;
@@ -14719,7 +14719,7 @@ loc_004B570C: ;
         esi += _st; edi += _st; ecx--;
         if (!_flags) break;
     } } /* repe cmpsd */
-    if ((_fa == 0)) goto loc_004B5725; /* je: equal / zero */
+    if ((_flags != 0)) goto loc_004B5725; /* je: equal / zero */
 
 loc_004B571D: ;
     eax = eax | 0x8000000;
@@ -14741,7 +14741,7 @@ loc_004B5725: ;
         esi += _st; edi += _st; ecx--;
         if (!_flags) break;
     } } /* repe cmpsd */
-    if ((_fa == 0)) goto loc_004B5763; /* je: equal / zero */
+    if ((_flags != 0)) goto loc_004B5763; /* je: equal / zero */
 
 loc_004B5736: ;
     eax = MEM32(ebp + 8);
@@ -14767,7 +14767,7 @@ loc_004B5746: ;
         esi += _st; edi += _st; ecx--;
         if (!_flags) break;
     } } /* repe cmpsd */
-    if ((_fa != 0)) goto loc_004B5763; /* jne: not equal / not zero */
+    if ((_flags == 0)) goto loc_004B5763; /* jne: not equal / not zero */
 
 loc_004B575F: ;
     MEM8(ebx + 0x4F) = MEM8(ebx + 0x4F) & 0xC3;
@@ -15581,7 +15581,7 @@ loc_004B5AFA: ;
         esi += _st; edi += _st; ecx--;
         if (!_flags) break;
     } } /* repe cmpsd */
-    if ((_fa != 0)) goto loc_004B5B33; /* jne: not equal / not zero */
+    if ((_flags == 0)) goto loc_004B5B33; /* jne: not equal / not zero */
 
 loc_004B5B14: ;
     MEM8(edx + 0x4F) = MEM8(edx + 0x4F) & 0xF7;
@@ -16213,7 +16213,7 @@ loc_004B5E95: ;
         esi += _st; edi += _st; ecx--;
         if (!_flags) break;
     } } /* repe cmpsd */
-    if ((_fa != 0)) goto loc_004B5EFC; /* jne: not equal / not zero */
+    if ((_flags == 0)) goto loc_004B5EFC; /* jne: not equal / not zero */
 
 loc_004B5EAD: ;
     PUSH32(esp, 2);
@@ -16228,7 +16228,7 @@ loc_004B5EAD: ;
         esi += _st; edi += _st; ecx--;
         if (!_flags) break;
     } } /* repe cmpsd */
-    if ((_fa == 0)) goto loc_004B5EFC; /* je: equal / zero */
+    if ((_flags != 0)) goto loc_004B5EFC; /* je: equal / zero */
 
 loc_004B5EBE: ;
     edi = MEM32(ebp + 0x14);
@@ -16959,7 +16959,7 @@ loc_004B6348: ;
         esi += _st; edi += _st; ecx--;
         if (!_flags) break;
     } } /* repe cmpsd */
-    if ((_fa != 0)) goto loc_004B636E; /* jne: not equal / not zero */
+    if ((_flags == 0)) goto loc_004B636E; /* jne: not equal / not zero */
 
 loc_004B6359: ;
     eax = MEM32(ebp + -4);
@@ -16988,7 +16988,7 @@ loc_004B636E: ;
         esi += _st; edi += _st; ecx--;
         if (!_flags) break;
     } } /* repe cmpsd */
-    if ((_fa != 0)) goto loc_004B6365; /* jne: not equal / not zero */
+    if ((_flags == 0)) goto loc_004B6365; /* jne: not equal / not zero */
 
 loc_004B6380: ;
     ecx = MEM32(ebp + -8);
@@ -19053,7 +19053,7 @@ loc_004B7078: ;
         if (!_flags) break;
     } } /* repe cmpsd */
     esi = MEM32(ebp + -4);
-    if ((_fa == 0)) goto loc_004B70D7; /* je: equal / zero */
+    if ((_flags != 0)) goto loc_004B70D7; /* je: equal / zero */
 
 loc_004B7099: ;
     PUSH32(esp, MEM32(eax + 0x13D4));
@@ -20850,7 +20850,7 @@ loc_004B7B0B: ;
         esi += _st; edi += _st; ecx--;
         if (!_flags) break;
     } } /* repe cmpsd */
-    if ((_fa == 0)) goto loc_004B7B35; /* je: equal / zero */
+    if ((_flags != 0)) goto loc_004B7B35; /* je: equal / zero */
 
 loc_004B7B1F: ;
     PUSH32(esp, 2);
@@ -20865,7 +20865,7 @@ loc_004B7B1F: ;
         esi += _st; edi += _st; ecx--;
         if (!_flags) break;
     } } /* repe cmpsd */
-    if ((_fa != 0)) goto loc_004B7B35; /* jne: not equal / not zero */
+    if ((_flags == 0)) goto loc_004B7B35; /* jne: not equal / not zero */
 
 loc_004B7B31: ;
     MEM8(eax + 3) = MEM8(eax + 3) & 0xC3;
@@ -56610,7 +56610,7 @@ loc_004C0EB2: ;
         if (!_flags) break;
     } } /* repe cmpsd */
     POP32(esp, edi);
-    SET_LO8(eax, ((_fa != 0)) ? 1 : 0); /* setne */
+    SET_LO8(eax, ((_flags == 0)) ? 1 : 0); /* setne */
     POP32(esp, esi);
     esp = ebp;
     POP32(esp, ebp); /* leave */
@@ -58540,7 +58540,7 @@ loc_004C17B5: ;
         esi += _st; edi += _st; ecx--;
         if (!_flags) break;
     } } /* repe cmpsd */
-    if ((_fa != 0)) goto loc_004C17E2; /* jne: not equal / not zero */
+    if ((_flags == 0)) goto loc_004C17E2; /* jne: not equal / not zero */
 
 loc_004C17C7: ;
     MEM32(ebp + 0xC) = MEM32(ebp + 0xC) + 1;
@@ -60204,7 +60204,7 @@ loc_004C20DF: ;
         esi += _st; edi += _st; ecx--;
         if (!_flags) break;
     } } /* repe cmpsd */
-    if ((_fa != 0)) goto loc_004C210A; /* jne: not equal / not zero */
+    if ((_flags == 0)) goto loc_004C210A; /* jne: not equal / not zero */
 
 loc_004C20F1: ;
     MEM32(ebp + -8) = MEM32(ebp + -8) + 1;
@@ -77841,7 +77841,7 @@ loc_004C77F1: ;
         esi += _st; edi += _st; ecx--;
         if (!_flags) break;
     } } /* repe cmpsd */
-    if ((_fa == 0)) goto loc_004C780A; /* je: equal / zero */
+    if ((_flags != 0)) goto loc_004C780A; /* je: equal / zero */
 
 loc_004C7800: ;
     _fb = (uint32_t)(0x70) & 0xFFFFFFFFu; _fbs = (int32_t)(int32_t)(_fb); /* add source, before the write */
@@ -84742,7 +84742,7 @@ loc_004C9E1A: ;
         esi += _st; edi += _st; ecx--;
         if (!_flags) break;
     } } /* repe cmpsw */
-    if ((_fa == 0)) goto loc_004C9E5F; /* je: equal / zero */
+    if ((_flags != 0)) goto loc_004C9E5F; /* je: equal / zero */
 
 loc_004C9E42: ;
     PUSH32(esp, 7);
@@ -84761,7 +84761,7 @@ loc_004C9E42: ;
         esi += _st; edi += _st; ecx--;
         if (!_flags) break;
     } } /* repe cmpsw */
-    if ((_fa != 0)) goto loc_004C9E6B; /* jne: not equal / not zero */
+    if ((_flags == 0)) goto loc_004C9E6B; /* jne: not equal / not zero */
 
 loc_004C9E5F: ;
     eax = MEM32(ebp + 8);
@@ -85604,7 +85604,7 @@ loc_004CA293: ;
         esi += _st; edi += _st; ecx--;
         if (!_flags) break;
     } } /* repe cmpsd */
-    SET_LO8(eax, ((_fa == 0)) ? 1 : 0); /* sete */
+    SET_LO8(eax, ((_flags != 0)) ? 1 : 0); /* sete */
     POP32(esp, edi);
     POP32(esp, esi);
     eax--;
@@ -88476,7 +88476,7 @@ loc_004CB2A1: ;
         esi += _st; edi += _st; ecx--;
         if (!_flags) break;
     } } /* repe cmpsw */
-    if ((_fa == 0)) goto loc_004CB2BC; /* je: equal / zero */
+    if ((_flags != 0)) goto loc_004CB2BC; /* je: equal / zero */
 
 loc_004CB2B1: ;
     ebx++;
@@ -102677,7 +102677,7 @@ loc_004CF850: ;
         esi += _st; edi += _st; ecx--;
         if (!_flags) break;
     } } /* repe cmpsd */
-    SET_LO8(eax, ((_fa == 0)) ? 1 : 0); /* sete */
+    SET_LO8(eax, ((_flags != 0)) ? 1 : 0); /* sete */
     POP32(esp, edi);
     eax--;
     _fa = (uint32_t)(eax) & 0xFFFFFFFFu;

@@ -32,3 +32,7 @@ tools/scorebug-studio/library.generated.js
 # team logos) stay local; tools/nbc-snf/build_plates.py rebuilds the plates.
 mods/presentations/NBC_SNF/reference/
 mods/presentations/NBC_SNF/assets/
+
+# Local music library (user-supplied audio; FOLDER = PLAYLIST)
+/Music/*
+!/Music/README.txt

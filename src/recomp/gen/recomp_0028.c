@@ -14681,7 +14681,7 @@ loc_003FA7A0: ;
         esi += _st; edi += _st; ecx--;
         if (!_flags) break;
     } } /* repe cmpsw */
-    if ((_fa != 0)) goto loc_003FA7C1; /* jne: not equal / not zero */
+    if ((_flags == 0)) goto loc_003FA7C1; /* jne: not equal / not zero */
 
 loc_003FA7B4: ;
     _fb = (uint32_t)(0x12) & 0xFFFFFFFFu; _fbs = (int32_t)(int32_t)(_fb); /* add source, before the write */
