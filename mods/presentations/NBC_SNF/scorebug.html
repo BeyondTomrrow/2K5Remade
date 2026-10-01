@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>NBC Sunday Night Football</title>
+<link rel="stylesheet" href="scorebug.css">
+<link rel="stylesheet" href="layout.css">
+</head>
+<body>
+<div id="canvas">
+  <!-- All coordinates inside #bug are reference pixels: the 576x94 box at
+       x 413, y 90 of reference/reference.png. -->
+  <div id="bug" data-element="bug">
+    <div class="panel away" data-element="away-panel"><div class="team-color"></div></div>
+    <div class="panel home" data-element="home-panel"><div class="team-color"></div></div>
+    <div class="divider away" data-element="away-divider"></div>
+    <div class="divider home" data-element="home-divider"></div>
+
+    <div class="logo-window away" data-element="away-logo"><img class="plate" alt=""><img class="logo" alt=""><div class="glass"></div></div>
+    <div class="logo-window home" data-element="home-logo"><img class="plate" alt=""><img class="logo" alt=""><div class="glass"></div></div>
+
+    <div class="text abbr away" data-element="away-abbr">LAR</div>
+    <div class="text record away" data-element="away-record">10-6</div>
+    <div class="text score away" data-element="away-score">42</div>
+    <div class="text score home" data-element="home-score">27</div>
+    <div class="text abbr home" data-element="home-abbr">CIN</div>
+    <div class="text record home" data-element="home-record">9-7</div>
+
+    <img class="rail" src="assets/plates/rail.png" alt="" data-element="rail">
+    <div class="timeouts away" data-element="away-timeouts"><i></i><i></i><i></i></div>
+    <div class="timeouts home" data-element="home-timeouts"><i></i><i></i><i></i></div>
+
+    <img class="pod" src="assets/plates/pod.png" alt="" data-element="pod">
+    <div class="text clock" data-element="clock">15:00</div>
+    <div class="quarter" data-element="quarter"><span class="num">2</span><span class="ord">ND</span></div>
+  </div>
+</div>
+<script src="../_runtime/nfl2k5-presentation.js"></script>
+<script src="scorebug.js"></script>
+</body>
+</html>

@@ -1,0 +1,100 @@
+/* NBC Sunday Night Football scorebug.
+ *
+ * Every number inside #bug is a pixel of reference/reference.png, measured
+ * there (the bug's 576x94 box starts at x 413, y 90 of that image). The bug
+ * is scaled as a whole (--bug-scale) to its broadcast size.
+ *
+ * Fixed art (clock pod with peacock, timeout rail, the reference teams'
+ * logo windows) is cut from the reference itself: assets/plates, made by
+ * tools/nbc-snf/build_plates.py. Team colours use the panel masks from the
+ * same script: dark tone + mask x (team colour - dark tone).
+ *
+ * Typeface: put the broadcast font in fonts/nbc-snf.ttf (or .otf) to replace
+ * the stand-in. scorebug.js fits every text block to the measured cap
+ * heights and widths whichever font is used. */
+@font-face { font-family: "NBC SNF"; src: url("fonts/nbc-snf.otf"), url("fonts/nbc-snf.ttf"); font-weight: 900; }
+
+:root {
+  --nbc-font: "NBC SNF", "Arial Black", sans-serif;
+  /* placement on the 1920x1080 broadcast canvas */
+  --bug-scale: 1.45;
+  --bug-x: 542px;            /* left edge of the 576x94 box */
+  --bug-y: 904px;            /* top edge (bottom of the bug about 40 px above the frame edge) */
+}
+
+html, body { margin: 0; background: transparent; overflow: hidden; }
+#canvas { position: relative; width: 1920px; height: 1080px; }
+
+#bug {
+  position: absolute; left: var(--bug-x); top: var(--bug-y);
+  width: 576px; height: 94px;
+  transform: scale(var(--bug-scale)); transform-origin: 0 0;
+  transition: opacity 0.35s ease;
+  --away-team: #1f4fae; --away-dark: #1a1e2e;
+  --home-team: #da541b; --home-dark: #2a2127;
+}
+#bug.off-air { opacity: 0; }
+#bug > * { position: absolute; }
+
+/* ---- panels: dark tone + team colour through the measured mask ---- */
+.panel { top: 23px; height: 52px; }
+.panel.away { left: 63px; width: 176px; background: var(--away-dark); }
+.panel.home { left: 336px; width: 183px; background: var(--home-dark); }
+.panel .team-color { position: absolute; inset: 0; }
+.panel.away .team-color { background: var(--away-team); -webkit-mask: url("assets/plates/away_mask.png") 0 0 / 100% 100%; mask: url("assets/plates/away_mask.png") 0 0 / 100% 100%; }
+.panel.home .team-color { background: var(--home-team); -webkit-mask: url("assets/plates/home_mask.png") 0 0 / 100% 100%; mask: url("assets/plates/home_mask.png") 0 0 / 100% 100%; }
+
+/* dividers between abbreviation and score (x 564 and 832 in the reference) */
+.divider { top: 23px; width: 2px; height: 52px;
+  background: linear-gradient(to bottom, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.28) 12%,
+              rgba(255,255,255,0.42) 30%, rgba(255,255,255,0.52) 52%, rgba(255,255,255,0.30) 70%,
+              rgba(255,255,255,0.16) 90%, rgba(255,255,255,0.10) 100%); }
+.divider.away { left: 151px; }
+.divider.home { left: 419px; }
+
+/* ---- logo windows ---- */
+.logo-window { top: 23px; height: 52px; overflow: hidden; }
+.logo-window.away { left: 2px; width: 63px; border-top-left-radius: 5px; }
+.logo-window.home { left: 517px; width: 56px; border-top-right-radius: 5px; }
+.logo-window > * { position: absolute; }
+.logo-window .plate { left: 0; top: 0; width: 100%; height: 100%; display: none; }
+.logo-window.exact .plate { display: block; }
+.logo-window.exact .logo, .logo-window.exact .glass { display: none; }
+/* Fitted to the reference: logo 1.25x the window height, cropped. */
+.logo-window.away .logo { height: 65px; top: -1px; right: 3px; }
+.logo-window.home .logo { height: 55px; top: 0; left: -3px; }
+.logo-window .glass { inset: 0;
+  background:
+    linear-gradient(to bottom right, rgba(255,255,255,0.32), rgba(255,255,255,0) 45%),
+    linear-gradient(var(--glass-angle, 40deg), transparent calc(50% - 0.6px), rgba(255,255,255,0.75) 50%, transparent calc(50% + 0.6px)); }
+.logo-window.home .glass { --glass-angle: -40deg; }
+/* silver rim on the outer edge */
+.logo-window::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  box-shadow: inset 1px 1px 0 rgba(235,232,228,0.85); }
+.logo-window.home::after { box-shadow: inset -1px 1px 0 rgba(235,232,228,0.85); }
+.logo-window.exact::after { display: none; }
+
+/* ---- rail and timeouts ---- */
+.rail { left: 2px; top: 73px; width: 571px; height: 8px; }
+/* Bars are 3.3 px tall in the reference (rows 165-168, the first and last
+ * partly covered); drawn per row so they land on the same pixels. */
+.timeouts i { position: absolute; top: 75px; width: 26px; height: 4px;
+  background: linear-gradient(to bottom, rgba(253,255,255,0.45) 0 1px, #fdffff 1px 3px, rgba(253,255,255,0.8) 3px 4px); }
+.timeouts i.used { background: linear-gradient(to bottom, rgba(111,117,125,0.45) 0 1px, #6f757d 1px 3px, rgba(100,104,111,0.85) 3px 4px); }
+.timeouts.away i:nth-child(1) { left: 50px; }  .timeouts.away i:nth-child(2) { left: 83px; }  .timeouts.away i:nth-child(3) { left: 116px; }
+.timeouts.home i:nth-child(1) { left: 431px; } .timeouts.home i:nth-child(2) { left: 464px; } .timeouts.home i:nth-child(3) { left: 497px; }
+
+/* ---- pod ---- */
+.pod { left: 237px; top: 0; width: 101px; height: 94px; }
+
+/* ---- text (positions and sizes set by scorebug.js from the measurements) ---- */
+.text, .quarter span { font-family: var(--nbc-font); font-weight: 900; white-space: nowrap;
+  color: #fefdfe; line-height: 1; }
+.text { text-shadow: 0.6px 0.8px 0.8px rgba(0, 0, 0, 0.55); }
+.score, .clock { background: linear-gradient(to bottom, #fefdfe 0%, #fefdfe 55%, #dadde1 85%, #c9ccd1 100%);
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0.6px 0.9px 0.6px rgba(0,0,0,0.55)); text-shadow: none; }
+.record { color: #eef0f3; }
+.quarter { left: 0; top: 0; }
+.quarter span { position: absolute; color: #f6f9fc; }
+.quarter .ord::after { content: ""; position: absolute; left: 0; right: 0; height: 2px; background: #e1e4e7; top: var(--ul-top, 10px); }

@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "id": "nbc_snf",
+  "name": "NBC Sunday Night Football",
+  "type": "html",
+  "version": "0.1.0",
+  "author": "NFL2K5-PC",
+  "description": "NBC Sunday Night Football scorebug, rebuilt from reference/reference.png. Layout in reference pixels; fixed art cut from the reference by tools/nbc-snf/build_plates.py.",
+  "enabled": true,
+  "entry": "scorebug.html",
+  "canvas": { "width": 1920, "height": 1080, "fit": "broadcast_safe_16x9" },
+  "dependencies": [],
+  "assets": {},
+  "compatibility": { "game": "NFL2K5-PC", "presentation_api": 1 }
+}
