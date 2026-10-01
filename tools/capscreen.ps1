@@ -1,4 +1,4 @@
-param([string]$Out = 'logs\screen.png', [string]$Title = 'ESPN NFL 2K5')
+﻿param([string]$Out = 'logs\screen.png', [string]$Title = 'ESPN NFL 2K5', [string]$Process = '')
 # Capture the game window as it appears on screen (desktop copy of its rect).
 # Works with the D3D swap-chain presenter, which PrintWindow/GDI capture of
 # the window DC does not see. The desktop must be unlocked.
@@ -14,7 +14,9 @@ public class W32 {
   [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
 }
 "@
-$h = [W32]::FindWindow('ESPN NFL 2K5', [NullString]::Value)
+# -Process xemu: that process's main window (xemu's title carries its version).
+if ($Process) { $h = (Get-Process $Process -ErrorAction SilentlyContinue | Select -First 1).MainWindowHandle; if (-not $h) { $h = [IntPtr]::Zero } }
+else { $h = [W32]::FindWindow($Title, [NullString]::Value) }
 if ($h -eq [IntPtr]::Zero) { 'no window'; exit 1 }
 [W32]::SetForegroundWindow($h) | Out-Null
 Start-Sleep -Milliseconds 400

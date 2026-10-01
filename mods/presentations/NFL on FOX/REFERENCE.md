@@ -25,6 +25,21 @@ The implementation preserves these measurements at 16:9. On ultrawide output the
 
 ## Local typography and music
 
+## Possession-side refinement (2026-09-27)
+
+The later FOX references establish that down/distance is not a centre tab: it
+is a compact team-colour banner above the side that currently has possession.
+The package therefore has separate away and home banners selected from the
+live possession pointer at `E60280`. Transparent canvas overflow prevents the
+active tab from being cropped at either logo edge, and the possession accent
+under the active score changes side and colour with that same live value.
+
+The verified title state map does not yet include a play-clock producer. The
+banner has a `{play_clock}` slot, but it and its divider stay hidden until a
+real value is published; a synthetic countdown would be misleading. Contextual
+player-stat inserts now render on the event team's side, including mirrored
+alignment and animation for home possession.
+
 The supplied `Human PE Narrow` family is the active scorebug face. Its bold
 cut is used for scores, clocks, down/distance, and timeout labels; its regular
 cut is available for supporting text. The supplied All-Pro Sans Bold and Heavy

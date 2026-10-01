@@ -8,7 +8,9 @@
     "canvas": {
       "width": 572,
       "height": 95,
-      "overflow_top": 82
+      "overflow_top": 82,
+      "overflow_left": 230,
+      "overflow_right": 230
     },
     "placement": {
       "center_x": 0.5,
@@ -129,21 +131,107 @@
       },
       {
         "type": "box",
-        "x": 147,
-        "y": 69,
-        "w": 95,
-        "h": 13,
-        "fill": "{away.primary}|darken:0.52|alpha:0.82",
+        "x": -40,
+        "y": -34,
+        "w": 282,
+        "h": 28,
+        "radius": 0,
+        "gradient": {
+          "top": "{away.primary}|lighten:0.14",
+          "bottom": "{away.primary}|darken:0.18"
+        },
+        "shadow": "#00000077",
+        "show": "possession:away"
+      },
+      {
+        "type": "text",
+        "text": "{down_distance}",
+        "x": -28,
+        "y": -34,
+        "w": 194,
+        "h": 28,
+        "size": 20,
+        "weight": 900,
+        "stretch": "condensed",
+        "color": "#FFFFFF",
+        "align": "center",
+        "shadow": "#00000088",
         "show": "possession:away"
       },
       {
         "type": "box",
-        "x": 338,
-        "y": 69,
-        "w": 95,
-        "h": 13,
-        "fill": "{home.primary}|darken:0.52|alpha:0.82",
+        "x": 166,
+        "y": -29,
+        "w": 1,
+        "h": 18,
+        "fill": "#FFFFFF88",
+        "show": "possession:away && play_clock_available"
+      },
+      {
+        "type": "text",
+        "text": "{play_clock}",
+        "x": 170,
+        "y": -34,
+        "w": 59,
+        "h": 28,
+        "size": 20,
+        "weight": 900,
+        "stretch": "condensed",
+        "color": "#FFFFFF",
+        "align": "center",
+        "show": "possession:away && play_clock_available"
+      },
+      {
+        "type": "box",
+        "x": 330,
+        "y": -34,
+        "w": 282,
+        "h": 28,
+        "radius": 0,
+        "gradient": {
+          "top": "{home.primary}|lighten:0.14",
+          "bottom": "{home.primary}|darken:0.18"
+        },
+        "shadow": "#00000077",
         "show": "possession:home"
+      },
+      {
+        "type": "text",
+        "text": "{down_distance}",
+        "x": 342,
+        "y": -34,
+        "w": 194,
+        "h": 28,
+        "size": 20,
+        "weight": 900,
+        "stretch": "condensed",
+        "color": "#FFFFFF",
+        "align": "center",
+        "shadow": "#00000088",
+        "show": "possession:home"
+      },
+      {
+        "type": "box",
+        "x": 536,
+        "y": -29,
+        "w": 1,
+        "h": 18,
+        "fill": "#FFFFFF88",
+        "show": "possession:home && play_clock_available"
+      },
+      {
+        "type": "text",
+        "text": "{play_clock}",
+        "x": 540,
+        "y": -34,
+        "w": 59,
+        "h": 28,
+        "size": 20,
+        "weight": 900,
+        "stretch": "condensed",
+        "color": "#FFFFFF",
+        "align": "center",
+        "show": "possession:home && play_clock_available"
       },
       {
         "type": "timeouts",
@@ -173,7 +261,7 @@
       },
       {
         "type": "image",
-        "src": "{away.logo}",
+        "src": "assets/logos/{away.abbr}.png",
         "x": 0,
         "y": 0,
         "w": 151,
@@ -181,7 +269,7 @@
       },
       {
         "type": "image",
-        "src": "{home.logo}",
+        "src": "assets/logos/{home.abbr}.png",
         "x": 425,
         "y": 0,
         "w": 147,
@@ -189,49 +277,21 @@
       },
       {
         "type": "box",
-        "x": 214,
-        "y": -31,
-        "w": 244,
-        "h": 29,
-        "fill": "#221C18B8",
-        "show": "scrimmage"
-      },
-      {
-        "type": "text",
-        "text": "{down_distance}",
-        "x": 214,
-        "y": -31,
-        "w": 152,
-        "h": 29,
-        "size": 20,
-        "weight": 900,
-        "stretch": "condensed",
-        "color": "#FFFFFF",
-        "align": "center",
-        "show": "scrimmage"
+        "x": 147,
+        "y": 69,
+        "w": 6,
+        "h": 13,
+        "fill": "{away.primary}|lighten:0.1",
+        "show": "possession:away"
       },
       {
         "type": "box",
-        "x": 366,
-        "y": -26,
-        "w": 1,
-        "h": 19,
-        "fill": "#A7A7A788",
-        "show": "scrimmage"
-      },
-      {
-        "type": "text",
-        "text": "{ball_on}",
-        "x": 368,
-        "y": -31,
-        "w": 90,
-        "h": 29,
-        "size": 15,
-        "weight": 800,
-        "stretch": "condensed",
-        "color": "#E8E8E8",
-        "align": "left",
-        "show": "scrimmage"
+        "x": 427,
+        "y": 69,
+        "w": 6,
+        "h": 13,
+        "fill": "{home.primary}|lighten:0.1",
+        "show": "possession:home"
       }
     ],
     "lifecycle": {
@@ -257,10 +317,16 @@
     "duck_under_announcers": 0.35,
     "announcer_level": 0.02,
     "intro": [
-      { "title": "NFL on FOX Theme", "file": "music/NFL on FOX Theme Song.mp3" }
+      {
+        "title": "NFL on FOX Theme",
+        "file": "music/NFL on FOX Theme Song.mp3"
+      }
     ],
     "outro": [
-      { "title": "NFL on FOX Theme", "file": "music/NFL on FOX Theme Song.mp3" }
+      {
+        "title": "NFL on FOX Theme",
+        "file": "music/NFL on FOX Theme Song.mp3"
+      }
     ]
   },
   "animations": {
@@ -773,91 +839,28 @@
       "duration": 5.0,
       "layers": [
         {
-          "type": "box",
-          "x": 4,
-          "y": -72,
-          "w": 270,
-          "h": 58,
-          "radius": 0,
-          "gradient": {
-            "top": "#353638EE",
-            "bottom": "#171719F2"
-          },
-          "keyframes": [
-            {
-              "time": 0,
-              "x": -34,
-              "opacity": 0,
-              "crop_x": 0
-            },
-            {
-              "time": 0.28,
-              "x": 0,
-              "opacity": 1,
-              "crop_x": 1,
-              "ease": "cubic_out"
-            },
-            {
-              "time": 4.6,
-              "x": 0,
-              "opacity": 1
-            },
-            {
-              "time": 5.0,
-              "x": -20,
-              "opacity": 0,
-              "ease": "cubic_in"
-            }
-          ]
-        },
-        {
-          "type": "box",
-          "x": 4,
-          "y": -72,
-          "w": 6,
-          "h": 58,
-          "fill": "{team.primary}",
-          "keyframes": [
-            {
-              "time": 0,
-              "opacity": 0
-            },
-            {
-              "time": 0.22,
-              "opacity": 1,
-              "ease": "cubic_out"
-            },
-            {
-              "time": 4.7,
-              "opacity": 1
-            },
-            {
-              "time": 5.0,
-              "opacity": 0,
-              "ease": "cubic_in"
-            }
-          ]
-        },
-        {
           "type": "text",
+          "show": "event_team:away",
           "text": "{player.name}",
-          "x": 18,
-          "y": -69,
-          "w": 244,
-          "h": 28,
-          "size": 20,
+          "x": -224,
+          "y": 32,
+          "w": 214,
+          "h": 26,
+          "size": 18,
           "weight": 900,
           "stretch": "condensed",
+          "italic": true,
           "color": "#FFFFFF",
-          "align": "left",
+          "align": "right",
+          "shadow": "#000000CC",
           "keyframes": [
             {
-              "time": 0.12,
-              "x": -18,
+              "time": 0,
+              "x": 10,
               "opacity": 0
             },
             {
-              "time": 0.34,
+              "time": 0.25,
               "x": 0,
               "opacity": 1,
               "ease": "cubic_out"
@@ -875,24 +878,103 @@
         },
         {
           "type": "text",
+          "show": "event_team:away",
           "text": "{player.line}",
-          "x": 18,
-          "y": -42,
-          "w": 244,
-          "h": 24,
+          "x": -224,
+          "y": 56,
+          "w": 214,
+          "h": 22,
           "size": 15,
-          "weight": 700,
+          "weight": 900,
           "stretch": "condensed",
-          "color": "#E5E5E5",
-          "align": "left",
+          "italic": true,
+          "color": "#FFFFFF",
+          "align": "right",
+          "shadow": "#000000CC",
           "keyframes": [
             {
-              "time": 0.18,
-              "x": -14,
+              "time": 0.08,
+              "x": 10,
               "opacity": 0
             },
             {
-              "time": 0.4,
+              "time": 0.3,
+              "x": 0,
+              "opacity": 1,
+              "ease": "cubic_out"
+            },
+            {
+              "time": 4.65,
+              "opacity": 1
+            },
+            {
+              "time": 5.0,
+              "opacity": 0,
+              "ease": "cubic_in"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "show": "event_team:home",
+          "text": "{player.name}",
+          "x": 582,
+          "y": 32,
+          "w": 214,
+          "h": 26,
+          "size": 18,
+          "weight": 900,
+          "stretch": "condensed",
+          "italic": true,
+          "color": "#FFFFFF",
+          "align": "left",
+          "shadow": "#000000CC",
+          "keyframes": [
+            {
+              "time": 0,
+              "x": -10,
+              "opacity": 0
+            },
+            {
+              "time": 0.25,
+              "x": 0,
+              "opacity": 1,
+              "ease": "cubic_out"
+            },
+            {
+              "time": 4.65,
+              "opacity": 1
+            },
+            {
+              "time": 5.0,
+              "opacity": 0,
+              "ease": "cubic_in"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "show": "event_team:home",
+          "text": "{player.line}",
+          "x": 582,
+          "y": 56,
+          "w": 214,
+          "h": 22,
+          "size": 15,
+          "weight": 900,
+          "stretch": "condensed",
+          "italic": true,
+          "color": "#FFFFFF",
+          "align": "left",
+          "shadow": "#000000CC",
+          "keyframes": [
+            {
+              "time": 0.08,
+              "x": -10,
+              "opacity": 0
+            },
+            {
+              "time": 0.3,
               "x": 0,
               "opacity": 1,
               "ease": "cubic_out"

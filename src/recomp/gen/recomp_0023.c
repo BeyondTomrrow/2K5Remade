@@ -133959,6 +133959,8 @@ loc_003636B0: ;
 
 loc_003636C7: ;
     MEMF(esp + 4) = (float)fp_top(); fp_pop(); /* fstp */
+    /* NFL2K5-GENPATCH:DIAG_GAMECAST_STATVALUE */
+    { extern void nfl2k5_gamecast_stat_value(uint32_t table_slot, uint32_t field, uint32_t value_bits); nfl2k5_gamecast_stat_value(esi, edx, MEM32(esp + 4)); }
     esi = MEM32(esi + 0xAED66C);
     _fa = (uint32_t)(esi) & 0xFFFFFFFFu; _fb = (uint32_t)(6) & 0xFFFFFFFFu;
     _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp esi, 6 (32-bit) */
@@ -134362,6 +134364,8 @@ void sub_003639D0(void)
     ebp = g_seh_ebp; /* fpo_leaf: inherit caller's frame */
 
 loc_003639D0: ;
+    /* NFL2K5-GENPATCH:DIAG_GAMECAST_STATCTX */
+    { extern void nfl2k5_gamecast_stat_context(uint32_t context, uint32_t selector); nfl2k5_gamecast_stat_context(ecx, edx); }
     PUSH32(esp, esi);
     esi = ecx;
     PUSH32(esp, 0x003639D8u); RECOMP_ABI_CALL(0x00061C60u, sub_00061C60); /* call 0x00061C60 */

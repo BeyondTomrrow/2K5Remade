@@ -7,6 +7,221 @@
 /* Host yields in guest context must give up the guest CPU (RECOMP_GGL). */
 #include "xbox_ggl.h"
 #include "recomp_funcs.h"
+#include "nfl2k5_broadcast.h"
+
+/* FOX samples the same current-match player accessor as Gamecast, but from
+ * normal guest execution rather than the Gamecast renderer. The scope-zero
+ * descriptor at 543B38 calls 003216C0 -> 000CB240; scope 11 is season data.
+ * Guest callbacks must never run on the presenter or a Windows timer thread. */
+static int nfl2k5_qb_read(uint32_t address, void *out, size_t size)
+{
+    uint64_t end = (uint64_t)address + size;
+    if (!((address >= 0x10000u && end <= 0x10000000u) ||
+          (address >= 0x80000000u && end <= 0x90000000u)))
+        return 0;
+    __try {
+        memcpy(out, (const void *)((uintptr_t)address + g_xbox_mem_offset), size);
+        return 1;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return 0;
+    }
+}
+
+static uint32_t nfl2k5_qb_rd32(uint32_t address)
+{
+    uint32_t value = 0;
+    nfl2k5_qb_read(address, &value, sizeof value);
+    return value;
+}
+
+static int nfl2k5_guest_player_stat(uint32_t player, uint32_t field, int *out)
+{
+    uint32_t save_eax = g_eax, save_ebx = g_ebx, save_ecx = g_ecx, save_edx = g_edx;
+    uint32_t save_esi = g_esi, save_edi = g_edi, save_ebp = g_ebp, save_esp = g_esp;
+    uint32_t save_seh_ebp = g_seh_ebp;
+    int save_fp_top = g_fp_top, save_fp_cmp = g_fp_cmp, save_df = g_df;
+    uint16_t save_fp_cc = g_fp_cc, save_fp_control = g_fp_control_word;
+    double save_fp_stack[8];
+    RecompXmm save_xmm[8] = { g_xmm0, g_xmm1, g_xmm2, g_xmm3,
+                            g_xmm4, g_xmm5, g_xmm6, g_xmm7 };
+    double value;
+    int valid;
+    static unsigned abi_errors;
+
+    memcpy(save_fp_stack, g_fp_stack, sizeof save_fp_stack);
+    g_ecx = player;
+    g_edx = field;
+    PUSH32(g_esp, 0u);          /* Gamecast's actual current-match scope. */
+    PUSH32(g_esp, 0x003216D9u); /* Synthetic call frame, not a stack argument. */
+    RECOMP_ABI_CALL(0x000CB240u, sub_000CB240);
+    value = g_fp_stack[g_fp_top & 7];
+    valid = g_esp == save_esp && g_fp_top == ((save_fp_top + 7) & 7) &&
+            isfinite(value) && value >= -10000.0 && value <= 10000.0;
+    if (!valid && abi_errors++ < 4)
+        fprintf(stderr, "[LIVE-QB-ABI] field=%X esp=%08X expected=%08X fp=%d expected=%d value=%.3f\n",
+                field, g_esp, save_esp, g_fp_top, (save_fp_top + 7) & 7, value);
+    g_eax = save_eax; g_ebx = save_ebx; g_ecx = save_ecx; g_edx = save_edx;
+    g_esi = save_esi; g_edi = save_edi; g_ebp = save_ebp; g_esp = save_esp;
+    g_seh_ebp = save_seh_ebp; g_df = save_df;
+    memcpy(g_fp_stack, save_fp_stack, sizeof save_fp_stack);
+    g_fp_top = save_fp_top; g_fp_cmp = save_fp_cmp; g_fp_cc = save_fp_cc;
+    g_fp_control_word = save_fp_control;
+    g_xmm0 = save_xmm[0]; g_xmm1 = save_xmm[1]; g_xmm2 = save_xmm[2]; g_xmm3 = save_xmm[3];
+    g_xmm4 = save_xmm[4]; g_xmm5 = save_xmm[5]; g_xmm6 = save_xmm[6]; g_xmm7 = save_xmm[7];
+    if (valid) *out = (int)(value >= 0 ? value + 0.5 : value - 0.5);
+    return valid;
+}
+
+/* Ask the title's current depth chart for the first QB slot. 61CB0/61CD0
+ * feed the home/away substitution state into E7990 -> E7810, so a substituted
+ * QB is selected before he has thrown his first pass. Roster order and total
+ * passing attempts do not identify the player currently in that slot. */
+static int nfl2k5_guest_current_qb(int side, uint32_t table, unsigned count,
+                                  uint32_t *out)
+{
+    uint32_t chart = side == 0 ? 0x00B33A28u : 0x00B336F4u;
+    uint32_t slots = nfl2k5_qb_rd32(chart + 0x9Cu);
+    unsigned char index = 0xFFu, position;
+    uint32_t save_eax = g_eax, save_ebx = g_ebx, save_ecx = g_ecx, save_edx = g_edx;
+    uint32_t save_esi = g_esi, save_edi = g_edi, save_ebp = g_ebp, save_esp = g_esp;
+    uint32_t save_seh_ebp = g_seh_ebp;
+    int save_fp_top = g_fp_top, save_fp_cmp = g_fp_cmp, save_df = g_df;
+    uint16_t save_fp_cc = g_fp_cc, save_fp_control = g_fp_control_word;
+    double save_fp_stack[8];
+    RecompXmm save_xmm[8] = { g_xmm0, g_xmm1, g_xmm2, g_xmm3,
+                            g_xmm4, g_xmm5, g_xmm6, g_xmm7 };
+    uint32_t player;
+    unsigned i;
+    int valid, found = 0;
+    static unsigned abi_errors;
+
+    /* E80D0 initializes chart+0 from the side's match roster. A missing chart
+     * or depth slot during initialization is retried on the next sample. */
+    if (!count || nfl2k5_qb_rd32(chart) != table || !slots ||
+        !nfl2k5_qb_read(slots, &index, sizeof index) || index >= count)
+        return 0;
+    memcpy(save_fp_stack, g_fp_stack, sizeof save_fp_stack);
+    g_ecx = 0u; /* QB position: 221EE0/510208 maps this to depth category 0. */
+    g_edx = 0u; /* First slot, with live substitutions applied by E7810. */
+    if (side == 0) {
+        PUSH32(g_esp, 0x0005A22Au);
+        RECOMP_ABI_CALL(0x00061CD0u, sub_00061CD0);
+    } else {
+        PUSH32(g_esp, 0x0005A231u);
+        RECOMP_ABI_CALL(0x00061CB0u, sub_00061CB0);
+    }
+    player = g_eax;
+    valid = g_esp == save_esp && g_fp_top == save_fp_top;
+    if (!valid && abi_errors++ < 4)
+        fprintf(stderr, "[LIVE-QB-SELECT-ABI] side=%d esp=%08X expected=%08X fp=%d expected=%d\n",
+                side, g_esp, save_esp, g_fp_top, save_fp_top);
+    g_eax = save_eax; g_ebx = save_ebx; g_ecx = save_ecx; g_edx = save_edx;
+    g_esi = save_esi; g_edi = save_edi; g_ebp = save_ebp; g_esp = save_esp;
+    g_seh_ebp = save_seh_ebp; g_df = save_df;
+    memcpy(g_fp_stack, save_fp_stack, sizeof save_fp_stack);
+    g_fp_top = save_fp_top; g_fp_cmp = save_fp_cmp; g_fp_cc = save_fp_cc;
+    g_fp_control_word = save_fp_control;
+    g_xmm0 = save_xmm[0]; g_xmm1 = save_xmm[1]; g_xmm2 = save_xmm[2]; g_xmm3 = save_xmm[3];
+    g_xmm4 = save_xmm[4]; g_xmm5 = save_xmm[5]; g_xmm6 = save_xmm[6]; g_xmm7 = save_xmm[7];
+    if (!valid || !player ||
+        !nfl2k5_qb_read(player + 0x35u, &position, sizeof position) || position != 0)
+        return 0;
+    for (i = 0; i < count; ++i) {
+        if (nfl2k5_qb_rd32(table + i * 4u) == player) { found = 1; break; }
+    }
+    if (!found || !nfl2k5_qb_rd32(nfl2k5_qb_rd32(player + 0x30u))) return 0;
+    *out = player;
+    return 1;
+}
+
+static int nfl2k5_guest_text(uint32_t address, char *out, size_t capacity)
+{
+    size_t i;
+    unsigned char first[2];
+    int wide;
+    if (!out || capacity < 2 || !nfl2k5_qb_read(address, first, sizeof first))
+        return 0;
+    wide = first[1] == 0;
+    for (i = 0; i + 1 < capacity; ++i) {
+        unsigned char ch;
+        if (!nfl2k5_qb_read(address + (uint32_t)i * (wide ? 2u : 1u), &ch, 1))
+            return 0;
+        if (!ch) break;
+        if (ch < 32 || ch >= 127) return 0;
+        out[i] = (char)ch;
+    }
+    out[i] = 0;
+    return i != 0;
+}
+
+static int nfl2k5_guest_player_name(uint32_t player, char *out, size_t capacity)
+{
+    char first[32] = {0}, last[40] = {0};
+    if (!nfl2k5_guest_text(nfl2k5_qb_rd32(player + 0x10u), first, sizeof first) ||
+        !nfl2k5_guest_text(nfl2k5_qb_rd32(player + 0x14u), last, sizeof last))
+        return 0;
+    _snprintf_s(out, capacity, _TRUNCATE, "%c. %s", first[0], last);
+    return 1;
+}
+
+void nfl2k5_live_qb_guest_tick(void)
+{
+    static DWORD last_sample;
+    static volatile LONG sampling;
+    static int was_match;
+    static unsigned diagnostics;
+    DWORD now = GetTickCount();
+    int side;
+    uint32_t period;
+    if (now - last_sample < 500u || InterlockedCompareExchange(&sampling, 1, 0))
+        return;
+    last_sample = now;
+    period = nfl2k5_qb_rd32(0x00E602C4u);
+    if (period == 0 || period > 5) {
+        if (was_match) {
+            nfl2k5_broadcast_live_qb_reset();
+        }
+        was_match = 0;
+        InterlockedExchange(&sampling, 0);
+        return;
+    }
+    was_match = 1;
+    for (side = 0; side < 2; ++side) {
+        /* Marker 1 selects E5FC20 (home); marker 2 selects E5FC60 (away)
+         * in sub_0007E0A6. These tables are NOT in broadcast side order. */
+        uint32_t table = side == 0 ? 0x00B30A58u : 0x00B30864u;
+        uint32_t count_address = side == 0 ? 0x00B30B74u : 0x00B30980u;
+        unsigned char count = 0;
+        uint32_t player = 0;
+        Nfl2k5PlayerStat stat;
+        char name[48];
+        nfl2k5_qb_read(count_address, &count, sizeof count);
+        if (count > 71u || !nfl2k5_guest_current_qb(side, table, count, &player)) continue;
+        memset(&stat, 0, sizeof stat);
+        if (!nfl2k5_guest_player_name(player, name, sizeof name) ||
+            !nfl2k5_guest_player_stat(player, 0x04u, &stat.completions) ||
+            !nfl2k5_guest_player_stat(player, 0x23u, &stat.attempts) ||
+            !nfl2k5_guest_player_stat(player, 0x4Cu, &stat.passing_yards) ||
+            !nfl2k5_guest_player_stat(player, 0x40u, &stat.passing_touchdowns) ||
+            !nfl2k5_guest_player_stat(player, 0x16u, &stat.interceptions))
+            continue;
+        if (stat.completions < 0 || stat.attempts < stat.completions || stat.attempts > 200 ||
+            stat.passing_yards < -1000 || stat.passing_yards > 3000 ||
+            stat.passing_touchdowns < 0 || stat.passing_touchdowns > 50 ||
+            stat.interceptions < 0 || stat.interceptions > 50)
+            continue;
+        stat.kind = NFL2K5_STAT_QB;
+        stat.player_name = name;
+        stat.display_seconds = 5.0f;
+        nfl2k5_broadcast_live_qb_sample(&stat, side);
+        if (diagnostics++ < 2)
+            fprintf(stderr, "[LIVE-QB-SOURCE] side=%d player=%08X %s %d/%d %d YDS TD=%d INT=%d\n",
+                    side, player, name, stat.completions, stat.attempts, stat.passing_yards,
+                    stat.passing_touchdowns, stat.interceptions);
+    }
+    InterlockedExchange(&sampling, 0);
+}
+
 /* Boot-only AC97 channel reset acknowledgement. This does not synthesize audio. */
 void nfl2k5_ack_ac97_reset(uint32_t address)
 {
@@ -25,6 +240,118 @@ void nfl2k5_trace_phase_gate(uint32_t value, uint32_t caller)
     static unsigned count;
     if (count++ < 64)
         fprintf(stderr, "[PHASE] B04EC8=%u caller=%08X\n", value, caller);
+}
+
+/* Low-overhead Gamecast Live row probe. sub_00171910 renders many list types,
+ * so record one row for each callback/style pair.  Passing columns share a
+ * callback but use separate style records; keying only on the callback hid
+ * YDS, TD, and INT after the first three numeric columns.  This remains
+ * bounded and never emits per-frame render-path output. */
+void nfl2k5_gamecast_row_probe(uint32_t list, uint32_t row,
+                               uint32_t index, uint32_t callback)
+{
+    enum { PROBE_SLOTS = 128 };
+    static volatile LONG seen[PROBE_SLOTS];
+    uint32_t style = MEM32(row + 0x00);
+    LONG key = (LONG)(callback ^ (style * 0x9E3779B9u));
+    unsigned slot = ((unsigned)key >> 1) & (PROBE_SLOTS - 1);
+
+    /* The renderer can invoke this concurrently.  One lock-free slot claims
+     * each observed callback/style pair; a collision merely loses optional
+     * diagnostic output and can never stall a frame. */
+    if (key == 0 || InterlockedCompareExchange(&seen[slot], key, 0) != 0)
+        return;
+
+    fprintf(stderr,
+            "[GAMECAST-ROW] cb=%08X list=%08X row=%08X index=%u "
+            "w=%08X,%08X,%08X,%08X,%08X,%08X,%08X,%08X,%08X,%08X,%08X "
+            "method=%08X/%08X/%08X/%08X\n",
+            callback, list, row, index,
+            MEM32(row + 0x00), MEM32(row + 0x04), MEM32(row + 0x08),
+            MEM32(row + 0x0C), MEM32(row + 0x10), MEM32(row + 0x14),
+            MEM32(row + 0x18), MEM32(row + 0x1C), MEM32(row + 0x20),
+            MEM32(row + 0x24), MEM32(row + 0x28),
+            MEM32(MEM32(row + 0x00) + 0x08), MEM32(MEM32(row + 0x00) + 0x0C),
+            MEM32(MEM32(row + 0x00) + 0x10), MEM32(MEM32(row + 0x00) + 0x14));
+}
+
+void nfl2k5_gamecast_text_probe(uint32_t widget, uint32_t value)
+{
+    enum { MAX_VALUES = 32 };
+    static uint32_t seen[MAX_VALUES];
+    static LONG seen_count;
+    LONG count = seen_count;
+    LONG i;
+    int j;
+    char ascii[33];
+
+    for (i = 0; i < count && i < MAX_VALUES; ++i)
+        if (seen[i] == value)
+            return;
+    i = InterlockedIncrement(&seen_count) - 1;
+    if (i < 0 || i >= MAX_VALUES)
+        return;
+    seen[i] = value;
+    for (j = 0; j < 32; ++j) {
+        unsigned char ch = MEM8(value + (uint32_t)j);
+        ascii[j] = (ch >= 32 && ch < 127) ? (char)ch : '.';
+    }
+    ascii[32] = 0;
+    fprintf(stderr,
+            "[GAMECAST-TEXT] widget=%08X value=%08X "
+            "w=%08X,%08X,%08X,%08X,%08X,%08X,%08X,%08X ascii='%s'\n",
+            widget, value,
+            MEM32(value + 0x00), MEM32(value + 0x04),
+            MEM32(value + 0x08), MEM32(value + 0x0C),
+            MEM32(value + 0x10), MEM32(value + 0x14),
+            MEM32(value + 0x18), MEM32(value + 0x1C), ascii);
+}
+
+/* 003639D0 is the Gamecast text adapter behind the player-name widget.
+ * Capture a bounded sample of its model context and selector so the source
+ * stat record can be mapped without observing D3D text output. */
+void nfl2k5_gamecast_stat_context(uint32_t context, uint32_t selector)
+{
+    enum { MAX_SAMPLES = 24 };
+    static LONG samples;
+    LONG n = InterlockedIncrement(&samples);
+    if (n > MAX_SAMPLES)
+        return;
+    {
+        uint32_t player = MEM32(0x00B30A58u + ((uint32_t)(n - 1) * 4u));
+        fprintf(stderr,
+                "[GAMECAST-STATCTX] idx=%ld ctx=%08X sel=%08X player=%08X "
+                "p=%08X,%08X,%08X,%08X,%08X,%08X,%08X,%08X,"
+                "%08X,%08X,%08X,%08X\n",
+                n - 1, context, selector, player,
+                MEM32(player + 0x00), MEM32(player + 0x04),
+                MEM32(player + 0x08), MEM32(player + 0x0C),
+                MEM32(player + 0x10), MEM32(player + 0x14),
+                MEM32(player + 0x18), MEM32(player + 0x1C),
+                MEM32(player + 0x20), MEM32(player + 0x24),
+                MEM32(player + 0x28), MEM32(player + 0x2C));
+    }
+}
+
+void nfl2k5_gamecast_stat_value(uint32_t table_slot, uint32_t field,
+                                 uint32_t value_bits)
+{
+    enum { MAX_SAMPLES = 24 };
+    static LONG samples;
+    LONG n = InterlockedIncrement(&samples);
+    uint32_t index;
+    uint32_t player;
+    if (n > MAX_SAMPLES || table_slot < 0x00AED668u ||
+        table_slot >= 0x00AED668u + MAX_SAMPLES * 12u)
+        return;
+    index = (table_slot - 0x00AED668u) / 12u;
+    player = MEM32(0x00B30A58u + index * 4u);
+    fprintf(stderr,
+            "[GAMECAST-STATVALUE] idx=%u player=%08X field=%08X fmt=%08X raw=%08X "
+            "player=%08X,%08X,%08X,%08X,%08X,%08X\n",
+            index, player, field, MEM32(table_slot + 4), value_bits,
+            MEM32(player + 0x00), MEM32(player + 0x04), MEM32(player + 0x08),
+            MEM32(player + 0x0C), MEM32(player + 0x10), MEM32(player + 0x14));
 }
 
 /* The frontend scheduler runs on a worker thread.  Keep its trace entirely

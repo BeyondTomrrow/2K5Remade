@@ -212,6 +212,7 @@ static std::string upper(std::string s) { for (auto &c : s) c = (char)toupper((u
  * Globals (2K5 Mod Studio: nfl2k5_overtime.py, nfl2k5_scorebug_runtime.py,
  * nfl2k5_uniform_choice.py):
  *   E6028C -> clock object, +0x10 game clock (float seconds)
+ *   E60294 -> scrimmage-countdown object, +0x10 play clock (float seconds)
  *   E602B0 period length (float seconds)      E602C4 period 1..4, 5+ = OT
  *   E602B4 phase: 0 pregame/toss, 1 safety kick, 2 kickoff, 3 PAT, 4 scrimmage
  *   E5FC20 home team object, E5FC60 away; +8 -> score object {points, timeouts}
@@ -246,7 +247,7 @@ static float rdf(uint32_t va) { float v = 0; gread(va, &v, 4); return v; }
 struct TeamState { int score = 0, timeouts = 0; std::string abbr; };
 struct GameState {
     bool valid = false;
-    int period = 0, phase = -1, down = 0, poss = 0;   /* poss: 0 none, 1 away, 2 home */
+    int period = 0, phase = -1, down = 0, poss = 0, play_clock = -1;   /* poss: 0 none, 1 away, 2 home */
     float clock = 0, period_len = 0, ball = 0, line = 0;
     TeamState t[2];                                     /* 0 away, 1 home */
 };
@@ -295,6 +296,13 @@ static bool read_state(GameState &g)
         g.ball = rdf(ds + 0x18);
         g.line = rdf(ds + 0x28);
     }
+    /* This is a distinct countdown from the period clock: native captures
+     * show E60294+10 descending once per second during phase 4 and resetting
+     * after the snap.  The television clock rounds partial seconds upward. */
+    uint32_t play_timer = rd32(0x00E60294u);
+    float play_seconds = play_timer ? rdf(play_timer + 0x10) : -1.0f;
+    if (g.phase == 4 && play_seconds >= 0.0f && play_seconds <= 99.0f)
+        g.play_clock = (int)std::ceil(play_seconds);
     g.valid = true;
     return true;
 }
@@ -376,7 +384,7 @@ static void publish_broadcast_state(const GameState &g)
     Nfl2k5BroadcastState out{};
     out.valid = g.valid ? 1 : 0;
     out.possession = g.poss; out.quarter = g.period; out.game_clock = g.clock;
-    out.play_clock = -1; out.down = g.down; out.phase = g.phase;
+    out.play_clock = g.play_clock; out.down = g.down; out.phase = g.phase;
     out.distance = (int)lroundf(fabsf(g.line - g.ball) / 91.44f);
     int yard = (int)lroundf(std::max(0.0f, std::min(100.0f, g.ball / 91.44f)));
     out.ball_on = std::min(yard, 100 - yard);
@@ -870,6 +878,22 @@ static std::mutex s_queue_lock;
 static ActiveAnim s_anim;
 static bool s_anim_on;
 
+struct LiveQbSample {
+    PlayerStat player;
+    uint64_t revision = 0;
+};
+static std::mutex s_live_qb_lock;
+static LiveQbSample s_live_qb[2];
+static uint64_t s_live_qb_revision;
+/* The following lifecycle state belongs exclusively to the HUD thread. */
+static Event s_live_qb_event;
+static uint64_t s_live_qb_display_revision;
+static bool s_live_qb_visible;
+static uint32_t s_live_qb_match_clock;
+static std::string s_live_qb_match_teams;
+static bool s_live_qb_match_valid;
+static int s_live_qb_match_period;
+
 static void queue_event(Event ev)
 {
     std::lock_guard<std::mutex> lock(s_queue_lock);
@@ -889,6 +913,24 @@ static bool queue_empty()
 {
     std::lock_guard<std::mutex> lock(s_queue_lock);
     return s_queue.empty();
+}
+
+/* Roster records use full names ("Quincy Carter"); FOX's compact stat
+ * treatment uses the initial plus surname ("Q. Carter").  Keep a string
+ * that is already abbreviated intact, so the presentation boundary can also
+ * accept a title-provided display name without applying the conversion twice. */
+static std::string broadcast_player_name(const char *full_name)
+{
+    std::string name = full_name ? full_name : "";
+    size_t first = name.find_first_not_of(" \t\r\n");
+    if (first == std::string::npos) return "";
+    size_t last = name.find_last_not_of(" \t\r\n");
+    name = name.substr(first, last - first + 1);
+    if (name.size() >= 2 && name[1] == '.') return name;
+    size_t split = name.find_last_of(" \t");
+    if (split == std::string::npos || split == 0 || split + 1 >= name.size())
+        return name;
+    return std::string(1, name[0]) + ". " + name.substr(split + 1);
 }
 
 static void clear_events()
@@ -949,6 +991,20 @@ extern "C" void nfl2k5_broadcast_event(Nfl2k5BroadcastEvent event, int team)
     if (name) queue_event({ name, team == AWAY ? AWAY : HOME, "" });
 }
 
+static PlayerStat copy_player_stat(const Nfl2k5PlayerStat &s)
+{
+    PlayerStat out;
+    out.kind = s.kind; out.name = broadcast_player_name(s.player_name);
+#define COPY_STAT(F) out.F = s.F
+    COPY_STAT(completions); COPY_STAT(attempts); COPY_STAT(passing_yards); COPY_STAT(passing_touchdowns); COPY_STAT(interceptions);
+    COPY_STAT(carries); COPY_STAT(rushing_yards); COPY_STAT(rushing_touchdowns);
+    COPY_STAT(receptions); COPY_STAT(receiving_yards); COPY_STAT(receiving_touchdowns);
+    COPY_STAT(tackles); COPY_STAT(sacks); COPY_STAT(defensive_interceptions);
+    COPY_STAT(field_goals_made); COPY_STAT(field_goals_attempted); COPY_STAT(longest_field_goal);
+#undef COPY_STAT
+    return out;
+}
+
 extern "C" void nfl2k5_broadcast_player_stat(const Nfl2k5PlayerStat *s, int team)
 {
     if (!s || !s->player_name) return;
@@ -956,15 +1012,75 @@ extern "C" void nfl2k5_broadcast_player_stat(const Nfl2k5PlayerStat *s, int team
     ev.name = "player_stat";
     ev.team = team == AWAY ? AWAY : HOME;
     ev.requested_duration = s->display_seconds > 0 ? s->display_seconds : 5.0;
-    ev.player.kind = s->kind; ev.player.name = s->player_name;
-#define COPY_STAT(F) ev.player.F = s->F
-    COPY_STAT(completions); COPY_STAT(attempts); COPY_STAT(passing_yards); COPY_STAT(passing_touchdowns); COPY_STAT(interceptions);
-    COPY_STAT(carries); COPY_STAT(rushing_yards); COPY_STAT(rushing_touchdowns);
-    COPY_STAT(receptions); COPY_STAT(receiving_yards); COPY_STAT(receiving_touchdowns);
-    COPY_STAT(tackles); COPY_STAT(sacks); COPY_STAT(defensive_interceptions);
-    COPY_STAT(field_goals_made); COPY_STAT(field_goals_attempted); COPY_STAT(longest_field_goal);
-#undef COPY_STAT
+    ev.player = copy_player_stat(*s);
     queue_event(std::move(ev));
+}
+
+extern "C" void nfl2k5_broadcast_live_qb_sample(const Nfl2k5PlayerStat *s, int team)
+{
+    if (!s || s->kind != NFL2K5_STAT_QB || !s->player_name || team < AWAY || team > HOME)
+        return;
+    PlayerStat next = copy_player_stat(*s);
+    if (next.name.empty()) return;
+    std::lock_guard<std::mutex> lock(s_live_qb_lock);
+    LiveQbSample &sample = s_live_qb[team];
+    const PlayerStat &old = sample.player;
+    if (!sample.revision || old.name != next.name || old.completions != next.completions ||
+        old.attempts != next.attempts || old.passing_yards != next.passing_yards ||
+        old.passing_touchdowns != next.passing_touchdowns || old.interceptions != next.interceptions) {
+        sample.player = std::move(next);
+        sample.revision = ++s_live_qb_revision;
+    }
+}
+
+extern "C" void nfl2k5_broadcast_live_qb_reset(void)
+{
+    std::lock_guard<std::mutex> lock(s_live_qb_lock);
+    s_live_qb[AWAY] = LiveQbSample();
+    s_live_qb[HOME] = LiveQbSample();
+}
+
+/* The automatic QB is a persistent scorebug component, not a timed insert.
+ * Its copied sample follows possession and remains visible until the live
+ * camera is hidden. It never occupies the broadcast animation queue. */
+static void service_live_qb(const GameState &g, bool visible, const JVal *anims)
+{
+    uint32_t clock = g.valid ? rd32(0x00E6028Cu) : 0;
+    std::string teams = g.t[AWAY].abbr + "|" + g.t[HOME].abbr;
+    bool new_match = g.valid && s_live_qb_match_valid &&
+                     (clock != s_live_qb_match_clock || teams != s_live_qb_match_teams ||
+                      (g.period == 0 && s_live_qb_match_period > 0));
+    if ((!g.valid && s_live_qb_match_valid) || new_match) {
+        nfl2k5_broadcast_live_qb_reset();
+        s_live_qb_display_revision = 0;
+    }
+    s_live_qb_match_valid = g.valid;
+    s_live_qb_match_clock = clock;
+    s_live_qb_match_teams = std::move(teams);
+    s_live_qb_match_period = g.period;
+    s_live_qb_visible = false;
+    if (!g.valid || !visible || !anims || !anims->get("player_stat") ||
+        g.poss < 1 || g.poss > 2)
+        return;
+    int side = g.poss - 1;
+    LiveQbSample sample;
+    {
+        std::lock_guard<std::mutex> lock(s_live_qb_lock);
+        sample = s_live_qb[side];
+    }
+    if (!sample.revision || sample.player.name.empty())
+        return;
+    if (sample.revision != s_live_qb_display_revision || s_live_qb_event.team != side) {
+        s_live_qb_event.name = "player_stat";
+        s_live_qb_event.team = side;
+        s_live_qb_event.player = std::move(sample.player);
+        s_live_qb_display_revision = sample.revision;
+        const PlayerStat &p = s_live_qb_event.player;
+        fprintf(stderr, "[LIVE-QB] %s %d/%d %d YDS TD=%d INT=%d side=%d possession=%d persistent=1\n",
+                p.name.c_str(), p.completions, p.attempts, p.passing_yards,
+                p.passing_touchdowns, p.interceptions, side, g.poss);
+    }
+    s_live_qb_visible = true;
 }
 
 /* ======================================================================
@@ -1132,7 +1248,20 @@ static std::string var(const Ctx &c, const std::string &name)
             if (k == "line") {
                 char b[160];
                 switch (p.kind) {
-                case NFL2K5_STAT_QB: snprintf(b, sizeof b, "%d/%d  %d YDS  %d TD  %d INT", p.completions, p.attempts, p.passing_yards, p.passing_touchdowns, p.interceptions); break;
+                case NFL2K5_STAT_QB:
+                    /* FOX's compact passer insert leads with completion/attempt
+                     * and yards.  Touchdowns and interceptions are contextual:
+                     * leave either field out until the title reports a nonzero
+                     * total, rather than displaying invented zero-value labels. */
+                    snprintf(b, sizeof b, "%d/%d  %d YDS", p.completions, p.attempts,
+                             p.passing_yards);
+                    if (p.passing_touchdowns)
+                        snprintf(b + strlen(b), sizeof b - strlen(b), "  %d TD",
+                                 p.passing_touchdowns);
+                    if (p.interceptions)
+                        snprintf(b + strlen(b), sizeof b - strlen(b), "  %d INT",
+                                 p.interceptions);
+                    break;
                 case NFL2K5_STAT_RB: snprintf(b, sizeof b, "%d CAR  %d YDS  %d TD", p.carries, p.rushing_yards, p.rushing_touchdowns); break;
                 case NFL2K5_STAT_RECEIVER: snprintf(b, sizeof b, "%d REC  %d YDS  %d TD", p.receptions, p.receiving_yards, p.receiving_touchdowns); break;
                 case NFL2K5_STAT_DEFENSE: snprintf(b, sizeof b, "%d TKL  %d SACK  %d INT", p.tackles, p.sacks, p.defensive_interceptions); break;
@@ -1147,6 +1276,12 @@ static std::string var(const Ctx &c, const std::string &name)
     }
     if (name == "down_distance") return down_distance(g);
     if (name == "ball_on") return ball_position(g);
+    if (name == "play_clock") {
+        if (g.play_clock < 0) return "";
+        char buf[8];
+        snprintf(buf, sizeof buf, ":%02d", g.play_clock);
+        return buf;
+    }
     if (name == "quarter") {
         if (g.period == 0) return "";
         if (is_final(g)) return g.period > 4 ? "F/OT" : "FINAL";
@@ -1212,9 +1347,18 @@ static D2D1_COLOR_F color(const Ctx &c, const std::string &spec, float extra_alp
 static bool shown(const Ctx &c, const std::string &cond)
 {
     if (cond.empty() || cond == "always") return true;
+    size_t and_at = cond.find(" && ");
+    if (and_at != std::string::npos)
+        return shown(c, cond.substr(0, and_at)) && shown(c, cond.substr(and_at + 4));
     const GameState &g = *c.g;
     if (cond == "possession:away") return g.phase == 4 && g.poss == 1;
     if (cond == "possession:home") return g.phase == 4 && g.poss == 2;
+    /* The player-stat event carries its own side.  Keeping this separate
+     * from current possession lets a completed-play insert remain on the
+     * correct side during the handoff to a kickoff or a turnover. */
+    if (cond == "event_team:away") return c.ev && c.ev->team == AWAY;
+    if (cond == "event_team:home") return c.ev && c.ev->team == HOME;
+    if (cond == "play_clock_available") return c.g && c.g->play_clock >= 0;
     if (cond == "scrimmage") return g.phase == 4;
     if (cond == "not_scrimmage") return g.phase != 4;
     if (cond == "final") return is_final(g);
@@ -1508,7 +1652,7 @@ static double s_last_t;
 static std::string s_last_sig;
 static bool s_game_started, s_outro_played, s_intro_active;
 static double s_invalid_since;
-static bool s_test, s_log;
+static bool s_test, s_log, s_probe;
 static std::string s_test_event;
 
 static bool custom_active() { int p = s_sel_pkg; return p > 0 && p < (int)s_pkgs.size(); }
@@ -1779,6 +1923,32 @@ static int hud_callback(const XboxHudFrame *f, XboxHudImage *img)
         g.t[1].score = 0; g.t[1].timeouts = 3; g.t[1].abbr = "NE";
     }
     publish_broadcast_state(g);
+    if (s_probe && g.valid && g.phase == 4) {
+        static DWORD last_probe;
+        DWORD now = GetTickCount();
+        if (now - last_probe >= 1000) {
+            last_probe = now;
+            /* Candidate countdown/state globals are emitted as both raw
+             * words and floats.  A verified producer must visibly decrease
+             * on consecutive samples before FOX consumes it. */
+            fprintf(stderr, "[PRES-PROBE] E60260..FC");
+            for (uint32_t a = 0x00E60260u; a <= 0x00E602FCu; a += 4)
+                fprintf(stderr, " %08X=%08X/%.3g", a, rd32(a), rdf(a));
+            /* E6028C/E60290/E60294 are adjacent timer-like objects created
+             * together.  The stock HUD uses E6028C+10 for the game clock;
+             * inspect the same compact header in its siblings before binding
+             * any of them as FOX's play clock. */
+            for (uint32_t root : { 0x00E6028Cu, 0x00E60290u, 0x00E60294u }) {
+                uint32_t object = rd32(root);
+                fprintf(stderr, " [%08X->%08X", root, object);
+                for (uint32_t off = 0; object && off <= 0x18; off += 4)
+                    fprintf(stderr, " +%02X=%08X/%.3g", off,
+                            rd32(object + off), rdf(object + off));
+                fprintf(stderr, "]");
+            }
+            fprintf(stderr, "\n");
+        }
+    }
     bool native_on = s_native_visible && GetTickCount() - s_native_tick < 300;
     /* NFL 2K5's play-call overlay has its own four-state controller.  The
      * state is written by sub_00071B50 and consumed every frame by
@@ -1786,6 +1956,11 @@ static int hud_callback(const XboxHudFrame *f, XboxHudImage *img)
      * visible and transition states.  The stock ESPN bug is part of that
      * screen, but modern broadcast bugs should leave the play cards clear. */
     bool playcall_on = rd32(0x00B38C30u) != 0;
+    /* navigation_pause_notitle's enter (sub_00278310) sets AC7444;
+     * its leave (sub_00270600) clears it, and sub_00270BA0 exposes the
+     * same value. Gamecast is a nested pause screen, so a retained phase 4
+     * is not sufficient evidence of a live camera. */
+    bool pause_on = rd32(0x00AC7444u) != 0;
     if (playcall_on) native_on = false;
     if (s_test) native_on = true;
 
@@ -1862,12 +2037,15 @@ static int hud_callback(const XboxHudFrame *f, XboxHudImage *img)
      * is not raised consistently by NFL 2K5's live scrimmage cameras. FOX
      * therefore follows verified live game phase too, while the play-call
      * controller remains the authoritative hide signal. */
-    bool fox_live = g.valid && !playcall_on && (g.phase == 4 || native_on);
+    bool fox_live = g.valid && !playcall_on && !pause_on && (g.phase == 4 || native_on);
     update_bug_lifecycle(sb, fox_live, dt);
 
     /* Next animation. */
     const JVal *anims = pkg.root.get("animations");
     if (s_anim_on && t - s_anim.t0 > s_anim.duration) s_anim_on = false;
+    bool qb_live = fox_live && g.phase == 4 && g.period > 0 && g.clock > 0.0f &&
+                   g.down >= 1 && g.down <= 4;
+    service_live_qb(g, qb_live, anims);
     Event ev;
     while (!s_anim_on && pop_event(ev)) {
         const JVal *def = anims ? anims->get(ev.name.c_str()) : nullptr;
@@ -1889,14 +2067,19 @@ static int hud_callback(const XboxHudFrame *f, XboxHudImage *img)
     const JVal *pl = sb->get("placement");
     float cw = cv ? (float)cv->num("width", 1000) : 1000, ch = cv ? (float)cv->num("height", 56) : 56;
     float top = fullscreen ? 0.0f : cv ? (float)cv->num("overflow_top", 70) : 70;
+    /* FOX's possession tab and its contextual insert can extend past the
+     * scorebug's logo edges.  Reserve that transparent space in the HUD
+     * image rather than clipping the broadcast graphic at canvas.width. */
+    float left = fullscreen ? 0.0f : cv ? (float)cv->num("overflow_left", 0) : 0;
+    float right = fullscreen ? 0.0f : cv ? (float)cv->num("overflow_right", 0) : 0;
     float u = fullscreen ? std::min(f->game_w / cw, f->game_h / ch)
                          : f->game_w * (pl ? (float)pl->num("width", 0.92) : 0.92f) / cw;
     float cx = f->game_x + f->game_w * (fullscreen ? 0.5f : pl ? (float)pl->num("center_x", 0.5) : 0.5f);
     float cy = f->game_y + f->game_h * (fullscreen ? 0.5f : pl ? (float)pl->num("center_y", 0.915) : 0.915f);
     const int pad = fullscreen ? 0 : 4;
-    int W = fullscreen ? f->game_w : (int)ceilf(cw * u) + pad * 2;
+    int W = fullscreen ? f->game_w : (int)ceilf((cw + left + right) * u) + pad * 2;
     int H = fullscreen ? f->game_h : (int)ceilf((ch + top) * u) + pad * 2;
-    int X = fullscreen ? f->game_x : (int)floorf(cx - cw * u / 2) - pad;
+    int X = fullscreen ? f->game_x : (int)floorf(cx - cw * u / 2 - left * u) - pad;
     int Y = fullscreen ? f->game_y : (int)floorf(cy - ch * u / 2 - top * u) - pad;
     if (W < 8 || H < 8 || W > 16384 || H > 4096) return 0;
 
@@ -1913,6 +2096,12 @@ static int hud_callback(const XboxHudFrame *f, XboxHudImage *img)
              var(c, "down_distance").c_str(), var(c, "quarter").c_str(), (g.t[0].abbr + g.t[1].abbr).c_str(),
              g.t[0].score, g.t[1].score, g.t[0].timeouts, g.t[1].timeouts, g.poss * 10 + g.phase);
     std::string sig = sigbuf;
+    /* A finished/cancelled card must clear its pixels even if the match
+     * clock is stopped and none of the scorebug fields changed. */
+    sig += s_anim_on ? "|animation" : "|noanimation";
+    bool draw_live_qb = s_live_qb_visible && !fullscreen;
+    sig += draw_live_qb ? "|qb:" + std::to_string(s_live_qb_display_revision) +
+                         ":" + std::to_string(s_live_qb_event.team) : "|noqb";
     bool changed = s_anim_on || sig != s_last_sig || R.w != W || R.h != H;
     s_last_sig = sig;
 
@@ -1936,7 +2125,7 @@ static int hud_callback(const XboxHudFrame *f, XboxHudImage *img)
             base = D2D1::Matrix3x2F::Scale(u, u) * D2D1::Matrix3x2F::Translation(ox, oy);
         } else {
             base = D2D1::Matrix3x2F::Scale(u, u) *
-                D2D1::Matrix3x2F::Translation((float)pad, (float)pad + (top + life_y) * u);
+                D2D1::Matrix3x2F::Translation((float)pad + left * u, (float)pad + (top + life_y) * u);
         }
         if (!fullscreen && life_scale != 1.0f)
             base = D2D1::Matrix3x2F::Scale(life_scale, life_scale, D2D1::Point2F(cw * 0.5f, ch * 0.5f)) * base;
@@ -1944,6 +2133,16 @@ static int hud_callback(const XboxHudFrame *f, XboxHudImage *img)
         if (!fullscreen || !s_anim.def->flag("hide_scorebug", true))
             if (const JVal *els = sb->get("elements"))
                 for (auto &e : els->a) draw_element(c, e, 1.0f, 0, 0, 1.0f);
+        if (draw_live_qb) {
+            Ctx qc = c;
+            qc.ev = &s_live_qb_event;
+            /* Share the package's unboxed text geometry and typography,
+             * without its temporary-insert entrance/expiry keyframes. The
+             * enclosing scorebug lifecycle still controls opacity. */
+            const JVal *def = anims->get("player_stat");
+            if (const JVal *layers = def->get("layers"))
+                for (auto &L : layers->a) draw_element(qc, L, 1.0f, 0, 0, 1.0f);
+        }
         if (s_anim_on && s_anim.def) {
             Ctx ac = c;
             ac.ev = &s_anim.ev;
@@ -1980,6 +2179,7 @@ extern "C" void nfl2k5_presentation_init(void)
     load_settings();
     s_test = getenv("NFL2K5_PRES_TEST") != nullptr;
     s_log = getenv("NFL2K5_PRES_LOG") != nullptr;
+    s_probe = getenv("NFL2K5_PRES_PROBE") != nullptr;
     if (const char *ev = getenv("NFL2K5_PRES_EVENT")) s_test_event = ev;
     xbox_PresentSetHudCallback(hud_callback);
     xbox_AudioSetCaptureMix(capture_mix);

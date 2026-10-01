@@ -279,12 +279,30 @@ PATCHES = [
 """),
     ("DIAG_MUSICSTREAM", "sub_0003F860", "loc_0003F860: ;", "after", """    { extern void nfl2k5_diag_stream(uint32_t dst, uint32_t src, uint32_t len, uint32_t eax_, uint32_t arg); nfl2k5_diag_stream(ebx, edx, edi, eax, MEM32(esp + 4)); }
 """),
+    # Gamecast Live table rows (2026-09-28). Capture each distinct row-render
+    # callback once so live stat record layouts can be mapped without a
+    # per-frame log or any changes to generated sources outside this patcher.
+    ("DIAG_GAMECAST_ROW", "sub_00171910", "edx = ebx;", "before", """\
+    { extern void nfl2k5_gamecast_row_probe(uint32_t list, uint32_t row, uint32_t index, uint32_t callback); nfl2k5_gamecast_row_probe(edi, ebx, ebp, MEM32(ebx + 0x20)); }
+"""),
+    ("DIAG_GAMECAST_TEXT", "sub_00173840", "loc_00173897: ;", "after", """\
+    { extern void nfl2k5_gamecast_text_probe(uint32_t widget, uint32_t value); nfl2k5_gamecast_text_probe(ebx, eax); }
+"""),
+    ("DIAG_GAMECAST_STATCTX", "sub_003639D0", "loc_003639D0: ;", "after", """\
+    { extern void nfl2k5_gamecast_stat_context(uint32_t context, uint32_t selector); nfl2k5_gamecast_stat_context(ecx, edx); }
+"""),
+    ("DIAG_GAMECAST_STATVALUE", "sub_003636B0", "MEMF(esp + 4) = (float)fp_top(); fp_pop(); /* fstp */", "after", """\
+    { extern void nfl2k5_gamecast_stat_value(uint32_t table_slot, uint32_t field, uint32_t value_bits); nfl2k5_gamecast_stat_value(esi, edx, MEM32(esp + 4)); }
+"""),
     ("SCOREBUG_HIDE_LAYOUT1", "sub_000FC200", "loc_000FC2A6: ;", "after", """    /* Re-hide the ESPN bug after the game lays it out for a new mode. */
     { extern void nfl2k5_scorebug_hide(void); nfl2k5_scorebug_hide(); }
 """),
     ("SCOREBUG_HIDE_LAYOUT2", "sub_000FC200", "loc_000FC329: ;", "after", """    { extern void nfl2k5_scorebug_hide(void); nfl2k5_scorebug_hide(); }
 """),
     ("SCOREBUG_HIDE_UPDATE", "sub_000FCE70", "loc_000FCE70: ;", "after", """    { extern void nfl2k5_scorebug_hide(void); nfl2k5_scorebug_hide(); }
+"""),
+    ("LIVE_QB_SAMPLE", "sub_000FCE70", "loc_000FCE70: ;", "after", """    /* Sample both title-maintained QB records on the guest execution thread. */
+    { extern void nfl2k5_live_qb_guest_tick(void); nfl2k5_live_qb_guest_tick(); }
 """),
     ("SCOREBUG_SKIP_TEST", "sub_000FCE70", "loc_000FCE70: ;", "after", """    /* Experiment (NFL2K5_HIDE_SKIP=1): skip the ESPN scorebug update while a
      * custom broadcast package is on, to find out whether it drives the bar. */

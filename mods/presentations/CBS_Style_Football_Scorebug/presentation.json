@@ -1,0 +1,320 @@
+﻿{
+    "name":  "CBS_Style_Football_Scorebug",
+    "version":  1,
+    "canvas":  {
+                   "width":  800,
+                   "height":  140,
+                   "anchor":  "bottom_center",
+                   "offset_x":  0,
+                   "offset_y":  35
+               },
+    "style":  {
+                  "font_family":  "Arial Bold",
+                  "primary_text_color":  "#FFFFFF",
+                  "secondary_text_color":  "#000000",
+                  "border_color":  "#8A8A8A",
+                  "border_width":  2,
+                  "corner_radius":  0
+              },
+    "layout":  {
+                   "team_left":  {
+                                     "x":  0,
+                                     "y":  0,
+                                     "width":  240,
+                                     "height":  140,
+                                     "background":  "#E6E6E6",
+                                     "logo":  {
+                                                  "source":  "teams/{away.team_id}/logo.png",
+                                                  "x":  18,
+                                                  "y":  20,
+                                                  "width":  95,
+                                                  "height":  95,
+                                                  "fit":  "contain"
+                                              },
+                                     "score":  {
+                                                   "value":  "{away.score}",
+                                                   "x":  135,
+                                                   "y":  21,
+                                                   "width":  70,
+                                                   "height":  70,
+                                                   "font_size":  64,
+                                                   "color":  "#000000",
+                                                   "align":  "center"
+                                               },
+                                     "timeouts":  {
+                                                      "value":  "{away.timeouts}",
+                                                      "x":  135,
+                                                      "y":  104,
+                                                      "slot_count":  3,
+                                                      "slot_width":  20,
+                                                      "slot_height":  5,
+                                                      "gap":  7,
+                                                      "active_color":  "#FFFFFF",
+                                                      "inactive_color":  "#9A9A9A"
+                                                  }
+                                 },
+                   "center":  {
+                                  "x":  240,
+                                  "y":  0,
+                                  "width":  320,
+                                  "height":  140,
+                                  "down_distance":  {
+                                                        "x":  0,
+                                                        "y":  0,
+                                                        "width":  320,
+                                                        "height":  70,
+                                                        "background":  "#E6E6E6",
+                                                        "text":  "{down_ordinal} \u0026 {yards_to_go}",
+                                                        "font_size":  34,
+                                                        "color":  "#111111",
+                                                        "align":  "center"
+                                                    },
+                                  "clock":  {
+                                                "x":  0,
+                                                "y":  70,
+                                                "width":  320,
+                                                "height":  70,
+                                                "background":  "#050505",
+                                                "quarter":  {
+                                                                "text":  "{quarter_ordinal}",
+                                                                "x":  42,
+                                                                "y":  16,
+                                                                "font_size":  31,
+                                                                "color":  "#FFFFFF"
+                                                            },
+                                                "divider":  {
+                                                                "x":  145,
+                                                                "y":  15,
+                                                                "width":  3,
+                                                                "height":  40,
+                                                                "color":  "#BFBFBF"
+                                                            },
+                                                "game_clock":  {
+                                                                   "text":  "{game_clock}",
+                                                                   "x":  174,
+                                                                   "y":  16,
+                                                                   "font_size":  31,
+                                                                   "color":  "#FFFFFF"
+                                                               }
+                                            }
+                              },
+                   "team_right":  {
+                                      "x":  560,
+                                      "y":  0,
+                                      "width":  240,
+                                      "height":  140,
+                                      "background":  "#071B46",
+                                      "score":  {
+                                                    "value":  "{home.score}",
+                                                    "x":  20,
+                                                    "y":  21,
+                                                    "width":  70,
+                                                    "height":  70,
+                                                    "font_size":  64,
+                                                    "color":  "#FFFFFF",
+                                                    "align":  "center"
+                                                },
+                                      "logo":  {
+                                                   "source":  "teams/{home.team_id}/logo.png",
+                                                   "x":  118,
+                                                   "y":  20,
+                                                   "width":  100,
+                                                   "height":  95,
+                                                   "fit":  "contain"
+                                               },
+                                      "timeouts":  {
+                                                       "value":  "{home.timeouts}",
+                                                       "x":  20,
+                                                       "y":  104,
+                                                       "slot_count":  3,
+                                                       "slot_width":  20,
+                                                       "slot_height":  5,
+                                                       "gap":  7,
+                                                       "active_color":  "#FFFFFF",
+                                                       "inactive_color":  "#5B6C8E"
+                                                   }
+                                  }
+               },
+    "data_bindings":  {
+                          "away.team_id":  "LV",
+                          "away.score":  0,
+                          "away.timeouts":  3,
+                          "home.team_id":  "NE",
+                          "home.score":  0,
+                          "home.timeouts":  3,
+                          "down_ordinal":  "3RD",
+                          "yards_to_go":  11,
+                          "quarter_ordinal":  "1ST",
+                          "game_clock":  "12:23"
+                      },
+    "assets":  {
+                   "team_logo_format":  "PNG",
+                   "allow_custom_team_logos":  true
+               },
+    "format":  1,
+    "network":  "CBS_Style_Football_Scorebug",
+    "font":  "Arial Bold",
+    "music":  {
+                  "volume":  0.15,
+                  "fade_out":  2.5,
+                  "duck_game_audio":  1,
+                  "mute_game_music":  false,
+                  "intro":  [
+
+                            ],
+                  "outro":  [
+
+                            ]
+              },
+    "scorebug":  {
+                     "canvas":  {
+                                    "width":  800,
+                                    "height":  140,
+                                    "overflow_top":  40
+                                },
+                     "placement":  {
+                                       "center_x":  0.5,
+                                       "center_y":  0.9,
+                                       "width":  0.78
+                                   },
+                     "fade_time":  0.25,
+                     "elements":  [
+                                      {
+                                          "h":  140,
+                                          "radius":  0,
+                                          "fill":  "#E6E6E6",
+                                          "y":  0,
+                                          "type":  "box",
+                                          "x":  0,
+                                          "w":  240
+                                      },
+                                      {
+                                          "h":  95,
+                                          "src":  "{away.logo}",
+                                          "y":  20,
+                                          "type":  "image",
+                                          "x":  18,
+                                          "w":  95
+                                      },
+                                      {
+                                          "x":  135,
+                                          "align":  "center",
+                                          "type":  "text",
+                                          "size":  64,
+                                          "w":  70,
+                                          "y":  21,
+                                          "text":  "{away.score}",
+                                          "h":  70,
+                                          "color":  "#000000",
+                                          "weight":  800
+                                      },
+                                      {
+                                          "x":  135,
+                                          "on":  "#FFFFFF",
+                                          "type":  "timeouts",
+                                          "y":  104,
+                                          "count":  3,
+                                          "off":  "#9A9A9A",
+                                          "bar_w":  20,
+                                          "bar_h":  5,
+                                          "team":  "away",
+                                          "gap":  7
+                                      },
+                                      {
+                                          "h":  70,
+                                          "radius":  0,
+                                          "fill":  "#E6E6E6",
+                                          "y":  0,
+                                          "type":  "box",
+                                          "x":  240,
+                                          "w":  320
+                                      },
+                                      {
+                                          "x":  240,
+                                          "align":  "center",
+                                          "type":  "text",
+                                          "size":  34,
+                                          "w":  320,
+                                          "y":  0,
+                                          "text":  "{down_distance}",
+                                          "h":  70,
+                                          "color":  "#111111",
+                                          "weight":  800
+                                      },
+                                      {
+                                          "h":  70,
+                                          "radius":  0,
+                                          "fill":  "#050505",
+                                          "y":  70,
+                                          "type":  "box",
+                                          "x":  240,
+                                          "w":  320
+                                      },
+                                      {
+                                          "x":  282,
+                                          "align":  "center",
+                                          "type":  "text",
+                                          "size":  31,
+                                          "w":  90,
+                                          "y":  86,
+                                          "text":  "{quarter}",
+                                          "h":  40,
+                                          "color":  "#FFFFFF",
+                                          "weight":  800
+                                      },
+                                      {
+                                          "x":  414,
+                                          "align":  "center",
+                                          "type":  "text",
+                                          "size":  31,
+                                          "w":  120,
+                                          "y":  86,
+                                          "text":  "{clock}",
+                                          "h":  40,
+                                          "color":  "#FFFFFF",
+                                          "weight":  800
+                                      },
+                                      {
+                                          "h":  140,
+                                          "radius":  0,
+                                          "fill":  "#071B46",
+                                          "y":  0,
+                                          "type":  "box",
+                                          "x":  560,
+                                          "w":  240
+                                      },
+                                      {
+                                          "h":  95,
+                                          "src":  "{home.logo}",
+                                          "y":  20,
+                                          "type":  "image",
+                                          "x":  118,
+                                          "w":  100
+                                      },
+                                      {
+                                          "x":  580,
+                                          "align":  "center",
+                                          "type":  "text",
+                                          "size":  64,
+                                          "w":  70,
+                                          "y":  21,
+                                          "text":  "{home.score}",
+                                          "h":  70,
+                                          "color":  "#FFFFFF",
+                                          "weight":  800
+                                      },
+                                      {
+                                          "x":  580,
+                                          "on":  "#FFFFFF",
+                                          "type":  "timeouts",
+                                          "y":  104,
+                                          "count":  3,
+                                          "off":  "#5B6C8E",
+                                          "bar_w":  20,
+                                          "bar_h":  5,
+                                          "team":  "home",
+                                          "gap":  7
+                                      }
+                                  ]
+                 }
+}

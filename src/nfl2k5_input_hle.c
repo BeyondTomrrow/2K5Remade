@@ -23,7 +23,9 @@
  *   screen coordinate directly.
  * and NFL2K5_AUTO_PRESS="start@20,a@35" holds buttons for 300 ms at those
  * seconds after the first poll, for unattended runs (the bring-up harness runs
- * the window hidden). Other device types (memory units, headsets) still go to
+ * the window hidden).  Script names include a/b/x/y, start/back, d-pad
+ * directions, black/white (also lb/rb), lt/rt, and l3/r3. Other device types
+ * (memory units, headsets) still go to
  * the original code. NFL2K5_INPUT_HLE=0 turns all of it off.
  *
  * Each gen patch (tools/apply-gen-patches.py) calls one of the nfl2k5_hle_*
@@ -154,6 +156,18 @@ static WORD file_press(BYTE analog[8])
         else if (!strcmp(name, "b")) analog[1] = 255;
         else if (!strcmp(name, "x")) analog[2] = 255;
         else if (!strcmp(name, "y")) analog[3] = 255;
+        else if (!strcmp(name, "black") || !strcmp(name, "lb")) analog[4] = 255;
+        else if (!strcmp(name, "white") || !strcmp(name, "rb")) analog[5] = 255;
+        else if (!strcmp(name, "lt")) analog[6] = 255;
+        else if (!strcmp(name, "rt")) analog[7] = 255;
+        else if (!strcmp(name, "l3")) buttons |= 0x40;
+        else if (!strcmp(name, "r3")) buttons |= 0x80;
+        else if (!strcmp(name, "black") || !strcmp(name, "lb")) analog[4] = 255;
+        else if (!strcmp(name, "white") || !strcmp(name, "rb")) analog[5] = 255;
+        else if (!strcmp(name, "lt")) analog[6] = 255;
+        else if (!strcmp(name, "rt")) analog[7] = 255;
+        else if (!strcmp(name, "l3")) buttons |= 0x40;
+        else if (!strcmp(name, "r3")) buttons |= 0x80;
         if (now - step_start >= 200) {
             pressing = 0;
             step_start = now;
@@ -344,12 +358,17 @@ int nfl2k5_hle_XInputGetCapabilities(void)
 
 int nfl2k5_hle_XInputGetState(void)
 {
+    extern void nfl2k5_live_qb_guest_tick(void);
     static uint32_t packet;
     static XBOX_GAMEPAD last;
     XBOX_GAMEPAD g;
     uint32_t state;
     if (!is_our_handle(MEM32(g_esp + 4u)))
         return 0;
+    /* XInput is polled throughout live play even when the native ESPN HUD is
+     * hidden.  This is a stable guest-thread service point for the read-only
+     * two-team FOX passer sampler. */
+    nfl2k5_live_qb_guest_tick();
     state = MEM32(g_esp + 8u);
     if (!s_first_poll_ms)
         s_first_poll_ms = GetTickCount();

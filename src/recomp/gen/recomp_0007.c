@@ -163612,6 +163612,9 @@ void sub_000FCE70(void)
     #define fp_st1() fp_st(1)
 
 loc_000FCE70: ;
+    /* NFL2K5-GENPATCH:LIVE_QB_SAMPLE */
+    /* Sample both title-maintained QB records on the guest execution thread. */
+    { extern void nfl2k5_live_qb_guest_tick(void); nfl2k5_live_qb_guest_tick(); }
     /* NFL2K5-GENPATCH:SCOREBUG_HIDE_UPDATE */
     { extern void nfl2k5_scorebug_hide(void); nfl2k5_scorebug_hide(); }
     /* NFL2K5-GENPATCH:SCOREBUG_SKIP_TEST */

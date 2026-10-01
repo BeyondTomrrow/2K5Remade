@@ -15,6 +15,35 @@
 extern MCPXAPUState *g_apu_state;
 extern bool apu_hook_handle_mmio(PCONTEXT, uintptr_t, uint32_t, int);
 
+/* A development build still resolves data against NFL2K5_PROJECT_ROOT, but a
+ * distributed build must be movable.  Prefer an explicit launcher override;
+ * otherwise use the executable's folder when it has an installed original/
+ * directory.  This keeps a clean development checkout working unchanged. */
+static const char *nfl2k5_project_root(void)
+{
+    static char root[MAX_PATH];
+    static int initialized;
+    if (initialized) return root;
+    initialized = 1;
+    const char *override = getenv("NFL2K5_ROOT");
+    if (override && override[0]) {
+        strncpy_s(root, sizeof root, override, _TRUNCATE);
+        return root;
+    }
+    if (GetModuleFileNameA(NULL, root, (DWORD)sizeof root)) {
+        char *slash = strrchr(root, '\\');
+        if (slash) {
+            *slash = '\0';
+            char original[MAX_PATH];
+            snprintf(original, sizeof original, "%s\\original", root);
+            if (GetFileAttributesA(original) != INVALID_FILE_ATTRIBUTES)
+                return root;
+        }
+    }
+    strncpy_s(root, sizeof root, NFL2K5_PROJECT_ROOT, _TRUNCATE);
+    return root;
+}
+
 static LONG CALLBACK audio_mmio(EXCEPTION_POINTERS *ep)
 {
     if (ep->ExceptionRecord->ExceptionCode != EXCEPTION_ACCESS_VIOLATION || !g_apu_state)
@@ -2292,13 +2321,25 @@ int main(int argc, char **argv)
      * segments beneath original/disc.  Mount that directory as D: when it is
      * available; keeping the original directory as the fallback preserves the
      * compact XBE-only development layout. */
-    const char *disc_dir = NFL2K5_PROJECT_ROOT "/original/disc";
-    const char *disc_xbe = NFL2K5_PROJECT_ROOT "/original/disc/default.xbe";
-    const char *game_dir = GetFileAttributesA(disc_xbe) != INVALID_FILE_ATTRIBUTES
-        ? disc_dir : NFL2K5_PROJECT_ROOT "/original";
-    const char *save_dir = NFL2K5_PROJECT_ROOT "/saves";
-    const char *xbe_path = GetFileAttributesA(disc_xbe) != INVALID_FILE_ATTRIBUTES
-        ? disc_xbe : NFL2K5_PROJECT_ROOT "/original/default.xbe";
+    const char *root = nfl2k5_project_root();
+    /* Explorer sets the process working directory to the executable's
+     * folder.  In a development build that is build/Release, while all
+     * movable runtime content (mods, team logos, presentation settings,
+     * fonts, music and logs) lives at the resolved project/install root.
+     * Normalize the working directory before any subsystem opens a relative
+     * path so directly double-clicking NFL2K5.exe behaves like the launcher. */
+    if (!SetCurrentDirectoryA(root)) {
+        fprintf(stderr, "[BOOT] Could not use runtime root %s (error %lu)\n",
+                root, (unsigned long)GetLastError());
+    }
+    char disc_dir[MAX_PATH], disc_xbe[MAX_PATH], original_dir[MAX_PATH], original_xbe[MAX_PATH], save_dir[MAX_PATH];
+    snprintf(disc_dir, sizeof disc_dir, "%s/original/disc", root);
+    snprintf(disc_xbe, sizeof disc_xbe, "%s/default.xbe", disc_dir);
+    snprintf(original_dir, sizeof original_dir, "%s/original", root);
+    snprintf(original_xbe, sizeof original_xbe, "%s/default.xbe", original_dir);
+    snprintf(save_dir, sizeof save_dir, "%s/saves", root);
+    const char *game_dir = GetFileAttributesA(disc_xbe) != INVALID_FILE_ATTRIBUTES ? disc_dir : original_dir;
+    const char *xbe_path = GetFileAttributesA(disc_xbe) != INVALID_FILE_ATTRIBUTES ? disc_xbe : original_xbe;
     const int validate_only = argc == 2 && strcmp(argv[1], "--validate") == 0;
     if (argc > 1 && !validate_only && !(argc == 2 && strcmp(argv[1], "--run") == 0)) {
         fprintf(stderr, "Usage: NFL2K5.exe [--validate | --run]\n");

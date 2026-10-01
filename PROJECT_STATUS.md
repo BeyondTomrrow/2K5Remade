@@ -2342,3 +2342,55 @@ Reached natively (user-verified): intro movies, legal/SEGA screens, title, main 
 - **Reference limitation:** no FOX live-scorebug fade-in video or FOX quarter-end video is present anywhere in the supplied attachment directories or project tree. The only broadcast motion reference on disk is CBS. The engine is ready to transcribe those clips as editable layers, but no invented bumper has been labelled frame-accurate.
 - **Next:** ingest the actual FOX fade-in and quarter-end source clips, make frame contact sheets, transcribe their timing into the new keyframe/full-screen definitions, then map title player-stat memory producers to `nfl2k5_broadcast_player_stat` for automatic contextual stat selection.
 
+## 2026-09-27: portable installer and self-relative game-data mount
+
+- **Installer:** added `installer/NFL2K5-PC.iss`, an Inno Setup x64 installer that installs the native executable, presentation packages, configuration, and user documentation. It does not include or download any retail XBE, ISO, archive, save, or extracted game asset.
+- **Player-supplied data:** setup requires the user to choose a complete legally extracted disc directory containing `default.xbe` and `vc_53450030`. It creates `original\\disc` as an NTFS junction to that selected folder, avoiding a duplicate multi-gigabyte game-data copy. An unattended install can pass `/GAMEPATH="C:\\path\\to\\disc"`.
+- **Portable runtime:** `src/main.c` now resolves the game root from `NFL2K5_ROOT`, then from the directory containing an installed `NFL2K5.exe`, and finally from the development source root. This lets the same Release executable mount the installed `original\\disc` link while preserving development behavior.
+- **Verification:** rebuilt the Release game successfully, compiled `dist/NFL2K5-PC-Setup.exe` with Inno Setup 6.7.3, performed a silent install into `E:\\NFL2K5-PC\\installer-smoke-test`, verified its junction resolves to the supplied disc `default.xbe`, and launched the installed executable through XBE loading and presentation-package initialization.
+
+### Installer refinement
+
+- **Destination and branding:** the installer now defaults to `Program Files\\ESPN NFL 2K5` while retaining Inno Setup's normal destination-browse page, so players can choose any install location. The classic Windows wizard uses the supplied ESPN NFL 2K5 cover art in its side panel and a cropped, alpha-cleaned NFL 2K5 ICO for setup and shortcut icons.
+- **ISO path:** bundled `tools\\extract-xiso.exe` and added a source-choice page. Players may select an existing disc extraction or a legally created `.iso`/`.xiso`; the latter is extracted to `<chosen parent>\\ESPN NFL 2K5`, then mounted through the same data junction. ISO input, output location, and return code are validated; neither route downloads or bundles game data.
+- **Packaged configuration:** the installer includes `mods\\README.md`, all current presentation/mod content, and `nfl2k5_video.ini`, so F1 video settings remain available after installation.
+- **Build:** recompiled the final branded `dist\\NFL2K5-PC-Setup.exe` successfully with Inno Setup 6.7.3.
+
+## 2026-09-28: FOX live play-clock source mapped and verified
+
+- **Investigation:** a rate-limited, read-only native HUD probe sampled the adjacent title timer objects during live scrimmage. `E6028C+0x10` remained the period clock (297 seconds in the capture); `E60290+0x10` rose from snap elapsed time; and `E60294+0x10` descended `19.8 -> 18.8 -> 17.8` seconds before resetting. This distinguishes the title's actual play clock from the other clock objects.
+- **Implementation:** `src/nfl2k5_presentation.cpp` now exports `ceil(E60294+0x10)` only for a valid scrimmage phase. The presentation boundary continues to emit `-1` outside that state, so the FOX tab cannot display a stale countdown in pregame, kickoffs, or replays.
+- **Verification:** Release rebuilt successfully. `logs/fox-playclock-24.png` is a native D3D11 capture in live play showing the FOX down-and-distance tab with the live `:25` play clock, along with live BUF/SF scores, logos, game clock, quarter, possession, and square timeout bars.
+- **Next:** map the game's authoritative passer-stat record and event transition to `nfl2k5_broadcast_player_stat`; no fabricated QB name or stat values will be used for the FOX contextual card.
+
+## 2026-09-28: Gamecast passer-stat source boundary
+
+- **Live reference:** inspected a non-invasive memory snapshot while the native Gamecast Passing page showed `Q. Carter`, `COM 0`, `ATT 2`, and `PCT 0%`. The visible `Q. Carter` text occurs in four mirrored 512-byte slots beginning at guest `0xBD7594`.
+- **Ruled out UI scraping:** `sub_00145840` through `sub_00145940` in generated `recomp_0009.c` own that address range. They are generic Unicode formatting/copy helpers backed by a rotating four-entry scratch buffer, so those slots are not an authoritative player or passing-stat record and must not be used for FOX.
+- **FOX presentation:** the player-stat API already carries player name, completions, attempts, passing yards, touchdowns, and interceptions. The QB display line now emits `COM/ATT`, yards, and appends TD/INT only when the live totals are nonzero.
+- **Next:** trace the Gamecast table's upstream player-stat provider rather than its rendered text, then call `nfl2k5_broadcast_player_stat` from that verified producer. This preserves live data when Gamecast is closed and avoids fabricated names or values.
+
+## 2026-09-30: CPU-versus-CPU Gamecast QB-card verification
+
+- **CPU match:** an unattended Quick Game advanced through the coin toss and played live scrimmage without controller input. Captures show an active CPU-versus-CPU match in Q1/Q2, including completed passing plays and score changes.
+- **Live source:** the title's Gamecast Passing renderer now supplies the FOX bridge with its formatted live QB values. A sustained Q2 check produced `Q. Carter — 3/4, 28 YDS, TD 0, INT 0`; an earlier Q1 check produced `J. Garcia — 1/1, 7 YDS`. The bridge preserves the title's compact display names and uses the current possession side for the live team binding.
+- **Presentation event:** `nfl2k5_broadcast_player_stat` received and rendered a live QB insert during the match. This confirms the end-to-end binding from Gamecast data through the C broadcast interface into the FOX package; no test or invented stat values were used.
+- **Known limitation:** the insert currently triggers while Gamecast is open, so its five-second broadcast duration can expire before returning to the live camera. It needs a small deferred-display handoff so the same verified sample is shown after the Gamecast overlay closes.
+- **Crash record:** one run exited with an access violation in `sub_00074790+0x33F` (`recomp_0003.c:35371`) while returning from Gamecast. The CPU match itself remains stable; retain this independently reproducible return-path crash for the next compatibility pass rather than treating it as a FOX layout issue.
+- **Next:** defer a deduplicated Gamecast sample until the live broadcast view resumes, then verify the stat insert's placement and fade in a CPU match without reopening the Gamecast overlay.
+
+## 2026-09-30: FOX passer insert moved from Gamecast into live play
+
+- Reworked the Gamecast passing-stat adapter so its guest/UI capture path only stores a pending immutable quarterback sample. The D3D11 HUD presenter now publishes that sample after the Gamecast passing row has stopped painting for 1.5 seconds, preventing the FOX insert from appearing over the Gamecast screen or building a duplicate-event backlog.
+- Corrected the event team mapping to the live possession convention (`1 = away`, `2 = home`).
+- Rebuilt the FOX `player_stat` animation from the supplied broadcast reference: two lines of italic white text, no background or accent boxes, aligned outside and beside the active team's logo. The second line remains data-driven and appends nonzero touchdown and interception totals.
+- **Build result:** `tools\build.ps1 -Game` completed successfully; `build\Release\NFL2K5.exe` was refreshed at 2026-09-30 13:00:25.
+- **Runtime result:** a CPU-versus-CPU Denver at Dallas game reached live play. Gamecast Passing supplied `J. Plummer`, 3 completions, 4 attempts and 23 passing yards. The Gamecast capture screen contained no FOX passer overlay. After returning to the field the log reported `[GAMECAST-QB] J. Plummer 3/4 23 YDS TD=0 INT=0 side=0` and `[PRES] animation player_stat (away)`; `logs/fox-qb-broadcast-result.png` visibly confirms the unboxed insert beside Denver's logo during live action.
+- **Next:** keep the same verified live-data path and compare later nonzero touchdown/interception samples as longer CPU games produce them; no structural renderer work is required for those fields because the formatter already conditionally appends `TD` and `INT`.
+
+## 2026-09-30: Direct EXE launch now finds broadcast packages
+
+- **Cause:** Windows Explorer launched `build\Release\NFL2K5.exe` with `build\Release` as its working directory. The presentation loader uses movable relative paths, so it could not see the root `mods` directory and exposed only the built-in ESPN presentation.
+- **Fix:** `src/main.c` now changes the process working directory to the already-resolved project/install root before any runtime subsystem opens relative files. This covers presentations, team logos, private fonts, music, settings, saves and logs while preserving `NFL2K5_ROOT` and installed-folder behavior.
+- **Build result:** Release rebuilt successfully; `build\Release\NFL2K5.exe` was refreshed at 2026-09-30 13:21:31.
+- **Direct-launch verification:** started the EXE with `E:\NFL2K5-PC\build\Release` as its working directory and no launcher script. The window remained responsive and `logs/direct-exe.stderr.log` reported four packages, all FOX fonts, and `[PRES] 4 presentations, selected "NFL on FOX"`.
