@@ -6310,6 +6310,8 @@ loc_002604D0: ;
     PUSH32(esp, 0x002604D5u); RECOMP_ABI_CALL(0x000DCFA0u, sub_000DCFA0); /* call 0x000DCFA0 */
 
 loc_002604D5: ;
+    /* NFL2K5-GENPATCH:PLAYERCARD_PROBE */
+    { extern void nfl2k5_playercard_probe(uint32_t ctx); nfl2k5_playercard_probe(eax); }
     ecx = MEM32(eax + 0x48);
     _fb = (uint32_t)(0xFFFFFFEFu) & 0xFFFFFFFFu; _fbs = (int32_t)(int32_t)(_fb); /* add source, before the write */
     _cf = (int)((((uint64_t)(ecx) + (uint64_t)(0xFFFFFFEFu)) >> 32) & 1);

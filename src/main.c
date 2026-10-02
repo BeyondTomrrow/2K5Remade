@@ -968,6 +968,63 @@ void nfl2k5_diag_stream(uint32_t dst, uint32_t src, uint32_t len, uint32_t eax_,
             m[src + 4], m[src + 5], m[src + 6], m[src + 7], GetTickCount());
 }
 
+/* 2026-10-02: pregame player cards (gen patch PLAYERCARD_PROBE, script op
+ * 133). Finds the 0x54 roster record the card is about: a record's names
+ * are UTF-16 strings behind +0x10 / +0x14 (field-relative, target = field +
+ * i32 - 1, as on disc; absolute also accepted). Logs the card kind, where in
+ * the context the record pointer sits, and the record's identity fields. */
+static int pc_name(const uint8_t *m, uint32_t field, char *out, int n)
+{
+    uint32_t cands[2], c;
+    int k, i;
+    if (field >= 0x4000000u - 8) return 0;
+    cands[0] = field + *(const int32_t *)(m + field) - 1;
+    cands[1] = *(const uint32_t *)(m + field);
+    for (k = 0; k < 2; k++) {
+        c = cands[k];
+        if (c < 0x10000u || c >= 0x4000000u - 64) continue;
+        for (i = 0; i < n - 1; i++) {
+            uint16_t ch = *(const uint16_t *)(m + c + i * 2u);
+            if (!ch) break;
+            if (ch < 32 || ch > 126) { i = -1; break; }
+            out[i] = (char)ch;
+        }
+        if (i >= 2) { out[i] = 0; return 1; }
+    }
+    return 0;
+}
+
+static int pc_player(const uint8_t *m, uint32_t rec, char *first, char *last)
+{
+    if (rec < 0x10000u || rec >= 0x4000000u - 0x54) return 0;
+    return pc_name(m, rec + 0x10u, first, 32) && pc_name(m, rec + 0x14u, last, 32);
+}
+
+void nfl2k5_playercard_probe(uint32_t ctx)
+{
+    static volatile LONG printed;
+    const uint8_t *m = (const uint8_t *)xbox_GetMemoryOffset();
+    char first[32], last[32];
+    uint32_t off, d, off2;
+    if (InterlockedIncrement(&printed) > 400 || ctx < 0x10000u || ctx >= 0x4000000u - 0x100)
+        return;
+    fprintf(stderr, "  [CARD] ctx=%08X kind=%u\n", ctx, *(const uint32_t *)(m + ctx + 0x48u));
+    for (off = 0; off < 0x100u; off += 4) {
+        d = *(const uint32_t *)(m + ctx + off);
+        if (pc_player(m, d, first, last)) {
+            fprintf(stderr, "  [CARD]   ctx+%02X -> %08X %s %s pos=%u photo=%u jersey=%u\n", off, d, first, last,
+                    m[d + 0x35u], *(const uint16_t *)(m + d + 6u), (*(const uint32_t *)(m + d + 0x20u) >> 3) & 0x7Fu);
+            continue;
+        }
+        if (d < 0x10000u || d >= 0x4000000u - 0x80) continue;
+        for (off2 = 0; off2 < 0x80u; off2 += 4) {
+            uint32_t d2 = *(const uint32_t *)(m + d + off2);
+            if (pc_player(m, d2, first, last))
+                fprintf(stderr, "  [CARD]   ctx+%02X -> %08X +%02X -> %08X %s %s\n", off, d, off2, d2, first, last);
+        }
+    }
+}
+
 /* 2026-09-25: popups (tools/apply-gen-patches.py DIAG_POPUP*). what 0: shown
  * (obj = the popup being copied into its slot: +0 slot, +8 timeout, +0x4C
  * title, +0xCC message, UTF-16); 1: close(slot); 2: close callback. */
@@ -1173,6 +1230,56 @@ void nfl2k5_diag_pbbegin(void)
 
 /* Fixed-interval flush of the above, independent of kernel_bridge.c's own
  * dispatch-count-gated summary (see call site in main() for why). */
+/* RECOMP_FIND_TEXT=word[,word...]: every 2 s, search guest RAM for each word
+ * as UTF-16 and log every address not seen before, with the UTF-16 strings
+ * around it and the dwords anywhere in RAM that point at it. Finds the
+ * objects behind on-screen text (the lineup ticker, 2026-10-02). */
+static DWORD WINAPI nfl2k5_find_text_thread(LPVOID arg)
+{
+    const char *spec = (const char *)arg;
+    static uint32_t seen[512];
+    unsigned nseen = 0;
+    for (;;) {
+        const uint8_t *m = (const uint8_t *)xbox_GetMemoryOffset();
+        char words[256], *w, *ctx = NULL;
+        Sleep(2000);
+        strncpy(words, spec, sizeof words - 1);
+        words[sizeof words - 1] = 0;
+        for (w = strtok_s(words, ",", &ctx); w; w = strtok_s(NULL, ",", &ctx)) {
+            uint16_t needle[64];
+            size_t n = strlen(w), i;
+            uint32_t a;
+            if (!n || n > 63) continue;
+            for (i = 0; i < n; i++) needle[i] = (uint8_t)w[i];
+            for (a = 0x10000u; a + n * 2 < 0x4000000u; a += 2) {
+                unsigned k;
+                if (*(const uint16_t *)(m + a) != needle[0] || memcmp(m + a, needle, n * 2)) continue;
+                for (k = 0; k < nseen && seen[k] != a; k++) {}
+                if (k < nseen || nseen >= 512) continue;
+                seen[nseen++] = a;
+                {
+                    char around[200];
+                    size_t o = 0;
+                    uint32_t b = a >= 96 ? a - 96 : a, p;
+                    for (; b < a + 96 && o + 2 < sizeof around; b += 2) {
+                        uint16_t ch = *(const uint16_t *)(m + b);
+                        around[o++] = ch >= 32 && ch < 127 ? (char)ch : '.';
+                    }
+                    around[o] = 0;
+                    fprintf(stderr, "  [FINDTEXT] '%s' at %08X t=%lu: %s\n", w, a, GetTickCount(), around);
+                    for (p = 0x10000u; p + 4 < 0x4000000u; p += 4) {
+                        uint32_t v = *(const uint32_t *)(m + p);
+                        if (v >= a - 0x20 && v <= a)
+                            fprintf(stderr, "  [FINDTEXT]   ref at %08X -> %08X\n", p, v);
+                    }
+                }
+            }
+        }
+        fflush(stderr);
+    }
+    return 0;
+}
+
 static DWORD WINAPI nfl2k5_execwatch_timer_thread(LPVOID unused)
 {
     (void)unused;
@@ -2366,6 +2473,10 @@ static DWORD WINAPI profile_thread(LPVOID arg)
 
 int main(int argc, char **argv)
 {
+    /* Like any PC game: keep the display and the machine awake while it
+     * runs. Without this a controller-only session (the pad is not "input"
+     * to Windows) let the monitor sleep mid-game, and presentation stalled. */
+    SetThreadExecutionState(ES_CONTINUOUS | ES_DISPLAY_REQUIRED | ES_SYSTEM_REQUIRED);
     /* A retail disc extraction has the XBE and its split vc_53450030 archive
      * segments beneath original/disc.  Mount that directory as D: when it is
      * available; keeping the original directory as the fallback preserves the
@@ -2540,6 +2651,8 @@ int main(int argc, char **argv)
     printf("[BOOT] Game data preserved across memory initialization.\n");
     xbox_kernel_init();
     xbox_path_init(game_dir, save_dir);
+    if (getenv("RECOMP_FIND_TEXT"))
+        CreateThread(NULL, 0, nfl2k5_find_text_thread, (LPVOID)getenv("RECOMP_FIND_TEXT"), 0, NULL);
     {   /* <root>/Music folders -> Xbox custom soundtracks (saves/Soundtracks) */
         extern void nfl2k5_local_music_start(const char *root, const char *save_dir);
         nfl2k5_local_music_start(root, save_dir);

@@ -2,7 +2,7 @@ file(GLOB NFL2K5_GENERATED CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/src/recomp/g
 if(NOT NFL2K5_GENERATED)
   message(FATAL_ERROR "Run tools/analyze.ps1 -Recompile before building the game.")
 endif()
-add_executable(NFL2K5 WIN32 src/main.c src/recomp_manual.c src/nfl2k5_input_hle.c src/nfl2k5_video_menu.c src/nfl2k5_presentation.cpp src/nfl2k5_local_music.cpp src/nfl2k5_wma_encode.cpp src/presentation/webview2_host.cpp src/nfl2k5.rc ${NFL2K5_GENERATED})
+add_executable(NFL2K5 WIN32 src/main.c src/recomp_manual.c src/nfl2k5_input_hle.c src/nfl2k5_video_menu.c src/nfl2k5_presentation.cpp src/nfl2k5_local_music.cpp src/nfl2k5_wma_encode.cpp src/presentation/webview2_host.cpp src/presentation/portraits.cpp src/nfl2k5.rc ${NFL2K5_GENERATED})
 target_include_directories(NFL2K5 PRIVATE src/recomp/gen src)
 # HTML presentation host (src/presentation): WebView2 SDK headers and static
 # loader. The engine itself is the WebView2 runtime that ships with Windows.

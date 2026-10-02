@@ -169378,6 +169378,8 @@ loc_000FFD37: ;
     if ((_fa != 0)) goto loc_000FFC20; /* jne: not equal / not zero */
 
 loc_000FFD54: ;
+    /* NFL2K5-GENPATCH:LINEUP_TICKER */
+    { extern void nfl2k5_lineup_ticker(uint32_t sp); nfl2k5_lineup_ticker(esp); }
     POP32(esp, edi);
     POP32(esp, esi);
     POP32(esp, ebp);
@@ -169425,6 +169427,8 @@ loc_000FFD81: ;
     MEM32(0xBA3218) = 1;
 
 loc_000FFD8B: ;
+    /* NFL2K5-GENPATCH:LINEUP_NATIVE_HIDE */
+    { extern int nfl2k5_lineup_hide_native(void); if (nfl2k5_lineup_hide_native()) { esp += 4; return; } }
     ecx = MEM32(0xBA3534);
     g_seh_ebp = ebp; sub_001775D0(); return; /* tail jmp 0x001775D0 */
 

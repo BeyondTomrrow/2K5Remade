@@ -179,6 +179,56 @@
     }
   }
 
+  /* ---- starting lineup ----
+   * The game sends LINEUP after kickoff: the offense of the team with the
+   * ball, a few plays later the other team's defense, and the same after the
+   * change of possession. Each starter gets the introduction look for
+   * PER_PLAYER ms (portrait, position and number, name, college); the bug
+   * steps aside meanwhile. */
+  var lu = document.getElementById('lineup'), luOn = false, luTimers = [];
+  var PER_PLAYER = 2600;
+  function luq(sel) { return lu.querySelector(sel); }
+  function luClear() { luTimers.forEach(clearTimeout); luTimers = []; }
+  function luEnd() {
+    luClear();
+    lu.classList.remove('on', 'swap');
+    luTimers.push(setTimeout(function () { luOn = false; bug.classList.toggle('off-air', false); }, 450));
+  }
+  function luPlayer(p, first) {
+    var show = function () {
+      var img = luq('.lu-portrait');
+      if (p.portrait) { img.style.visibility = ''; img.setAttribute('src', p.portrait); }
+      else { img.style.visibility = 'hidden'; img.removeAttribute('src'); }
+      luq('.lu-tab .pos').textContent = p.position || '';
+      luq('.lu-tab .num').textContent = p.number != null ? String(p.number) : '';
+      luq('.lu-name').textContent = p.name || ((p.first || '') + ' ' + (p.last || '')).trim();
+      luq('.lu-sub').textContent = p.college || '';
+      lu.classList.remove('swap');
+    };
+    if (first) { show(); return; }
+    lu.classList.add('swap');
+    luTimers.push(setTimeout(show, 260));
+  }
+  function lineup(e) {
+    var s = NFL2K5.state, t = s && e.team && s[e.team];
+    var players = (e.players || []).filter(function (p) { return p && (p.name || p.last); });
+    if (!t || !players.length || busy) return;
+    luClear();
+    lu.style.setProperty('--lu-team', color(t));
+    setLogo(luq('.lu-logo .logo'), t);
+    setLogo(luq('.lu-ghost .logo'), t);
+    var team = ((t.city || '') + ' ' + (t.name || '')).trim().toUpperCase() || code(t);
+    var track = luq('.lu-track'), html = '';
+    for (var i = 0; i < 16; i++) html += '<span>' + team.replace(/[<&]/g, '') + '</span><i></i>';
+    track.innerHTML = html;
+    luOn = true;
+    bug.classList.add('off-air');
+    luPlayer(players[0], true);
+    lu.classList.add('on');
+    players.forEach(function (p, i) { if (i) luTimers.push(setTimeout(function () { luPlayer(p, false); }, i * PER_PLAYER)); });
+    luTimers.push(setTimeout(luEnd, players.length * PER_PLAYER));
+  }
+
   NFL2K5.onState(function (s, prev) {
     if (!s.away || !s.home) return;
     setTeam('away', s.away, prev && prev.away);
@@ -193,7 +243,8 @@
      * (it would cover the play art) and the pause menu, never during a
      * scoring sequence. */
     var cx = s.context || {};
-    bug.classList.toggle('off-air', (!busy && !!(cx.playSelection || cx.paused)) || s.valid === false);
+    bug.classList.toggle('off-air', luOn || (!busy && !!(cx.playSelection || cx.paused)) || s.valid === false);
+    if (luOn && (cx.paused || s.valid === false)) luEnd();
     var down = niceDown(s.downDistanceText);
     setTab(s.possession, down, !!s.possession && !!down);
     var pc = s.playClock;
@@ -210,6 +261,7 @@
     case 'FIELD_GOAL': scoring('FIELD GOAL', e.team, e.drive); break;
     case 'SAFETY': scoring('SAFETY', e.team, null); break;
     case 'DRIVE_SUMMARY': lastDrive = e.drive; if (busy && e.drive) showDrive(e.drive); break;
+    case 'LINEUP': lineup(e); break;
     case 'PENALTY': flagUntil = Date.now() + 8000; updateFlag(true); setTimeout(function () { updateFlag(false); }, 8100); break;
     }
   });
@@ -232,6 +284,17 @@
     }
     if (pv === 'away-ball') { st.possession = 'away'; st.downDistanceText = '4TH & INCHES'; st.playClock = 35; }
     if (pv === 'flag') st.context.flag = true;
+    if (pv === 'lineup') {
+      PER_PLAYER = 1e9;            /* hold the first player for screenshots */
+      st.home = { abbreviation: 'DAL', city: 'Dallas', name: 'Cowboys', record: '10-6', score: 0, timeouts: 3 };
+      setTimeout(function () {
+        NFL2K5.dispatch({ type: 'event', event: { name: 'LINEUP', team: 'home', unit: 'offense', players: [
+          { position: 'RT', number: 78, name: 'Terence Steele', college: 'Texas Tech', portrait: '' },
+          { position: 'QB', number: 4, name: 'Dak Prescott', college: 'Mississippi State', portrait: '' }] } });
+        var freeze = (/[?&]t=(\d+)/.exec(location.search) || [])[1];
+        if (freeze) setTimeout(function () { document.getAnimations().forEach(function (a) { a.pause(); }); }, +freeze);
+      }, 200);
+    }
     if (pv === 'touchdown') { st.away.score = 48; st.possession = 'away'; st.downDistanceText = 'PAT'; }
     NFL2K5.dispatch({ type: 'state', state: st });
     if (pv === 'touchdown') {

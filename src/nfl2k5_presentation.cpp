@@ -57,7 +57,9 @@
 extern "C" {
 extern ptrdiff_t g_xbox_mem_offset;
 typedef struct { int bb_w, bb_h; float game_x, game_y, game_w, game_h; } XboxHudFrame;
-typedef struct { const void *pixels; int w, h, stride, x, y, changed, dw, dh; } XboxHudImage;
+typedef struct { const void *pixels; int w, h, stride, x, y, changed, dw, dh; void *shared; } XboxHudImage;
+/* Set by the presenter when it cannot open a shared HUD texture: use pixels. */
+extern "C" int xbox_hud_shared_failed;
 typedef int (*XboxHudCallback)(const XboxHudFrame *f, XboxHudImage *img);
 void xbox_PresentSetHudCallback(XboxHudCallback cb);
 void xbox_AudioSetGameGain(float gain);
@@ -425,6 +427,9 @@ struct Package {
     bool html = false;
     std::string entry;
     int canvas_w = 1920, canvas_h = 1080;
+    /* mod.json "replaces": game graphics the package draws itself, which
+     * the game then leaves out (e.g. "lineup": the after-kickoff starters). */
+    bool replaces_lineup = false;
 };
 
 static std::vector<Package> s_pkgs;           /* [0] is the game's own ESPN presentation */
@@ -469,6 +474,9 @@ static void load_packages()
             if (!p.root.flag("enabled", true)) continue;
             p.html = true;
             p.entry = p.root.str("entry", "index.html");
+            if (const JVal *r = p.root.get("replaces"))
+                for (auto &v : r->a)
+                    if (v.t == JVal::Str && v.s == "lineup") p.replaces_lineup = true;
             if (const JVal *c = p.root.get("canvas")) {
                 p.canvas_w = (int)c->num("width", 1920);
                 p.canvas_h = (int)c->num("height", 1080);
@@ -2184,10 +2192,111 @@ extern "C" void nfl2k5_presentation_popup_text(const char *title, const char *te
     s_popup_events.push_back(j);
 }
 
+/* The game's after-kickoff lineup ticker (sub_000FFBA0; gen patch
+ * LINEUP_TICKER at its end, 2026-10-02). It shows the offense of the team
+ * with the ball, a few plays later the other team's defense, and the same
+ * after the change of possession. sp is its frame: 11 roster record
+ * pointers at sp+0x1C, lineup position codes at sp+0x48 (text: the pointer
+ * table at 0x4F2688); the names it formats are at 0xBA3274 + i*0x40. A
+ * record keeps its college behind a field-relative pointer at +0x00
+ * (target = field + i32 - 1; the college's name pointer likewise), the
+ * portrait id at +0x06 and the jersey number in bits 3..9 of +0x20. */
+static std::string gtext(uint32_t va, int max = 40)
+{
+    std::string s;
+    uint8_t b[2];
+    if (!gread(va, b, 2)) return s;
+    bool wide = b[1] == 0;
+    for (int i = 0; i < max; i++) {
+        uint32_t c = 0;
+        if (!gread(va + (wide ? i * 2 : i), &c, wide ? 2 : 1) || !c) break;
+        if (c < 32 || c > 126) return "";
+        s += (char)c;
+    }
+    /* A stray pointer lands in fill patterns ("DEADBEEF...", Peerless
+     * Price's college, 2026-10-02) or runs on past any real name. */
+    if (s.find("DEADBEEF") != std::string::npos || s.find("EADBEEFD") != std::string::npos || (int)s.size() >= max)
+        return "";
+    return s;
+}
+
+/* A roster pointer field: on disc field-relative (field + i32 - 1); the
+ * running game may hold it fixed up. Each form is tried in turn. */
+static uint32_t grel(uint32_t field, int form)
+{
+    int32_t v = (int32_t)rd32(field);
+    if (!v) return 0;
+    return form == 0 ? field + v - 1 : form == 1 ? field + v : (uint32_t)v;
+}
+
+static std::string grel_text(uint32_t field)
+{
+    for (int f = 0; f < 3; f++) {
+        std::string s = gtext(grel(field, f));
+        if (s.size() >= 2) return s;
+    }
+    return "";
+}
+
+std::string nfl2k5_portrait_url(int photo_id);   /* src/presentation/portraits.cpp */
+extern "C" void nfl2k5_portraits_warm(void);
+static std::mutex s_lineup_lock;
+static std::vector<std::pair<bool, std::string>> s_lineups;   /* offense?, players JSON */
+
+/* gen patch LINEUP_NATIVE_HIDE: the game skips showing its lineup ticker
+ * (the starters are still read and sent as LINEUP) while the selected HTML
+ * package says it draws the lineup itself. */
+extern "C" int nfl2k5_lineup_hide_native(void)
+{
+    int k = s_sel_pkg.load();
+    fprintf(stderr, "[PRES] game shows its lineup ticker (package %d, html %d)\n", k, s_html.host ? 1 : 0);
+    return k > 0 && k < (int)s_pkgs.size() && s_pkgs[k].html && s_pkgs[k].replaces_lineup && s_html.host ? 1 : 0;
+}
+
+extern "C" void nfl2k5_lineup_ticker(uint32_t sp)
+{
+    std::string players;
+    bool offense = false;
+    int n = 0;
+    for (int i = 0; i < 11; i++) {
+        uint32_t rec = rd32(sp + 0x1C + i * 4), code = rd32(sp + 0x48 + i * 4);
+        if (!rec) continue;
+        std::string pos = code < 64 ? gtext(rd32(0x4F2688 + code * 4), 8) : "";
+        std::string name = gtext(0xBA3274 + i * 0x40, 32);
+        std::string first = grel_text(rec + 0x10), last = grel_text(rec + 0x14);
+        std::string college;
+        for (int f = 0; f < 3 && college.size() < 2; f++)
+            if (uint32_t c = grel(rec, f)) college = grel_text(c);
+        uint16_t photo = 0;
+        gread(rec + 6, &photo, 2);
+        int number = (int)((rd32(rec + 0x20) >> 3) & 0x7F);
+        if (name.empty()) name = first + (first.empty() ? "" : " ") + last;
+        if (pos == "QB") offense = true;
+        players += std::string(n++ ? "," : "") + "{\"position\":" + json_str(pos) + ",\"number\":" + std::to_string(number) +
+                   ",\"name\":" + json_str(name) + ",\"first\":" + json_str(first) + ",\"last\":" + json_str(last) +
+                   ",\"college\":" + json_str(college) + ",\"photoId\":" + std::to_string(photo) +
+                   ",\"portrait\":" + json_str(nfl2k5_portrait_url(photo)) + "}";
+    }
+    fprintf(stderr, "[PRES] lineup %s: %s\n", offense ? "offense" : "defense", players.c_str());
+    if (!n) return;
+    std::lock_guard<std::mutex> lock(s_lineup_lock);
+    s_lineups.push_back({ offense, players });
+}
+
 /* Generic events that follow from two consecutive states. */
 static void html_state_events(const GameState &p, const GameState &g)
 {
     drive_update(p, g);
+    {
+        /* LINEUP: offense = the team with the ball, defense = the other. */
+        std::vector<std::pair<bool, std::string>> pending;
+        { std::lock_guard<std::mutex> lock(s_lineup_lock); pending.swap(s_lineups); }
+        for (auto &l : pending) {
+            int side = g.poss ? (l.first ? g.poss - 1 : 2 - g.poss) : -1;
+            html_post(html_event_json("LINEUP", side, std::string(",\"unit\":\"") + (l.first ? "offense" : "defense") +
+                                      "\",\"players\":[" + l.second + "]"));
+        }
+    }
     {
         std::vector<std::string> pending;
         { std::lock_guard<std::mutex> lock(s_popup_lock); pending.swap(s_popup_events); }
@@ -2253,6 +2362,8 @@ static int html_hud(const XboxHudFrame *f, XboxHudImage *img, const GameState &g
         c.entry = pkg.entry;
         c.root_dir = "mods/presentations";
         c.teams_dir = "mods/teams";
+        c.portraits_dir = "cache/portraits";
+        nfl2k5_portraits_warm();
         c.canvas_width = pkg.canvas_w;
         c.canvas_height = pkg.canvas_h;
         c.raster_scale = want_scale;
@@ -2308,9 +2419,18 @@ static int html_hud(const XboxHudFrame *f, XboxHudImage *img, const GameState &g
         }
 
     nfl2k5::PresentationSurface surf;
-    if (!s_html.host->acquire_surface(surf)) return 0;
+    nfl2k5::PresentationSharedSurface shared;
     static uint64_t shown;
-    img->pixels = surf.pixels;
+    if (!xbox_hud_shared_failed && s_html.host->acquire_shared(shared)) {
+        /* GPU to GPU: the presenter draws the browser's texture itself. */
+        surf.width = shared.width; surf.height = shared.height;
+        surf.stride = shared.width * 4; surf.serial = shared.serial;
+        img->shared = shared.handle;
+        img->pixels = shared.handle;          /* non-null: "there is an image" */
+    } else {
+        if (!s_html.host->acquire_surface(surf)) return 0;
+        img->pixels = surf.pixels;
+    }
     img->w = surf.width; img->h = surf.height; img->stride = surf.stride;
     img->x = (int)lroundf(f->game_x + (gw - dw) / 2);
     img->y = (int)lroundf(f->game_y + (gh - dh) / 2);

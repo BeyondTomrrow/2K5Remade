@@ -19,5 +19,7 @@ Push-Location $PSScriptRoot
 try {
     & cl.exe /nologo /EHsc /O2 /std:c++17 stackdump.cpp /Festackdump.exe "/Fo$obj\\" dbghelp.lib
     if ($LASTEXITCODE) { throw 'build failed' }
+    & cl.exe /nologo /EHsc /O2 /std:c++17 sampleprof.cpp /Fesampleprof.exe "/Fo$obj\\" dbghelp.lib winmm.lib
+    if ($LASTEXITCODE) { throw 'build failed' }
 } finally { Pop-Location }
-"built $PSScriptRoot\stackdump.exe"
+"built stackdump.exe, sampleprof.exe"

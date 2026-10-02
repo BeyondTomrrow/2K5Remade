@@ -220,6 +220,20 @@ PATCHES = [
     ("DIAG_SCRIPTOP", "sub_000DBC10", "loc_000DBC20: ;", "after", """\
     { extern void nfl2k5_diag_script(uint32_t ctx, uint32_t op, uint32_t start); nfl2k5_diag_script(esi, eax & 0xFF, MEM32(esp + 0x24)); }
 """),
+    # Player cards (2026-10-02): script op 133 shows a pregame card; the
+    # context (eax after sub_000DCFA0) says which kind (+0x48) and whose.
+    ("PLAYERCARD_PROBE", "sub_002604D0", "loc_002604D5: ;", "after", """\
+    { extern void nfl2k5_playercard_probe(uint32_t ctx); nfl2k5_playercard_probe(eax); }
+"""),
+    # The after-kickoff lineup ticker (2026-10-02): sub_000FFBA0 has filled
+    # its 11 lines; report the starters (src/nfl2k5_presentation.cpp).
+    ("LINEUP_TICKER", "sub_000FFBA0", "loc_000FFD54: ;", "after", """\
+    { extern void nfl2k5_lineup_ticker(uint32_t sp); nfl2k5_lineup_ticker(esp); }
+"""),
+    # sub_000FFD60 shows the ticker once it is filled; skip only the show
+    # (sub_001775D0 on the ticker layout) when the package draws the lineup.
+    ("LINEUP_NATIVE_HIDE", "sub_000FFD60", "loc_000FFD8B: ;", "after", """    { extern int nfl2k5_lineup_hide_native(void); if (nfl2k5_lineup_hide_native()) { esp += 4; return; } }
+"""),
     ("DIAG_FSMPOP", "sub_0006E400", "loc_0006E439: ;", "after", """\
     { extern void nfl2k5_diag_fsm(uint32_t obj, uint32_t desc, int push); nfl2k5_diag_fsm(esi, 0, 0); }
 """),

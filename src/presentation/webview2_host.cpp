@@ -15,7 +15,7 @@
 
 #include <windows.h>
 #include <d3d11.h>
-#include <dxgi.h>
+#include <dxgi1_2.h>
 #include <wrl.h>
 #include <DispatcherQueue.h>
 #include <windows.graphics.capture.interop.h>
@@ -123,9 +123,22 @@ public:
         if (hwnd_) PostMessageW(hwnd_, WM_PRES_FLUSH, 0, 0);
     }
 
+    bool acquire_shared(PresentationSharedSurface &out) override
+    {
+        std::lock_guard<std::mutex> g(frame_lock_);
+        gpu_only_ = true;
+        if (!shared_serial_ || shared_latest_ < 0) return false;
+        out.handle = shared_handle_[shared_latest_];
+        out.width = shared_w_;
+        out.height = shared_h_;
+        out.serial = shared_serial_;
+        return true;
+    }
+
     bool acquire_surface(PresentationSurface &out) override
     {
         std::lock_guard<std::mutex> g(frame_lock_);
+        gpu_only_ = false;
         if (!front_serial_) return false;
         /* The consumer gets its own copy, taken only when a new frame exists;
          * it stays valid until the next call. */
@@ -275,6 +288,12 @@ private:
             if (!config_.teams_dir.empty())
                 wv3->SetVirtualHostNameToFolderMapping(L"teams.local", full_path(config_.teams_dir).c_str(),
                                                        COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_ALLOW);
+            if (!config_.portraits_dir.empty()) {
+                CreateDirectoryW(full_path("cache").c_str(), nullptr);
+                CreateDirectoryW(full_path(config_.portraits_dir).c_str(), nullptr);
+                wv3->SetVirtualHostNameToFolderMapping(L"portraits.local", full_path(config_.portraits_dir).c_str(),
+                                                       COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_ALLOW);
+            }
         }
         /* Packages can tell they are inside the game (vs. the editor). */
         webview_->AddScriptToExecuteOnDocumentCreated(L"window.NFL2K5_HOST = 'game';", nullptr);
@@ -362,6 +381,8 @@ private:
         if (FAILED(access->GetInterface(IID_PPV_ARGS(&tex)))) return;
         D3D11_TEXTURE2D_DESC d;
         tex->GetDesc(&d);
+        share_frame(tex.Get(), d);
+        if (gpu_only_) return;           /* the game draws the shared texture */
         if (!staging_ || staging_w_ != (int)d.Width || staging_h_ != (int)d.Height) {
             D3D11_TEXTURE2D_DESC sd = d;
             sd.Usage = D3D11_USAGE_STAGING;
@@ -386,6 +407,51 @@ private:
         frame_w_ = staging_w_; frame_h_ = staging_h_;
         front_serial_++;
         if (front_serial_ == 1) fprintf(stderr, "[HTMLPRES] first frame %dx%d\n", frame_w_, frame_h_);
+    }
+
+    /* Copy the captured frame into one of two shared textures (the one not
+     * last published), so the game's device can draw it with no CPU copy.
+     * A 2560x1440 frame read back and copied twice cost ~16% of the game
+     * thread (2026-10-02). */
+    void share_frame(ID3D11Texture2D *tex, const D3D11_TEXTURE2D_DESC &d)
+    {
+        if (share_failed_) return;
+        if (!shared_[0] || shared_w_ != (int)d.Width || shared_h_ != (int)d.Height) {
+            std::lock_guard<std::mutex> g(frame_lock_);
+            for (int i = 0; i < 2; i++) {
+                if (shared_handle_[i]) CloseHandle(shared_handle_[i]);
+                shared_handle_[i] = nullptr;
+                shared_mutex_[i].Reset();
+                shared_[i].Reset();
+            }
+            shared_latest_ = -1;
+            D3D11_TEXTURE2D_DESC sd = {};
+            sd.Width = d.Width; sd.Height = d.Height; sd.MipLevels = 1; sd.ArraySize = 1;
+            sd.Format = DXGI_FORMAT_B8G8R8A8_UNORM; sd.SampleDesc.Count = 1;
+            sd.Usage = D3D11_USAGE_DEFAULT;
+            sd.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
+            sd.MiscFlags = D3D11_RESOURCE_MISC_SHARED_NTHANDLE | D3D11_RESOURCE_MISC_SHARED_KEYEDMUTEX;
+            for (int i = 0; i < 2; i++) {
+                ComPtr<IDXGIResource1> r;
+                if (FAILED(d3d_->CreateTexture2D(&sd, nullptr, &shared_[i])) ||
+                    FAILED(shared_[i].As(&r)) || FAILED(shared_[i].As(&shared_mutex_[i])) ||
+                    FAILED(r->CreateSharedHandle(nullptr, DXGI_SHARED_RESOURCE_READ | DXGI_SHARED_RESOURCE_WRITE,
+                                                 nullptr, &shared_handle_[i]))) {
+                    fprintf(stderr, "[HTMLPRES] shared textures unavailable; CPU copies\n");
+                    share_failed_ = true;
+                    gpu_only_ = false;
+                    return;
+                }
+            }
+            shared_w_ = (int)d.Width; shared_h_ = (int)d.Height;
+        }
+        int idx = shared_latest_ == 0 ? 1 : 0;
+        if (shared_mutex_[idx]->AcquireSync(0, 100) != S_OK) return;
+        d3d_ctx_->CopyResource(shared_[idx].Get(), tex);
+        shared_mutex_[idx]->ReleaseSync(0);
+        std::lock_guard<std::mutex> g(frame_lock_);
+        shared_latest_ = idx;
+        shared_serial_++;
     }
 
     PresentationHostConfig config_;
@@ -418,6 +484,14 @@ private:
     std::vector<uint8_t> back_, front_, consumer_;
     int frame_w_ = 0, frame_h_ = 0;
     uint64_t front_serial_ = 0, consumer_serial_ = 0;
+
+    ComPtr<ID3D11Texture2D> shared_[2];
+    ComPtr<IDXGIKeyedMutex> shared_mutex_[2];
+    HANDLE shared_handle_[2] = { nullptr, nullptr };
+    int shared_w_ = 0, shared_h_ = 0, shared_latest_ = -1;
+    uint64_t shared_serial_ = 0;
+    std::atomic<bool> gpu_only_{ false };
+    bool share_failed_ = false;
 };
 
 } // namespace

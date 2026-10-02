@@ -114,7 +114,9 @@ static WORD file_press(BYTE analog[8])
     static int head, tail;
     static DWORD next_check, step_start;
     static int pressing;
-    const char *path = getenv("NFL2K5_PRESS_FILE");
+    static const char *path;          /* looked up once: getenv per poll was ~15% of the game thread */
+    static int looked;
+    if (!looked) { path = getenv("NFL2K5_PRESS_FILE"); looked = 1; }
     DWORD now = GetTickCount();
     WORD buttons = 0;
 
@@ -256,7 +258,9 @@ static void host_gamepad(XBOX_GAMEPAD *g)
      * (2026-09-25). Only for 15 s after the last scripted press, though --
      * ignoring the pad for the whole run left the user on the keyboard in
      * every game a script had launched (2026-10-01). */
-    if (!(getenv("NFL2K5_NO_HOST_PAD") && g_last_script_press &&
+    static int no_host_pad = -1;
+    if (no_host_pad < 0) no_host_pad = getenv("NFL2K5_NO_HOST_PAD") != NULL;
+    if (!(no_host_pad && g_last_script_press &&
           GetTickCount() - g_last_script_press < 15000) &&
         xbox_InputGetState(0, &pad) == 0)
         *g = pad.Gamepad;

@@ -2198,7 +2198,9 @@ static void nfl2k5_frame_callback(void)
      * notification.  On the native bridge it is raised by the XPP path but
      * no interrupt completion clears it, leaving startup polling forever.
      * Keep this strictly opt-in until the completion source is modeled. */
-    if (getenv("RECOMP_BOOT_UNSTICK"))
+    static int unstick = -1;   /* getenv scans the whole environment: once */
+    if (unstick < 0) unstick = getenv("RECOMP_BOOT_UNSTICK") != NULL;
+    if (unstick)
         MEM32(0x00B04EC0u) = 0;
     POP32(g_esp, g_esi);
     sub_00040D20(); /* original tail jump consumes the caller return */

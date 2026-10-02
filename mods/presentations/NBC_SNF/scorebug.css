@@ -231,3 +231,65 @@ img.logo[src=""], img.logo:not([src]) { visibility: hidden; }
 #bug.closing .drive-bar > * { opacity: 0 !important; filter: blur(5px); }
 #bug.closing .drive-bar { clip-path: inset(0 100% 0 0); transition-delay: 0.25s; }
 #bug.closing .drive-stack { clip-path: inset(0 0 0 100%); transition-delay: 0.25s; }
+
+/* ---- starting lineup (LINEUP event) ----------------------------------
+ * Canvas pixels, measured from 1920x1080 frames of the 2025 SNF player
+ * introductions: bar 888-1016 (upper tone to ~953), 2 px edge, ribbon
+ * 1018-1080; silver logo panel behind a curved swoosh from x 1584 at the
+ * top to 1432 at the bottom; tab 810-1115 x 880-922; name caps 931-972,
+ * centred on x 962; sub-line caps 981-1010. Colours are the reference's
+ * (bar 0A2C3E over 042232, edge 002646, ribbon 001421 with 394D58 text);
+ * the team colour only tints the swoosh. */
+#lineup { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; pointer-events: none;
+  opacity: 0; transition: opacity 0.45s ease;
+  --lu-team: #003594;
+  --lu-top: #0a2c3e;
+  --lu-bot: #042232;
+  --lu-ribbon: #001421;
+  --lu-ink: #394d58;
+  --lu-font: "Bahnschrift", "Arial Narrow", "Arial", sans-serif; }
+#lineup.on { opacity: 1; }
+#lineup > *, #lineup .lu-bar > * { position: absolute; }
+#lineup .lu-bar { left: 0; top: 888px; width: 1920px; height: 128px; overflow: hidden;
+  background: linear-gradient(to bottom, var(--lu-top) 0, var(--lu-top) 50%, var(--lu-bot) 51%, var(--lu-bot) 100%);
+  transform: translateX(-100%); transition: transform 0.6s cubic-bezier(0.22, 0.9, 0.24, 1); }
+#lineup.on .lu-bar { transform: none; }
+#lineup .lu-ghost { left: 96px; top: -18px; width: 320px; height: 160px; opacity: 0.16; filter: grayscale(1) brightness(2.2); }
+#lineup .lu-ghost img, #lineup .lu-logo img { width: 100%; height: 100%; object-fit: contain; }
+#lineup .lu-panel { left: 1420px; top: 0; width: 500px; height: 128px; }
+#lineup .lu-swoosh { stroke: color-mix(in srgb, var(--lu-team) 40%, #2f86ff); }
+#lineup .lu-line { left: 0; top: 1016px; width: 1920px; height: 2px; background: #002646; }
+#lineup .lu-ribbon { left: 0; top: 1018px; width: 1920px; height: 62px; overflow: hidden; background: var(--lu-ribbon); }
+#lineup .lu-track { left: 0; top: 0; height: 62px; width: max-content; white-space: nowrap; display: flex; align-items: center;
+  animation: lu-scroll 30s linear infinite; }
+#lineup .lu-track span { flex: none; font: italic 700 20px/1 var(--lu-font); letter-spacing: 1px; color: var(--lu-ink); padding: 0 58px; }
+#lineup .lu-track i { flex: none; width: 22px; height: 22px; display: block; background: var(--lu-ink);
+  clip-path: polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); opacity: 0.9; }
+@keyframes lu-scroll { to { transform: translateX(-50%); } }
+#lineup .lu-logo { left: 1530px; top: 790px; width: 316px; height: 276px;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.45)); transform: scale(0.6); opacity: 0;
+  transition: transform 0.5s 0.25s cubic-bezier(0.3, 1.5, 0.5, 1), opacity 0.3s 0.25s; }
+#lineup.on .lu-logo { transform: none; opacity: 1; }
+#lineup .lu-portrait { left: 70px; top: 660px; width: 420px; height: 420px; object-fit: contain;
+  filter: drop-shadow(8px 0 18px rgba(0, 0, 0, 0.35)); transition: opacity 0.25s, transform 0.35s; }
+#lineup .lu-card { left: 562px; top: 0; width: 800px; height: 1080px; transition: opacity 0.25s; }
+#lineup .lu-card > * { position: absolute; left: 0; width: 800px; text-align: center; }
+#lineup .lu-tab { left: 248px; width: 305px; top: 880px; height: 42px;
+  clip-path: polygon(0 0, 100% 0, 94% 100%, 6% 100%);
+  background: linear-gradient(to bottom, #f6f8f9, #c9d0d4); color: #0d2434;
+  font: 400 31px/42px var(--lu-font); }
+#lineup .lu-tab .pos { font-weight: 700; margin-right: 10px; }
+#lineup .lu-name { top: 918px; font: italic 700 64px/1 var(--lu-font); font-stretch: condensed; letter-spacing: 0.5px;
+  text-transform: uppercase; background: linear-gradient(to bottom, #ffffff 30%, #bfe2fb); -webkit-background-clip: text;
+  background-clip: text; color: transparent; transform: skewX(-6deg); }
+#lineup .lu-sub { top: 974px; font: italic 700 40px/1 var(--lu-font); font-stretch: semi-condensed; color: #e9f3fa;
+  text-transform: uppercase; transform: skewX(-6deg); }
+#lineup.swap .lu-card, #lineup.swap .lu-portrait { opacity: 0; }
+#lineup.swap .lu-portrait { transform: translateX(-40px); }
+/* Layering as in the reference: the logo's lower points pass behind the
+ * edge and ribbon; the player stands in front of everything. */
+#lineup .lu-bar { z-index: 1; }
+#lineup .lu-logo { z-index: 2; }
+#lineup .lu-line, #lineup .lu-ribbon { z-index: 3; }
+#lineup .lu-card { z-index: 4; }
+#lineup .lu-portrait { z-index: 5; left: 90px; top: 690px; width: 390px; height: 390px; }

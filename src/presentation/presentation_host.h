@@ -28,11 +28,22 @@ struct PresentationSurface {
     uint64_t serial = 0;
 };
 
+/* The newest frame as a GPU texture shared between devices: an NT handle
+ * from IDXGIResource1::CreateSharedHandle, B8G8R8A8 premultiplied, guarded
+ * by a keyed mutex used as a plain lock (key 0). Open it with
+ * ID3D11Device1::OpenSharedResource1; hold the lock while drawing it. */
+struct PresentationSharedSurface {
+    void *handle = nullptr;
+    int width = 0, height = 0;
+    uint64_t serial = 0;
+};
+
 struct PresentationHostConfig {
     std::string package_dir;          /* e.g. mods/presentations/HTML_Test */
     std::string entry = "index.html"; /* page inside package_dir */
     std::string root_dir;             /* folder served as https://presentation.local/ */
     std::string teams_dir;            /* folder served as https://teams.local/ */
+    std::string portraits_dir;        /* folder served as https://portraits.local/ (player headshots) */
     int canvas_width = 1920;          /* logical CSS pixels */
     int canvas_height = 1080;
     float raster_scale = 1.0f;        /* device pixels per CSS pixel */
@@ -56,6 +67,12 @@ public:
     /* The newest frame, valid until the next call. Returns false until the
      * first frame exists. */
     virtual bool acquire_surface(PresentationSurface &out) = 0;
+
+    /* The newest frame without leaving the GPU. Once called, the host stops
+     * copying frames to the CPU (acquire_surface turns them back on).
+     * Returns false until a shared frame exists or when sharing is
+     * unavailable. */
+    virtual bool acquire_shared(PresentationSharedSurface &out) { (void)out; return false; }
 
     /* Readable status for logs ("loading", "running", or an error). */
     virtual std::string status() const = 0;
