@@ -2260,6 +2260,16 @@ extern "C" int nfl2k5_lineup_hide_native(void)
     return k > 0 && k < (int)s_pkgs.size() && s_pkgs[k].html && s_pkgs[k].replaces_lineup && s_html.host ? 1 : 0;
 }
 
+/* While a package's lineup intro plays, the game's own player cards (popup
+ * slot 1: rookie cards, career stats) would cover it; main.c's popup hook
+ * asks this and closes them at once. */
+static volatile DWORD s_lineup_until;
+extern "C" int nfl2k5_lineup_active(void)
+{
+    DWORD until = s_lineup_until;
+    return until && (int32_t)(until - GetTickCount()) > 0;
+}
+
 extern "C" void nfl2k5_lineup_ticker(uint32_t sp)
 {
     std::string players;
@@ -2286,6 +2296,8 @@ extern "C" void nfl2k5_lineup_ticker(uint32_t sp)
     }
     fprintf(stderr, "[PRES] lineup %s: %s\n", offense ? "offense" : "defense", players.c_str());
     if (n) xbox_PresentRecord(36);        /* NFL2K5_REC=<prefix>: record the intro (11 x 2.6 s) */
+    if (n && nfl2k5_lineup_hide_native())  /* the package plays it: keep the game's cards out of its way */
+        s_lineup_until = GetTickCount() + (DWORD)n * 2600u + 1500u;
     if (!n) return;
     std::lock_guard<std::mutex> lock(s_lineup_lock);
     s_lineups.push_back({ offense, players });

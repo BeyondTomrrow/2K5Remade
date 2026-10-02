@@ -1034,6 +1034,16 @@ void nfl2k5_diag_popup(uint32_t obj, int what)
     if (what == 0) {
         char title[64], msg[128];
         int i;
+        {
+            /* A presentation package is playing its lineup intro: the
+             * game's player card (slot 1) closes at once instead of
+             * covering it (src/nfl2k5_presentation.cpp). */
+            extern int nfl2k5_lineup_active(void);
+            if (*(const int32_t *)(m + obj) == 1 && nfl2k5_lineup_active()) {
+                *(float *)((uint8_t *)m + obj + 8u) = 0.01f;
+                fprintf(stderr, "  [POPUPOP] card closed: lineup intro playing\n");
+            }
+        }
         for (i = 0; i < 63 && *(const uint16_t *)(m + obj + 0x4Cu + i * 2u); i++)
             title[i] = (char)*(const uint16_t *)(m + obj + 0x4Cu + i * 2u);
         title[i] = 0;
