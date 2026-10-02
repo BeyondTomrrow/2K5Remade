@@ -1,4 +1,4 @@
-﻿param([string[]]$Side = @('left'), [string]$Tag = 'qd', [int]$PlaySeconds = 300, [int]$ShotEvery = 30, [string]$Exe = 'build\Release\NFL2K5.exe', [int]$TapEvery = 0, [switch]$NoSkip)
+﻿param([string[]]$Side = @('left'), [string]$Tag = 'qd', [int]$PlaySeconds = 300, [int]$ShotEvery = 30, [string]$Exe = 'build\Release\NFL2K5.exe', [int]$TapEvery = 0, [switch]$NoSkip, [string[]]$HomeTeam = @())
 # Drive a CPU-vs-CPU Quick Game: title -> main menu -> Quick Game -> Team
 # Select (the controller starts on the HOME side; the default one Left press
 # moves it to the middle = CPU vs CPU) -> Coach Matchup -> Start Game ->
@@ -22,6 +22,7 @@ Press start 8       # attract demo (if it started) -> title
 Press start 6       # title -> "Successfully loaded Settings" popup
 Press a 8           # dismiss the popup -> main menu
 Press a 12          # Quick Game
+foreach ($h in $HomeTeam) { Press $h 2 }   # e.g. -HomeTeam (,'lt'*11) = 49ers (default home is Cowboys)
 if ($Side) { Press $Side 3 }   # from home: left = middle (CPU vs CPU), left left = away, -Side @() = play home
 Press start 12      # Team Select -> Coach Matchup
 Press a 30          # Start Game -> loading -> pregame
