@@ -1774,5 +1774,225 @@
   {
     "start": "0x0042FE90",
     "note": "2026-09-25 evening: restored -- not reached by fall-through from the preceding code (after ret/jmp, padding such as lea esp,[esp], or data)."
+  },
+  {
+    "start": "0x00016ADC",
+    "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
+  },
+  {
+    "start": "0x0001769B",
+    "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
+  },
+  {
+    "start": "0x0001769D",
+    "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
+  },
+  {
+    "start": "0x0008FFE7",
+    "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
+  },
+  {
+    "start": "0x00095002",
+    "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
+  },
+  {
+    "start": "0x000A130D",
+    "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
+  },
+  {
+    "start": "0x000AAB5D",
+    "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
+  },
+  {
+    "start": "0x000C1E75",
+    "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
+  },
+  {
+    "start": "0x000CA735",
+    "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
+  },
+  {
+    "start": "0x000CA738",
+    "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
+  },
+  {
+    "start": "0x00112334",
+    "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
+  },
+  {
+    "start": "0x0011233A",
+    "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
+  },
+  {
+    "start": "0x0012F9EE",
+    "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
+  },
+  {
+    "start": "0x0013986A",
+    "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
+  },
+  {
+    "start": "0x001398AA",
+    "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
+  },
+  {
+    "start": "0x00162F15",
+    "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
+  },
+  {
+    "start": "0x001A95F3",
+    "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
+  },
+  {
+    "start": "0x001A95F7",
+    "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
+  },
+  {
+    "start": "0x001D8DCF",
+    "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
+  },
+  {
+    "start": "0x001D9E34",
+    "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
+  },
+  {
+    "start": "0x002176BC",
+    "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
+  },
+  {
+    "start": "0x002176C0",
+    "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
+  },
+  {
+    "start": "0x002176C4",
+    "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
+  },
+  {
+    "start": "0x0021C7B9",
+    "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
+  },
+  {
+    "start": "0x0021C8E0",
+    "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
+  },
+  {
+    "start": "0x0021D329",
+    "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
+  },
+  {
+    "start": "0x0024FF9C",
+    "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
+  },
+  {
+    "start": "0x0025F35C",
+    "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
+  },
+  {
+    "start": "0x0026189F",
+    "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
+  },
+  {
+    "start": "0x0026FEF8",
+    "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
+  },
+  {
+    "start": "0x0028F4B1",
+    "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
+  },
+  {
+    "start": "0x002992EE",
+    "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
+  },
+  {
+    "start": "0x002994F8",
+    "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
+  },
+  {
+    "start": "0x002B37FE",
+    "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
+  },
+  {
+    "start": "0x002B381E",
+    "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
+  },
+  {
+    "start": "0x002B383E",
+    "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
+  },
+  {
+    "start": "0x002B385E",
+    "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
+  },
+  {
+    "start": "0x002B387E",
+    "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
+  },
+  {
+    "start": "0x002B389E",
+    "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
+  },
+  {
+    "start": "0x002B3AAE",
+    "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
+  },
+  {
+    "start": "0x002B3AFE",
+    "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
+  },
+  {
+    "start": "0x002B3B1E",
+    "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
+  },
+  {
+    "start": "0x002B9C3E",
+    "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
+  },
+  {
+    "start": "0x002C3B46",
+    "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
+  },
+  {
+    "start": "0x002C3C56",
+    "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
+  },
+  {
+    "start": "0x0033BEF8",
+    "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
+  },
+  {
+    "start": "0x00347A8B",
+    "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
+  },
+  {
+    "start": "0x00375F82",
+    "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
+  },
+  {
+    "start": "0x003B07D2",
+    "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
+  },
+  {
+    "start": "0x003B07E1",
+    "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
+  },
+  {
+    "start": "0x003E7D7D",
+    "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
+  },
+  {
+    "start": "0x004BABBE",
+    "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
+  },
+  {
+    "start": "0x004BC79D",
+    "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
+  },
+  {
+    "start": "0x004D0E47",
+    "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
+  },
+  {
+    "start": "0x004D0E49",
+    "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
   }
 ]

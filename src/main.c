@@ -2381,6 +2381,18 @@ int main(int argc, char **argv)
         fprintf(stderr, "[BOOT] Could not use runtime root %s (error %lu)\n",
                 root, (unsigned long)GetLastError());
     }
+    {
+        /* Launched by double-click (stderr goes nowhere): keep the session's
+         * output in logs/session.log, so a crash or freeze in normal play
+         * still leaves its report behind. Scripts that redirect stderr keep
+         * their own file. */
+        DWORD type = GetFileType(GetStdHandle(STD_ERROR_HANDLE));
+        if (type != FILE_TYPE_DISK && type != FILE_TYPE_PIPE) {
+            CreateDirectoryA("logs", NULL);
+            if (freopen("logs/session.log", "w", stderr))
+                setvbuf(stderr, NULL, _IOLBF, 1 << 16);
+        }
+    }
     char disc_dir[MAX_PATH], disc_xbe[MAX_PATH], original_dir[MAX_PATH], original_xbe[MAX_PATH], save_dir[MAX_PATH];
     snprintf(disc_dir, sizeof disc_dir, "%s/original/disc", root);
     snprintf(disc_xbe, sizeof disc_xbe, "%s/default.xbe", disc_dir);
