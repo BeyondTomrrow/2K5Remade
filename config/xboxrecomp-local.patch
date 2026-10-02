@@ -3950,10 +3950,10 @@ index 0000000..55d31a1
 +}
 diff --git a/src/kernel/nv2a_gpu_d3d11.inc.c b/src/kernel/nv2a_gpu_d3d11.inc.c
 new file mode 100644
-index 0000000..213d3a0
+index 0000000..f7fb88f
 --- /dev/null
 +++ b/src/kernel/nv2a_gpu_d3d11.inc.c
-@@ -0,0 +1,1740 @@
+@@ -0,0 +1,1811 @@
 +/* ── Hardware rendering (Direct3D 11) ─────────────────────────────────────
 + *
 + * Included into nv2a_pb_exec.c (it reads that file's state directly), after
@@ -4796,7 +4796,7 @@ index 0000000..213d3a0
 +    if (i == 64)
 +        i = 0;
 +    for (int k = 0; k < 2; k++)
-+        am[k] = modes[k] == 1 ? D3D11_TEXTURE_ADDRESS_WRAP
++        am[k] = (modes[k] == 1 || env_cached("RECOMP_FORCE_WRAP")) ? D3D11_TEXTURE_ADDRESS_WRAP
 +              : modes[k] == 2 ? D3D11_TEXTURE_ADDRESS_MIRROR
 +              : modes[k] == 4 ? D3D11_TEXTURE_ADDRESS_BORDER
 +              : D3D11_TEXTURE_ADDRESS_CLAMP;
@@ -5054,6 +5054,76 @@ index 0000000..213d3a0
 +    return x;
 +}
 +
++/* RECOMP_TRI_DUMP=<texture hex>,<ms>: after that many ms, write every CPU-
++ * transformed triangle drawn with that texture during one frame to
++ * logs\tridump.txt (x y z w per corner, then the draw's vp start). */
++static void gpu_tri_dump(const XfVert *a, const XfVert *b, const XfVert *c, uint32_t ia, uint32_t ib, uint32_t ic)
++{
++    static int state = -1;          /* -1 unparsed, 0 off, 1 waiting, 2 dumping, 3 done */
++    static uint32_t tex;
++    static DWORD after, t0, frame;
++    static FILE *f;
++    if (state < 0) {
++        const char *e = env_cached("RECOMP_TRI_DUMP");
++        state = 0;
++        if (e && sscanf(e, "%x,%lu", &tex, &after) == 2) state = 1;
++    }
++    if (state == 0 || state == 3) return;
++    if (!t0) t0 = GetTickCount();
++    if (state == 1) {
++        if (GetTickCount() - t0 < after) return;
++        state = 2;
++        frame = s_gpu11.frame;
++        f = fopen("logs\\tridump.txt", "w");
++    }
++    if (s_gpu11.frame != frame) { if (f) fclose(f); f = NULL; state = 3; return; }
++    if (!f || (tex && (!s_gpu.tex.valid || s_gpu.tex.offset != tex))) return;   /* tex 0: every draw */
++    {   /* once per draw: the constant rows the skinning program reads */
++        static uint32_t last_draws = 0xFFFFFFFFu;
++        if (s_gpu.draws != last_draws) {
++            int q;
++            last_draws = s_gpu.draws;
++            fprintf(f, "DRAW %u start %u tex %08X\n", s_gpu.draws, s_vp.start, s_gpu.tex.valid ? s_gpu.tex.offset : 0);
++            if (tex) for (q = 0; q < 192; q++)
++                fprintf(f, "C %d %g %g %g %g\n", q, s_vp.c[q][0], s_vp.c[q][1], s_vp.c[q][2], s_vp.c[q][3]);
++        }
++    }
++    {
++        float ba[4], bb[4], bc[4], pa[4], pb[4], pc[4];
++        fetch_attr(&s_gpu.attr[1], ia, ba); fetch_attr(&s_gpu.attr[1], ib, bb); fetch_attr(&s_gpu.attr[1], ic, bc);
++        fetch_attr(&s_gpu.attr[0], ia, pa); fetch_attr(&s_gpu.attr[0], ib, pb); fetch_attr(&s_gpu.attr[0], ic, pc);
++        fprintf(f, "%g %g %g %g %g %g %g %g %g %g %g %g %u %d%d%d bones %g %g %g idx %u %u %u in %g,%g,%g %g,%g,%g %g,%g,%g\n",
++                a->x, a->y, a->z, a->w, b->x, b->y, b->z, b->w, c->x, c->y, c->z, c->w, s_vp.start, a->ok, b->ok, c->ok,
++                ba[0], bb[0], bc[0], ia, ib, ic, pa[0], pa[1], pa[2], pb[0], pb[1], pb[2], pc[0], pc[1], pc[2]);
++    }
++}
++
++/* RECOMP_VP_REJ_LOG=1: the first vertices whose transformed position is
++ * unusable (triangle dropped): program start, output and every input attribute. */
++static void gpu_log_rejected(uint32_t index, const XfVert *v)
++{
++    static int on = -1, n;
++    if (on < 0) on = env_cached("RECOMP_VP_REJ_LOG") != NULL;
++    static DWORD t0;
++    if (!on || v->ok || n >= 60) return;
++    if (!t0) t0 = GetTickCount();
++    {
++        const char *after = env_cached("RECOMP_VP_REJ_AFTER");   /* ms after the first rejection */
++        if (after && GetTickCount() - t0 < (DWORD)atoi(after)) return;
++    }
++    n++;
++    fprintf(stderr, "  [VPREJ] start %u prim %u idx %u out (%g,%g,%g,%g)\n",
++            s_vp.start, s_gpu.prim, index, v->x, v->y, v->z, v->w);
++    for (uint32_t k = 0; k < NV_VERTEX_ATTRS; k++) {
++        float in[4];
++        if (!s_gpu.attr[k].size) continue;
++        fetch_attr(&s_gpu.attr[k], index, in);
++        fprintf(stderr, "  [VPREJ]   attr%u off %08X type %u size %u stride %u = %g %g %g %g\n", k,
++                s_gpu.attr[k].offset, s_gpu.attr[k].type, s_gpu.attr[k].size, s_gpu.attr[k].stride,
++                in[0], in[1], in[2], in[3]);
++    }
++}
++
 +/* Draw the triangles of the current batch: transformed by the vertex
 + * program, or (flat2d) pre-transformed screen-space vertices shaded like the
 + * software 2D path -- texture x diffuse, no combiners, depth or stencil.
@@ -5085,11 +5155,12 @@ index 0000000..213d3a0
 +
 +#define GPU_TRI(a_, b_, c_) do { \
 +        const XfVert *A_ = get(ix[a_]), *B_ = get(ix[b_]), *C_ = get(ix[c_]); \
++        gpu_tri_dump(A_, B_, C_, ix[a_], ix[b_], ix[c_]); \
 +        if (A_->ok && B_->ok && C_->ok && nv + 3 <= GPU_MAX_VERTS) { \
 +            gpu_vertex(&s_gpu11.verts[nv++], A_, rw, rh); \
 +            gpu_vertex(&s_gpu11.verts[nv++], B_, rw, rh); \
 +            gpu_vertex(&s_gpu11.verts[nv++], C_, rw, rh); \
-+        } else s_vp.rej_bad++; } while (0)
++        } else { s_vp.rej_bad++; gpu_log_rejected(ix[a_], A_); gpu_log_rejected(ix[b_], B_); gpu_log_rejected(ix[c_], C_); } } while (0)
 +    /* Lines (NV097 2 lines, 3 line loop, 4 line strip) go out as a D3D line
 +     * list: play art on the play-calling screen, field markings. */
 +#define GPU_LINE(a_, b_) do {         const XfVert *A_ = get(ix[a_]), *B_ = get(ix[b_]);         if (A_->ok && B_->ok && nv + 2 <= GPU_MAX_VERTS) {             gpu_vertex(&s_gpu11.verts[nv++], A_, rw, rh);             gpu_vertex(&s_gpu11.verts[nv++], B_, rw, rh);         } else s_vp.rej_bad++; } while (0)
@@ -7254,10 +7325,10 @@ index 0000000..6951738
 +}
 diff --git a/src/kernel/nv2a_gpu_vp.inc.c b/src/kernel/nv2a_gpu_vp.inc.c
 new file mode 100644
-index 0000000..bd7bffe
+index 0000000..4dbc714
 --- /dev/null
 +++ b/src/kernel/nv2a_gpu_vp.inc.c
-@@ -0,0 +1,643 @@
+@@ -0,0 +1,647 @@
 +/* ── NV2A vertex programs on the GPU ─────────────────────────────────────
 + *
 + * Included into nv2a_gpu_d3d11.inc.c. Opt-in with RECOMP_GPU_VP=1 while it is
@@ -7656,7 +7727,11 @@ index 0000000..bd7bffe
 +    {
 +        const char *dump = env_cached("RECOMP_GPU_VP_DUMP_START");
 +        static uint8_t dumped[256];
++        static DWORD dump_t0;
++        const char *dump_after = env_cached("RECOMP_GPU_VP_DUMP_AFTER");   /* ms after first use */
++        if (dump && !dump_t0) dump_t0 = GetTickCount();
 +        if (dump && s_vp.start < sizeof dumped && !dumped[s_vp.start]
++                && (!dump_after || GetTickCount() - dump_t0 >= (DWORD)atoi(dump_after))
 +                && (uint32_t)strtoul(dump, NULL, 0) == s_vp.start) {
 +            uint32_t len = 0, slot;
 +            char *src = gpu_vp_translate(s_vp.start, &len);
@@ -7902,7 +7977,7 @@ index 0000000..bd7bffe
 +    return 1;
 +}
 diff --git a/src/kernel/nv2a_pb_exec.c b/src/kernel/nv2a_pb_exec.c
-index b3dcbf7..5b37dcf 100644
+index b3dcbf7..aaf449c 100644
 --- a/src/kernel/nv2a_pb_exec.c
 +++ b/src/kernel/nv2a_pb_exec.c
 @@ -24,8 +24,11 @@
@@ -8000,7 +8075,27 @@ index b3dcbf7..5b37dcf 100644
  #define NV097_SET_TEXTURE_ADDRESS         0x1B08
  #define NV097_SET_TEXTURE_CONTROL1        0x1B10
  #define NV097_SET_TEXTURE_IMAGE_RECT      0x1B1C
-@@ -214,6 +266,8 @@ typedef struct {
+@@ -200,6 +252,19 @@ typedef struct {
+ 
+ #define NV_VERTEX_ATTRS 16
+ #define NV_MAX_INDICES  4096
++
++/* Indices that did not fit a batch (silently lost before 2026-10-02). */
++static void idx_overflow_note(const char *how, uint32_t dropped)
++{
++    static unsigned long total, events;
++    static DWORD last;
++    total += dropped; events++;
++    if (GetTickCount() - last > 2000) {
++        fprintf(stderr, "  [IDXCAP] %lu batches overflowed, %lu indices dropped (last: %s)""\n", events, total, how);
++        last = GetTickCount();
++    }
++}
++
+ #define NV_MAX_INLINE   4096            /* dwords of INLINE_ARRAY per batch */
+ 
+ /* Texture stage 0, decoded from what the title programmed.
+@@ -214,6 +279,8 @@ typedef struct {
      uint32_t pitch;                     /* bytes per row, from CONTROL1  */
      uint32_t color;                     /* NV097 colour-format code      */
      uint32_t addr_u, addr_v;            /* wrap mode per axis            */
@@ -8009,7 +8104,7 @@ index b3dcbf7..5b37dcf 100644
      int      valid;
  } Texture;
  
-@@ -222,6 +276,11 @@ static struct {
+@@ -222,6 +289,11 @@ static struct {
      uint32_t   prim;                    /* SET_BEGIN_END parameter, 0 = ended */
      uint16_t   idx[NV_MAX_INDICES];
      uint32_t   idx_count;
@@ -8021,7 +8116,7 @@ index b3dcbf7..5b37dcf 100644
      /* INLINE_ARRAY payload: vertices written straight into the pushbuffer
       * instead of into a buffer the title points at. Same vertex format, a
       * different place to read them from. */
-@@ -237,6 +296,7 @@ static struct {
+@@ -237,6 +309,7 @@ static struct {
      uint32_t   draws, verts, nonzero_draws;
      float      min_x, max_x, min_y, max_y;
      uint32_t color_offset, color_base, pitch, format;
@@ -8029,7 +8124,7 @@ index b3dcbf7..5b37dcf 100644
      /* The surface the last batch actually drew into. A double-buffered title
       * has already pointed color_offset at the next buffer and cleared it by
       * the time the flip arrives, so dumping the current one dumps the frame
-@@ -246,7 +306,13 @@ static struct {
+@@ -246,7 +319,13 @@ static struct {
      uint64_t pixels;
      uint32_t pixel_max;   /* brightest value any pixel write carried */
      uint32_t clip_x, clip_w, clip_y, clip_h;
@@ -8043,7 +8138,7 @@ index b3dcbf7..5b37dcf 100644
      uint32_t clears, unhandled_total;
      uint32_t flip_read, flip_write, flip_modulo, flips;
      uint32_t tris_drawn, tris_skipped_offscreen, batches_untransformed;
-@@ -257,6 +323,18 @@ static struct {
+@@ -257,6 +336,18 @@ static struct {
      Texture  tex;
  } s_gpu;
  
@@ -8062,7 +8157,7 @@ index b3dcbf7..5b37dcf 100644
  /* Unhandled methods, ranked. The interesting output is not that something was
   * skipped but which things dominate, because that is the order to implement
   * them in. */
-@@ -291,9 +369,22 @@ static void record_tex_reg(uint32_t method, uint32_t param)
+@@ -291,9 +382,22 @@ static void record_tex_reg(uint32_t method, uint32_t param)
       * which is nearly all of them, since swizzled is the Xbox default. That
       * left the title's own textures unsampled and every textured quad drawn in
       * flat vertex colour. */
@@ -8085,7 +8180,7 @@ index b3dcbf7..5b37dcf 100644
  }
  
  /* Every distinct texture a batch was drawn with, and how many batches used it.
-@@ -349,6 +440,11 @@ static void note_unhandled(uint32_t method, uint32_t param)
+@@ -349,6 +453,11 @@ static void note_unhandled(uint32_t method, uint32_t param)
          }
      }
      if (s_unhandled_count < PB_EXEC_MAX_UNHANDLED) {
@@ -8097,7 +8192,7 @@ index b3dcbf7..5b37dcf 100644
          s_unhandled[s_unhandled_count].method = method;
          s_unhandled[s_unhandled_count].count = 1;
          s_unhandled[s_unhandled_count].last_param = param;
-@@ -367,8 +463,12 @@ static int fetch_attr(const VertexAttr *a, uint32_t index, float out[4])
+@@ -367,8 +476,12 @@ static int fetch_attr(const VertexAttr *a, uint32_t index, float out[4])
  
      out[0] = out[1] = out[2] = 0.0f;
      out[3] = 1.0f;
@@ -8111,7 +8206,7 @@ index b3dcbf7..5b37dcf 100644
      if (s_gpu.inline_active) {
          /* The batch arrived as INLINE_ARRAY, so `offset` is a byte offset into
           * the buffered payload rather than a guest address -- and 0 is a legal
-@@ -389,9 +489,12 @@ static int fetch_attr(const VertexAttr *a, uint32_t index, float out[4])
+@@ -389,9 +502,12 @@ static int fetch_attr(const VertexAttr *a, uint32_t index, float out[4])
          /* A DWORD 0xAARRGGBB, so little-endian bytes are B,G,R,A -- not the
           * component order of every other format here. Returned as R,G,B,A so
           * callers need not know which format the title chose. */
@@ -8126,7 +8221,7 @@ index b3dcbf7..5b37dcf 100644
          out[3] = (float)p[3] / 255.0f;
          return 1;
      case 2:                                  /* float */
-@@ -402,6 +505,36 @@ static int fetch_attr(const VertexAttr *a, uint32_t index, float out[4])
+@@ -402,6 +518,36 @@ static int fetch_attr(const VertexAttr *a, uint32_t index, float out[4])
          for (i = 0; i < a->size && i < 4; i++)
              out[i] = (float)p[i] / 255.0f;
          return 1;
@@ -8163,7 +8258,7 @@ index b3dcbf7..5b37dcf 100644
      default:
          return 0;
      }
-@@ -501,6 +634,11 @@ static void raster_triangle(const float a[2], const float b[2],
+@@ -501,6 +647,11 @@ static void raster_triangle(const float a[2], const float b[2],
                              const float c[2], uint32_t argb,
                              const float uv[3][2]);
  
@@ -8175,7 +8270,7 @@ index b3dcbf7..5b37dcf 100644
  static void clear_surface(uint32_t param)
  {
      uint8_t *mem = (uint8_t *)xbox_GetMemoryOffset();
-@@ -520,6 +658,30 @@ static void clear_surface(uint32_t param)
+@@ -520,6 +671,30 @@ static void clear_surface(uint32_t param)
          s_gpu.color_base = base;
      }
  
@@ -8206,7 +8301,7 @@ index b3dcbf7..5b37dcf 100644
      for (y = 0; y < s_gpu.clip_h; y++) {
          uint8_t *row = mem + s_gpu.color_base
                       + (size_t)(s_gpu.clip_y + y) * s_gpu.pitch;
-@@ -538,6 +700,7 @@ static void clear_surface(uint32_t param)
+@@ -538,6 +713,7 @@ static void clear_surface(uint32_t param)
                  p[x] = v;
          }
      }
@@ -8214,7 +8309,7 @@ index b3dcbf7..5b37dcf 100644
      s_gpu.clears++;
      /* Progress markers, interleaved with everything else in the log. The
       * summary says drawing stopped; only a marker next to the surrounding
-@@ -597,7 +760,12 @@ static void clear_surface(uint32_t param)
+@@ -597,7 +773,12 @@ static void clear_surface(uint32_t param)
       * would show the one nothing is writing. */
      /* The window has to read where the pixels actually are, which is the
       * resolved address rather than the DMA-object offset. */
@@ -8228,7 +8323,7 @@ index b3dcbf7..5b37dcf 100644
  
      /* And open the window, rather than waiting for AvSetDisplayMode to do it.
       *
-@@ -710,6 +878,17 @@ static int sample_texture(uint32_t u, uint32_t v, uint32_t *argb)
+@@ -710,6 +891,17 @@ static int sample_texture(uint32_t u, uint32_t v, uint32_t *argb)
      if (d3d8_format_dxt_block_bytes(fmt))
          return d3d8_dxt_decode_texel(mem + s_gpu.tex.offset, fmt, u, v,
                                       s_gpu.tex.width, argb);
@@ -8246,7 +8341,7 @@ index b3dcbf7..5b37dcf 100644
      if (d3d8_format_is_swizzled(fmt)) {
          /* Morton order: a texel's index is interleaved from x and y instead of
           * v*pitch + u, so index from the base of the image. The switch below
-@@ -830,8 +1009,9 @@ static void dump_texture_bmp(uint32_t seq)
+@@ -830,8 +1022,9 @@ static void dump_texture_bmp(uint32_t seq)
      pad = (4 - (row_bytes & 3)) & 3;
      filesz = 54 + (row_bytes + pad) * h;
  
@@ -8258,7 +8353,7 @@ index b3dcbf7..5b37dcf 100644
      f = fopen(path, "wb");
      if (!f)
          return;
-@@ -913,6 +1093,112 @@ static void put_pixel(uint8_t *mem, uint32_t bpp, int x, int y, uint32_t argb)
+@@ -913,6 +1106,112 @@ static void put_pixel(uint8_t *mem, uint32_t bpp, int x, int y, uint32_t argb)
      }
  }
  
@@ -8371,7 +8466,7 @@ index b3dcbf7..5b37dcf 100644
  /* Half-space fill. Barycentric edge functions rather than scanline slopes:
   * the same test decides both windings, so a title that emits clockwise
   * triangles does not silently render nothing. */
-@@ -976,11 +1262,11 @@ static void raster_triangle(const float a[2], const float b[2],
+@@ -976,11 +1275,11 @@ static void raster_triangle(const float a[2], const float b[2],
                  if (su < 0.0f) su = 0.0f;
                  if (sv < 0.0f) sv = 0.0f;
                  if (sample_texture((uint32_t)su, (uint32_t)sv, &texel)) {
@@ -8385,7 +8480,7 @@ index b3dcbf7..5b37dcf 100644
          }
      }
      s_gpu.tris_drawn++;
-@@ -1136,11 +1422,18 @@ static int batch_is_screen_space(void)
+@@ -1136,11 +1435,18 @@ static int batch_is_screen_space(void)
  }
  
  /* NV097 primitive types that are triangles under some winding. */
@@ -8409,7 +8504,7 @@ index b3dcbf7..5b37dcf 100644
  
  /* How many post-draw captures to keep: enough to see whether the geometry
   * is stable from frame to frame, few enough not to fill a directory. */
-@@ -1210,14 +1503,30 @@ static void raster_batch(void)
+@@ -1210,14 +1516,30 @@ static void raster_batch(void)
                             vertex_color(s_gpu.idx[i]));
          break;
      case NV_PRIM_TRIANGLE_FAN:
@@ -8444,7 +8539,7 @@ index b3dcbf7..5b37dcf 100644
      default:
          break;                             /* points and lines: not yet */
      }
-@@ -1242,6 +1551,1299 @@ static void raster_batch(void)
+@@ -1242,6 +1564,1433 @@ static void raster_batch(void)
   * question is what space attribute 0 arrives in: a title running a vertex
   * program hands over object-space positions that mean nothing without running
   * it, while pre-transformed screen-space coordinates can be drawn directly. */
@@ -8827,6 +8922,10 @@ index b3dcbf7..5b37dcf 100644
 +
 +#define VP_PROG_LEN   136
 +#define VP_CONSTS     192
++/* Constant slots the title has written (RECOMP_VP_CONST_LOG): a matrix
++ * palette entry read through a0 that was never uploaded shows up here. */
++static uint8_t s_const_written[VP_CONSTS];
++static void const_unwritten_note(int c, int a0);
 +#define VP_VPSCL      0x3A     /* constant slots SET_VIEWPORT_* write */
 +#define VP_VPOFF      0x3B
 +
@@ -8864,6 +8963,20 @@ index b3dcbf7..5b37dcf 100644
 +           .color_mask = 0x01010101u,
 +           .clear_rx = 0x0FFF0000u, .clear_ry = 0x0FFF0000u };
 +
++static void const_unwritten_note(int c, int a0)
++{
++    static int on = -1, n;
++    static uint32_t seen[64];
++    uint32_t key = ((uint32_t)s_vp.start << 16) | (uint32_t)c;
++    int k;
++    if (on < 0) on = getenv("RECOMP_VP_CONST_LOG") != NULL;
++    if (!on || n >= 64) return;
++    for (k = 0; k < n; k++) if (seen[k] == key) return;
++    seen[n++] = key;
++    fprintf(stderr, "  [VPCONST] program start %u reads unwritten c[%d] (a0 %d, const_load now %u)\n",
++            s_vp.start, c, a0, s_vp.const_load);
++}
++
 +/* Returns 1 when the method was a transform-engine method. */
 +static int vp_method(uint32_t method, uint32_t param)
 +{
@@ -8880,8 +8993,10 @@ index b3dcbf7..5b37dcf 100644
 +    }
 +    if (method >= NV097_SET_TRANSFORM_CONSTANT && method < NV097_SET_TRANSFORM_CONSTANT + 0x80) {
 +        uint32_t slot = (method - NV097_SET_TRANSFORM_CONSTANT) / 4;
-+        if (s_vp.const_load < VP_CONSTS)
++        if (s_vp.const_load < VP_CONSTS) {
 +            s_vp.c[s_vp.const_load][slot % 4] = f;
++            s_const_written[s_vp.const_load] = 1;
++        }
 +        if (slot % 4 == 3)
 +            s_vp.const_load++;
 +        return 1;
@@ -8964,8 +9079,10 @@ index b3dcbf7..5b37dcf 100644
 +    case 2:  s = V[vp_field(t, 1, 9, 4)]; break;
 +    case 3: {
 +        int c = (int)vp_field(t, 1, 13, 8);
-+        if (vp_field(t, 3, 1, 1))
++        if (vp_field(t, 3, 1, 1)) {
 +            c += a0;
++            if (c >= 0 && c < VP_CONSTS && !s_const_written[c]) const_unwritten_note(c, a0);
++        }
 +        if (c < 0) c = 0;
 +        if (c >= VP_CONSTS) c = VP_CONSTS - 1;
 +        s = s_vp.c[c];
@@ -9082,7 +9199,26 @@ index b3dcbf7..5b37dcf 100644
 +        case 10: for (i = 0; i < 4; i++) mres[i] = A[i] > B[i] ? A[i] : B[i]; break; /* MAX */
 +        case 11: for (i = 0; i < 4; i++) mres[i] = A[i] < B[i] ? 1.0f : 0.0f; break; /* SLT */
 +        case 12: for (i = 0; i < 4; i++) mres[i] = A[i] >= B[i] ? 1.0f : 0.0f; break;/* SGE */
-+        case 13: new_a0 = (int)floorf(A[0] + 0.001f); a0_written = 1; break;          /* ARL */
++        case 13: new_a0 = (int)floorf(A[0] + 0.001f); a0_written = 1;                  /* ARL */
++            {   /* RECOMP_VP_A0_LOG: the address range each program start uses */
++                static int on = -1;
++                static int lo[256], hi[256], seen[256];
++                static DWORD last;
++                if (on < 0) on = getenv("RECOMP_VP_A0_LOG") != NULL;
++                if (on && s_vp.start < 256) {
++                    int st = (int)s_vp.start;
++                    if (!seen[st] || new_a0 < lo[st]) lo[st] = new_a0;
++                    if (!seen[st] || new_a0 > hi[st]) hi[st] = new_a0;
++                    seen[st] = 1;
++                    if (GetTickCount() - last > 3000) {
++                        int q;
++                        last = GetTickCount();
++                        for (q = 0; q < 256; q++)
++                            if (seen[q]) fprintf(stderr, "  [VPA0] start %d a0 %d..%d (input %g)\n", q, lo[q], hi[q], A[0]);
++                    }
++                }
++            }
++            break;
 +        default: break;
 +        }
 +
@@ -9741,13 +9877,108 @@ index b3dcbf7..5b37dcf 100644
 +            s_vp.depth_test, s_vp.depth_func, s_vp.depth_mask, s_vp.control0);
 +}
 +
++/* RECOMP_VB_WATCH=1: does the title rewrite a skinned batch's vertex data
++ * after the draw was executed? Each such draw records a hash of the vertex
++ * range it read; every later kick rehashes it. */
++static struct { uint32_t addr, len, hash, kick; } s_vbw[64];
++static uint32_t s_vbw_kick;
++static uint32_t vbw_hash(uint32_t addr, uint32_t len)
++{
++    const uint8_t *m = (const uint8_t *)xbox_GetMemoryOffset() + addr;
++    uint32_t h = 2166136261u, i;
++    for (i = 0; i < len; i++) h = (h ^ m[i]) * 16777619u;
++    return h;
++}
++static void vbw_record(void)
++{
++    static int on = -1;
++    uint32_t i, maxi = 0, len, k;
++    if (on < 0) on = getenv("RECOMP_VB_WATCH") != NULL;
++    if (!on || s_gpu.attr[1].type != 5 || !s_gpu.attr[0].stride || !s_gpu.idx_count) return;
++    for (i = 0; i < s_gpu.idx_count; i++) if (s_gpu.idx[i] > maxi) maxi = s_gpu.idx[i];
++    len = (maxi + 1) * s_gpu.attr[0].stride;
++    if (len > (1u << 20)) return;
++    {   /* static or rewritten between draws? per address, summary every 5 s */
++        static struct { uint32_t addr, hash, draws, changes; } t[256];
++        static DWORD last;
++        uint32_t h = vbw_hash(s_gpu.attr[0].offset, len), q;
++        for (q = 0; q < 256; q++)
++            if (!t[q].addr || t[q].addr == s_gpu.attr[0].offset) {
++                if (t[q].addr && t[q].hash != h) t[q].changes++;
++                t[q].addr = s_gpu.attr[0].offset; t[q].hash = h; t[q].draws++;
++                break;
++            }
++        if (GetTickCount() - last > 5000) {
++            uint32_t stat = 0, dyn = 0;
++            last = GetTickCount();
++            for (q = 0; q < 256 && t[q].addr; q++) {
++                if (t[q].changes) {
++                    dyn++;
++                    if (dyn <= 12) fprintf(stderr, "  [VBDYN] %08X changed %u of %u draws\n", t[q].addr, t[q].changes, t[q].draws);
++                } else stat++;
++            }
++            fprintf(stderr, "  [VBDYN] skinned buffers: %u static, %u rewritten\n", stat, dyn);
++        }
++    }
++    for (k = 0; k < 64; k++)
++        if (!s_vbw[k].len || s_vbw[k].addr == s_gpu.attr[0].offset) {
++            s_vbw[k].addr = s_gpu.attr[0].offset; s_vbw[k].len = len;
++            s_vbw[k].hash = vbw_hash(s_vbw[k].addr, len); s_vbw[k].kick = s_vbw_kick;
++            return;
++        }
++}
++void nv2a_vb_watch_kick(void)
++{
++    static int shown;
++    uint32_t k;
++    s_vbw_kick++;
++    for (k = 0; k < 64; k++) {
++        uint32_t d;
++        if (!s_vbw[k].len || s_vbw[k].kick == s_vbw_kick) continue;
++        d = s_vbw_kick - s_vbw[k].kick;
++        if (vbw_hash(s_vbw[k].addr, s_vbw[k].len) != s_vbw[k].hash) {
++            if (shown++ < 40)
++                fprintf(stderr, "  [VBWATCH] skinned vertex data %08X (+%u) changed %u kick(s) after its draw\n",
++                        s_vbw[k].addr, s_vbw[k].len, d);
++            s_vbw[k].len = 0;
++        } else if (d > 8) {
++            s_vbw[k].len = 0;
++        }
++    }
++}
++
++/* RECOMP_DRAW_LOG=<ms>: list 600 draws starting that long after the first
++ * draw (one scene's worth): layout, program, texture. */
++static void draw_list_log(void)
++{
++    static int on = -1;
++    static DWORD t0;
++    static unsigned n;
++    unsigned a;
++    if (on < 0) on = getenv("RECOMP_DRAW_LOG") != NULL;
++    if (!on || n >= 600) return;
++    if (!t0) t0 = GetTickCount();
++    if (GetTickCount() - t0 < (DWORD)atoi(getenv("RECOMP_DRAW_LOG"))) return;
++    n++;
++    fprintf(stderr, "  [DRAWLOG] #%u prim %u idx %u vpstart %u mode %u tex %08X fmt %02X %ux%u |",
++            n, s_gpu.prim, s_gpu.idx_count, s_vp.start, s_vp.mode, s_gpu.tex.valid ? s_gpu.tex.offset : 0,
++            s_gpu.tex.color, s_gpu.tex.width, s_gpu.tex.height);
++    for (a = 0; a < NV_VERTEX_ATTRS; a++)
++        if (s_gpu.attr[a].size)
++            fprintf(stderr, " a%u:%08X t%u s%u st%u", a, s_gpu.attr[a].offset, s_gpu.attr[a].type,
++                    s_gpu.attr[a].size, s_gpu.attr[a].stride);
++    fputc('\n', stderr);
++}
++
  static void draw_primitive(void)
  {
      float v[4];
-@@ -1250,6 +2852,24 @@ static void draw_primitive(void)
+@@ -1250,6 +2999,26 @@ static void draw_primitive(void)
      if (!s_gpu.prim || !s_gpu.idx_count)
          return;
      s_gpu.draws++;
++    vbw_record();
++    draw_list_log();
 +    trace_constant_arrays();
 +    trace_zeta_surface();
 +    /* RECOMP_PRIM_LOG: how many batches of each NV097 primitive type (points
@@ -9769,7 +10000,7 @@ index b3dcbf7..5b37dcf 100644
      if ((s_gpu.draws % 200) == 0)
          fprintf(stderr, "  [GPU] draw #%u\n", s_gpu.draws);
      s_gpu.verts += s_gpu.idx_count;
-@@ -1270,7 +2890,49 @@ static void draw_primitive(void)
+@@ -1270,7 +3039,49 @@ static void draw_primitive(void)
          }
      }
  
@@ -9820,7 +10051,52 @@ index b3dcbf7..5b37dcf 100644
  
      if (getenv("RECOMP_PB_EXEC_VERBOSE")) {
          static int shown;
-@@ -1390,6 +3052,12 @@ static void draw_inline_array(void)
+@@ -1359,6 +3170,44 @@ static void draw_primitive(void)
+     }
+ }
+ 
++/* A batch with more indices than s_gpu.idx holds is drawn in pieces: draw
++ * what is there and carry the indices the next piece needs to continue the
++ * primitive (a list's incomplete tail, a strip's last two -- three to keep
++ * the strip's winding alternation -- a fan's centre and last vertex). The
++ * rest used to be dropped, which removed the end of every large mesh: holes
++ * in faces and missing pieces of players (2026-10-02). */
++static void idx_make_room(uint32_t need)
++{
++    uint32_t n = s_gpu.idx_count, keep = 0, k;
++    uint16_t carry[4];
++    if (n + need <= NV_MAX_INDICES)
++        return;
++    switch (s_gpu.prim) {
++    case NV_PRIM_TRIANGLES:      keep = n % 3; break;
++    case NV_PRIM_QUADS:          keep = n % 4; break;
++    case NV_PRIM_LINES:          keep = n % 2; break;
++    case NV_PRIM_TRIANGLE_STRIP:
++    case NV_PRIM_QUAD_STRIP:     keep = (n % 2 == 0) ? 2 : 3; break;
++    case NV_PRIM_LINE_STRIP:
++    case NV_PRIM_LINE_LOOP:      keep = 1; break;
++    case NV_PRIM_TRIANGLE_FAN:
++    case NV_PRIM_POLYGON:        keep = 2; break;
++    default:                     keep = 0; break;
++    }
++    if (keep > n) keep = n;
++    if (s_gpu.prim == NV_PRIM_TRIANGLE_FAN || s_gpu.prim == NV_PRIM_POLYGON) {
++        carry[0] = s_gpu.idx[0];
++        carry[1] = s_gpu.idx[n - 1];
++    } else {
++        for (k = 0; k < keep; k++)
++            carry[k] = s_gpu.idx[n - keep + k];
++    }
++    draw_primitive();
++    for (k = 0; k < keep; k++)
++        s_gpu.idx[k] = carry[k];
++    s_gpu.idx_count = keep;
++}
++
+ /* Draw the vertices the title wrote straight into the pushbuffer.
+  *
+  * INLINE_ARRAY carries no offsets and no indices: the dwords between BEGIN and
+@@ -1390,6 +3239,12 @@ static void draw_inline_array(void)
          case 0:  bytes = 4;                        break;  /* D3DCOLOR   */
          case 2:  bytes = 4 * s_gpu.attr[a].size;   break;  /* float      */
          case 4:  bytes = s_gpu.attr[a].size;       break;  /* ubyte norm */
@@ -9833,7 +10109,16 @@ index b3dcbf7..5b37dcf 100644
          default: bytes = 4 * s_gpu.attr[a].size;   break;
          }
          s_gpu.attr[a].offset = off;
-@@ -1493,6 +3161,37 @@ static int imm_vertex_method(uint32_t method, uint32_t param)
+@@ -1400,6 +3255,8 @@ static void draw_inline_array(void)
+         goto out;
+ 
+     count = (s_gpu.inline_count * 4) / vsize;
++    if (count > NV_MAX_INDICES)
++        idx_overflow_note("inline array (whole batch)", count);
+     if (count < 3 || count > NV_MAX_INDICES)
+         goto out;
+     for (a = 0; a < NV_VERTEX_ATTRS; a++)
+@@ -1493,6 +3350,37 @@ static int imm_vertex_method(uint32_t method, uint32_t param)
      union { uint32_t u; float f; } v;
      v.u = param;
  
@@ -9871,7 +10156,7 @@ index b3dcbf7..5b37dcf 100644
      if (method >= NV097_SET_VERTEX4F && method < NV097_SET_VERTEX4F + 16) {
          uint32_t c = (method - NV097_SET_VERTEX4F) / 4;
          s_gpu.imm_pos[c] = v.f;
-@@ -1566,11 +3265,126 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1566,11 +3454,126 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
                      subch, method, param);
      }
  
@@ -9998,7 +10283,7 @@ index b3dcbf7..5b37dcf 100644
      case NV097_SET_SURFACE_CLIP_HORIZONTAL:
          s_gpu.clip_x = param & 0xFFFF;
          s_gpu.clip_w = (param >> 16) & 0xFFFF;
-@@ -1584,21 +3398,42 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1584,21 +3587,42 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
          break;
      case NV097_SET_SURFACE_PITCH:
          s_gpu.pitch = param & 0xFFFF;      /* colour pitch; zeta is the top half */
@@ -10041,7 +10326,7 @@ index b3dcbf7..5b37dcf 100644
              s_gpu.inline_count = 0;
              s_gpu.imm_count = 0;
          } else {
-@@ -1612,6 +3447,7 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1612,6 +3636,7 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
              else
                  draw_primitive();
              s_gpu.prim = 0;
@@ -10049,7 +10334,7 @@ index b3dcbf7..5b37dcf 100644
              s_gpu.inline_count = 0;
              s_gpu.imm_count = 0;
          }
-@@ -1620,8 +3456,20 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1620,8 +3645,20 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
      case NV097_INLINE_ARRAY:
          /* Vertex data, not a pointer to it. Buffered rather than decoded here
           * because the format is only fully known at END. */
@@ -10071,10 +10356,11 @@ index b3dcbf7..5b37dcf 100644
          break;
  
      case NV097_DRAW_ARRAYS: {
-@@ -1639,13 +3487,41 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1639,14 +3676,47 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
  
          if (!s_gpu.prim)
              break;
+-        for (i = 0; i < count && s_gpu.idx_count < NV_MAX_INDICES; i++)
 +        /* xemu keeps one (start,count) entry per DRAW_ARRAYS and submits each
 +         * as a separate draw.  It only joins immediately adjacent ranges.
 +         * Concatenating discontinuous triangle strips manufactured triangles
@@ -10086,8 +10372,10 @@ index b3dcbf7..5b37dcf 100644
 +            s_gpu.idx_count = 0;
 +        }
 +        s_gpu.draw_arrays_active = 1;
-         for (i = 0; i < count && s_gpu.idx_count < NV_MAX_INDICES; i++)
++        for (i = 0; i < count; i++) {
++            idx_make_room(1);
              s_gpu.idx[s_gpu.idx_count++] = (uint16_t)(start + i);
++        }
          break;
      }
  
@@ -10100,20 +10388,25 @@ index b3dcbf7..5b37dcf 100644
 +            s_gpu.idx_count = 0;
 +            s_gpu.draw_arrays_active = 0;
 +        }
-+        if (s_gpu.prim && s_gpu.idx_count < NV_MAX_INDICES)
++        if (s_gpu.prim) {
++            idx_make_room(1);
 +            s_gpu.idx[s_gpu.idx_count++] = (uint16_t)param;
++        }
 +        break;
      case NV097_ARRAY_ELEMENT16:
          /* Two 16-bit indices per parameter word. */
+-        if (s_gpu.prim && s_gpu.idx_count + 2 <= NV_MAX_INDICES) {
 +        if (s_gpu.draw_arrays_active && s_gpu.idx_count) {
 +            draw_primitive();
 +            s_gpu.idx_count = 0;
 +            s_gpu.draw_arrays_active = 0;
 +        }
-         if (s_gpu.prim && s_gpu.idx_count + 2 <= NV_MAX_INDICES) {
++        if (s_gpu.prim) {
++            idx_make_room(2);
              s_gpu.idx[s_gpu.idx_count++] = (uint16_t)(param & 0xFFFF);
              s_gpu.idx[s_gpu.idx_count++] = (uint16_t)(param >> 16);
-@@ -1659,6 +3535,23 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+         }
+@@ -1659,6 +3729,23 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
          record_tex_reg(method, param);
          break;
  
@@ -10137,7 +10430,7 @@ index b3dcbf7..5b37dcf 100644
      case NV097_SET_FLIP_READ:
          s_gpu.flip_read = param;
          return;
-@@ -1682,6 +3575,47 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1682,6 +3769,47 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
          /* The stall ends when the buffer being read is the one just finished.
           * There is no scanout here to wait for, so that is now. */
          s_gpu.flip_read = s_gpu.flip_write;
@@ -10185,7 +10478,7 @@ index b3dcbf7..5b37dcf 100644
          /* And this is a completed swap, which is what a title's own swap
           * counter counts -- see xbox_Nv2aFrameCounterFlip. */
          xbox_Nv2aFrameCounterFlip();
-@@ -1696,6 +3630,11 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1696,6 +3824,11 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
          return;
  
      case NV097_SET_TEXTURE_FORMAT:
@@ -10197,7 +10490,7 @@ index b3dcbf7..5b37dcf 100644
          s_gpu.tex.color = (param >> 8) & 0xFF;
          /* A swizzled texture carries its own dimensions here, as log2 in
           * BASE_SIZE_U/V (nv2a_regs.h: 0x00F00000 / 0x0F000000). It has to:
-@@ -1729,6 +3668,9 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -1729,6 +3862,9 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
      case NV097_SET_TEXTURE_IMAGE_RECT:
          s_gpu.tex.width  = param >> 16;
          s_gpu.tex.height = param & 0xFFFF;
@@ -10207,7 +10500,7 @@ index b3dcbf7..5b37dcf 100644
          record_tex_reg(method, param);
          break;
  
-@@ -1948,9 +3890,12 @@ void nv2a_pb_exec_report(void)
+@@ -1948,9 +4084,12 @@ void nv2a_pb_exec_report(void)
              dma_resolve(s_gpu.drawn_offset), s_gpu.color_offset,
              dma_resolve(s_gpu.color_offset));
      fprintf(stderr, "[GPU] rasterised %u triangles; %u batches skipped as not"
@@ -10815,7 +11108,7 @@ index 0000000..6def568
 +
 +#endif /* XBOX_GGL_H */
 diff --git a/src/kernel/xbox_memory_layout.c b/src/kernel/xbox_memory_layout.c
-index 53d8c75..0911884 100644
+index 53d8c75..ca4fb6d 100644
 --- a/src/kernel/xbox_memory_layout.c
 +++ b/src/kernel/xbox_memory_layout.c
 @@ -14,8 +14,12 @@
@@ -10948,7 +11241,7 @@ index 53d8c75..0911884 100644
                      /* Periodic, because what the title submits at init is not
                       * what it submits once it is drawing a menu, and the
                       * question the survey answers is about the latter. */
-@@ -848,6 +848,158 @@ static DWORD WINAPI nv2a_ack_thread(LPVOID param)
+@@ -848,6 +848,159 @@ static DWORD WINAPI nv2a_ack_thread(LPVOID param)
                  fflush(stderr);
              }
          }
@@ -11033,6 +11326,7 @@ index 53d8c75..0911884 100644
 +    LARGE_INTEGER t0 = { 0 }, t1;
 +    if (!g_nv2a_memory)
 +        return;
++    { extern void nv2a_vb_watch_kick(void); nv2a_vb_watch_kick(); }
 +    InterlockedExchange(&s_pb_sync_kick_active, 1);
 +    if (pb_profile_enabled()) QueryPerformanceCounter(&t0);
 +    AcquireSRWLockExclusive(&s_pb_exec_lock);
@@ -11107,7 +11401,7 @@ index 53d8c75..0911884 100644
          if (s_nv2a_trace) {
              static uint32_t last_start = 0xFFFFFFFFu;
              uint32_t start = *(volatile uint32_t *)((char *)regs + 0x600800);
-@@ -885,6 +1037,7 @@ static void xbox_Nv2aAckStart(void)
+@@ -885,6 +1038,7 @@ static void xbox_Nv2aAckStart(void)
      g_nv2a_ack_stop = 0;
      g_nv2a_ack_thread = CreateThread(NULL, 0, nv2a_ack_thread,
                                       g_nv2a_memory, 0, NULL);
@@ -11115,7 +11409,7 @@ index 53d8c75..0911884 100644
      if (g_nv2a_ack_thread) {
          fprintf(stderr, "  NV2A busy-bit ack: %zu register(s) acknowledged\n",
                  sizeof(NV2A_ACK) / sizeof(NV2A_ACK[0]));
-@@ -913,6 +1066,7 @@ ptrdiff_t g_xbox_mem_offset = 0;
+@@ -913,6 +1067,7 @@ ptrdiff_t g_xbox_mem_offset = 0;
   * nothing breaks before the title is loaded. */
  uint32_t g_xbox_image_lo = 0;
  uint32_t g_xbox_image_hi = 0;
@@ -11123,7 +11417,7 @@ index 53d8c75..0911884 100644
  uint32_t g_xbox_code_lo = 0;
  uint32_t g_xbox_code_hi = 0;
  
-@@ -1081,6 +1235,7 @@ extern volatile uint32_t g_icall_trace_idx;
+@@ -1081,6 +1236,7 @@ extern volatile uint32_t g_icall_trace_idx;
  extern volatile uint64_t g_icall_count;
  
  static uint32_t *s_watchdog_esp;
@@ -11131,7 +11425,7 @@ index 53d8c75..0911884 100644
  /* The other guest registers are thread-local too, so the watchdog has to be
   * handed the guest thread's copies rather than reading its own -- which are
   * always zero, and read as "every register is null" at exactly the moment the
-@@ -1224,11 +1379,15 @@ static DWORD WINAPI xbox_watchdog_thread(LPVOID unused)
+@@ -1224,11 +1380,15 @@ static DWORD WINAPI xbox_watchdog_thread(LPVOID unused)
  
      for (i = 0; i < 400 && esp; i++) {
          uint32_t a = esp + i * 4;
@@ -11148,7 +11442,7 @@ index 53d8c75..0911884 100644
      _exit(3);
      return 0;
  }
-@@ -1248,6 +1407,8 @@ void xbox_WatchdogStart(void)
+@@ -1248,6 +1408,8 @@ void xbox_WatchdogStart(void)
       * be handed the address of the one that matters rather than reading its
       * own, which is always zero. */
      s_watchdog_esp = &g_esp;
@@ -11157,7 +11451,7 @@ index 53d8c75..0911884 100644
      s_watchdog_regs[0] = &g_eax; s_watchdog_regs[1] = &g_ecx;
      s_watchdog_regs[2] = &g_edx; s_watchdog_regs[3] = &g_ebx;
      s_watchdog_regs[4] = &g_esi; s_watchdog_regs[5] = &g_edi;
-@@ -1669,6 +1830,8 @@ BOOL xbox_MemoryLayoutInit(const void *xbe_data, size_t xbe_size)
+@@ -1669,6 +1831,8 @@ BOOL xbox_MemoryLayoutInit(const void *xbe_data, size_t xbe_size)
  
      /* Set the global offset for recompiled code MEM macros */
      g_xbox_mem_offset = g_memory_offset;
@@ -11166,7 +11460,7 @@ index 53d8c75..0911884 100644
  
      /*
       * Initialize the Xbox stack for recompiled code.
-@@ -1718,7 +1881,12 @@ BOOL xbox_MemoryLayoutInit(const void *xbe_data, size_t xbe_size)
+@@ -1718,7 +1882,12 @@ BOOL xbox_MemoryLayoutInit(const void *xbe_data, size_t xbe_size)
           * only worked while page zero was mapped. Pointing at real zeroed
           * memory says the same thing to the title and survives that page being
           * unmapped, which is what makes a genuine null dereference visible. */
@@ -11180,7 +11474,7 @@ index 53d8c75..0911884 100644
          memset(XBOX_VA(FAKE_PRCB_VA), 0, 0x400);
          MEM32_INIT(XBOX_FS_BASE + 0x20, FAKE_PRCB_VA);
          #undef FAKE_PRCB_VA
-@@ -1729,8 +1897,8 @@ BOOL xbox_MemoryLayoutInit(const void *xbe_data, size_t xbe_size)
+@@ -1729,8 +1898,8 @@ BOOL xbox_MemoryLayoutInit(const void *xbe_data, size_t xbe_size)
           * to its data area. We allocate a fake structure at 0x00760000
           * (in the BSS area) and a data buffer at 0x00700000.
           */
@@ -11191,7 +11485,7 @@ index 53d8c75..0911884 100644
  
          MEM32_INIT(XBOX_FS_BASE + 0x28, FAKE_TLS_VA);
          /* TLS[0x28] = pointer to RW data area */
-@@ -1764,8 +1932,8 @@ BOOL xbox_MemoryLayoutInit(const void *xbe_data, size_t xbe_size)
+@@ -1764,8 +1933,8 @@ BOOL xbox_MemoryLayoutInit(const void *xbe_data, size_t xbe_size)
           * Every guest thread therefore shares LastError. Give this a per-thread
           * allocation when a title is observed to care.
           */
@@ -11202,7 +11496,7 @@ index 53d8c75..0911884 100644
          {
              DWORD tls_dir_va = *(const DWORD *)(xbe + XBE_TLS_ADDR_OFFSET);
  
-@@ -1971,6 +2139,20 @@ BOOL xbox_MemoryLayoutInit(const void *xbe_data, size_t xbe_size)
+@@ -1971,6 +2140,20 @@ BOOL xbox_MemoryLayoutInit(const void *xbe_data, size_t xbe_size)
                  if (VirtualProtect((char *)g_mcpx_memory, 0x00080000u,
                                     PAGE_NOACCESS, &old_protect))
                      g_apu_mmio_trapped = 1;
@@ -11223,7 +11517,7 @@ index 53d8c75..0911884 100644
                  if (g_apu_mmio_trapped)
                      fprintf(stderr, "  APU: 0x%08X..0x%08X trapped for MMIO\n",
                              XBOX_MCPX_BASE, XBOX_MCPX_BASE + 0x00080000u);
-@@ -2504,55 +2686,161 @@ void xbox_FreeThreadStack(uint32_t stack_top)
+@@ -2504,55 +2687,161 @@ void xbox_FreeThreadStack(uint32_t stack_top)
          g_thread_stacks_used--;
  }
  
@@ -11934,10 +12228,30 @@ index 6fdf222..66180ee 100644
                             CW_USEDEFAULT, CW_USEDEFAULT,
                             r.right - r.left, r.bottom - r.top,
 diff --git a/templates/runtime/recomp_types.h b/templates/runtime/recomp_types.h
-index dc1dae0..398a525 100644
+index dc1dae0..1958127 100644
 --- a/templates/runtime/recomp_types.h
 +++ b/templates/runtime/recomp_types.h
-@@ -298,6 +298,8 @@ static inline int64_t recomp_fist(double value, uint16_t control, unsigned bits)
+@@ -289,6 +289,19 @@ static inline int64_t recomp_fist(double value, uint16_t control, unsigned bits)
+     return (int64_t)rounded;
+ }
+ 
++/* frndint rounds by the guest RC bits too. The CRT's floor() and ceil() set
++ * RC to down/up and call frndint; rint() (host round-to-nearest) made
++ * floor(2.7) return 3 (2026-10-02). */
++static inline double recomp_frndint(double value, uint16_t control) {
++    if (!isfinite(value)) return value;
++    switch((control>>10)&3) {
++    case 1: return floor(value);
++    case 2: return ceil(value);
++    case 3: return trunc(value);
++    default: return nearbyint(value);
++    }
++}
++
+ /* ================================================================
+  * ICALL trace ring buffer (for debugging indirect calls)
+  * ================================================================ */
+@@ -298,6 +311,8 @@ static inline int64_t recomp_fist(double value, uint16_t control, unsigned bits)
  
  /** Ring buffer of recent indirect call target VAs. */
  extern volatile uint32_t g_icall_trace[ICALL_TRACE_SIZE];
@@ -11946,7 +12260,7 @@ index dc1dae0..398a525 100644
  
  /** Current write index into the ring buffer. */
  extern volatile uint32_t g_icall_trace_idx;
-@@ -559,6 +561,18 @@ static inline RecompXmm XMM_UNPACK_HIGH(RecompXmm a, RecompXmm b) {
+@@ -559,6 +574,18 @@ static inline RecompXmm XMM_UNPACK_HIGH(RecompXmm a, RecompXmm b) {
   * ================================================================ */
  
  /* Unsigned comparison conditions (from CMP a, b -> a - b) */
@@ -11965,7 +12279,7 @@ index dc1dae0..398a525 100644
  #define CMP_EQ(a, b)  ((uint32_t)(a) == (uint32_t)(b))
  #define CMP_NE(a, b)  ((uint32_t)(a) != (uint32_t)(b))
  #define CMP_B(a, b)   ((uint32_t)(a) <  (uint32_t)(b))   /* below (CF=1) */
-@@ -864,6 +878,7 @@ void recomp_abi_violation_log(uint32_t va, uint32_t ebx0, uint32_t esi0,
+@@ -864,6 +891,7 @@ void recomp_abi_violation_log(uint32_t va, uint32_t ebx0, uint32_t esi0,
      g_icall_trace[g_icall_trace_idx & (ICALL_TRACE_SIZE-1)] = _va; \
      g_icall_trace_idx++; \
      g_icall_count++; \
@@ -11973,7 +12287,7 @@ index dc1dae0..398a525 100644
      /* Skip garbage VAs outside code section + kernel thunk range */ \
      if (!RECOMP_ICALL_IS_CODE(_va)) { \
          recomp_icall_not_code_log(_va); \
-@@ -891,6 +906,7 @@ void recomp_abi_violation_log(uint32_t va, uint32_t ebx0, uint32_t esi0,
+@@ -891,6 +919,7 @@ void recomp_abi_violation_log(uint32_t va, uint32_t ebx0, uint32_t esi0,
      g_icall_trace[g_icall_trace_idx & (ICALL_TRACE_SIZE-1)] = _va; \
      g_icall_trace_idx++; \
      g_icall_count++; \
@@ -12149,7 +12463,7 @@ index 159f56c..f11e961 100644
      "FrenchXlate", "SpanishXlate", "ItalianXlate",
  }
 diff --git a/tools/recomp/lifter.py b/tools/recomp/lifter.py
-index f0ba077..4a72022 100644
+index f0ba077..740da8b 100644
 --- a/tools/recomp/lifter.py
 +++ b/tools/recomp/lifter.py
 @@ -487,6 +487,32 @@ def _has_xmm_operand(ops):
@@ -12397,6 +12711,15 @@ index f0ba077..4a72022 100644
  
      def _lift_sse(self, insn, m, ops):
          """Translate SSE instructions to C float operations."""
+@@ -3372,7 +3456,7 @@ class Lifter:
+         if m == "fscale":
+             return [f"fp_top() = ldexp(fp_top(), (int)fp_st1()); /* fscale */"]
+         if m == "frndint":
+-            return [f"fp_top() = rint(fp_top()); /* frndint */"]
++            return [f"fp_top() = recomp_frndint(fp_top(), g_fp_control_word); /* frndint */"]
+         if m == "fldpi":
+             return [f"fp_push(3.14159265358979323846); /* fldpi */"]
+         if m == "fldl2e":
 @@ -3503,7 +3587,20 @@ def lift_basic_block(lifter, bb, flag_state=None):
          and flag_state is a tuple for passing to the next block.
      """

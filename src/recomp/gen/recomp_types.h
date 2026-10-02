@@ -289,6 +289,19 @@ static inline int64_t recomp_fist(double value, uint16_t control, unsigned bits)
     return (int64_t)rounded;
 }
 
+/* frndint rounds by the guest RC bits too. The CRT's floor() and ceil() set
+ * RC to down/up and call frndint; rint() (host round-to-nearest) made
+ * floor(2.7) return 3 (2026-10-02). */
+static inline double recomp_frndint(double value, uint16_t control) {
+    if (!isfinite(value)) return value;
+    switch((control>>10)&3) {
+    case 1: return floor(value);
+    case 2: return ceil(value);
+    case 3: return trunc(value);
+    default: return nearbyint(value);
+    }
+}
+
 /* ================================================================
  * ICALL trace ring buffer (for debugging indirect calls)
  * ================================================================ */

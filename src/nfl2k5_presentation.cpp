@@ -1790,6 +1790,14 @@ extern "C" void nfl2k5_scorebug_hide(void)
     }
 }
 
+/* In a match, pause menu and replays included: the game's own scorebug
+ * updated in the last 30 s. */
+extern "C" int nfl2k5_in_match(void)
+{
+    DWORD t = s_native_tick;
+    return t && GetTickCount() - t < 30000;
+}
+
 extern "C" void nfl2k5_scorebug_native_hook(void)
 {
     s_native_visible = rd32(0x00A95A00u) != 0;

@@ -287,7 +287,7 @@ extern "C" void nfl2k5_local_music_start(const char *root, const char *save_dir)
  * read as an I/O error, and raising the "finished" flag directly skipped the
  * stream discontinuity, so entering a game mode waited on the stream forever
  * (2026-10-01). L3 shows NOW PLAYING again. */
-extern "C" void xbox_PresentToast(const char *header, const char *line1, const char *line2, unsigned ms);
+extern "C" int nfl2k5_in_match(void);
 extern "C" ptrdiff_t xbox_GetMemoryOffset(void);
 
 static volatile LONG g_cur_id = -1;
@@ -368,11 +368,9 @@ static void show_now_playing(uint32_t id)
     std::wstring sub = title + L" - " + album;
     if (sub.size() > 28) sub = title;
     if (sub.size() > 28) sub = sub.substr(0, 26) + L"...";
-    if (banner_show(L"Now Playing", sub)) return;
-    char t8[128], a8[128];
-    WideCharToMultiByte(CP_ACP, 0, title.c_str(), -1, t8, sizeof t8, "?", nullptr);
-    WideCharToMultiByte(CP_ACP, 0, album.c_str(), -1, a8, sizeof a8, "?", nullptr);
-    xbox_PresentToast("NOW PLAYING", t8, a8, 5000);
+    /* Menus only, in the game's own header bar; never over a match. */
+    if (nfl2k5_in_match()) return;
+    banner_show(L"Now Playing", sub);
 }
 
 extern "C" void nfl2k5_local_music_opening(uint32_t song_id, uint32_t player)
@@ -394,6 +392,12 @@ extern "C" void nfl2k5_local_music_buttons(int l3, int r3)
     LONG cur = g_cur_id;
     banner_tick();
     uint32_t player = g_player;
+    /* L3 and R3 are game controls in a match: the music never reacts there. */
+    if (nfl2k5_in_match()) {
+        prev_l3 = l3;
+        prev_r3 = r3;
+        return;
+    }
     if (cur >= 0 && player && r3 && !prev_r3) {
         /* Pull the song's end point (player + 0x1004C) in to the start.
          * sub_00328460 compares it with the play position before every
@@ -402,8 +406,7 @@ extern "C" void nfl2k5_local_music_buttons(int l3, int r3)
         volatile uint32_t *end_pos =
             (volatile uint32_t *)((uint8_t *)xbox_GetMemoryOffset() + player + 0x1004Cu);
         *end_pos = 1;
-        if (!banner_show(L"Next Song", L""))
-            xbox_PresentToast("NEXT SONG", "", "", 1200);
+        banner_show(L"Next Song", L"");
     }
     if (cur >= 0 && l3 && !prev_l3)
         show_now_playing((uint32_t)cur);
