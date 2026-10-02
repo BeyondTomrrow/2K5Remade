@@ -436,7 +436,7 @@ index dd6bec1..b97d940 100644
  
  /* Stub address space - just passed to ldl_le_phys etc. (ignored) */
 diff --git a/src/apu/apu_vp.c b/src/apu/apu_vp.c
-index b9f429e..7246f36 100644
+index b9f429e..3f877f9 100644
 --- a/src/apu/apu_vp.c
 +++ b/src/apu/apu_vp.c
 @@ -46,6 +46,15 @@ static const struct {
@@ -976,7 +976,50 @@ index b9f429e..7246f36 100644
      /* Low-pass filter */
      int fmode = voice_get_mask(d, v, NV_PAVS_VOICE_CFG_MISC,
                                 NV_PAVS_VOICE_CFG_MISC_FMODE);
-@@ -1169,10 +1539,43 @@ static void voice_process(MCPXAPUState *d,
+@@ -1130,6 +1500,42 @@ static void voice_process(MCPXAPUState *d,
+         }
+     }
+ 
++    /* RECOMP_APU_VOICE_DUMP=<dir>: each voice's output (left, at its largest
++     * bin gain) to <dir>\v<handle>.raw as records of {uint32 frame, int16[32]},
++     * to find which voice carries a sound in a recording. */
++    {
++        static int on = -1;
++        static char dir[260];
++        static FILE *f[MCPX_HW_MAX_VOICES];
++        extern unsigned long g_apu_vp_frames;
++        if (on < 0) {
++            const char *e = getenv("RECOMP_APU_VOICE_DUMP");
++            on = e && *e;
++            if (on) snprintf(dir, sizeof dir, "%s", e);
++        }
++        if (on && v < MCPX_HW_MAX_VOICES) {
++            if (!f[v]) {
++                char p[300];
++                snprintf(p, sizeof p, "%s\\v%03X.raw", dir, v);
++                f[v] = fopen(p, "wb");
++            }
++            if (f[v]) {
++                float g = 0.0f;
++                for (int b = 0; b < 8; b++) {
++                    float a = attenuate(vol[b]);
++                    if (a > g) g = a;
++                }
++                g *= ea_value;
++                uint32_t fr = (uint32_t)g_apu_vp_frames;
++                int16_t out[NUM_SAMPLES_PER_FRAME];
++                for (int i = 0; i < NUM_SAMPLES_PER_FRAME; i++)
++                    out[i] = (int16_t)(clampf(g * samples[i][0], -1.0f, 1.0f) * 32767.0f);
++                fwrite(&fr, 4, 1, f[v]);
++                fwrite(out, 2, NUM_SAMPLES_PER_FRAME, f[v]);
++            }
++        }
++    }
++
+     /* Mix into bins */
+     for (int b = 0; b < 8; b++) {
+         float g = ea_value;
+@@ -1169,10 +1575,43 @@ static void voice_process(MCPXAPUState *d,
   * Simplified single-threaded version (no worker threads initially)
   * ============================================================ */
  
@@ -1020,7 +1063,7 @@ index b9f429e..7246f36 100644
  
      for (int list = 0; list < 3; list++) {
          hwaddr top, current, next;
-@@ -1194,10 +1597,36 @@ void mcpx_apu_vp_frame(MCPXAPUState *d,
+@@ -1194,10 +1633,36 @@ void mcpx_apu_vp_frame(MCPXAPUState *d,
  
              if (!voice_get_mask(d, v, NV_PAVS_VOICE_PAR_STATE,
                                  NV_PAVS_VOICE_PAR_STATE_ACTIVE_VOICE)) {

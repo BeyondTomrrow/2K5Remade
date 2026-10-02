@@ -1,11 +1,68 @@
 /**
  * ESPN NFL 2K5 - Recompiled code chunk 31
- * Functions: 1000 (0x0048582F - 0x004AF3C1)
+ * Functions: 1000 (0x0048581C - 0x004AF34C)
  */
 
 #define RECOMP_GENERATED_CODE
 #include "recomp_funcs.h"
 #include <math.h>
+
+/**
+ * sub_0048581C
+ * Original: 0x0048581C - 0x00485826 (10 bytes, 2 insns)
+ * CC: cdecl, 0 params, returns int_or_void
+ * Frame: fpo_leaf
+ */
+void sub_0048581C(void)
+{
+    uint32_t ebp = 0;
+    ebp = g_ebp;  /* frameless: caller's frame */
+    ebp = g_seh_ebp; /* fpo_leaf: inherit caller's frame */
+
+loc_0048581C: ;
+    g_seh_ebp = ebp; sub_0001B2E7(); return; /* tail jmp 0x0001B2E7 */
+
+    g_seh_ebp = ebp; sub_0001B307(); return; /* tail jmp 0x0001B307 */
+
+}
+
+/**
+ * sub_00485821
+ * Original: 0x00485821 - 0x00485826 (5 bytes, 1 insns)
+ * CC: cdecl, 0 params, returns int_or_void
+ * Frame: fpo_leaf
+ */
+void sub_00485821(void)
+{
+    uint32_t ebp = 0;
+    ebp = g_ebp;  /* frameless: caller's frame */
+    ebp = g_seh_ebp; /* fpo_leaf: inherit caller's frame */
+
+loc_00485821: ;
+    g_seh_ebp = ebp; sub_0001B307(); return; /* tail jmp 0x0001B307 */
+
+}
+
+/**
+ * sub_00485826
+ * Original: 0x00485826 - 0x0048582F (9 bytes, 4 insns)
+ * CC: cdecl, 0 params, returns int_or_void
+ * Frame: standard_frame
+ */
+void sub_00485826(void)
+{
+    uint32_t ebp = 0;
+    ebp = g_ebp;  /* prologue saves caller's frame */
+
+loc_00485826: ;
+    PUSH32(esp, ebp);
+    ebp = esp;
+    g_ebp = ebp; /* publish frame for frameless callees */
+    g_seh_ebp = ebp;
+    POP32(esp, ebp);
+    g_seh_ebp = ebp; sub_0001B581(); return; /* tail jmp 0x0001B581 */
+
+}
 
 /**
  * sub_0048582F
@@ -130894,142 +130951,5 @@ loc_004AF357: ;
 
 loc_004AF361: ;
     esp += 8; return; /* ret 4 */
-
-}
-
-/**
- * sub_004AF364
- * Original: 0x004AF364 - 0x004AF392 (46 bytes, 17 insns)
- * CC: cdecl, 3 params, returns int_zero
- * Frame: fpo_leaf
- */
-void sub_004AF364(void)
-{
-    int _flags = 0; /* fallback flag var */
-    uint32_t _fa = 0, _fb = 0;
-    int32_t _fas = 0, _fbs = 0;
-    (void)_fa; (void)_fb; (void)_fas; (void)_fbs;
-
-loc_004AF364: ;
-    _fa = (uint32_t)(ecx) & 0xFFFFFFFFu; _fb = (uint32_t)(ecx) & 0xFFFFFFFFu;
-    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test ecx, ecx (32-bit) */
-    if (TEST_NZ(_fa, _fb)) goto loc_004AF36F; /* jne: not equal / not zero */
-
-loc_004AF368: ;
-    eax = 0x80150005u;
-    goto loc_004AF38F;
-
-loc_004AF36F: ;
-    ecx = MEM32(esp + 8);
-    _fa = (uint32_t)(ecx) & 0xFFFFFFFFu; _fb = (uint32_t)(ecx) & 0xFFFFFFFFu;
-    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test ecx, ecx (32-bit) */
-    eax = MEM32(esp + 4);
-    if (TEST_Z(_fa, _fb)) goto loc_004AF380; /* je: equal / zero */
-
-loc_004AF37B: ;
-    edx = MEM32(eax + 0x64);
-    MEM32(ecx) = edx;
-
-loc_004AF380: ;
-    ecx = MEM32(esp + 0xC);
-    _fa = (uint32_t)(ecx) & 0xFFFFFFFFu; _fb = (uint32_t)(ecx) & 0xFFFFFFFFu;
-    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test ecx, ecx (32-bit) */
-    if (TEST_Z(_fa, _fb)) goto loc_004AF38D; /* je: equal / zero */
-
-loc_004AF388: ;
-    eax = MEM32(eax + 0x68);
-    MEM32(ecx) = eax;
-
-loc_004AF38D: ;
-    eax = 0; /* xor self */
-    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* xor result */
-
-loc_004AF38F: ;
-    esp += 16; return; /* ret 12 */
-
-}
-
-/**
- * sub_004AF399
- * Original: 0x004AF399 - 0x004AF3C1 (40 bytes, 15 insns)
- * Category: game_network
- * CC: cdecl, 8 params, returns int_or_void
- * Frame: standard_frame
- */
-void sub_004AF399(void)
-{
-    uint32_t ebp = 0;
-    ebp = g_ebp;  /* prologue saves caller's frame */
-
-loc_004AF399: ;
-    PUSH32(esp, ebp);
-    ebp = esp;
-    g_ebp = ebp; /* publish frame for frameless callees */
-    g_seh_ebp = ebp;
-    PUSH32(esp, MEM32(ebp + 0x24));
-    PUSH32(esp, MEM32(ebp + 0x20));
-    PUSH32(esp, MEM32(ebp + 0x1C));
-    PUSH32(esp, MEM32(ebp + 0x18));
-    PUSH32(esp, MEM32(ebp + 0x14));
-    PUSH32(esp, 0);
-    PUSH32(esp, MEM32(ebp + 0x10));
-    PUSH32(esp, MEM32(ebp + 0xC));
-    PUSH32(esp, MEM32(ebp + 8));
-    PUSH32(esp, 2);
-    g_ebp = ebp; /* frame stays current across calls */
-    g_seh_ebp = ebp;
-    PUSH32(esp, 0x004AF3BDu); RECOMP_ABI_CALL(0x004CEF6Du, sub_004CEF6D); /* call 0x004CEF6D */
-
-loc_004AF3BD: ;
-    POP32(esp, ebp);
-    esp += 36; return; /* ret 32 */
-
-}
-
-/**
- * sub_004AF3C1
- * Original: 0x004AF3C1 - 0x004AF3EE (45 bytes, 17 insns)
- * Category: game_network
- * CC: cdecl, 6 params, returns int_or_void
- * Frame: standard_frame
- */
-void sub_004AF3C1(void)
-{
-    uint32_t ebp = 0;
-    ebp = g_ebp;  /* prologue saves caller's frame */
-    int _flags = 0; /* fallback flag var */
-    uint32_t _fa = 0, _fb = 0;
-    int32_t _fas = 0, _fbs = 0;
-    (void)_fa; (void)_fb; (void)_fas; (void)_fbs;
-
-loc_004AF3C1: ;
-    PUSH32(esp, ebp);
-    ebp = esp;
-    g_ebp = ebp; /* publish frame for frameless callees */
-    g_seh_ebp = ebp;
-    _fa = (uint32_t)(ecx) & 0xFFFFFFFFu; _fb = (uint32_t)(ecx) & 0xFFFFFFFFu;
-    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test ecx, ecx (32-bit) */
-    if (TEST_NZ(_fa, _fb)) goto loc_004AF3CF; /* jne: not equal / not zero */
-
-loc_004AF3C8: ;
-    eax = 0x80150005u;
-    goto loc_004AF3EA;
-
-loc_004AF3CF: ;
-    PUSH32(esp, MEM32(ebp + 0x1C));
-    PUSH32(esp, MEM32(ebp + 0x18));
-    PUSH32(esp, MEM32(ebp + 0x14));
-    PUSH32(esp, MEM32(ebp + 0x10));
-    PUSH32(esp, MEM32(ebp + 0xC));
-    PUSH32(esp, MEM32(ebp + 8));
-    PUSH32(esp, 0);
-    PUSH32(esp, 9);
-    g_ebp = ebp; /* frame stays current across calls */
-    g_seh_ebp = ebp;
-    PUSH32(esp, 0x004AF3EAu); RECOMP_ABI_CALL(0x004AED23u, sub_004AED23); /* call 0x004AED23 */
-
-loc_004AF3EA: ;
-    POP32(esp, ebp);
-    esp += 28; return; /* ret 24 */
 
 }

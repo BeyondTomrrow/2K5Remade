@@ -1840,10 +1840,6 @@
     "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
   },
   {
-    "start": "0x001A95F3",
-    "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
-  },
-  {
     "start": "0x001A95F7",
     "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
   },
@@ -1901,10 +1897,6 @@
   },
   {
     "start": "0x002992EE",
-    "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
-  },
-  {
-    "start": "0x002994F8",
     "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
   },
   {
@@ -1994,5 +1986,21 @@
   {
     "start": "0x004D0E49",
     "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
+  },
+  {
+    "start": "0x0021C7BE",
+    "note": "Code after a seeded shared tail, reached by a jump from the piece before it; seeding the tail (2026-10-01) cut that piece short and left this target as an empty stub (0x24FFA7 crashed franchise sim / game start, 2026-10-02)."
+  },
+  {
+    "start": "0x0024FFA7",
+    "note": "Code after a seeded shared tail, reached by a jump from the piece before it; seeding the tail (2026-10-01) cut that piece short and left this target as an empty stub (0x24FFA7 crashed franchise sim / game start, 2026-10-02)."
+  },
+  {
+    "start": "0x002618A7",
+    "note": "Code after a seeded shared tail, reached by a jump from the piece before it; seeding the tail (2026-10-01) cut that piece short and left this target as an empty stub (0x24FFA7 crashed franchise sim / game start, 2026-10-02)."
+  },
+  {
+    "start": "0x00284C50",
+    "note": "Indirect-call target 'mov cl,[ecx+0Dh]; jmp 0BBA60h', called hundreds of times while a game loads; unresolved since before 2026-10-01."
   }
 ]

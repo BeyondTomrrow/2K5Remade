@@ -1,11 +1,85 @@
 /**
  * ESPN NFL 2K5 - Recompiled code chunk 28
- * Functions: 1000 (0x003F5D40 - 0x0041DAF7)
+ * Functions: 1000 (0x003F5CF0 - 0x0041DAD0)
  */
 
 #define RECOMP_GENERATED_CODE
 #include "recomp_funcs.h"
 #include <math.h>
+
+/**
+ * sub_003F5CF0
+ * Original: 0x003F5CF0 - 0x003F5D18 (40 bytes, 13 insns)
+ * CC: cdecl, 0 params, returns int_or_void
+ * Frame: fpo_leaf
+ */
+void sub_003F5CF0(void)
+{
+    int _flags = 0; /* fallback flag var */
+    uint32_t _fa = 0, _fb = 0;
+    int32_t _fas = 0, _fbs = 0;
+    (void)_fa; (void)_fb; (void)_fas; (void)_fbs;
+
+loc_003F5CF0: ;
+    edx = MEM32(0xDF2090);
+    eax = MEM32(0xDF2088);
+    edx++;
+    _fa = (uint32_t)(edx) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fb = (_fa == 0x80000000u); /* inc result/SF/OF; CF unchanged */
+    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test eax, eax (32-bit) */
+    MEM32(0xDF2090) = edx;
+    if (TEST_Z(_fa, _fb)) goto loc_003F5D17; /* je: equal / zero */
+
+loc_003F5D06: ;
+    ecx = MEM32(esp + 0xC);
+    edx = MEM32(0xDF208C);
+    { uint32_t _icall_esp = g_esp;
+    PUSH32(esp, ecx);
+    PUSH32(esp, edx);
+    { uint32_t _icall_target = eax; PUSH32(esp, 0x003F5D14u); RECOMP_ICALL_SAFE(_icall_target, _icall_esp); } /* indirect call */
+    }
+
+loc_003F5D14: ;
+    _fb = (uint32_t)(8) & 0xFFFFFFFFu; _fbs = (int32_t)(int32_t)(_fb); /* add source, before the write */
+    esp = esp + 8;
+    _fa = (uint32_t)(esp) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* add result */
+
+loc_003F5D17: ;
+    esp += 4; return; /* ret */
+
+}
+
+/**
+ * sub_003F5D20
+ * Original: 0x003F5D20 - 0x003F5D2A (10 bytes, 3 insns)
+ * CC: cdecl, 0 params, returns int_or_void
+ * Frame: fpo_leaf
+ */
+void sub_003F5D20(void)
+{
+
+loc_003F5D20: ;
+    eax = MEM32(esp + 4);
+    MEM32(0xDF2094) = eax;
+    esp += 4; return; /* ret */
+
+}
+
+/**
+ * sub_003F5D30
+ * Original: 0x003F5D30 - 0x003F5D36 (6 bytes, 2 insns)
+ * CC: cdecl, 0 params, returns int_or_void
+ * Frame: fpo_leaf
+ */
+void sub_003F5D30(void)
+{
+
+loc_003F5D30: ;
+    eax = MEM32(0xDF2094);
+    esp += 4; return; /* ret */
+
+}
 
 /**
  * sub_003F5D40
@@ -313456,68 +313530,5 @@ loc_0041DAD0: ;
 loc_0041DAD6: ;
     POP32(esp, ecx);
     esp += 4; return; /* ret */
-
-}
-
-/**
- * sub_0041DAEC
- * Original: 0x0041DAEC - 0x0041DAF1 (5 bytes, 1 insns)
- * Category: game_vtable
- * CC: cdecl, 0 params, returns int_or_void
- * Frame: fpo_leaf
- */
-void sub_0041DAEC(void)
-{
-    uint32_t ebp = 0;
-    ebp = g_ebp;  /* frameless: caller's frame */
-    ebp = g_seh_ebp; /* fpo_leaf: inherit caller's frame */
-
-loc_0041DAEC: ;
-    g_seh_ebp = ebp; sub_0041E0E6(); return; /* tail jmp 0x0041E0E6 */
-
-}
-
-/**
- * sub_0041DAF1
- * Original: 0x0041DAF1 - 0x0041DAF7 (6 bytes, 1 insns)
- * Category: game_vtable
- * CC: cdecl, 0 params, returns int_or_void
- * Frame: fpo_leaf
- */
-void sub_0041DAF1(void)
-{
-    uint32_t ebp = 0;
-    ebp = g_ebp;  /* frameless: caller's frame */
-    ebp = g_seh_ebp; /* fpo_leaf: inherit caller's frame */
-
-loc_0041DAF1: ;
-    g_seh_ebp = ebp; RECOMP_ITAIL(MEM32(0x4E3B84)); return; /* indirect tail jmp */
-
-}
-
-/**
- * sub_0041DAF7
- * Original: 0x0041DAF7 - 0x0041DB0E (23 bytes, 6 insns)
- * Category: game_vtable
- * CC: cdecl, 3 params, returns int_or_void
- * Frame: fpo_leaf
- */
-void sub_0041DAF7(void)
-{
-    uint32_t _fa = 0, _fb = 0;
-    int32_t _fas = 0, _fbs = 0;
-    (void)_fa; (void)_fb; (void)_fas; (void)_fbs;
-
-loc_0041DAF7: ;
-    PUSH32(esp, MEM32(esp + 0xC));
-    PUSH32(esp, MEM32(esp + 0xC));
-    PUSH32(esp, MEM32(esp + 0xC));
-    PUSH32(esp, 0x0041DB08u); RECOMP_ABI_CALL(0x00420074u, sub_00420074); /* call 0x00420074 */
-
-loc_0041DB08: ;
-    _fb = (uint32_t)(0xC) & 0xFFFFFFFFu; _fbs = (int32_t)(int32_t)(_fb); /* add source, before the write */
-    esp = esp + 0xC;
-    _fa = (uint32_t)(esp) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* add result */
-    esp += 16; return; /* ret 12 */
 
 }

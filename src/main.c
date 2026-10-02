@@ -3247,3 +3247,81 @@ void nfl2k5_diag_sched(uint32_t idx)
         fprintf(stderr, "[SCHED]   %2u busy %08X fn %08X\n", i, *(const uint32_t *)(gm + 0xB04D20u + i * 8),
                 *(const uint32_t *)(gm + 0xB04D24u + i * 8));
 }
+
+/* sub_00204930 found no candidate (gen patch SIM_PICK_EMPTY): log the team's
+ * in-game player list and return any active, healthy entry instead (0 if
+ * there is none), so the game thread doesn't die dividing by zero. */
+uint32_t nfl2k5_sim_pick_empty(uint32_t team, uint32_t want, uint32_t arg2, uint32_t mask)
+{
+    const uint8_t *m = (const uint8_t *)xbox_GetMemoryOffset();
+    uint32_t count = *(const uint32_t *)(m + team + 0x38u), base = *(const uint32_t *)(m + team + 0x60u);
+    uint32_t pick = 0, loose = 0;
+    static int logged;
+    int log = logged++ < 4;
+    if (log)
+        fprintf(stderr, "[SIMPICK] empty: team %08X (slot %d) count %u base %08X want group %u arg2 %08X mask %08X\n",
+                team, team >= 0xB75A40u ? (int)((team - 0xB75A40u) / 0x13390u) : -1, count, base, want, arg2, mask);
+    for (uint32_t i = 0; base && i < count && i < 80; i++) {
+        uint32_t e = base + i * 0x60u, fl = *(const uint32_t *)(m + e + 4u);
+        if (log)
+            fprintf(stderr, "[SIMPICK]   %2u %08X flags %08X group %u%s%s\n", i, e, fl, (fl >> 6) & 7,
+                    (fl & 0x80000000u) ? " active" : "", (fl & 0x400000u) ? " out" : "");
+        if ((fl & 0x80000000u) && !(fl & 0x400000u) && !pick) pick = e;
+        if ((fl & 0x80000000u) && !loose) loose = e;
+    }
+    if (!pick) pick = loose;
+    if (!pick && base && count) pick = base;
+    fprintf(stderr, "[SIMPICK] fallback -> %08X\n", pick);
+    fflush(stderr);
+    return pick;
+}
+
+/* Commentary entry validation result (gen patch DIAG_COMMVALID): entry, the
+ * validator's return (0 = valid), its words and name. First 40 only. */
+void nfl2k5_diag_commvalid(uint32_t entry, uint32_t ret)
+{
+    static int n;
+    const uint8_t *m = (const uint8_t *)xbox_GetMemoryOffset();
+    if (n++ >= 40) return;
+    const uint32_t *w = (const uint32_t *)(m + entry);
+    char name[64] = { 0 };
+    uint32_t np = w[0];
+    if (np && np < 0x04000000u)
+        for (int i = 0; i < 63; i++) { uint16_t c = *(const uint16_t *)(m + np + i * 2); if (!c) break; name[i] = c < 128 ? (char)c : '?'; }
+    fprintf(stderr, "[COMMVALID] %08X ret %08X w %08X %08X %08X %08X %08X %08X name \"%s\"\n",
+            entry, ret, w[0], w[1], w[2], w[3], w[4], w[5], name);
+}
+
+/* Play validation failure point (gen patch DIAG_PLAYVALID_FAIL, sub_001A9840's
+ * "Invalid play" exit): which player slot it reached and the counters. */
+void nfl2k5_diag_playfail(uint32_t entry, uint32_t esi_, uint32_t ebp_, uint32_t ebx_, uint32_t edi_,
+                          uint32_t s10, uint32_t s14, uint32_t s18, uint32_t eax_)
+{
+    static int n;
+    const uint8_t *m = (const uint8_t *)xbox_GetMemoryOffset();
+    if (n++ >= 30) return;
+    fprintf(stderr, "[PLAYFAIL] entry %08X flags %08X slot_off %+d ebp %u ebx %u edi %u s10 %u s14 %u s18 %u eax %08X\n",
+            entry, *(const uint32_t *)(m + entry + 4), (int)(esi_ - entry), ebp_, ebx_, edi_, s10, s14, s18, eax_);
+}
+
+void nfl2k5_diag_playstep(int which, uint32_t eax_, uint32_t esi_, uint32_t ebp_)
+{
+    static int n;
+    const uint8_t *m = (const uint8_t *)xbox_GetMemoryOffset();
+    if (n++ >= 24) return;
+    uint32_t nodes = *(const uint32_t *)(m + esi_ + 4);
+    fprintf(stderr, "[PLAYSTEP] %s ret %08X slot %u word %08X %08X", which == 1 ? "1A91A0" : "1A96B0",
+            eax_, ebp_, *(const uint32_t *)(m + esi_), nodes);
+    if (nodes && nodes < 0x04000000u)
+        for (int k = 0; k < 6; k++)
+            fprintf(stderr, " [%08X %08X]", *(const uint32_t *)(m + nodes + k * 8),
+                    *(const uint32_t *)(m + nodes + k * 8 + 4));
+    fprintf(stderr, "\n");
+}
+
+void nfl2k5_diag_slot(const char *where, uint32_t a, uint32_t b, uint32_t c, uint32_t d)
+{
+    static int n;
+    if (n++ >= 60) return;
+    fprintf(stderr, "[SLOT] %s: %08X %08X %08X %08X\n", where, a, b, c, d);
+}

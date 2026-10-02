@@ -327,6 +327,30 @@ PATCHES = [
 """),
     ("DIAG_SCHEDTABLE", "sub_00038CD0", "loc_00038CEB: ;", "after", """    { extern void nfl2k5_diag_sched(uint32_t idx); uint32_t _f = MEM32(esi * 8 + 0xB04D24); if (_f < 0x10000u || _f >= 0x01000000u) nfl2k5_diag_sched(esi); }
 """),
+    # Franchise sim crash (2026-10-02): the random player pick in
+    # sub_00204930 divides by its candidate count, which came up 0 (team
+    # 0xB75A40 + n*0x13390, entries 0x60 bytes at +0x60, count +0x38) and
+    # killed the game thread. Log the list and fall back to any active entry.
+    # Commentary line validation (sub_001A9840 via sub_001A9A80): all 270
+    # entries failed in the port (no bit 31), so random line picks were empty.
+    ("DIAG_COMMVALID", "sub_001A9A80", "loc_001A9A88: ;", "after", """    { extern void nfl2k5_diag_commvalid(uint32_t entry, uint32_t ret); nfl2k5_diag_commvalid(esi, eax); }
+"""),
+    ("DIAG_PLAYVALID_FAIL", "sub_001A9840", "loc_001A98AF: ;", "after", """    { extern void nfl2k5_diag_playfail(uint32_t entry, uint32_t esi_, uint32_t ebp_, uint32_t ebx_, uint32_t edi_, uint32_t s10, uint32_t s14, uint32_t s18, uint32_t eax_); nfl2k5_diag_playfail(MEM32(esp + 0x1C), esi, ebp, ebx, edi, MEM32(esp + 0x10), MEM32(esp + 0x14), MEM32(esp + 0x18), eax); }
+"""),
+    ("DIAG_PLAYVALID_A", "sub_001A9840", "loc_001A9924: ;", "after", """    { extern void nfl2k5_diag_playstep(int which, uint32_t eax_, uint32_t esi_, uint32_t ebp_); nfl2k5_diag_playstep(1, eax, esi, ebp); }
+"""),
+    ("DIAG_PLAYVALID_B", "sub_001A9840", "loc_001A993A: ;", "after", """    { extern void nfl2k5_diag_playstep(int which, uint32_t eax_, uint32_t esi_, uint32_t ebp_); nfl2k5_diag_playstep(2, eax, esi, ebp); }
+"""),
+    ("DIAG_SLOT_9238", "sub_001A91A0", "loc_001A9238: ;", "after", """    { extern void nfl2k5_diag_slot(const char *where, uint32_t a, uint32_t b, uint32_t c, uint32_t d); nfl2k5_diag_slot("9238 icall ret/node/vt", eax, esi, MEM32(esi), MEM32(esi + 4)); }
+"""),
+    ("DIAG_SLOT_959C", "sub_001A91A0", "loc_001A959C: ;", "after", """    { extern void nfl2k5_diag_slot(const char *where, uint32_t a, uint32_t b, uint32_t c, uint32_t d); nfl2k5_diag_slot("959C 1A8FB0 ret/s10/s14/s18", eax, MEM32(esp + 0x10), MEM32(esp + 0x14), MEM32(esp + 0x18)); }
+"""),
+    ("DIAG_SLOT_95D5", "sub_001A91A0", "loc_001A95D5: ;", "after", """    { extern void nfl2k5_diag_slot(const char *where, uint32_t a, uint32_t b, uint32_t c, uint32_t d); nfl2k5_diag_slot("95D5 word/s18/ebx/-", MEM32(ebp), MEM32(esp + 0x18), ebx, 0); }
+"""),
+    ("DIAG_SLOT_93AE", "sub_001A91A0", "loc_001A93AE: ;", "after", """    { extern void nfl2k5_diag_slot(const char *where, uint32_t a, uint32_t b, uint32_t c, uint32_t d); nfl2k5_diag_slot("93AE fail eax/ebx/loop/edi", eax, ebx, MEM32(esp + 0x28), edi); }
+"""),
+    ("SIM_PICK_EMPTY", "sub_00204930", "loc_002049F2: ;", "after", """    if (!edi) { extern uint32_t nfl2k5_sim_pick_empty(uint32_t team, uint32_t want, uint32_t arg2, uint32_t mask); uint32_t _p = nfl2k5_sim_pick_empty(ebx, MEM32(esp + 0x8C), MEM32(esp + 0x90), ebp); MEM32(esp + 0x10) = _p; edi = 1; }
+"""),
     ("DIAG_MUSICPLAY", "sub_0003CEA0", "loc_0003CEA0: ;", "after", """    { extern void nfl2k5_diag_music(int what, uint32_t handle_ptr, uint32_t esp_); nfl2k5_diag_music(1, ecx, esp); }
 """),
     ("DIAG_MUSICSTOP", "sub_0003CEE0", "loc_0003CEE0: ;", "after", """    { extern void nfl2k5_diag_music(int what, uint32_t handle_ptr, uint32_t esp_); nfl2k5_diag_music(0, ecx, esp); }

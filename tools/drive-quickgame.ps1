@@ -1,6 +1,7 @@
-﻿param([string]$Side = '', [string]$Tag = 'qd', [int]$PlaySeconds = 300, [int]$ShotEvery = 30, [string]$Exe = 'build\Release\NFL2K5.exe', [int]$TapEvery = 0, [switch]$NoSkip)
+﻿param([string[]]$Side = @('left'), [string]$Tag = 'qd', [int]$PlaySeconds = 300, [int]$ShotEvery = 30, [string]$Exe = 'build\Release\NFL2K5.exe', [int]$TapEvery = 0, [switch]$NoSkip)
 # Drive a CPU-vs-CPU Quick Game: title -> main menu -> Quick Game -> Team
-# Select (controller left in the middle) -> Coach Matchup -> Start Game ->
+# Select (the controller starts on the HOME side; the default one Left press
+# moves it to the middle = CPU vs CPU) -> Coach Matchup -> Start Game ->
 # skip the pregame. Presses go through NFL2K5_PRESS_FILE (tools\press.ps1),
 # so the window does not need focus, and host pads are ignored so a connected
 # controller cannot move the cursor. Screenshots land in logs\$Tag-<s>.png;
@@ -16,10 +17,12 @@ $p = Start-Process $Exe -WorkingDirectory $root -PassThru `
      -RedirectStandardError "logs\$Tag.stderr.log" -RedirectStandardOutput "logs\$Tag.stdout.log"
 $null = $p.Handle
 function Press([string[]]$b, [int]$after) { & "$PSScriptRoot\press.ps1" @b; Start-Sleep $after }
-Start-Sleep 35
-Press start 10      # title -> main menu
+Start-Sleep 50
+Press start 8       # attract demo (if it started) -> title
+Press start 6       # title -> "Successfully loaded Settings" popup
+Press a 8           # dismiss the popup -> main menu
 Press a 12          # Quick Game
-if ($Side) { Press $Side 3 }   # controller onto a team (left = away, right = home)
+if ($Side) { Press $Side 3 }   # from home: left = middle (CPU vs CPU), left left = away, -Side @() = play home
 Press start 12      # Team Select -> Coach Matchup
 Press a 30          # Start Game -> loading -> pregame
 if (-not $NoSkip) { Press a 5 }   # skip pregame (-NoSkip watches it)
