@@ -257,23 +257,23 @@ img.logo[src=""], img.logo:not([src]) { visibility: hidden; }
   --lu-font: "Bahnschrift", "Arial Narrow", "Arial", sans-serif; }
 #lineup.on { opacity: 1; }
 #lineup > *, #lineup .lu-bar > * { position: absolute; }
-#lineup .lu-bar { left: calc(-1 * var(--pad, 0px)); top: 888px; width: calc(1920px + 2 * var(--pad, 0px)); height: 128px; overflow: hidden;
+#lineup .lu-bar { left: 0; top: 888px; width: 1920px; height: 128px; overflow: hidden;
   background: linear-gradient(to bottom, var(--lu-top) 0, var(--lu-top) 50%, var(--lu-bot) 51%, var(--lu-bot) 100%);
   transform: translateX(-100%); transition: transform 0.6s cubic-bezier(0.22, 0.9, 0.24, 1); }
 #lineup.on .lu-bar { transform: none; }
 #lineup .lu-ghost { left: 96px; top: -18px; width: 320px; height: 160px; opacity: 0.16; filter: grayscale(1) brightness(2.2); }
 #lineup .lu-ghost img, #lineup .lu-logo img { width: 100%; height: 100%; object-fit: contain; }
-#lineup .lu-panel { left: calc(1420px + 2 * var(--pad, 0px)); top: 0; width: 500px; height: 128px; }
+#lineup .lu-panel { left: 1420px; top: 0; width: 500px; height: 128px; }
 #lineup .lu-swoosh { stroke: var(--lu-swoosh); }
-#lineup .lu-line { left: calc(-1 * var(--pad, 0px)); top: 1016px; width: calc(1920px + 2 * var(--pad, 0px)); height: 2px; background: var(--lu-edge); }
-#lineup .lu-ribbon { left: calc(-1 * var(--pad, 0px)); top: 1018px; width: calc(1920px + 2 * var(--pad, 0px)); height: 62px; overflow: hidden; background: var(--lu-ribbon); }
+#lineup .lu-line { left: 0; top: 1016px; width: 1920px; height: 2px; background: var(--lu-edge); }
+#lineup .lu-ribbon { left: 0; top: 1018px; width: 1920px; height: 62px; overflow: hidden; background: var(--lu-ribbon); }
 #lineup .lu-track { left: 0; top: 0; height: 62px; width: max-content; white-space: nowrap; display: flex; align-items: center;
   animation: lu-scroll 30s linear infinite; }
 #lineup .lu-track span { flex: none; font: italic 700 20px/1 var(--lu-font); letter-spacing: 1px; color: var(--lu-ink); padding: 0 58px; }
 #lineup .lu-track i { flex: none; width: 22px; height: 22px; display: block; background: var(--lu-ink);
   clip-path: polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); opacity: 0.9; }
 @keyframes lu-scroll { to { transform: translateX(-50%); } }
-#lineup .lu-logo { left: calc(1530px + var(--pad, 0px)); top: 790px; width: 316px; height: 276px;
+#lineup .lu-logo { left: 1530px; top: 790px; width: 316px; height: 276px;
   filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.45)); transform: scale(0.6); opacity: 0;
   transition: transform 0.5s 0.25s cubic-bezier(0.3, 1.5, 0.5, 1), opacity 0.3s 0.25s; }
 #lineup.on .lu-logo { transform: none; opacity: 1; }
@@ -299,4 +299,9 @@ img.logo[src=""], img.logo:not([src]) { visibility: hidden; }
 #lineup .lu-logo { z-index: 2; }
 #lineup .lu-line, #lineup .lu-ribbon { z-index: 3; }
 #lineup .lu-card { z-index: 4; }
-#lineup .lu-portrait { z-index: 5; left: calc(90px - var(--pad, 0px)); top: 690px; width: 390px; height: 390px; }
+#lineup .lu-portrait { z-index: 5; left: 90px; top: 690px; width: 390px; height: 390px; }
+/* The 2024 SNF lineup (user reference, Lions): the bar stays inside the
+ * picture and fades out at both ends rather than running edge to edge. */
+#lineup .lu-bar, #lineup .lu-line, #lineup .lu-ribbon {
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 9%, #000 91%, transparent 100%);
+  mask-image: linear-gradient(90deg, transparent 0, #000 9%, #000 91%, transparent 100%); }
