@@ -935,6 +935,9 @@ void nfl2k5_diag_res(uint32_t res, int load, uint32_t ret, uint32_t r2, uint32_t
  * {type, start, poll} entry at 0xA8F7B8 + op*12. */
 void nfl2k5_diag_script(uint32_t ctx, uint32_t op, uint32_t start)
 {
+    extern int xbox_verbose(void);
+    if (!xbox_verbose())          /* thousands of lines a match */
+        return;
     static uint32_t ctxs[16], last[16];
     static volatile LONG printed;
     const uint8_t *m = (const uint8_t *)xbox_GetMemoryOffset();
