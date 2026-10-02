@@ -186,6 +186,29 @@
    * PER_PLAYER ms (portrait, position and number, name, college); the bug
    * steps aside meanwhile. */
   var lu = document.getElementById('lineup'), luOn = false, luTimers = [];
+  /* Lineup bar colours: [main, second]. Main fills the bar (darkening into
+   * the ribbon); second is the swoosh and edge. Teams by current names
+   * (ALIAS maps the 2004 abbreviations). */
+  var LU_COLORS = {
+    ARI: ['#97233f', '#ffb612'], ATL: ['#a71930', '#000000'], BAL: ['#241773', '#9e7c0c'], BUF: ['#00338d', '#c60c30'],
+    CAR: ['#0085ca', '#101820'], CHI: ['#0b162a', '#c83803'], CIN: ['#fb4f14', '#000000'], CLE: ['#311d00', '#ff3c00'],
+    DEN: ['#fb4f14', '#002244'], DET: ['#0076b6', '#b0b7bc'], GB: ['#203731', '#ffb612'], HOU: ['#03202f', '#a71930'],
+    IND: ['#002c5f', '#a2aaad'], JAX: ['#006778', '#d7a22a'], KC: ['#e31837', '#ffb81c'], LV: ['#000000', '#a5acaf'],
+    LAC: ['#0080c6', '#ffc20e'], LAR: ['#003594', '#ffa300'], MIA: ['#008e97', '#fc4c02'], MIN: ['#4f2683', '#ffc62f'],
+    NE: ['#002244', '#c60c30'], NO: ['#101820', '#d3bc8d'], NYG: ['#0b2265', '#a71930'], NYJ: ['#125740', '#ffffff'],
+    PHI: ['#004c54', '#a5acaf'], PIT: ['#101820', '#ffb612'], SF: ['#aa0000', '#b3995d'], SEA: ['#002244', '#69be28'],
+    TB: ['#d50a0a', '#34302b'], TEN: ['#0c2340', '#4b92db'], WAS: ['#5a1414', '#ffb612']
+  };
+  /* Dallas is the reference: its exact colours. */
+  var LU_EXACT = { DAL: { top: '#0a2c3e', bot: '#042232', ribbon: '#001421', ink: '#394d58', edge: '#002646', swoosh: '#2f86ff' } };
+  function luColors(t) {
+    var c = code(t), pair = LU_COLORS[c] || [color(t), '#a5acaf'], exact = LU_EXACT[c] || {};
+    lu.style.setProperty('--lu-base', pair[0]);
+    lu.style.setProperty('--lu-accent', pair[1]);
+    ['top', 'bot', 'ribbon', 'ink', 'edge', 'swoosh'].forEach(function (k) {
+      if (exact[k]) lu.style.setProperty('--lu-' + k, exact[k]); else lu.style.removeProperty('--lu-' + k);
+    });
+  }
   var PER_PLAYER = 2600;
   function luq(sel) { return lu.querySelector(sel); }
   function luClear() { luTimers.forEach(clearTimeout); luTimers = []; }
@@ -214,7 +237,7 @@
     var players = (e.players || []).filter(function (p) { return p && (p.name || p.last); });
     if (!t || !players.length || busy) return;
     luClear();
-    lu.style.setProperty('--lu-team', color(t));
+    luColors(t);
     setLogo(luq('.lu-logo .logo'), t);
     setLogo(luq('.lu-ghost .logo'), t);
     var team = ((t.city || '') + ' ' + (t.name || '')).trim().toUpperCase() || code(t);
@@ -286,7 +309,10 @@
     if (pv === 'flag') st.context.flag = true;
     if (pv === 'lineup') {
       PER_PLAYER = 1e9;            /* hold the first player for screenshots */
-      st.home = { abbreviation: 'DAL', city: 'Dallas', name: 'Cowboys', record: '10-6', score: 0, timeouts: 3 };
+      var tm = ((/[?&]team=(\w+)/.exec(location.search) || [])[1] || 'DAL').toUpperCase();
+      var NAMES = { DAL: ['Dallas', 'Cowboys'], ATL: ['Atlanta', 'Falcons'], PIT: ['Pittsburgh', 'Steelers'], CLE: ['Cleveland', 'Browns'],
+                    GB: ['Green Bay', 'Packers'], KC: ['Kansas City', 'Chiefs'] };
+      st.home = { abbreviation: tm, city: (NAMES[tm] || ['', tm])[0], name: (NAMES[tm] || ['', tm])[1], record: '10-6', score: 0, timeouts: 3 };
       setTimeout(function () {
         NFL2K5.dispatch({ type: 'event', event: { name: 'LINEUP', team: 'home', unit: 'offense', players: [
           { position: 'RT', number: 78, name: 'Terence Steele', college: 'Texas Tech', portrait: '' },
@@ -307,6 +333,13 @@
       if (freeze) setTimeout(function () { document.getAnimations().forEach(function (a) { a.pause(); }); }, 200 + +freeze);
     }
   }
+
+  /* Extra width beyond the 1920 design, per side (fill_width pages). */
+  function pad() {
+    document.documentElement.style.setProperty('--pad', Math.max(0, (window.innerWidth - 1920) / 2) + 'px');
+  }
+  window.addEventListener('resize', pad);
+  pad();
 
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(layout);
   layout();

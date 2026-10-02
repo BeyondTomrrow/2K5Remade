@@ -13,7 +13,7 @@
   "canvas": {
     "width": 1920,
     "height": 1080,
-    "fit": "broadcast_safe_16x9"
+    "fit": "fill_width"
   },
   "dependencies": [],
   "assets": {},

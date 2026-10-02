@@ -430,6 +430,10 @@ struct Package {
     /* mod.json "replaces": game graphics the package draws itself, which
      * the game then leaves out (e.g. "lineup": the after-kickoff starters). */
     bool replaces_lineup = false;
+    /* mod.json "canvas": { "fit": "fill_width" }: the page is as wide as the
+     * game picture (e.g. 2580x1080 on 21:9) instead of a centred 16:9
+     * canvas, so full-width graphics reach the screen edges. */
+    bool fill_width = false;
 };
 
 static std::vector<Package> s_pkgs;           /* [0] is the game's own ESPN presentation */
@@ -480,6 +484,7 @@ static void load_packages()
             if (const JVal *c = p.root.get("canvas")) {
                 p.canvas_w = (int)c->num("width", 1920);
                 p.canvas_h = (int)c->num("height", 1080);
+                p.fill_width = c->str("fit") == "fill_width";
             }
             if (!file_exists(p.dir + "/" + p.entry)) {
                 fprintf(stderr, "[PRES] HTML package %s: entry %s missing, skipped\n", dir8, p.entry.c_str());
@@ -2076,6 +2081,7 @@ struct HtmlPresentation {
     std::unique_ptr<nfl2k5::PresentationHost> host;
     int package = -1;
     float scale = 1.0f;
+    int canvas_w = 0;                 /* page width in use (fill_width packages follow the picture) */
     std::string last_state;
     double last_state_t = 0;
     GameState prev;
@@ -2240,6 +2246,7 @@ static std::string grel_text(uint32_t field)
 
 std::string nfl2k5_portrait_url(int photo_id);   /* src/presentation/portraits.cpp */
 extern "C" void nfl2k5_portraits_warm(void);
+extern "C" void xbox_PresentRecord(int seconds);   /* nv2a_gpu_present.inc.c, video clips */
 static std::mutex s_lineup_lock;
 static std::vector<std::pair<bool, std::string>> s_lineups;   /* offense?, players JSON */
 
@@ -2278,6 +2285,7 @@ extern "C" void nfl2k5_lineup_ticker(uint32_t sp)
                    ",\"portrait\":" + json_str(nfl2k5_portrait_url(photo)) + "}";
     }
     fprintf(stderr, "[PRES] lineup %s: %s\n", offense ? "offense" : "defense", players.c_str());
+    if (n) xbox_PresentRecord(36);        /* NFL2K5_REC=<prefix>: record the intro (11 x 2.6 s) */
     if (!n) return;
     std::lock_guard<std::mutex> lock(s_lineup_lock);
     s_lineups.push_back({ offense, players });
@@ -2344,14 +2352,17 @@ static int html_hud(const XboxHudFrame *f, XboxHudImage *img, const GameState &g
     int pk = s_sel_pkg;
     const Package &pkg = s_pkgs[pk];
     float gw = f->game_w, gh = f->game_h;
-    float dh = std::min(gh, gw * pkg.canvas_h / pkg.canvas_w), dw = dh * pkg.canvas_w / pkg.canvas_h;
+    int cw = pkg.canvas_w;
+    if (pkg.fill_width && gh > 0)
+        cw = std::max(pkg.canvas_w, std::min(pkg.canvas_w * 3, (int)lroundf(pkg.canvas_h * gw / gh)));
+    float dh = std::min(gh, gw * pkg.canvas_h / cw), dw = dh * cw / pkg.canvas_h;
     /* Rasterise at about the size it is shown (1080p: 1, 1440p: 1.33,
      * 4K: 2). The window can still be settling when the host starts, so a
      * shown size that stays well off the current scale for a second
      * restarts the page at the right one. */
     float want_scale = std::max(1.0f, std::min(2.0f, dh / pkg.canvas_h));
     static double scale_off_since;
-    if (s_html.package == pk && fabsf(want_scale - s_html.scale) > 0.2f) {
+    if (s_html.package == pk && (fabsf(want_scale - s_html.scale) > 0.2f || abs(cw - s_html.canvas_w) > 8)) {
         if (!scale_off_since) scale_off_since = now_s();
         else if (now_s() - scale_off_since > 1.0) { html_stop(); scale_off_since = 0; }
     } else scale_off_since = 0;
@@ -2364,7 +2375,8 @@ static int html_hud(const XboxHudFrame *f, XboxHudImage *img, const GameState &g
         c.teams_dir = "mods/teams";
         c.portraits_dir = "cache/portraits";
         nfl2k5_portraits_warm();
-        c.canvas_width = pkg.canvas_w;
+        c.canvas_width = cw;
+        s_html.canvas_w = cw;
         c.canvas_height = pkg.canvas_h;
         c.raster_scale = want_scale;
         s_html.scale = want_scale;
