@@ -419,6 +419,15 @@ void recomp_trace_esp(const char *name, const char *tag);
  * being the unordered form) and the header stays portable.
  * ================================================================ */
 
+/* Host SSE for the guest's packed SSE (x64 always has it). */
+#if (defined(_M_X64) || defined(__x86_64__)) && !defined(RECOMP_XMM_SSE)
+#define RECOMP_XMM_SSE 1
+#include <immintrin.h>
+#endif
+#ifndef RECOMP_XMM_SSE
+#define RECOMP_XMM_SSE 0
+#endif
+
 #ifndef RECOMP_XMM_DEFINED
 #define RECOMP_XMM_DEFINED
 typedef union RecompXmm {
@@ -460,14 +469,23 @@ static inline RecompXmm XMM_SCALAR_BITS(uint32_t bits) {
 
 static inline RecompXmm XMM_MEM(uint32_t addr) {
     RecompXmm r;
+#if RECOMP_XMM_SSE
+    /* One unaligned 16-byte load (movups): the guest's movaps/movups. */
+    _mm_storeu_ps(r.f, _mm_loadu_ps((const float *)XBOX_PTR(addr)));
+#else
     r.u[0] = MEM32(addr);      r.u[1] = MEM32(addr + 4);
     r.u[2] = MEM32(addr + 8);  r.u[3] = MEM32(addr + 12);
+#endif
     return r;
 }
 
 static inline void XMM_STORE(uint32_t addr, RecompXmm v) {
+#if RECOMP_XMM_SSE
+    _mm_storeu_ps((float *)XBOX_PTR(addr), _mm_loadu_ps(v.f));
+#else
     MEM32(addr)      = v.u[0]; MEM32(addr + 4)  = v.u[1];
     MEM32(addr + 8)  = v.u[2]; MEM32(addr + 12) = v.u[3];
+#endif
 }
 
 /* movlps/movhps move 8 bytes into or out of one half, leaving the
@@ -501,6 +519,34 @@ static inline RecompXmm XMM_MOVE_HIGH_TO_LOW(RecompXmm a, RecompXmm b) {
 
 /* -- packed arithmetic -- */
 
+/* The guest's packed SSE maps one-to-one onto host SSE (every x64 CPU has
+ * it): one instruction instead of a four-lane C loop. Same results --
+ * IEEE single per lane; minps/maxps return the second operand on a tie or
+ * NaN, as the lane-wise forms below spell out; cmpeq/lt/le are ordered and
+ * cmpneq unordered; andnps is ~a & b. The game's transform and animation
+ * math runs through these (2026-10-02). */
+#if RECOMP_XMM_SSE
+#define RECOMP_XMM_SSE_OP(name, op)                                       \
+    static inline RecompXmm name(RecompXmm a, RecompXmm b) {              \
+        RecompXmm r;                                                      \
+        _mm_storeu_ps(r.f, op(_mm_loadu_ps(a.f), _mm_loadu_ps(b.f)));     \
+        return r;                                                         \
+    }
+RECOMP_XMM_SSE_OP(XMM_ADD, _mm_add_ps)
+RECOMP_XMM_SSE_OP(XMM_SUB, _mm_sub_ps)
+RECOMP_XMM_SSE_OP(XMM_MUL, _mm_mul_ps)
+RECOMP_XMM_SSE_OP(XMM_DIV, _mm_div_ps)
+RECOMP_XMM_SSE_OP(XMM_MIN, _mm_min_ps)
+RECOMP_XMM_SSE_OP(XMM_MAX, _mm_max_ps)
+RECOMP_XMM_SSE_OP(XMM_AND, _mm_and_ps)
+RECOMP_XMM_SSE_OP(XMM_OR, _mm_or_ps)
+RECOMP_XMM_SSE_OP(XMM_XOR, _mm_xor_ps)
+RECOMP_XMM_SSE_OP(XMM_ANDN, _mm_andnot_ps)
+RECOMP_XMM_SSE_OP(XMM_CMP_EQ, _mm_cmpeq_ps)
+RECOMP_XMM_SSE_OP(XMM_CMP_LT, _mm_cmplt_ps)
+RECOMP_XMM_SSE_OP(XMM_CMP_LE, _mm_cmple_ps)
+RECOMP_XMM_SSE_OP(XMM_CMP_NEQ, _mm_cmpneq_ps)
+#else
 #define RECOMP_XMM_LANEWISE(name, expr)                                   \
     static inline RecompXmm name(RecompXmm a, RecompXmm b) {              \
         RecompXmm r; int i;                                               \
@@ -537,6 +583,7 @@ RECOMP_XMM_BITWISE(XMM_CMP_EQ,  (a.f[i] == b.f[i]) ? 0xFFFFFFFFu : 0u)
 RECOMP_XMM_BITWISE(XMM_CMP_LT,  (a.f[i] <  b.f[i]) ? 0xFFFFFFFFu : 0u)
 RECOMP_XMM_BITWISE(XMM_CMP_LE,  (a.f[i] <= b.f[i]) ? 0xFFFFFFFFu : 0u)
 RECOMP_XMM_BITWISE(XMM_CMP_NEQ, (a.f[i] == b.f[i]) ? 0u : 0xFFFFFFFFu)
+#endif /* RECOMP_XMM_SSE */
 
 /** movmskps: the four lane sign bits, packed into the low nibble. */
 static inline uint32_t XMM_MOVEMASK(RecompXmm a) {
