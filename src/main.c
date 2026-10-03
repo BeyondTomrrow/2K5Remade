@@ -2565,6 +2565,10 @@ int main(int argc, char **argv)
          * RECOMP_GPU=0 goes back to software. */
         if (!getenv("RECOMP_GPU")) _putenv_s("RECOMP_GPU", "1");
         if (!getenv("RECOMP_GPU_VP")) _putenv_s("RECOMP_GPU_VP", "1");   /* vertex programs on the GPU */
+        /* Vertex programs decode the guest's raw vertex bytes themselves
+         * (nv2a_gpu_vp.inc.c, 2026-10-02): the CPU no longer converts every
+         * vertex. RECOMP_GPU_RAWVB=0 goes back to CPU conversion. */
+        if (!getenv("RECOMP_GPU_RAWVB")) _putenv_s("RECOMP_GPU_RAWVB", "1");
         /* RECOMP_GPU_VP_SKIP_START remains available for shader diagnosis.
          * Program 46 no longer needs the reference fallback: its corruption
          * was the translated shader's overly large near-zero w clamp. */
