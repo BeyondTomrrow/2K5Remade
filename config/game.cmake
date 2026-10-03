@@ -1,4 +1,12 @@
-file(GLOB NFL2K5_GENERATED CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/src/recomp/gen/*.c")
+# NFL2K5_REG_LOCALS: compile tools/gen-reg-locals.py's copy of the generated
+# code (build/gen-locals), in which every function keeps the guest registers
+# it uses in locals instead of thread-local globals. tools/build.ps1 writes it.
+option(NFL2K5_REG_LOCALS "Compile the generated code with guest registers in locals (build/gen-locals)" ON)
+if(NFL2K5_REG_LOCALS AND EXISTS "${PROJECT_SOURCE_DIR}/build/gen-locals/recomp_0000.c")
+  file(GLOB NFL2K5_GENERATED CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/build/gen-locals/*.c")
+else()
+  file(GLOB NFL2K5_GENERATED CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/src/recomp/gen/*.c")
+endif()
 if(NOT NFL2K5_GENERATED)
   message(FATAL_ERROR "Run tools/analyze.ps1 -Recompile before building the game.")
 endif()

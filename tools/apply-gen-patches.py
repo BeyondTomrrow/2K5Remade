@@ -234,6 +234,13 @@ PATCHES = [
     # (sub_001775D0 on the ticker layout) when the package draws the lineup.
     ("LINEUP_NATIVE_HIDE", "sub_000FFD60", "loc_000FFD8B: ;", "after", """    { extern int nfl2k5_lineup_hide_native(void); if (nfl2k5_lineup_hide_native()) { esp += 4; return; } }
 """),
+    # Frame interval (2026-10-03): sub_00027880 stores how many vblanks a
+    # frame lasts (1 = 60 fps, 2 = 30). The game asks for 2 in its wide and
+    # presentation camera modes (table at 0x9F5B4 via sub_0009F570) and while
+    # loading. src/main.c nfl2k5_frame_interval can lock 60 or 30 instead.
+    ("FRAME_INTERVAL", "sub_00027880", "loc_00027880: ;", "after", """\
+    { extern uint32_t nfl2k5_frame_interval(uint32_t requested, uint32_t caller); ecx = nfl2k5_frame_interval(ecx, MEM32(esp)); }
+"""),
     ("DIAG_FSMPOP", "sub_0006E400", "loc_0006E439: ;", "after", """\
     { extern void nfl2k5_diag_fsm(uint32_t obj, uint32_t desc, int push); nfl2k5_diag_fsm(esi, 0, 0); }
 """),

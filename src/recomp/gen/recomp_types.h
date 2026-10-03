@@ -933,6 +933,47 @@ void recomp_abi_violation_log(uint32_t va, uint32_t ebx0, uint32_t esi0,
  * left over from a hardcoded 0x00400000 cutoff that was only ever right for
  * one title. Editing this header per project is no longer a thing.
  */
+#if defined(RECOMP_REG_LOCALS) && defined(RECOMP_GENERATED_CODE)
+/* Registers in locals (tools/gen-reg-locals.py): an indirect call writes the
+ * function's registers out, runs the dispatch on the globals, and reads them
+ * back. The dispatch itself is the code below, with every register access on
+ * the globals. */
+static inline void recomp_icall_g(uint32_t _va, int safe, uint32_t saved_esp, int tail)
+{
+    recomp_func_t _fn;
+    if (!tail) {
+        g_icall_trace[g_icall_trace_idx & (ICALL_TRACE_SIZE-1)] = _va;
+        g_icall_trace_idx++;
+        g_icall_count++;
+        recomp_icall_hist(_va);
+        if (!RECOMP_ICALL_IS_CODE(_va)) {
+            recomp_icall_not_code_log(_va);
+            if (safe) g_esp = saved_esp; else g_esp += 4;
+            g_eax = 0;
+            return;
+        }
+    }
+    _fn = recomp_lookup_manual(_va);
+    if (!_fn) _fn = recomp_lookup(_va);
+    if (!_fn) _fn = recomp_lookup_kernel(_va);
+    if (_fn) { RECOMP_ICALL_OBSERVE(_va, RECOMP_ICALL_SEEN_RESOLVED); _fn(); }
+    else {
+        RECOMP_ICALL_OBSERVE(_va, RECOMP_ICALL_SEEN_UNRESOLVED);
+        recomp_icall_fail_log(_va);
+        if (safe) g_esp = saved_esp; else g_esp += 4;
+        g_eax = 0;
+    }
+}
+#undef RECOMP_ABI_CALL
+#define RECOMP_ABI_CALL(va, fn) do { RECOMP_REGS_OUT(); (fn)(); RECOMP_REGS_IN(); } while (0)
+#define RECOMP_ICALL(xbox_va) do { uint32_t _va = (uint32_t)(xbox_va); \
+    RECOMP_REGS_OUT(); recomp_icall_g(_va, 0, 0, 0); RECOMP_REGS_IN(); } while (0)
+#define RECOMP_ICALL_SAFE(xbox_va, saved_esp) do { uint32_t _va = (uint32_t)(xbox_va); \
+    uint32_t _se = (uint32_t)(saved_esp); \
+    RECOMP_REGS_OUT(); recomp_icall_g(_va, 1, _se, 0); RECOMP_REGS_IN(); } while (0)
+#define RECOMP_ITAIL(xbox_va) do { uint32_t _va = (uint32_t)(xbox_va); \
+    RECOMP_REGS_OUT(); recomp_icall_g(_va, 0, 0, 1); RECOMP_REGS_IN(); } while (0)
+#else
 #define RECOMP_ICALL(xbox_va) do { \
     uint32_t _va = (uint32_t)(xbox_va); \
     g_icall_trace[g_icall_trace_idx & (ICALL_TRACE_SIZE-1)] = _va; \
@@ -997,6 +1038,7 @@ void recomp_abi_violation_log(uint32_t va, uint32_t ebx0, uint32_t esi0,
     else { RECOMP_ICALL_OBSERVE(_va, RECOMP_ICALL_SEEN_UNRESOLVED); \
            recomp_icall_fail_log(_va); g_esp += 4; g_eax = 0; } \
 } while(0)
+#endif /* RECOMP_REG_LOCALS */
 
 /* ================================================================
  * Register name aliases for generated code
@@ -1011,6 +1053,20 @@ void recomp_abi_violation_log(uint32_t va, uint32_t ebx0, uint32_t esi0,
  * ================================================================ */
 
 #ifdef RECOMP_GENERATED_CODE
+#ifdef RECOMP_REG_LOCALS
+/* tools/gen-reg-locals.py output: each function keeps the registers it uses
+ * in locals r_eax ... r_edi and defines RECOMP_REGS_OUT()/RECOMP_REGS_IN()
+ * (locals -> globals, globals -> locals) for exactly those registers. */
+#define eax r_eax
+#define ecx r_ecx
+#define edx r_edx
+#define esp r_esp
+#define ebx r_ebx
+#define esi r_esi
+#define edi r_edi
+#define RECOMP_CALL(fn) do { RECOMP_REGS_OUT(); fn(); RECOMP_REGS_IN(); } while (0)
+#define RECOMP_TAILCALL(fn) do { RECOMP_REGS_OUT(); fn(); return; } while (0)
+#else
 #define eax g_eax
 #define ecx g_ecx
 #define edx g_edx
@@ -1018,6 +1074,8 @@ void recomp_abi_violation_log(uint32_t va, uint32_t ebx0, uint32_t esi0,
 #define ebx g_ebx
 #define esi g_esi
 #define edi g_edi
+#define RECOMP_CALL(fn) fn()
+#endif
 
 /* ================================================================
  * MMX register file

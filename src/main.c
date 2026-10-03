@@ -1003,6 +1003,87 @@ static int pc_player(const uint8_t *m, uint32_t rec, char *first, char *last)
     return pc_name(m, rec + 0x10u, first, 32) && pc_name(m, rec + 0x14u, last, 32);
 }
 
+/* Frame interval (gen patch FRAME_INTERVAL in sub_00027880): the vblanks
+ * each frame lasts, 1 = 60 fps, 2 = 30. The game asks for 2 in its wide and
+ * presentation cameras and while loading -- on the Xbox those shots ran at
+ * 30. The Frame Rate Cap video setting decides: 30 locks 2; 60, 120 and
+ * Unlimited lock 1 (60 fps in every camera; the game is time-based, the play
+ * clock still runs 1.00 s per second, measured 2026-10-03); Original keeps
+ * the game's choice. NFL2K5_FRAME_INTERVAL=1 or 2 overrides the setting;
+ * NFL2K5_CLOCK_LOG=1 logs every request (with the caller) and, every second,
+ * the play clock against wall time. */
+extern int xbox_VideoFpsLimit(void);
+extern void (*g_xbox_fps_limit_changed)(void);
+static uint32_t s_frame_req = 1;          /* the game's last request */
+
+static uint32_t nfl2k5_frame_interval_for(uint32_t requested)
+{
+    static int forced = -1;
+    int limit;
+    if (forced < 0) {
+        const char *e = getenv("NFL2K5_FRAME_INTERVAL");
+        forced = e ? atoi(e) : 0;
+    }
+    if (forced == 1 || forced == 2)
+        return (uint32_t)forced;
+    if (requested == 0 || requested > 2)
+        return requested;                 /* not a frame rate this hook knows */
+    limit = xbox_VideoFpsLimit();
+    if (limit < 0) return requested;      /* Original */
+    return limit == 30 ? 2u : 1u;
+}
+
+/* The setting changed: apply it now rather than at the next camera change. */
+static void nfl2k5_frame_interval_refresh(void)
+{
+    *(volatile uint32_t *)((uint8_t *)xbox_GetMemoryOffset() + 0xA6A9ACu) = nfl2k5_frame_interval_for(s_frame_req);
+}
+
+uint32_t nfl2k5_frame_interval(uint32_t requested, uint32_t caller)
+{
+    static int log = -1;
+    static uint32_t last_req = 0xFFFFFFFFu, last_caller;
+    uint32_t r;
+    if (log < 0) {
+        log = getenv("NFL2K5_CLOCK_LOG") != NULL;
+        g_xbox_fps_limit_changed = nfl2k5_frame_interval_refresh;
+    }
+    s_frame_req = requested;
+    r = nfl2k5_frame_interval_for(requested);
+    if (log && (requested != last_req || caller != last_caller))
+        fprintf(stderr, "  [FRAMEINT] %08X asks %u -> %u\n", caller, requested, r);
+    last_req = requested; last_caller = caller;
+    return r;
+}
+
+static DWORD WINAPI nfl2k5_clock_log_thread(LPVOID unused)
+{
+    const uint8_t *m = (const uint8_t *)xbox_GetMemoryOffset();
+    LARGE_INTEGER fq, t0, t;
+    float last_play = -1.0f, last_game = -1.0f;
+    double last_t = 0;
+    (void)unused;
+    QueryPerformanceFrequency(&fq);
+    QueryPerformanceCounter(&t0);
+    for (;;) {
+        uint32_t pt, ck;
+        float play = -1.0f, game = -1.0f;
+        double now;
+        Sleep(1000);
+        QueryPerformanceCounter(&t);
+        now = (double)(t.QuadPart - t0.QuadPart) / fq.QuadPart;
+        pt = *(const uint32_t *)(m + 0x00E60294u);
+        ck = *(const uint32_t *)(m + 0x00E6028Cu);
+        if (pt && pt < 0x4000000u) play = *(const float *)(m + pt + 0x10);
+        if (ck && ck < 0x4000000u) game = *(const float *)(m + ck + 0x10);
+        if (last_play >= 0 && play >= 0 && play < last_play && last_play - play < 5.0f)
+            fprintf(stderr, "  [CLOCK] t=%.1f play %.2f -> %.2f: %.3f game-s per s; game clock %.2f (vblanks %u)\n",
+                    now, last_play, play, (last_play - play) / (now - last_t), game,
+                    *(const uint32_t *)(m + 0xA6A9B4u));
+        last_play = play; last_game = game; last_t = now;
+    }
+}
+
 void nfl2k5_playercard_probe(uint32_t ctx)
 {
     static volatile LONG printed;
@@ -2670,6 +2751,8 @@ int main(int argc, char **argv)
     xbox_path_init(game_dir, save_dir);
     if (getenv("RECOMP_FIND_TEXT"))
         CreateThread(NULL, 0, nfl2k5_find_text_thread, (LPVOID)getenv("RECOMP_FIND_TEXT"), 0, NULL);
+    if (getenv("NFL2K5_CLOCK_LOG"))
+        CreateThread(NULL, 0, nfl2k5_clock_log_thread, NULL, 0, NULL);
     {   /* <root>/Music folders -> Xbox custom soundtracks (saves/Soundtracks) */
         extern void nfl2k5_local_music_start(const char *root, const char *save_dir);
         nfl2k5_local_music_start(root, save_dir);

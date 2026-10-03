@@ -76688,6 +76688,8 @@ void sub_00027880(void)
 {
 
 loc_00027880: ;
+    /* NFL2K5-GENPATCH:FRAME_INTERVAL */
+    { extern uint32_t nfl2k5_frame_interval(uint32_t requested, uint32_t caller); ecx = nfl2k5_frame_interval(ecx, MEM32(esp)); }
     MEM32(0xA6A9AC) = ecx;
     esp += 4; return; /* ret */
 
