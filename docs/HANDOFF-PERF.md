@@ -114,3 +114,42 @@ Visual check: `NFL2K5_PRESENT_SHOT=<prefix>` saves presented frames.
   compiles it when `NFL2K5_REG_LOCALS=ON` (the default). Patch blocks are wrapped in
   `src/recomp_patch_begin.h` / `src/recomp_patch_end.h`. Turn it off with
   `-DNFL2K5_REG_LOCALS=OFF` (or delete `build/gen-locals`) to compare.
+
+### 2026-10-03 later (HITMAN closed, clean GPU)
+
+- **The 30 FPS segments were the game's own design.** `sub_0009F570` picks 1 or 2 vblanks
+  per frame per camera mode (table at 0x9F5B4). The chain is `sub_00064B30` → setter
+  `sub_00027880` → `0xA6A9AC`; `0xA6A9B0` is the vblank countdown polled with
+  Sleep(1) in `sub_00028DE0`. With the original behaviour the port now holds exactly 60 or
+  exactly 30, as the game asks.
+- **New gen patch FRAME_INTERVAL** with `nfl2k5_frame_interval` in `src/main.c` applies the
+  Frame Rate Cap setting:
+  - 30 → 2 vblanks per frame
+  - 60 / 120 / Unlimited → 1 (60 FPS in every camera)
+  - Original → the game's choice
+
+  Game speed was verified with `NFL2K5_CLOCK_LOG=1`: the play clock runs at 1.000
+  game-seconds per wall second when forced to 60.
+- **Bulk pushbuffer runs:** `nv2a_pb_exec_run` (`nv2a_pb_exec.c`), called from
+  `nv2a_pb_scan`, handles transform constants, program words, INLINE_ARRAY and
+  ARRAY_ELEMENT16 runs in one call.
+- **Gameplay averages, 60 s windows with the default settings:**
+
+  | Run | Scale | Avg FPS | 10 s windows |
+  |---|---|---|---|
+  | `locals2` (registers in locals, game's own 30/60) | 2× | 45.8 | |
+  | `def4` (60 locked) | 4× | 53.5 | |
+  | `def8` | 8× | 54.5 | |
+  | `bulk1` (with bulk runs) | 2× | 58.5 | 60 60 53 60 60 58 |
+  | `bulk8` | 8× | 55.5 | 60 60 51 52 59 51 |
+
+  Before tonight: 2× averaged 38 and 8× ran at 3–22.
+- **Remaining:** the heaviest wide stadium shots (crowd) run at 50–55 FPS at any
+  resolution. They are game-thread CPU-bound: kickoff is ~57% of the busy time and the draw
+  path ~21% of samples (`logs/prof60b.txt`).
+- **Async render (`RECOMP_GPU_ASYNC=1`) is still broken.** The render thread reads garbage
+  surface state (for example `software surface 83878000 19445x81349 bpp 0` and
+  `09FF186A 10240x8192 pitch 26`), so draws fall back to the CPU rasteriser while the game
+  thread spins in BlockOnFence (`sub_004262F0`). The pushbuffer is likely consumed after
+  the game has reused it, or the coalesced PUT walk is wrong across ring wraps. Fixing this
+  is the next big structural win: the kickoff would run in parallel with game logic.
