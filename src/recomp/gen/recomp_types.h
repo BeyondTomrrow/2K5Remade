@@ -161,6 +161,9 @@ extern uint32_t g_xbox_code_hi;
 
 extern RECOMP_TLS uint32_t g_eax, g_ecx, g_edx, g_esp;
 extern RECOMP_TLS uint32_t g_ebx, g_esi, g_edi;
+/* Flags handed back by a flag-returning function (kernel: xbox_memory_layout.c). */
+extern RECOMP_TLS uint32_t g_rf_kind, g_rf_a, g_rf_b;
+extern RECOMP_TLS int32_t g_rf_as, g_rf_bs;
 
 /* x87 stack. Per-thread for the same reason the integer registers are:
  * arguments are passed in st(0)/st(1) across call boundaries. */
@@ -965,7 +968,11 @@ static inline void recomp_icall_g(uint32_t _va, int safe, uint32_t saved_esp, in
     }
 }
 #undef RECOMP_ABI_CALL
+#ifdef RECOMP_ABI_CHECK   /* abi check in locals mode: same test as below */
+#define RECOMP_ABI_CALL(va, fn) do { RECOMP_REGS_OUT(); {     uint32_t _ab = g_ebx, _as = g_esi, _ad = g_edi, _ap = g_esp;     (fn)();     if (g_ebx != _ab || g_esi != _as || g_edi != _ad || g_esp < _ap + 4)         recomp_abi_violation_log((va), _ab, _as, _ad, _ap); }     RECOMP_REGS_IN(); } while (0)
+#else
 #define RECOMP_ABI_CALL(va, fn) do { RECOMP_REGS_OUT(); (fn)(); RECOMP_REGS_IN(); } while (0)
+#endif
 #define RECOMP_ICALL(xbox_va) do { uint32_t _va = (uint32_t)(xbox_va); \
     RECOMP_REGS_OUT(); recomp_icall_g(_va, 0, 0, 0); RECOMP_REGS_IN(); } while (0)
 #define RECOMP_ICALL_SAFE(xbox_va, saved_esp) do { uint32_t _va = (uint32_t)(xbox_va); \
@@ -1053,6 +1060,10 @@ static inline void recomp_icall_g(uint32_t _va, int safe, uint32_t saved_esp, in
  * ================================================================ */
 
 #ifdef RECOMP_GENERATED_CODE
+/* mov to/from cr3 (TLB flush after page-table edits, e.g. a mod's 128 MB
+ * mapping): there are no guest page tables here, so it is a plain value. */
+static uint32_t recomp_cr3;
+#define cr3 recomp_cr3
 #ifdef RECOMP_REG_LOCALS
 /* tools/gen-reg-locals.py output: each function keeps the registers it uses
  * in locals r_eax ... r_edi and defines RECOMP_REGS_OUT()/RECOMP_REGS_IN()

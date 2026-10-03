@@ -35,6 +35,11 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 GEN = os.path.join(ROOT, "src", "recomp", "gen")
 OUT = os.path.join(ROOT, "build", "gen-locals")
+# --gen DIR --out DIR: another generated tree (a mod pack's build).
+if "--gen" in sys.argv:
+    GEN = os.path.abspath(sys.argv[sys.argv.index("--gen") + 1])
+if "--out" in sys.argv:
+    OUT = os.path.abspath(sys.argv[sys.argv.index("--out") + 1])
 REGS = ("eax", "ecx", "edx", "esp", "ebx", "esi", "edi")
 
 FUNC_RE = re.compile(r"^void ([A-Za-z_]\w*)\(void\)$")

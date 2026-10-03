@@ -1,17 +1,28 @@
+# NFL2K5_GEN_DIR / NFL2K5_LOCALS_DIR: the generated code to build. Defaults
+# are the retail game's; a mod pack build (tools/build-pack.ps1) points them
+# at its own tree (build/gen-<pack>, build/gen-<pack>-locals).
+set(NFL2K5_GEN_DIR "${PROJECT_SOURCE_DIR}/src/recomp/gen" CACHE PATH "Generated code (tools/analyze.ps1 -Recompile)")
+set(NFL2K5_LOCALS_DIR "${PROJECT_SOURCE_DIR}/build/gen-locals" CACHE PATH "Register-locals copy (tools/gen-reg-locals.py)")
 # NFL2K5_REG_LOCALS: compile tools/gen-reg-locals.py's copy of the generated
-# code (build/gen-locals), in which every function keeps the guest registers
-# it uses in locals instead of thread-local globals. tools/build.ps1 writes it.
-option(NFL2K5_REG_LOCALS "Compile the generated code with guest registers in locals (build/gen-locals)" ON)
-if(NFL2K5_REG_LOCALS AND EXISTS "${PROJECT_SOURCE_DIR}/build/gen-locals/recomp_0000.c")
-  file(GLOB NFL2K5_GENERATED CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/build/gen-locals/*.c")
+# code, in which every function keeps the guest registers it uses in locals
+# instead of thread-local globals. tools/build.ps1 writes it.
+option(NFL2K5_REG_LOCALS "Compile the generated code with guest registers in locals" ON)
+if(NFL2K5_REG_LOCALS AND EXISTS "${NFL2K5_LOCALS_DIR}/recomp_0000.c")
+  file(GLOB NFL2K5_GENERATED CONFIGURE_DEPENDS "${NFL2K5_LOCALS_DIR}/*.c")
 else()
-  file(GLOB NFL2K5_GENERATED CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/src/recomp/gen/*.c")
+  file(GLOB NFL2K5_GENERATED CONFIGURE_DEPENDS "${NFL2K5_GEN_DIR}/*.c")
 endif()
 if(NOT NFL2K5_GENERATED)
   message(FATAL_ERROR "Run tools/analyze.ps1 -Recompile before building the game.")
 endif()
 add_executable(NFL2K5 WIN32 src/main.c src/recomp_manual.c src/nfl2k5_input_hle.c src/nfl2k5_video_menu.c src/nfl2k5_presentation.cpp src/nfl2k5_local_music.cpp src/nfl2k5_wma_encode.cpp src/presentation/webview2_host.cpp src/presentation/portraits.cpp src/nfl2k5.rc ${NFL2K5_GENERATED})
-target_include_directories(NFL2K5 PRIVATE src/recomp/gen src)
+target_include_directories(NFL2K5 PRIVATE "${NFL2K5_GEN_DIR}" src)
+# The XBE the generated code came from (empty: retail). A pack build runs that
+# XBE and finds its installed pack by this hash (src/main.c).
+set(NFL2K5_XBE_SHA256 "" CACHE STRING "SHA-256 of the XBE the generated code was built from (empty = retail)")
+if(NFL2K5_XBE_SHA256)
+  set_source_files_properties(src/main.c PROPERTIES COMPILE_DEFINITIONS "NFL2K5_XBE_SHA256=\"${NFL2K5_XBE_SHA256}\"")
+endif()
 # HTML presentation host (src/presentation): WebView2 SDK headers and static
 # loader. The engine itself is the WebView2 runtime that ships with Windows.
 set(NFL2K5_WEBVIEW2_SDK "${PROJECT_SOURCE_DIR}/dependencies/webview2/sdk/build/native")

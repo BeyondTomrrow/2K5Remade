@@ -2565,6 +2565,37 @@ static DWORD WINAPI profile_thread(LPVOID arg)
     return 0;
 }
 
+/* The XBE this build was compiled from: retail, or a mod pack's patched one
+ * (CMake NFL2K5_XBE_SHA256, set by tools/build.ps1 -Pack). */
+#define NFL2K5_RETAIL_XBE_SHA256 "73105b17a3161c546fea792a1c84ce37f9966a67c416f474cdbfab74b911a4a9"
+#ifndef NFL2K5_XBE_SHA256
+#define NFL2K5_XBE_SHA256 NFL2K5_RETAIL_XBE_SHA256
+#endif
+
+static int nfl2k5_file_sha256(const char *path, char hex[65])
+{
+    FILE *f = fopen(path, "rb");
+    BCRYPT_ALG_HANDLE alg = NULL;
+    BCRYPT_HASH_HANDLE h = NULL;
+    unsigned char buf[1 << 16], dig[32];
+    size_t n;
+    int ok = 0;
+    if (!f) return 0;
+    if (BCryptOpenAlgorithmProvider(&alg, BCRYPT_SHA256_ALGORITHM, NULL, 0) >= 0
+            && BCryptCreateHash(alg, &h, NULL, 0, NULL, 0, 0) >= 0) {
+        while ((n = fread(buf, 1, sizeof buf, f)) > 0)
+            BCryptHashData(h, buf, (ULONG)n, 0);
+        if (BCryptFinishHash(h, dig, sizeof dig, 0) >= 0) {
+            for (int i = 0; i < 32; i++) sprintf(hex + i * 2, "%02x", dig[i]);
+            ok = 1;
+        }
+    }
+    if (h) BCryptDestroyHash(h);
+    if (alg) BCryptCloseAlgorithmProvider(alg, 0);
+    fclose(f);
+    return ok;
+}
+
 int main(int argc, char **argv)
 {
     /* Like any PC game: keep the display and the machine awake while it
@@ -2606,6 +2637,44 @@ int main(int argc, char **argv)
     snprintf(save_dir, sizeof save_dir, "%s/saves", root);
     const char *game_dir = GetFileAttributesA(disc_xbe) != INVALID_FILE_ATTRIBUTES ? disc_dir : original_dir;
     const char *xbe_path = GetFileAttributesA(disc_xbe) != INVALID_FILE_ATTRIBUTES ? disc_xbe : original_xbe;
+    /* A mod pack build (tools/build.ps1 -Pack) is compiled from that pack's
+     * patched default.xbe: it runs that XBE, from the pack's installed folder
+     * (tools/pack-install.py), with the pack's disc overlay. The folder is
+     * found by the XBE's hash under mods\packs, or named by NFL2K5_PACK. */
+    static char pack_xbe[MAX_PATH], pack_dir[MAX_PATH];
+    if (strcmp(NFL2K5_XBE_SHA256, NFL2K5_RETAIL_XBE_SHA256) != 0) {
+        const char *env = getenv("NFL2K5_PACK");
+        if (env && *env) {
+            snprintf(pack_dir, sizeof pack_dir, "%s", env);
+        } else {
+            char pattern[MAX_PATH];
+            WIN32_FIND_DATAA fd;
+            HANDLE fh;
+            snprintf(pattern, sizeof pattern, "%s/mods/packs/*", root);
+            fh = FindFirstFileA(pattern, &fd);
+            if (fh != INVALID_HANDLE_VALUE) {
+                do {
+                    char cand[MAX_PATH], hex[65];
+                    if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) || fd.cFileName[0] == '.') continue;
+                    snprintf(cand, sizeof cand, "%s/mods/packs/%s/default.xbe", root, fd.cFileName);
+                    if (nfl2k5_file_sha256(cand, hex) && !strcmp(hex, NFL2K5_XBE_SHA256)) {
+                        snprintf(pack_dir, sizeof pack_dir, "%s/mods/packs/%s", root, fd.cFileName);
+                        break;
+                    }
+                } while (FindNextFileA(fh, &fd));
+                FindClose(fh);
+            }
+        }
+        if (!pack_dir[0]) {
+            fprintf(stderr, "[BOOT] This build is for a mod pack whose default.xbe has SHA-256 %s;\n"
+                            "       install the pack with tools/pack-install.py first.\n", NFL2K5_XBE_SHA256);
+            return 2;
+        }
+        snprintf(pack_xbe, sizeof pack_xbe, "%s/default.xbe", pack_dir);
+        xbe_path = pack_xbe;
+        _putenv_s("NFL2K5_PACK", pack_dir);
+        printf("[BOOT] Mod pack: %s\n", pack_dir);
+    }
     const int validate_only = argc == 2 && strcmp(argv[1], "--validate") == 0;
     if (argc > 1 && !validate_only && !(argc == 2 && strcmp(argv[1], "--run") == 0)) {
         fprintf(stderr, "Usage: NFL2K5.exe [--validate | --run]\n");
@@ -2687,7 +2756,7 @@ int main(int argc, char **argv)
     BCRYPT_ALG_HANDLE sha = NULL;
     unsigned char digest[32];
     char digest_hex[65];
-    const char *expected_sha = "73105b17a3161c546fea792a1c84ce37f9966a67c416f474cdbfab74b911a4a9";
+    const char *expected_sha = NFL2K5_XBE_SHA256;
     if (BCryptOpenAlgorithmProvider(&sha, BCRYPT_SHA256_ALGORITHM, NULL, 0) < 0) {
         free(data); return 2;
     }
@@ -2705,7 +2774,9 @@ int main(int argc, char **argv)
     if (memcmp(data, "XBEH", 4) || cert < base ||
         (uint64_t)(cert - base) + 12 > (uint64_t)length ||
         read32(data, cert - base + 8) != 0x53450030 ||
-        (read32(data, 0x128) ^ 0xA8FC57AB) != 0x00016BD1) {
+        /* Retail entry point; a pack may start in its own code (its XBE
+         * hash was checked above). */
+        (!strcmp(NFL2K5_XBE_SHA256, NFL2K5_RETAIL_XBE_SHA256) && (read32(data, 0x128) ^ 0xA8FC57AB) != 0x00016BD1)) {
         fprintf(stderr, "XBE does not match this NFL 2K5 integration. Reanalyze before rebuilding.\n");
         free(data); return 2;
     }
@@ -2755,6 +2826,14 @@ int main(int argc, char **argv)
     printf("[BOOT] Game data preserved across memory initialization.\n");
     xbox_kernel_init();
     xbox_path_init(game_dir, save_dir);
+    {   /* NFL2K5_PACK=<mods\packs\<pack> folder>: that mod pack's disc files
+         * (tools/pack-install.py) read over the retail ones. Its data only
+         * matches its own code build; the Extras menu will choose packs. */
+        extern int xbox_overlay_load(const char *dir, const char *disc);
+        const char *pack = getenv("NFL2K5_PACK");
+        if (pack && *pack)
+            xbox_overlay_load(pack, game_dir);
+    }
     if (getenv("RECOMP_FIND_TEXT"))
         CreateThread(NULL, 0, nfl2k5_find_text_thread, (LPVOID)getenv("RECOMP_FIND_TEXT"), 0, NULL);
     if (getenv("NFL2K5_CLOCK_LOG"))

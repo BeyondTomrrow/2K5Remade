@@ -23,6 +23,11 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 GEN = os.path.join(ROOT, "src", "recomp", "gen")
+# --gen DIR: another generated tree (a mod pack's build). --lenient: a patch
+# whose function or anchor the pack changed is reported, not fatal.
+if "--gen" in sys.argv:
+    GEN = os.path.abspath(sys.argv[sys.argv.index("--gen") + 1])
+LENIENT = "--lenient" in sys.argv
 
 # (id, function, anchor line (stripped match), insert 'before' or 'after', code)
 PATCHES = [
@@ -503,8 +508,8 @@ def main():
     if present:
         print("[gen-patch] already present: %s" % ", ".join(present))
     for msg in failed:
-        print("[gen-patch] FAILED %s" % msg, file=sys.stderr)
-    return 1 if failed else 0
+        print("[gen-patch] FAILED %s" % msg, file=sys.stdout if LENIENT else sys.stderr)
+    return 1 if failed and not LENIENT else 0
 
 
 if __name__ == "__main__":

@@ -1,4 +1,6 @@
-param([ValidateSet('Release','Debug')][string]$Configuration = 'Release', [switch]$Game, [switch]$Optimize, [switch]$DebugGen)
+# -Pack <name>: build a mod pack's code (tools/analyze.ps1 -Xbe <its default.xbe>
+# -Analysis analysis-<name> -Gen build\gen-<name>) into build\<Configuration>-<name>.
+param([ValidateSet('Release','Debug')][string]$Configuration = 'Release', [switch]$Game, [switch]$Optimize, [switch]$DebugGen, [string]$Pack = '')
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 $vs = $null
@@ -26,15 +28,20 @@ New-Item -ItemType Directory -Force $env:TEMP | Out-Null
 if ($Game) {
   # Regeneration wipes every hand patch in src/recomp/gen; re-apply the
   # AC97 reset ack and NFL2K5_FORCE_UNBLOCK_* ones (idempotent, fails on a moved anchor).
-  & python "$root/tools/apply-gen-patches.py"
+  $genDir = if ($Pack) { "$root\build\gen-$Pack" } else { "$root\src\recomp\gen" }
+  $localsDir = if ($Pack) { "$root\build\gen-$Pack-locals" } else { "$root\build\gen-locals" }
+  # A pack may have changed a patched function: its misses are reported, not fatal.
+  $patchArgs = if ($Pack) { @('--gen', $genDir, '--lenient') } else { @() }
+  & python "$root/tools/apply-gen-patches.py" @patchArgs
   if ($LASTEXITCODE) { throw 'Re-applying generated-code patches failed; see tools/apply-gen-patches.py.' }
   # Guest registers in locals: a transformed copy in build/gen-locals that
   # config/game.cmake compiles (NFL2K5_REG_LOCALS, default ON).
-  & python "$root/tools/gen-reg-locals.py"
+  & python "$root/tools/gen-reg-locals.py" --gen $genDir --out $localsDir
   if ($LASTEXITCODE) { throw 'tools/gen-reg-locals.py failed.' }
-  $audioSource = (Get-Content -Raw -Path "$root/src/recomp/gen/recomp_*.c")
+  $audioSource = (Get-Content -Raw -Path "$genDir/recomp_*.c")
   if (-not ($audioSource -join "").Contains('nfl2k5_ack_ac97_reset(eax + 0xFEC0010Bu)')) {
-    throw 'AC97 reset hook missing after regeneration. Restore the verified reset-write patch described in docs/PROGRESS.md.'
+    if ($Pack) { Write-Warning 'AC97 reset hook is not in this pack build.' }
+    else { throw 'AC97 reset hook missing after regeneration. Restore the verified reset-write patch described in docs/PROGRESS.md.' }
   }
 }
 $gameOption = if ($Game) { 'ON' } else { 'OFF' }
@@ -44,9 +51,19 @@ $gameOption = if ($Game) { 'ON' } else { 'OFF' }
 # 2026-09-26: optimised generated code is the default, so build\Release\NFL2K5.exe
 # (the exe that gets double-clicked) is the fast one. -DebugGen builds the /Od
 # variant in build\<Configuration>-od; -Optimize keeps building -opt as before.
-$buildDir = if ($Optimize) { "$root\build\$Configuration-opt" } elseif ($DebugGen) { "$root\build\$Configuration-od" } else { "$root\build\$Configuration" }
+$buildDir = if ($Pack) { "$root\build\$Configuration-$Pack" } elseif ($Optimize) { "$root\build\$Configuration-opt" } elseif ($DebugGen) { "$root\build\$Configuration-od" } else { "$root\build\$Configuration" }
 if (-not $DebugGen) { $Optimize = $true }
 $extra = if ($Optimize) { @('-DNFL2K5_OPTIMIZE=ON', '-DNFL2K5_FORCE_UNBLOCK_AUDIO_LOCK=ON', '-DNFL2K5_FORCE_UNBLOCK_33660_DRAIN=ON', '-DNFL2K5_FORCE_UNBLOCK_NETPOLL=ON', '-DNFL2K5_FORCE_UNBLOCK_STATE9_READY=ON') } else { @() }
+if ($Game) { $extra += @("-DNFL2K5_GEN_DIR=$genDir", "-DNFL2K5_LOCALS_DIR=$localsDir") }
+if ($Game) {
+  # The XBE this tree was generated from (tools/analyze.ps1 records it).
+  $shaFile = if ($Pack) { "$root\analysis-$Pack\input-sha256.json" } else { '' }
+  $xbeSha = if ($shaFile -and (Test-Path $shaFile)) { ((Get-Content -Raw $shaFile | ConvertFrom-Json).Hash).ToLower() } else { '' }
+  $extra += @("-DNFL2K5_XBE_SHA256=$xbeSha")
+}
+# NFL2K5_CMAKE_EXTRA: more -D options for this configure (diagnostics such as
+# -DNFL2K5_ABI_CHECK=ON); a cached option keeps its value until set again.
+if ($env:NFL2K5_CMAKE_EXTRA) { $extra += ($env:NFL2K5_CMAKE_EXTRA -split ' ') }
 & $cmake -S $root -B $buildDir -G Ninja "-DCMAKE_BUILD_TYPE=$Configuration" "-DNFL2K5_BUILD_GAME=$gameOption" @extra -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl 2>&1 | Tee-Object "$root\logs\configure-$Configuration.log"
 if ($LASTEXITCODE) { throw 'CMake configure failed.' }
 if ($Game) { $buildTargets = @('--target','NFL2K5','NFL2K5_toolchain_check') }
