@@ -76,3 +76,18 @@ if ($LASTEXITCODE) { throw 'Build failed; see logs.' }
 & "$buildDir\NFL2K5_toolchain_check.exe"
 if ($LASTEXITCODE) { throw 'Native toolchain check failed.' }
 if (-not $Game -and -not (Test-Path "$root\build\$Configuration\NFL2K5_Rebuild.exe")) { throw 'Native reconstruction build missing.' }
+if ($Game -and $Pack) {
+  # Put the native code build beside the installed overlay.  The in-game
+  # Features > Mod Packs screen switches between this executable and the
+  # retail build; players never need the compiler or a launcher script.
+  $installed = Get-ChildItem "$root\mods\packs" -Directory -ErrorAction SilentlyContinue | Where-Object {
+    $xbe = Join-Path $_.FullName 'default.xbe'
+    (Test-Path $xbe) -and ((Get-FileHash $xbe -Algorithm SHA256).Hash.ToLower() -eq $xbeSha)
+  } | Select-Object -First 1
+  if (-not $installed) { throw "Built pack '$Pack', but no installed pack has XBE hash $xbeSha." }
+  $native = Join-Path $installed.FullName 'native'
+  New-Item -ItemType Directory -Force $native | Out-Null
+  Copy-Item -Force "$buildDir\NFL2K5.exe" (Join-Path $native 'NFL2K5.exe')
+  if (Test-Path "$buildDir\NFL2K5.pdb") { Copy-Item -Force "$buildDir\NFL2K5.pdb" (Join-Path $native 'NFL2K5.pdb') }
+  Write-Host "Installed native code pack: $native"
+}

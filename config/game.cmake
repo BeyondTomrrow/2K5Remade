@@ -15,7 +15,7 @@ endif()
 if(NOT NFL2K5_GENERATED)
   message(FATAL_ERROR "Run tools/analyze.ps1 -Recompile before building the game.")
 endif()
-add_executable(NFL2K5 WIN32 src/main.c src/recomp_manual.c src/nfl2k5_input_hle.c src/nfl2k5_video_menu.c src/nfl2k5_presentation.cpp src/nfl2k5_local_music.cpp src/nfl2k5_wma_encode.cpp src/presentation/webview2_host.cpp src/presentation/portraits.cpp src/nfl2k5.rc ${NFL2K5_GENERATED})
+add_executable(NFL2K5 WIN32 src/main.c src/recomp_manual.c src/nfl2k5_input_hle.c src/nfl2k5_video_menu.c src/nfl2k5_mod_packs.c src/nfl2k5_presentation.cpp src/nfl2k5_local_music.cpp src/nfl2k5_wma_encode.cpp src/presentation/webview2_host.cpp src/presentation/portraits.cpp src/nfl2k5.rc ${NFL2K5_GENERATED})
 target_include_directories(NFL2K5 PRIVATE "${NFL2K5_GEN_DIR}" src)
 # The XBE the generated code came from (empty: retail). A pack build runs that
 # XBE and finds its installed pack by this hash (src/main.c).

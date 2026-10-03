@@ -2629,6 +2629,17 @@ int main(int argc, char **argv)
                 setvbuf(stderr, NULL, _IOLBF, 1 << 16);
         }
     }
+    /* The desktop shortcut always points at the retail build.  If the player
+     * selected a native code pack in Features > Mod Packs, hand off before
+     * any Xbox state is created.  Pack builds use the same path to return to
+     * retail when the selected pack is turned off. */
+    if (!getenv("NFL2K5_NO_PACK_DISPATCH")) {
+        extern int nfl2k5_modpacks_boot_dispatch(const char *root);
+        if (nfl2k5_modpacks_boot_dispatch(root)) {
+            SetThreadExecutionState(ES_CONTINUOUS);
+            return 0;
+        }
+    }
     char disc_dir[MAX_PATH], disc_xbe[MAX_PATH], original_dir[MAX_PATH], original_xbe[MAX_PATH], save_dir[MAX_PATH];
     snprintf(disc_dir, sizeof disc_dir, "%s/original/disc", root);
     snprintf(disc_xbe, sizeof disc_xbe, "%s/default.xbe", disc_dir);

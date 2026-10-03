@@ -92,6 +92,27 @@ don't need it.
 6. Distribution: ship code packs keyed by the patched XBE's sha256, so players never
    compile anything.
 
+## Progress log (2026-10-03, in-game pack selector)
+
+- **Features > Mod Packs is implemented.** `src/nfl2k5_video_menu.c` adds a native
+  `Mod Packs` link to the existing Features screen. The page lists every installed
+  pack that has `pack.json`, `default.xbe`, and `native\NFL2K5.exe`, with an On/Off
+  value beside its display name.
+- **Selection persists and restarts safely.** `src/nfl2k5_mod_packs.c` stores the
+  selected folder in `mods\active-pack.ini`, validates the folder name, and writes
+  the file atomically. Turning a pack on restarts into its native executable;
+  turning it off restarts into the retail executable. Launching the normal retail
+  shortcut also dispatches to the selected pack before Xbox state is initialized.
+- **Pack builds install their native executable.** `tools/build.ps1 -Game -Pack
+  <name>` matches the installed pack by the patched XBE SHA-256 and copies the EXE
+  and PDB into the pack's `native` folder. Players do not need a compiler or a
+  separate launcher.
+- **SOFTDRINK 2K28 verified.** Both retail and SOFTDRINK builds pass the native
+  toolchain check. The live game log reports one playable pack and an eight-row
+  Features menu. Direct launch tests passed in both directions: retail dispatched
+  to `SOFTDRINK_2K28-2K28\native\NFL2K5.exe`, and the pack executable returned to
+  `build\Release\NFL2K5.exe` when disabled.
+
 ## Progress log (2026-10-03, later)
 
 - **SOFTDRINK conversion:** `analysis-softdrink` → `build\gen-softdrink`. All 33,935
