@@ -186,3 +186,21 @@ Visual check: `NFL2K5_PRESENT_SHOT=<prefix>` saves presented frames.
     `nv2a_gpu_d3d11_hlsl.inc` (specialised pixel shaders, target-copy generation)
   - `src/kernel/nv2a_gpu_present.inc.c` (frame-rate cap)
   - `templates/runtime/recomp_types.h` (register-locals macros)
+
+### Final checks (2026-10-03 morning)
+
+- **9× (6480×4320), async:** 58.3 FPS average (60 59 60 60 51 60). The one dip is in the
+  heaviest wide shot; at 28 Mpixels the RTX 2060 SUPER is near its limit.
+- **12-minute run at 4× (`long4`), async default:** no crash and no desync, 60 FPS almost
+  throughout, with occasional transition dips (43–51) into the second quarter.
+- **Frame Rate Cap = 30:** locked 30 (`cap30`).
+- **Frame Rate Cap = 120 / Unlimited:** the same as 60 in practice. The game simulates
+  60 frames a second, so more distinct frames would need interpolation, which is not
+  implemented.
+
+### Next ideas, if more is wanted
+
+- Draw path micro-work (texture hash, upload+bind) for headroom at 9× and on slower CPUs.
+- Depth format `D32_FLOAT_S8X24` (8 B/px) → `D24S8` where integer depth suffices; would
+  cut GPU bandwidth at 8–9×.
+- x87 stack in TLS (`g_fp_stack` / `g_fp_top`): the same locals idea as the registers.
