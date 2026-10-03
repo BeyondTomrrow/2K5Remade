@@ -2650,6 +2650,12 @@ int main(int argc, char **argv)
          * (nv2a_gpu_vp.inc.c, 2026-10-02): the CPU no longer converts every
          * vertex. RECOMP_GPU_RAWVB=0 goes back to CPU conversion. */
         if (!getenv("RECOMP_GPU_RAWVB")) _putenv_s("RECOMP_GPU_RAWVB", "1");
+        /* Commands run on a render thread while the game builds its next
+         * frame (xbox_memory_layout.c; each kick's segment is captured, so
+         * the render thread never walks memory D3D has reused). 60 fps in
+         * every camera at 2x-8x, 2026-10-03. RECOMP_GPU_ASYNC=0 goes back
+         * to running them inside the kick. */
+        if (!getenv("RECOMP_GPU_ASYNC")) _putenv_s("RECOMP_GPU_ASYNC", "1");
         /* RECOMP_GPU_VP_SKIP_START remains available for shader diagnosis.
          * Program 46 no longer needs the reference fallback: its corruption
          * was the translated shader's overly large near-zero w clamp. */

@@ -153,3 +153,36 @@ Visual check: `NFL2K5_PRESENT_SHOT=<prefix>` saves presented frames.
   thread spins in BlockOnFence (`sub_004262F0`). The pushbuffer is likely consumed after
   the game has reused it, or the coalesced PUT walk is wrong across ring wraps. Fixing this
   is the next big structural win: the kickoff would run in parallel with game logic.
+
+### 2026-10-03: async render thread fixed and made the default (locked 60)
+
+- **Root cause of the async garbage:** the render thread walked guest memory late. D3D
+  patches the jump that ends a submitted chunk to point at its next chunk, and reuses ring
+  and chunk memory, so a late walk followed patched jumps into chunks still being written.
+- **Fix: capture at kick.** `nv2a_pb_capture` (`nv2a_pb_scan.c`) runs on the game thread
+  inside `xbox_Nv2aKick`. It copies the submitted segment as headers + data, following
+  jumps, calls and returns exactly as the synchronous walk reads them. GET is set to PUT
+  at once, because the commands are already copied.
+- The render thread (`pb_async_thread`, `xbox_memory_layout.c`) executes the copies
+  (`nv2a_pb_exec_linear`) from a queue of up to 48. Fence and counter mirrors are
+  published only after a copy has been executed, so D3D's resource waits stay honest.
+- `RECOMP_GPU_ASYNC` now defaults to 1 (`src/main.c`); set `RECOMP_GPU_ASYNC=0` to go back.
+- **Results:**
+
+  | Run | Scale | Avg FPS | 10 s windows | Desyncs |
+  |---|---|---|---|---|
+  | `async7` | 2× | 59.2 | 60 60 60 60 55 60 | 0 |
+  | `async8x` | 8× | 60.0 | 60 60 60 60 60 60 | — |
+
+  The heavy wide stadium shots, which the game used to cap at 30, also hold 60. The only
+  "lost stream" is one capture during D3D init (`03FCC000 → 010A0000`, 0 words), the
+  same garbage walk sync mode also does there; it is harmless.
+- **Files changed in `external/xboxrecomp`** (left uncommitted there by convention):
+  - `src/kernel/nv2a_pb_scan.c` (bulk runs, live-PUT stop, capture, linear execution)
+  - `src/kernel/nv2a_pb_exec.c` (`nv2a_pb_exec_run`)
+  - `src/kernel/xbox_memory_layout.c` (async queue)
+  - `src/kernel/kernel_bridge.c` (exact vblank timer)
+  - `src/kernel/nv2a_gpu_d3d11.inc.c`, `nv2a_gpu_ps.inc.c` (new), `nv2a_gpu_d3d11.hlsl`,
+    `nv2a_gpu_d3d11_hlsl.inc` (specialised pixel shaders, target-copy generation)
+  - `src/kernel/nv2a_gpu_present.inc.c` (frame-rate cap)
+  - `templates/runtime/recomp_types.h` (register-locals macros)
