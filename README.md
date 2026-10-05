@@ -29,7 +29,7 @@ An extracted disc folder must contain `default.xbe` and `vc_53450030`.
 
 ### Video settings
 
-Press **F1** while the game is running to open the video menu. It includes:
+Open Options and go down to Video Settings It includes:
 
 - Windowed, borderless, and fullscreen modes
 - Resolution and aspect-ratio controls, including ultrawide
