@@ -1,0 +1,14 @@
+{
+  "abbreviation": "ARI",
+  "city": "Arizona",
+  "name": "Cardinals",
+  "colors": {
+    "primary": "#97233F",
+    "secondary": "#000000",
+    "text": "#FFFFFF"
+  },
+  "logos": {
+    "scorebug": "logos/scorebug.png"
+  },
+  "aliases": []
+}

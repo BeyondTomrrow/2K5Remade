@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "id": "html_test",
+  "name": "HTML Test (development)",
+  "type": "html",
+  "version": "0.1.0",
+  "author": "NFL2K5-PC",
+  "description": "Development package that proves the HTML/CSS/JS presentation host: live teams, scores, quarter, clock, down and distance, plus event animations. Not a network design.",
+  "enabled": true,
+  "entry": "scorebug.html",
+  "canvas": { "width": 1920, "height": 1080, "fit": "broadcast_safe_16x9" },
+  "dependencies": [],
+  "assets": {},
+  "compatibility": { "game": "NFL2K5-PC", "presentation_api": 1 }
+}

@@ -1,0 +1,14 @@
+{
+  "abbreviation": "CAR",
+  "city": "Carolina",
+  "name": "Panthers",
+  "colors": {
+    "primary": "#0085CA",
+    "secondary": "#101820",
+    "text": "#FFFFFF"
+  },
+  "logos": {
+    "scorebug": "logos/scorebug.png"
+  },
+  "aliases": []
+}

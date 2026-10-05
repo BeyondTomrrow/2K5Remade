@@ -161,6 +161,9 @@ extern uint32_t g_xbox_code_hi;
 
 extern RECOMP_TLS uint32_t g_eax, g_ecx, g_edx, g_esp;
 extern RECOMP_TLS uint32_t g_ebx, g_esi, g_edi;
+/* Flags handed back by a flag-returning function (kernel: xbox_memory_layout.c). */
+extern RECOMP_TLS uint32_t g_rf_kind, g_rf_a, g_rf_b;
+extern RECOMP_TLS int32_t g_rf_as, g_rf_bs;
 
 /* x87 stack. Per-thread for the same reason the integer registers are:
  * arguments are passed in st(0)/st(1) across call boundaries. */
@@ -289,6 +292,19 @@ static inline int64_t recomp_fist(double value, uint16_t control, unsigned bits)
     return (int64_t)rounded;
 }
 
+/* frndint rounds by the guest RC bits too. The CRT's floor() and ceil() set
+ * RC to down/up and call frndint; rint() (host round-to-nearest) made
+ * floor(2.7) return 3 (2026-10-02). */
+static inline double recomp_frndint(double value, uint16_t control) {
+    if (!isfinite(value)) return value;
+    switch((control>>10)&3) {
+    case 1: return floor(value);
+    case 2: return ceil(value);
+    case 3: return trunc(value);
+    default: return nearbyint(value);
+    }
+}
+
 /* ================================================================
  * ICALL trace ring buffer (for debugging indirect calls)
  * ================================================================ */
@@ -406,6 +422,15 @@ void recomp_trace_esp(const char *name, const char *tag);
  * being the unordered form) and the header stays portable.
  * ================================================================ */
 
+/* Host SSE for the guest's packed SSE (x64 always has it). */
+#if (defined(_M_X64) || defined(__x86_64__)) && !defined(RECOMP_XMM_SSE)
+#define RECOMP_XMM_SSE 1
+#include <immintrin.h>
+#endif
+#ifndef RECOMP_XMM_SSE
+#define RECOMP_XMM_SSE 0
+#endif
+
 #ifndef RECOMP_XMM_DEFINED
 #define RECOMP_XMM_DEFINED
 typedef union RecompXmm {
@@ -447,14 +472,23 @@ static inline RecompXmm XMM_SCALAR_BITS(uint32_t bits) {
 
 static inline RecompXmm XMM_MEM(uint32_t addr) {
     RecompXmm r;
+#if RECOMP_XMM_SSE
+    /* One unaligned 16-byte load (movups): the guest's movaps/movups. */
+    _mm_storeu_ps(r.f, _mm_loadu_ps((const float *)XBOX_PTR(addr)));
+#else
     r.u[0] = MEM32(addr);      r.u[1] = MEM32(addr + 4);
     r.u[2] = MEM32(addr + 8);  r.u[3] = MEM32(addr + 12);
+#endif
     return r;
 }
 
 static inline void XMM_STORE(uint32_t addr, RecompXmm v) {
+#if RECOMP_XMM_SSE
+    _mm_storeu_ps((float *)XBOX_PTR(addr), _mm_loadu_ps(v.f));
+#else
     MEM32(addr)      = v.u[0]; MEM32(addr + 4)  = v.u[1];
     MEM32(addr + 8)  = v.u[2]; MEM32(addr + 12) = v.u[3];
+#endif
 }
 
 /* movlps/movhps move 8 bytes into or out of one half, leaving the
@@ -488,6 +522,34 @@ static inline RecompXmm XMM_MOVE_HIGH_TO_LOW(RecompXmm a, RecompXmm b) {
 
 /* -- packed arithmetic -- */
 
+/* The guest's packed SSE maps one-to-one onto host SSE (every x64 CPU has
+ * it): one instruction instead of a four-lane C loop. Same results --
+ * IEEE single per lane; minps/maxps return the second operand on a tie or
+ * NaN, as the lane-wise forms below spell out; cmpeq/lt/le are ordered and
+ * cmpneq unordered; andnps is ~a & b. The game's transform and animation
+ * math runs through these (2026-10-02). */
+#if RECOMP_XMM_SSE
+#define RECOMP_XMM_SSE_OP(name, op)                                       \
+    static inline RecompXmm name(RecompXmm a, RecompXmm b) {              \
+        RecompXmm r;                                                      \
+        _mm_storeu_ps(r.f, op(_mm_loadu_ps(a.f), _mm_loadu_ps(b.f)));     \
+        return r;                                                         \
+    }
+RECOMP_XMM_SSE_OP(XMM_ADD, _mm_add_ps)
+RECOMP_XMM_SSE_OP(XMM_SUB, _mm_sub_ps)
+RECOMP_XMM_SSE_OP(XMM_MUL, _mm_mul_ps)
+RECOMP_XMM_SSE_OP(XMM_DIV, _mm_div_ps)
+RECOMP_XMM_SSE_OP(XMM_MIN, _mm_min_ps)
+RECOMP_XMM_SSE_OP(XMM_MAX, _mm_max_ps)
+RECOMP_XMM_SSE_OP(XMM_AND, _mm_and_ps)
+RECOMP_XMM_SSE_OP(XMM_OR, _mm_or_ps)
+RECOMP_XMM_SSE_OP(XMM_XOR, _mm_xor_ps)
+RECOMP_XMM_SSE_OP(XMM_ANDN, _mm_andnot_ps)
+RECOMP_XMM_SSE_OP(XMM_CMP_EQ, _mm_cmpeq_ps)
+RECOMP_XMM_SSE_OP(XMM_CMP_LT, _mm_cmplt_ps)
+RECOMP_XMM_SSE_OP(XMM_CMP_LE, _mm_cmple_ps)
+RECOMP_XMM_SSE_OP(XMM_CMP_NEQ, _mm_cmpneq_ps)
+#else
 #define RECOMP_XMM_LANEWISE(name, expr)                                   \
     static inline RecompXmm name(RecompXmm a, RecompXmm b) {              \
         RecompXmm r; int i;                                               \
@@ -524,6 +586,7 @@ RECOMP_XMM_BITWISE(XMM_CMP_EQ,  (a.f[i] == b.f[i]) ? 0xFFFFFFFFu : 0u)
 RECOMP_XMM_BITWISE(XMM_CMP_LT,  (a.f[i] <  b.f[i]) ? 0xFFFFFFFFu : 0u)
 RECOMP_XMM_BITWISE(XMM_CMP_LE,  (a.f[i] <= b.f[i]) ? 0xFFFFFFFFu : 0u)
 RECOMP_XMM_BITWISE(XMM_CMP_NEQ, (a.f[i] == b.f[i]) ? 0u : 0xFFFFFFFFu)
+#endif /* RECOMP_XMM_SSE */
 
 /** movmskps: the four lane sign bits, packed into the low nibble. */
 static inline uint32_t XMM_MOVEMASK(RecompXmm a) {
@@ -873,6 +936,51 @@ void recomp_abi_violation_log(uint32_t va, uint32_t ebx0, uint32_t esi0,
  * left over from a hardcoded 0x00400000 cutoff that was only ever right for
  * one title. Editing this header per project is no longer a thing.
  */
+#if defined(RECOMP_REG_LOCALS) && defined(RECOMP_GENERATED_CODE)
+/* Registers in locals (tools/gen-reg-locals.py): an indirect call writes the
+ * function's registers out, runs the dispatch on the globals, and reads them
+ * back. The dispatch itself is the code below, with every register access on
+ * the globals. */
+static inline void recomp_icall_g(uint32_t _va, int safe, uint32_t saved_esp, int tail)
+{
+    recomp_func_t _fn;
+    if (!tail) {
+        g_icall_trace[g_icall_trace_idx & (ICALL_TRACE_SIZE-1)] = _va;
+        g_icall_trace_idx++;
+        g_icall_count++;
+        recomp_icall_hist(_va);
+        if (!RECOMP_ICALL_IS_CODE(_va)) {
+            recomp_icall_not_code_log(_va);
+            if (safe) g_esp = saved_esp; else g_esp += 4;
+            g_eax = 0;
+            return;
+        }
+    }
+    _fn = recomp_lookup_manual(_va);
+    if (!_fn) _fn = recomp_lookup(_va);
+    if (!_fn) _fn = recomp_lookup_kernel(_va);
+    if (_fn) { RECOMP_ICALL_OBSERVE(_va, RECOMP_ICALL_SEEN_RESOLVED); _fn(); }
+    else {
+        RECOMP_ICALL_OBSERVE(_va, RECOMP_ICALL_SEEN_UNRESOLVED);
+        recomp_icall_fail_log(_va);
+        if (safe) g_esp = saved_esp; else g_esp += 4;
+        g_eax = 0;
+    }
+}
+#undef RECOMP_ABI_CALL
+#ifdef RECOMP_ABI_CHECK   /* abi check in locals mode: same test as below */
+#define RECOMP_ABI_CALL(va, fn) do { RECOMP_REGS_OUT(); {     uint32_t _ab = g_ebx, _as = g_esi, _ad = g_edi, _ap = g_esp;     (fn)();     if (g_ebx != _ab || g_esi != _as || g_edi != _ad || g_esp < _ap + 4)         recomp_abi_violation_log((va), _ab, _as, _ad, _ap); }     RECOMP_REGS_IN(); } while (0)
+#else
+#define RECOMP_ABI_CALL(va, fn) do { RECOMP_REGS_OUT(); (fn)(); RECOMP_REGS_IN(); } while (0)
+#endif
+#define RECOMP_ICALL(xbox_va) do { uint32_t _va = (uint32_t)(xbox_va); \
+    RECOMP_REGS_OUT(); recomp_icall_g(_va, 0, 0, 0); RECOMP_REGS_IN(); } while (0)
+#define RECOMP_ICALL_SAFE(xbox_va, saved_esp) do { uint32_t _va = (uint32_t)(xbox_va); \
+    uint32_t _se = (uint32_t)(saved_esp); \
+    RECOMP_REGS_OUT(); recomp_icall_g(_va, 1, _se, 0); RECOMP_REGS_IN(); } while (0)
+#define RECOMP_ITAIL(xbox_va) do { uint32_t _va = (uint32_t)(xbox_va); \
+    RECOMP_REGS_OUT(); recomp_icall_g(_va, 0, 0, 1); RECOMP_REGS_IN(); } while (0)
+#else
 #define RECOMP_ICALL(xbox_va) do { \
     uint32_t _va = (uint32_t)(xbox_va); \
     g_icall_trace[g_icall_trace_idx & (ICALL_TRACE_SIZE-1)] = _va; \
@@ -937,6 +1045,7 @@ void recomp_abi_violation_log(uint32_t va, uint32_t ebx0, uint32_t esi0,
     else { RECOMP_ICALL_OBSERVE(_va, RECOMP_ICALL_SEEN_UNRESOLVED); \
            recomp_icall_fail_log(_va); g_esp += 4; g_eax = 0; } \
 } while(0)
+#endif /* RECOMP_REG_LOCALS */
 
 /* ================================================================
  * Register name aliases for generated code
@@ -951,6 +1060,24 @@ void recomp_abi_violation_log(uint32_t va, uint32_t ebx0, uint32_t esi0,
  * ================================================================ */
 
 #ifdef RECOMP_GENERATED_CODE
+/* mov to/from cr3 (TLB flush after page-table edits, e.g. a mod's 128 MB
+ * mapping): there are no guest page tables here, so it is a plain value. */
+static uint32_t recomp_cr3;
+#define cr3 recomp_cr3
+#ifdef RECOMP_REG_LOCALS
+/* tools/gen-reg-locals.py output: each function keeps the registers it uses
+ * in locals r_eax ... r_edi and defines RECOMP_REGS_OUT()/RECOMP_REGS_IN()
+ * (locals -> globals, globals -> locals) for exactly those registers. */
+#define eax r_eax
+#define ecx r_ecx
+#define edx r_edx
+#define esp r_esp
+#define ebx r_ebx
+#define esi r_esi
+#define edi r_edi
+#define RECOMP_CALL(fn) do { RECOMP_REGS_OUT(); fn(); RECOMP_REGS_IN(); } while (0)
+#define RECOMP_TAILCALL(fn) do { RECOMP_REGS_OUT(); fn(); return; } while (0)
+#else
 #define eax g_eax
 #define ecx g_ecx
 #define edx g_edx
@@ -958,6 +1085,8 @@ void recomp_abi_violation_log(uint32_t va, uint32_t ebx0, uint32_t esi0,
 #define ebx g_ebx
 #define esi g_esi
 #define edi g_edi
+#define RECOMP_CALL(fn) fn()
+#endif
 
 /* ================================================================
  * MMX register file

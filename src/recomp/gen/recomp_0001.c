@@ -21726,6 +21726,8 @@ loc_00038CE0: ;
     if (TEST_NZ(_fa, _fb)) goto loc_00038D08; /* jne: not equal / not zero */
 
 loc_00038CEB: ;
+    /* NFL2K5-GENPATCH:DIAG_SCHEDTABLE */
+    { extern void nfl2k5_diag_sched(uint32_t idx); uint32_t _f = MEM32(esi * 8 + 0xB04D24); if (_f < 0x10000u || _f >= 0x01000000u) nfl2k5_diag_sched(esi); }
     MEM32(esi * 8 + 0xB04D20) = 1;
     { uint32_t _icall_esp = g_esp;
     { uint32_t _icall_target = MEM32(esi * 8 + 0xB04D24); PUSH32(esp, 0x00038CFDu); RECOMP_ICALL_SAFE(_icall_target, _icall_esp); } /* indirect call */
@@ -32204,6 +32206,8 @@ void sub_0003CEA0(void)
     (void)_fa; (void)_fb; (void)_fas; (void)_fbs;
 
 loc_0003CEA0: ;
+    /* NFL2K5-GENPATCH:DIAG_MUSICPLAY */
+    { extern void nfl2k5_diag_music(int what, uint32_t handle_ptr, uint32_t esp_); nfl2k5_diag_music(1, ecx, esp); }
     eax = MEM32(ecx);
     _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(0xFFFFFFFFu) & 0xFFFFFFFFu;
     _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp eax, 0xFFFFFFFFu (32-bit) */
@@ -32246,6 +32250,8 @@ void sub_0003CEE0(void)
     (void)_fa; (void)_fb; (void)_fas; (void)_fbs;
 
 loc_0003CEE0: ;
+    /* NFL2K5-GENPATCH:DIAG_MUSICSTOP */
+    { extern void nfl2k5_diag_music(int what, uint32_t handle_ptr, uint32_t esp_); nfl2k5_diag_music(0, ecx, esp); }
     eax = MEM32(ecx);
     _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(0xFFFFFFFFu) & 0xFFFFFFFFu;
     _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp eax, 0xFFFFFFFFu (32-bit) */
@@ -34844,7 +34850,11 @@ loc_0003DD1C: ;
 loc_0003DD28: ;
     _fa = (uint32_t)(ecx) & 0xFFFFFFFFu; _fb = (uint32_t)(ecx) & 0xFFFFFFFFu;
     _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test ecx, ecx (32-bit) */
+    /* NFL2K5-GENPATCH:MUSICPOS_KEEP */
+    uint32_t nfl2k5_pos_old = MEM32(ebx + 0xA6D8E0); int nfl2k5_pos_set = 0;
     MEM32(ebx + 0xA6D8E0) = 0;
+    /* NFL2K5-GENPATCH:MUSICPOS_RESTORE */
+    MEM32(ebx + 0xA6D8E0) = nfl2k5_pos_old;   /* MUSICPOS: no transient 0 */
     if (TEST_Z(_fa, _fb)) goto loc_0003DD62; /* je: equal / zero */
 
 loc_0003DD36: ;
@@ -34860,6 +34870,8 @@ loc_0003DD3F: ;
     PUSH32(esp, 0x0003DD4Fu); RECOMP_ABI_CALL(0x00445BC3u, sub_00445BC3); /* call 0x00445BC3 */
 
 loc_0003DD4F: ;
+    /* NFL2K5-GENPATCH:DIAG_MUSICCURSOR */
+    { extern void nfl2k5_diag_music_cursor(uint32_t slot_off, uint32_t cursor, uint32_t limit); nfl2k5_diag_music_cursor(ebx, MEM32(esp + 0x84), MEM32(esp + 0x24)); }
     eax = MEM32(esp + 0x84);
     _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(MEM32(esp + 0x24)) & 0xFFFFFFFFu;
     _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp eax, MEM32(esp + 0x24) (32-bit) */
@@ -34867,8 +34879,12 @@ loc_0003DD4F: ;
 
 loc_0003DD5C: ;
     MEM32(ebx + 0xA6D8E0) = eax;
+    /* NFL2K5-GENPATCH:MUSICPOS_SET */
+    nfl2k5_pos_set = 1;
 
 loc_0003DD62: ;
+    /* NFL2K5-GENPATCH:MUSICPOS_FINAL */
+    if (!nfl2k5_pos_set) MEM32(ebx + 0xA6D8E0) = 0;   /* MUSICPOS: final value, stored once */
     eax = MEM32(ebx + 0xA6D838);
     _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;
     _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test eax, eax (32-bit) */
@@ -47176,12 +47192,16 @@ loc_000408D1: ;
     if (CMP_L(_fas, _fbs)) goto loc_000408DF; /* jl: less (signed <) */
 
 loc_000408D8: ;
+    /* NFL2K5-GENPATCH:DIAG_MUSICEND */
+    { extern void nfl2k5_diag_music_end(uint32_t mgr, uint32_t rec, uint32_t delta, uint32_t chan); nfl2k5_diag_music_end(ebx, esi, ecx, ebp); }
     PUSH32(esp, 0x000408DDu); RECOMP_ABI_CALL(0x000406F0u, sub_000406F0); /* call 0x000406F0 */
 
 loc_000408DD: ;
     goto loc_000408E8;
 
 loc_000408DF: ;
+    /* NFL2K5-GENPATCH:DIAG_MUSICFILL */
+    { extern void nfl2k5_diag_music_fill(uint32_t mgr, uint32_t rec, uint32_t delta, uint32_t chan); nfl2k5_diag_music_fill(ebx, esi, ecx, ebp); }
     PUSH32(esp, ecx);
     edi = esi + -12;
     PUSH32(esp, 0x000408E8u); RECOMP_ABI_CALL(0x0003EDD0u, sub_0003EDD0); /* call 0x0003EDD0 */
@@ -60390,7 +60410,7 @@ void sub_00043D20(void)
 
 loc_00043D20: ;
     /* NFL2K5-GENPATCH:DIAG_RES43D20_IN */
-    { extern void nfl2k5_diag_res43(uint32_t obj, uint32_t load, uint32_t fre, uint32_t where); nfl2k5_diag_res43(esi, ebx, eax, 0); }
+    { extern void nfl2k5_diag_res43(uint32_t obj, uint32_t load, uint32_t fre, uint32_t where); nfl2k5_diag_res43(esi, ebx, eax, MEM32(esp)); }
     PUSH32(esp, edi);
     edi = eax;
     eax = MEM32(esi + 0x10);
@@ -63745,7 +63765,7 @@ void sub_000450B0(void)
 
 loc_000450B0: ;
     /* NFL2K5-GENPATCH:DIAG_RESLOAD */
-    { extern void nfl2k5_diag_res(uint32_t res, int load, uint32_t ret); nfl2k5_diag_res(ecx, 1, MEM32(esp)); }
+    { extern void nfl2k5_diag_res(uint32_t res, int load, uint32_t ret, uint32_t r2, uint32_t r3); nfl2k5_diag_res(ecx, 1, MEM32(esp), MEM32(esp + 8), MEM32(esp + 0x18)); }
     eax = MEM32(ecx + 0x20);
     MEM32(eax + 8) = MEM32(eax + 8) + 1;
     _fa = (uint32_t)(MEM32(eax + 8)) & 0xFFFFFFFFu;
@@ -63775,7 +63795,7 @@ void sub_000450D0(void)
 
 loc_000450D0: ;
     /* NFL2K5-GENPATCH:DIAG_RESFREE */
-    { extern void nfl2k5_diag_res(uint32_t res, int load, uint32_t ret); nfl2k5_diag_res(ecx, 0, MEM32(esp)); }
+    { extern void nfl2k5_diag_res(uint32_t res, int load, uint32_t ret, uint32_t r2, uint32_t r3); nfl2k5_diag_res(ecx, 0, MEM32(esp), MEM32(esp + 8), MEM32(esp + 0x18)); }
     PUSH32(esp, esi);
     esi = ecx;
     PUSH32(esp, 0x000450D8u); RECOMP_ABI_CALL(0x00028F40u, sub_00028F40); /* call 0x00028F40 */

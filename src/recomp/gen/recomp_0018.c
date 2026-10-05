@@ -1,11 +1,26 @@
 /**
  * ESPN NFL 2K5 - Recompiled code chunk 18
- * Functions: 1000 (0x0027EF10 - 0x0029F780)
+ * Functions: 1000 (0x0027EEC0 - 0x0029F730)
  */
 
 #define RECOMP_GENERATED_CODE
 #include "recomp_funcs.h"
 #include <math.h>
+
+/**
+ * sub_0027EEC0
+ * Original: 0x0027EEC0 - 0x0027EEC9 (9 bytes, 2 insns)
+ * CC: cdecl, 1 params, returns int_or_void
+ * Frame: fpo_leaf
+ */
+void sub_0027EEC0(void)
+{
+
+loc_0027EEC0: ;
+    eax = (int32_t)MEMF(esp + 4); /* cvttss2si */
+    esp += 8; return; /* ret 4 */
+
+}
 
 /**
  * sub_0027EF10
@@ -6763,6 +6778,13 @@ void sub_00280620(void)
     #define fp_st1() fp_st(1)
 
 loc_00280620: ;
+    /* NFL2K5-GENPATCH:LOCALMUSIC_RETAIL_NEXT */
+    { extern int nfl2k5_retail_music_take_next(void); if (nfl2k5_retail_music_take_next()) {
+        uint32_t keep_eax = eax, keep_ecx = ecx, keep_edx = edx;
+        PUSH32(esp, 0x00280620u); RECOMP_ABI_CALL(0x0027FEC0u, sub_0027FEC0);
+        PUSH32(esp, 0x00280620u); RECOMP_ABI_CALL(0x0027F040u, sub_0027F040);
+        eax = keep_eax; ecx = keep_ecx; edx = keep_edx;
+    } }
     PUSH32(esp, 0x00280625u); RECOMP_ABI_CALL(0x0027F690u, sub_0027F690); /* call 0x0027F690 */
 
 loc_00280625: ;
@@ -16613,7 +16635,7 @@ loc_00284C00: ;
 
 /**
  * sub_00284C10
- * Original: 0x00284C10 - 0x00284C58 (72 bytes, 27 insns)
+ * Original: 0x00284C10 - 0x00284C50 (64 bytes, 25 insns)
  * CC: cdecl, 0 params, returns int_or_void
  * Frame: fpo_leaf
  */
@@ -16652,6 +16674,26 @@ loc_00284C2A: ;
     eax = 0; /* xor self */
     _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* xor result */
     esp += 4; return; /* ret */
+
+    g_seh_ebp = ebp; sub_00284C50(); return; /* fallthrough 0x00284C50 */
+
+}
+
+/**
+ * sub_00284C50
+ * Original: 0x00284C50 - 0x00284C58 (8 bytes, 2 insns)
+ * CC: cdecl, 0 params, returns int_or_void
+ * Frame: fpo_leaf
+ */
+void sub_00284C50(void)
+{
+    uint32_t ebp = 0;
+    ebp = g_ebp;  /* frameless: caller's frame */
+    ebp = g_seh_ebp; /* fpo_leaf: inherit caller's frame */
+
+loc_00284C50: ;
+    SET_LO8(ecx, MEM8(ecx + 0xD));
+    g_seh_ebp = ebp; sub_000BBA60(); return; /* tail jmp 0x000BBA60 */
 
 }
 
@@ -76766,42 +76808,5 @@ loc_0029F753: ;
 
 loc_0029F75F: ;
     esp += 12; return; /* ret 8 */
-
-}
-
-/**
- * sub_0029F770
- * Original: 0x0029F770 - 0x0029F77E (14 bytes, 5 insns)
- * CC: cdecl, 1 params, returns int_or_void
- * Frame: fpo_leaf
- */
-void sub_0029F770(void)
-{
-
-loc_0029F770: ;
-    PUSH32(esp, eax);
-    PUSH32(esp, ecx);
-    ecx = MEM32(esp + 0xC);
-    PUSH32(esp, 0x0029F77Bu); RECOMP_ABI_CALL(0x0029B570u, sub_0029B570); /* call 0x0029B570 */
-
-loc_0029F77B: ;
-    esp += 8; return; /* ret 4 */
-
-}
-
-/**
- * sub_0029F780
- * Original: 0x0029F780 - 0x0029F785 (5 bytes, 1 insns)
- * CC: cdecl, 0 params, returns int_or_void
- * Frame: fpo_leaf
- */
-void sub_0029F780(void)
-{
-    uint32_t ebp = 0;
-    ebp = g_ebp;  /* frameless: caller's frame */
-    ebp = g_seh_ebp; /* fpo_leaf: inherit caller's frame */
-
-loc_0029F780: ;
-    g_seh_ebp = ebp; sub_0029B1A0(); return; /* tail jmp 0x0029B1A0 */
 
 }

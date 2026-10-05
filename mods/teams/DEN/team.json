@@ -1,0 +1,14 @@
+{
+  "abbreviation": "DEN",
+  "city": "Denver",
+  "name": "Broncos",
+  "colors": {
+    "primary": "#FB4F14",
+    "secondary": "#002244",
+    "text": "#FFFFFF"
+  },
+  "logos": {
+    "scorebug": "logos/scorebug.png"
+  },
+  "aliases": []
+}

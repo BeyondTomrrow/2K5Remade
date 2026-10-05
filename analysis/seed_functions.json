@@ -1,0 +1,1786 @@
+[
+  {
+    "start": "0x004DA7E0",
+    "note": "Observed native runtime indirect-call target; verified XPP function prologue in the original XBE."
+  },
+  {
+    "start": "0x00016856",
+    "note": "Observed native runtime indirect-call target; verified short callback body in the original XBE."
+  },
+  {
+    "start": "0x004945A3",
+    "note": "Observed native frontend state-machine vtable target; verified 26-state dispatcher in the user's extracted XBE."
+  },
+  {
+    "start": "0x000650A0",
+    "note": "2026-09-22: found via live xemu (reference oracle) hardware-breakpoint trace of the archive-load call chain (sub_0008D2B0 -> sub_00043AC0 -> sub_00043BE0 -> sub_00043980), confirmed real, working, and reachable on a correct boot. This address is the true caller of sub_00064CD0 (return address 0x650a9 landed 14 bytes past sub_00064FE0's declared end, in a 277-byte gap with no registered function at all -- confirmed real x86 code via Capstone disassembly of the original XBE: `push ecx; push ebx; mov ebx,ecx; call 0x64cd0; cmp [0xa83a18],3; jne 0x651a8; ...; ret`, 16-byte aligned, 5 bytes of NOP padding immediately before it at 0x6509B). The analyzer never discovered this function at all (not a boundary-extension bug like three earlier instances this session -- a genuine gap), almost certainly because whatever calls it does so indirectly and was never seeded before. See PROJECT_STATUS.md, 2026-09-22 xemu entries, for the full trace this depends on."
+  },
+  {
+    "start": "0x000200B0",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00041810",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00041FF0",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00042180",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00044BB0",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00044DF0",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00045100",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00045600",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00045920",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x000459D0",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00045A20",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00045D10",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x0004A5E0",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x0004A790",
+    "note": "2026-09-23: observed unresolved native icall target from the scheduler pump sub_00038CD0 (0x38CFD)."
+  },
+  {
+    "start": "0x0004C1B0",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x0004C220",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x0004C290",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x0004C300",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x0004C360",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x0004C3C0",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x0004C420",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x0004D810",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x0004F080",
+    "note": "2026-09-23: observed unresolved native icall target (from 0x4F28A/0x4F2DE); switch dispatcher behind NOP padding."
+  },
+  {
+    "start": "0x0004F300",
+    "note": "2026-09-23: observed unresolved native icall target; switch dispatcher `mov eax,[ecx]; jmp [eax*4+0x4f318]`."
+  },
+  {
+    "start": "0x000582C0",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00058320",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x0005B0D0",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00067150",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00080270",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00083D60",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00089D40",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x000A2580",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x000A2590",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x000AD1D0",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x000D7460",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x000D8570",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x000D8950",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x000DA5D0",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x000DD060",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x000EC090",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x000F3FC0",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x000F8AA0",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00104AF0",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x001072C0",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00108240",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x0010A100",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00117C10",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00117C30",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00123B20",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x0013C660",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x0013CA40",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00146C70",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00148B80",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x0014D410",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x0014D780",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00159880",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00159B30",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x0015D930",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x0015DD30",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x0015F120",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00161980",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00167A30",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00168C70",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x0016A780",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00170470",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x001704C0",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00174CE0",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x0018E140",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x0018EFC0",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x001A76A0",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x001ABF30",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x001AC010",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x001AC040",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x001AC080",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x001BCE40",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x001C1FA0",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x001DCB80",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x001DCE30",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x001EB710",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x001FFF80",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00201F50",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x0020CB30",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00213660",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00218CC0",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00218CD0",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00218CE0",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00218CF0",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00218D00",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00218D10",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00218D20",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00219620",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00219DF0",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x0021A9E0",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x0021AAD0",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x0021B450",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x0021E860",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00220B30",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x002381C0",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00254E00",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00255770",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00257A20",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00257F60",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00258920",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x0025B910",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x0025E360",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x0025E660",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x0026DAF0",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x0027AFE0",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x0027BBD0",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00291930",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x002AE6C0",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x002B0660",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x002B1160",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x002B1DC0",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x002B4230",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x002B4350",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x002B4420",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x002B4C30",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x002B4DF0",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x002B5120",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x002B54E0",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x002B5660",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x002B5770",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x002B58D0",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x002B59F0",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x002B5BA0",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x002B5F60",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x002B63E0",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x002B6530",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x002B6840",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x002B6990",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x002B6A80",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x002B6BD0",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x002B6CB0",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x002B6E20",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x002C1250",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x002C34E0",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x002DC0B0",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x002F5690",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00314640",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x003147A0",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x0031A280",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00320210",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00320A60",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00324C90",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00326AD0",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00326C50",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x003276C0",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00327A90",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x003287C0",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x0032B190",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x0033FA00",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00341CC0",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x003420F0",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00348190",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x003500F0",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00350970",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00353A80",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x003563E0",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x003584C0",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00362140",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00366160",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00366E20",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00367710",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x00369D80",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x003CB1C0",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x003CC280",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x003D7780",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x0040FEF0",
+    "note": "2026-09-23 systematic scan: code address used as a push/mov imm32 constant or stored as a pointer in .rdata/.data, 16-byte aligned, preceded by padding/ret, decodes cleanly, and not registered by the analyzer. Motivated by the scheduler driver ops table at 0xA7DEE0 (0x4C1B0..0x4C420), whose functions were absorbed into ranges ending at 0x4C480 and lost their `jmp 0x3a4f0` completion tail calls, so I/O requests never completed."
+  },
+  {
+    "start": "0x004D6F20",
+    "note": "2026-09-23: MPEG-2 movie decoder PSFD_I picture routine (whole section, one function), called through the decoder's function table ([ebx+0x2A0]) and never reached by static analysis. Without it every intro movie frame decode jumped to an unresolved target and the intro drew nothing."
+  },
+  {
+    "start": "0x004D7C20",
+    "note": "2026-09-23: MPEG-2 movie decoder PSFD_P picture routine (whole section, one function), called through the decoder's function table ([ebx+0x2A0]) and never reached by static analysis. Without it every intro movie frame decode jumped to an unresolved target and the intro drew nothing."
+  },
+  {
+    "start": "0x00400900",
+    "note": "2026-09-23: MPEG decoder helper (.text). Found by scanning every code section for 16-aligned starts after int3 padding that were not recompiled; disassembles to a clean prologue in the original XBE. 0x413970 was hit live as an unresolved icall during the intro movie."
+  },
+  {
+    "start": "0x00413970",
+    "note": "2026-09-23: MPEG DCT-coefficient decode, called via a function pointer from PSFD00 0x4D96C7. Found by scanning every code section for 16-aligned starts after int3 padding that were not recompiled; disassembles to a clean prologue in the original XBE. 0x413970 was hit live as an unresolved icall during the intro movie."
+  },
+  {
+    "start": "0x004D9A90",
+    "note": "2026-09-23: MPEG decoder (PSFD00). Found by scanning every code section for 16-aligned starts after int3 padding that were not recompiled; disassembles to a clean prologue in the original XBE. 0x413970 was hit live as an unresolved icall during the intro movie."
+  },
+  {
+    "start": "0x00421D10",
+    "note": "2026-09-23: D3D. Found by scanning every code section for 16-aligned starts after int3 padding that were not recompiled; disassembles to a clean prologue in the original XBE. 0x413970 was hit live as an unresolved icall during the intro movie."
+  },
+  {
+    "start": "0x00428920",
+    "note": "2026-09-23: D3D. Found by scanning every code section for 16-aligned starts after int3 padding that were not recompiled; disassembles to a clean prologue in the original XBE. 0x413970 was hit live as an unresolved icall during the intro movie."
+  },
+  {
+    "start": "0x0042ADE0",
+    "note": "2026-09-23: D3D. Found by scanning every code section for 16-aligned starts after int3 padding that were not recompiled; disassembles to a clean prologue in the original XBE. 0x413970 was hit live as an unresolved icall during the intro movie."
+  },
+  {
+    "start": "0x004D9F50",
+    "note": "2026-09-24: MPEG motion-compensation routine, entry 3 of the decoder's function table at 0xCE2220 (filled by sub_0040C370/sub_00417470 with 0x4DA1C0, 0x4DA120, 0x4DA070, 0x4D9F50). Preceded by lea-alignment padding rather than int3, so the int3-padding scan missed it. Its unresolved call left esp off by 4 and every later call in sub_004D9xxx read a garbage target (0xCC8xxx)."
+  },
+  {
+    "start": "0x00172A50",
+    "note": "2026-09-24: vtable method (mov eax,ecx; jmp 0x16FAB0) returning a float, called via [eax+0x1C] from 0x1702CE in the menu layout path. Unresolved on native: the caller read a garbage float, preceding the post-START pushbuffer overrun (sub_00069880 -> sub_0002D2A0). Preceded by a jump table, so no padding-based scan found it."
+  },
+  {
+    "start": "0x00360FA0",
+    "note": "2026-09-24: function referenced from a data-section pointer table whose neighbouring entries are recompiled functions; clean prologue in the original XBE (0x3AA3F8.. are SSE math routines with an aligned-stack prologue)."
+  },
+  {
+    "start": "0x003AA3F8",
+    "note": "2026-09-24: function referenced from a data-section pointer table whose neighbouring entries are recompiled functions; clean prologue in the original XBE (0x3AA3F8.. are SSE math routines with an aligned-stack prologue)."
+  },
+  {
+    "start": "0x003AA6D8",
+    "note": "2026-09-24: function referenced from a data-section pointer table whose neighbouring entries are recompiled functions; clean prologue in the original XBE (0x3AA3F8.. are SSE math routines with an aligned-stack prologue)."
+  },
+  {
+    "start": "0x003AA9B8",
+    "note": "2026-09-24: function referenced from a data-section pointer table whose neighbouring entries are recompiled functions; clean prologue in the original XBE (0x3AA3F8.. are SSE math routines with an aligned-stack prologue)."
+  },
+  {
+    "start": "0x003AACE8",
+    "note": "2026-09-24: function referenced from a data-section pointer table whose neighbouring entries are recompiled functions; clean prologue in the original XBE (0x3AA3F8.. are SSE math routines with an aligned-stack prologue)."
+  },
+  {
+    "start": "0x003AB4C8",
+    "note": "2026-09-24: function referenced from a data-section pointer table whose neighbouring entries are recompiled functions; clean prologue in the original XBE (0x3AA3F8.. are SSE math routines with an aligned-stack prologue)."
+  },
+  {
+    "start": "0x003AB778",
+    "note": "2026-09-24: function referenced from a data-section pointer table whose neighbouring entries are recompiled functions; clean prologue in the original XBE (0x3AA3F8.. are SSE math routines with an aligned-stack prologue)."
+  },
+  {
+    "start": "0x003ABA28",
+    "note": "2026-09-24: function referenced from a data-section pointer table whose neighbouring entries are recompiled functions; clean prologue in the original XBE (0x3AA3F8.. are SSE math routines with an aligned-stack prologue)."
+  },
+  {
+    "start": "0x003AC338",
+    "note": "2026-09-24: function referenced from a data-section pointer table whose neighbouring entries are recompiled functions; clean prologue in the original XBE (0x3AA3F8.. are SSE math routines with an aligned-stack prologue)."
+  },
+  {
+    "start": "0x003AC468",
+    "note": "2026-09-24: function referenced from a data-section pointer table whose neighbouring entries are recompiled functions; clean prologue in the original XBE (0x3AA3F8.. are SSE math routines with an aligned-stack prologue)."
+  },
+  {
+    "start": "0x003AC598",
+    "note": "2026-09-24: function referenced from a data-section pointer table whose neighbouring entries are recompiled functions; clean prologue in the original XBE (0x3AA3F8.. are SSE math routines with an aligned-stack prologue)."
+  },
+  {
+    "start": "0x00173830",
+    "note": "Unresolved icall from 0x1702CE right before a pushbuffer-overrun crash in the menus (2026-09-24); thunk mov eax,ecx; jmp 0x16FAB0."
+  },
+  {
+    "start": "0x00052410",
+    "note": "Referenced from a data table, preceded by padding, not translated; verified function-like start with capstone (2026-09-24 scan)."
+  },
+  {
+    "start": "0x00060A90",
+    "note": "Referenced from a data table, preceded by padding, not translated; verified function-like start with capstone (2026-09-24 scan)."
+  },
+  {
+    "start": "0x000BF080",
+    "note": "Referenced from a data table, preceded by padding, not translated; verified function-like start with capstone (2026-09-24 scan)."
+  },
+  {
+    "start": "0x0010DD00",
+    "note": "Referenced from a data table, preceded by padding, not translated; verified function-like start with capstone (2026-09-24 scan)."
+  },
+  {
+    "start": "0x00202A40",
+    "note": "Referenced from a data table, preceded by padding, not translated; verified function-like start with capstone (2026-09-24 scan)."
+  },
+  {
+    "start": "0x0020CE00",
+    "note": "Referenced from a data table, preceded by padding, not translated; verified function-like start with capstone (2026-09-24 scan)."
+  },
+  {
+    "start": "0x0020D8D0",
+    "note": "Referenced from a data table, preceded by padding, not translated; verified function-like start with capstone (2026-09-24 scan)."
+  },
+  {
+    "start": "0x0020F800",
+    "note": "Referenced from a data table, preceded by padding, not translated; verified function-like start with capstone (2026-09-24 scan)."
+  },
+  {
+    "start": "0x00218700",
+    "note": "Referenced from a data table, preceded by padding, not translated; verified function-like start with capstone (2026-09-24 scan)."
+  },
+  {
+    "start": "0x0021D900",
+    "note": "Referenced from a data table, preceded by padding, not translated; verified function-like start with capstone (2026-09-24 scan)."
+  },
+  {
+    "start": "0x0021DA00",
+    "note": "Referenced from a data table, preceded by padding, not translated; verified function-like start with capstone (2026-09-24 scan)."
+  },
+  {
+    "start": "0x0021FA00",
+    "note": "Referenced from a data table, preceded by padding, not translated; verified function-like start with capstone (2026-09-24 scan)."
+  },
+  {
+    "start": "0x00222400",
+    "note": "Referenced from a data table, preceded by padding, not translated; verified function-like start with capstone (2026-09-24 scan)."
+  },
+  {
+    "start": "0x00223200",
+    "note": "Referenced from a data table, preceded by padding, not translated; verified function-like start with capstone (2026-09-24 scan)."
+  },
+  {
+    "start": "0x00223600",
+    "note": "Referenced from a data table, preceded by padding, not translated; verified function-like start with capstone (2026-09-24 scan)."
+  },
+  {
+    "start": "0x002244D0",
+    "note": "Referenced from a data table, preceded by padding, not translated; verified function-like start with capstone (2026-09-24 scan)."
+  },
+  {
+    "start": "0x00290200",
+    "note": "Referenced from a data table, preceded by padding, not translated; verified function-like start with capstone (2026-09-24 scan)."
+  },
+  {
+    "start": "0x00290300",
+    "note": "Referenced from a data table, preceded by padding, not translated; verified function-like start with capstone (2026-09-24 scan)."
+  },
+  {
+    "start": "0x00320100",
+    "note": "Referenced from a data table, preceded by padding, not translated; verified function-like start with capstone (2026-09-24 scan)."
+  },
+  {
+    "start": "0x00320FD0",
+    "note": "Referenced from a data table, preceded by padding, not translated; verified function-like start with capstone (2026-09-24 scan)."
+  },
+  {
+    "start": "0x000116F0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00011760",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x000429C0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x000599F0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00059B30",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0005A490",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00063C80",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00064B10",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00072C00",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00073C80",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00077540",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0008A300",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0008A320",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x000A1660",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x000A20D0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x000BD7E0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x000CD720",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x000DE630",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x000E6713",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0010C4E0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0010D0B0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00116380",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00117310",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00117430",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0011BEB0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0011C0E0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0011C0F0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0011D580",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x001207B0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00125700",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x001286E0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0012B7D0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00130010",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00137C90",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00137CF0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0013D410",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0013DB50",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x001425C0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0014F4F0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0015F790",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0016CAA0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00191EB0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x001B68F0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x001BDB30",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x001C17E0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0021E85A",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0024C3A0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0024E545",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0024E588",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00251050",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00251180",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x002511F0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00251390",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x002514C0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00251710",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x002517B0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0025E780",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00262C7C",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00262CB4",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00262CDC",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0026AE20",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0026AE40",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0026AEC0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0026AF50",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0026AF80",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0026B040",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0026B0E0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0027B570",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0027C8C0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0027CA80",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0027F3A0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00285F50",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00285FE0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00286110",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00286A90",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00286C30",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00286E20",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00287030",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x002871A0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00288DE0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0028FD60",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0029B7A0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x002A6000",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x002A6750",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x002AA4F0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x002B1340",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x002B1FC0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x002B33E0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x002C10F0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x002C4460",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x002C5340",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x002C5470",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x002C55F0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x002D13A0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0031F9A0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00343310",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00353860",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00355DD0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00357370",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0035C670",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0035F200",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00361C70",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00361D40",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00364E80",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0036A0A0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0036A0C0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0036A6B0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0036D820",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0036D970",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0036E010",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0036E0A0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0036E0E0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00372BB0",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x004457BB",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x00484CB2",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x004861EA",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0048637B",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x004A6ACF",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x004A6AFA",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x004A6B1C",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x004A6B61",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x004AD0A1",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x004AF34C",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x004AF364",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x004B34C8",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x004BA64B",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x004BAEE7",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x004BB0BD",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x004BB0FD",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x004BB49B",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x004BB6CA",
+    "note": "2026-09-25: direct call/jump target outside every detected function (was an empty stub in recomp_stubs_unresolved.c; 0x25E780 stalled the coin toss)."
+  },
+  {
+    "start": "0x0006ECE0",
+    "note": "2026-09-25: call/jump target right after a ret + padding that the analysis merged into the preceding function (empty stub; 0x1398E0 and 0x261F90 ran during the coin toss)."
+  },
+  {
+    "start": "0x0006ED00",
+    "note": "2026-09-25: call/jump target right after a ret + padding that the analysis merged into the preceding function (empty stub; 0x1398E0 and 0x261F90 ran during the coin toss)."
+  },
+  {
+    "start": "0x00073680",
+    "note": "2026-09-25: call/jump target right after a ret + padding that the analysis merged into the preceding function (empty stub; 0x1398E0 and 0x261F90 ran during the coin toss)."
+  },
+  {
+    "start": "0x000DD290",
+    "note": "2026-09-25: call/jump target right after a ret + padding that the analysis merged into the preceding function (empty stub; 0x1398E0 and 0x261F90 ran during the coin toss)."
+  },
+  {
+    "start": "0x000EC330",
+    "note": "2026-09-25: call/jump target right after a ret + padding that the analysis merged into the preceding function (empty stub; 0x1398E0 and 0x261F90 ran during the coin toss)."
+  },
+  {
+    "start": "0x001398E0",
+    "note": "2026-09-25: call/jump target right after a ret + padding that the analysis merged into the preceding function (empty stub; 0x1398E0 and 0x261F90 ran during the coin toss)."
+  },
+  {
+    "start": "0x00146250",
+    "note": "2026-09-25: call/jump target right after a ret + padding that the analysis merged into the preceding function (empty stub; 0x1398E0 and 0x261F90 ran during the coin toss)."
+  },
+  {
+    "start": "0x00261F90",
+    "note": "2026-09-25: call/jump target right after a ret + padding that the analysis merged into the preceding function (empty stub; 0x1398E0 and 0x261F90 ran during the coin toss)."
+  },
+  {
+    "start": "0x002A05E0",
+    "note": "2026-09-25: call/jump target right after a ret + padding that the analysis merged into the preceding function (empty stub; 0x1398E0 and 0x261F90 ran during the coin toss)."
+  },
+  {
+    "start": "0x002B3640",
+    "note": "2026-09-25: call/jump target right after a ret + padding that the analysis merged into the preceding function (empty stub; 0x1398E0 and 0x261F90 ran during the coin toss)."
+  },
+  {
+    "start": "0x002B3670",
+    "note": "2026-09-25: call/jump target right after a ret + padding that the analysis merged into the preceding function (empty stub; 0x1398E0 and 0x261F90 ran during the coin toss)."
+  },
+  {
+    "start": "0x003636B0",
+    "note": "2026-09-25: call/jump target right after a ret + padding that the analysis merged into the preceding function (empty stub; 0x1398E0 and 0x261F90 ran during the coin toss)."
+  },
+  {
+    "start": "0x0036D5A0",
+    "note": "2026-09-25: call/jump target right after a ret + padding that the analysis merged into the preceding function (empty stub; 0x1398E0 and 0x261F90 ran during the coin toss)."
+  },
+  {
+    "start": "0x0036F450",
+    "note": "2026-09-25: call/jump target right after a ret + padding that the analysis merged into the preceding function (empty stub; 0x1398E0 and 0x261F90 ran during the coin toss)."
+  },
+  {
+    "start": "0x0046C290",
+    "note": "2026-09-25: call/jump target right after a ret + padding that the analysis merged into the preceding function (empty stub; 0x1398E0 and 0x261F90 ran during the coin toss)."
+  },
+  {
+    "start": "0x004B3190",
+    "note": "2026-09-25: call/jump target right after a ret + padding that the analysis merged into the preceding function (empty stub; 0x1398E0 and 0x261F90 ran during the coin toss)."
+  },
+  {
+    "start": "0x00046000",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x0004A480",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x0004E860",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x000AED90",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x000AEED0",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x000AF0B0",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x0013F1B0",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x00152B80",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x00153720",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x0015ED70",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x0015EDD0",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x0015EDF0",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x0016F8A0",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x00173350",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x001734D0",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x00173660",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x00173790",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x00183CD0",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x001A4DA0",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x00210C70",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x00212920",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x00219B40",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x0021C090",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x0021CB00",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x0021DC60",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x0021DC80",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x0025A0A0",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x0025A0C0",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x0025A0D0",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x00284C10",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x00284C60",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x00284CA0",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x00284CB0",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x00284CC0",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x00284CD0",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x00284CE0",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x00284CF0",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x00284D00",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x00284D10",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x00284D20",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x00284D30",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x00284D40",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x00284D50",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x00284D60",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x00284D70",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x002D3E80",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x002E3F70",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x002E7930",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x002EB5C0",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x002EDFB0",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x002EE000",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x002EE040",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x002FD930",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x002FE120",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x002FE130",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x0036F1C0",
+    "note": "2026-09-25: code address stored as an immediate (callback/vtable slot) into uncovered .text after padding; never detected, so indirect calls to it failed ([ICALL] Unresolved 0x152B80/0x153720 stalled the kickoff)."
+  },
+  {
+    "start": "0x002E3650",
+    "note": "2026-09-25: per-object update callback called indirectly during the kick return; sits after a byte table inside sub_002E2DA0's old range (verified prologue)."
+  },
+  {
+    "start": "0x0006ED10",
+    "note": "2026-09-25 evening: 16-aligned call/jump/icall target after padding or ret that was still an empty stub (0x6ED10 thunk, 0x2E3650 per-object update callback ran during the kick return)."
+  },
+  {
+    "start": "0x0025D2A0",
+    "note": "2026-09-25 evening: 16-aligned call/jump/icall target after padding or ret that was still an empty stub (0x6ED10 thunk, 0x2E3650 per-object update callback ran during the kick return)."
+  },
+  {
+    "start": "0x0034BE40",
+    "note": "2026-09-25 evening: 16-aligned call/jump/icall target after padding or ret that was still an empty stub (0x6ED10 thunk, 0x2E3650 per-object update callback ran during the kick return)."
+  },
+  {
+    "start": "0x0001488A",
+    "note": "2026-09-25 evening: restored -- not reached by fall-through from the preceding code (after ret/jmp, padding such as lea esp,[esp], or data)."
+  },
+  {
+    "start": "0x0001488E",
+    "note": "2026-09-25 evening: restored -- not reached by fall-through from the preceding code (after ret/jmp, padding such as lea esp,[esp], or data)."
+  },
+  {
+    "start": "0x000DAE98",
+    "note": "2026-09-25 evening: restored -- not reached by fall-through from the preceding code (after ret/jmp, padding such as lea esp,[esp], or data)."
+  },
+  {
+    "start": "0x0015E8DC",
+    "note": "2026-09-25 evening: restored -- not reached by fall-through from the preceding code (after ret/jmp, padding such as lea esp,[esp], or data)."
+  },
+  {
+    "start": "0x001F74C6",
+    "note": "2026-09-25 evening: restored -- not reached by fall-through from the preceding code (after ret/jmp, padding such as lea esp,[esp], or data)."
+  },
+  {
+    "start": "0x001F74CA",
+    "note": "2026-09-25 evening: restored -- not reached by fall-through from the preceding code (after ret/jmp, padding such as lea esp,[esp], or data)."
+  },
+  {
+    "start": "0x001F74CE",
+    "note": "2026-09-25 evening: restored -- not reached by fall-through from the preceding code (after ret/jmp, padding such as lea esp,[esp], or data)."
+  },
+  {
+    "start": "0x00303FE9",
+    "note": "2026-09-25 evening: restored -- not reached by fall-through from the preceding code (after ret/jmp, padding such as lea esp,[esp], or data)."
+  },
+  {
+    "start": "0x003D2215",
+    "note": "2026-09-25 evening: restored -- not reached by fall-through from the preceding code (after ret/jmp, padding such as lea esp,[esp], or data)."
+  },
+  {
+    "start": "0x0041E0E6",
+    "note": "2026-09-25 evening: restored -- not reached by fall-through from the preceding code (after ret/jmp, padding such as lea esp,[esp], or data)."
+  },
+  {
+    "start": "0x004767A2",
+    "note": "2026-09-25 evening: restored -- not reached by fall-through from the preceding code (after ret/jmp, padding such as lea esp,[esp], or data)."
+  },
+  {
+    "start": "0x00478DE8",
+    "note": "2026-09-25 evening: restored -- not reached by fall-through from the preceding code (after ret/jmp, padding such as lea esp,[esp], or data)."
+  },
+  {
+    "start": "0x0047F071",
+    "note": "2026-09-25 evening: restored -- not reached by fall-through from the preceding code (after ret/jmp, padding such as lea esp,[esp], or data)."
+  },
+  {
+    "start": "0x004E3B02",
+    "note": "2026-09-25 evening: restored -- not reached by fall-through from the preceding code (after ret/jmp, padding such as lea esp,[esp], or data)."
+  },
+  {
+    "start": "0x004E3B12",
+    "note": "2026-09-25 evening: restored -- not reached by fall-through from the preceding code (after ret/jmp, padding such as lea esp,[esp], or data)."
+  },
+  {
+    "start": "0x00041808",
+    "note": "2026-09-25 evening: restored -- not reached by fall-through from the preceding code (after ret/jmp, padding such as lea esp,[esp], or data)."
+  },
+  {
+    "start": "0x00081D8C",
+    "note": "2026-09-25 evening: restored -- not reached by fall-through from the preceding code (after ret/jmp, padding such as lea esp,[esp], or data)."
+  },
+  {
+    "start": "0x002190A0",
+    "note": "2026-09-25 evening: restored -- not reached by fall-through from the preceding code (after ret/jmp, padding such as lea esp,[esp], or data)."
+  },
+  {
+    "start": "0x00228AE0",
+    "note": "2026-09-25 evening: restored -- not reached by fall-through from the preceding code (after ret/jmp, padding such as lea esp,[esp], or data)."
+  },
+  {
+    "start": "0x0010D070",
+    "note": "2026-09-25 evening: restored -- not reached by fall-through from the preceding code (after ret/jmp, padding such as lea esp,[esp], or data)."
+  },
+  {
+    "start": "0x000A14B0",
+    "note": "2026-09-25 evening: 'call 0x1CF480; jmp 0x88650' after a byte table; called by the script interpreter (0xDBCCE). As an empty stub it corrupted the stack and crashed the kickoff in sub_000DEE30."
+  },
+  {
+    "start": "0x0042FE90",
+    "note": "2026-09-25 evening: restored -- not reached by fall-through from the preceding code (after ret/jmp, padding such as lea esp,[esp], or data)."
+  },
+  {
+    "start": "0x000C1E75",
+    "note": "Shared function tail reached by a jump from another function (straight-line code to a ret). Was an unresolved stub; 0xC1E75 'mov eax,1; pop esi; ret' skipped its pop and corrupted esi when ESPN 25th Anniversary loaded rosters (2026-10-01)."
+  },
+  {
+    "start": "0x00284C50",
+    "note": "Indirect-call target 'mov cl,[ecx+0Dh]; jmp 0BBA60h', called hundreds of times while a game loads; unresolved since before 2026-10-01."
+  }
+]

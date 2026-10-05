@@ -1,0 +1,14 @@
+{
+  "abbreviation": "NYG",
+  "city": "New York",
+  "name": "Giants",
+  "colors": {
+    "primary": "#0B2265",
+    "secondary": "#A71930",
+    "text": "#FFFFFF"
+  },
+  "logos": {
+    "scorebug": "logos/scorebug.png"
+  },
+  "aliases": []
+}

@@ -1,0 +1,39 @@
+[general]
+show_welcome = false
+games_dir = 'E:\ESPN NFL 2K5 (axekin.com).iso'
+last_viewed_menu_index = 7
+
+[input]
+gamepad_mappings = [
+    { gamepad_id = '0300fa675e040000ff02000000007801'}
+    ]
+
+[input.bindings]
+port1_driver = 'usb-xbox-gamepad'
+port1 = '0300fa675e040000ff02000000007801'
+
+[display.vulkan]
+preferred_physical_device = 'NVIDIA GeForce RTX 2060 SUPER'
+
+[display.window]
+startup_size = '1920x1080'
+last_width = 1920
+last_height = 1009
+
+[display.ui]
+aspect_ratio = '16x9'
+
+[display.debug.video]
+y_winsize = 983
+advanced_tree_state = true
+
+[net]
+enable = true
+
+[sys.files]
+bootrom_path = 'E:\Xbox-Emulator-Files\mcpx\mcpx_1.0.bin'
+flashrom_path = 'E:\Xbox-Emulator-Files\bios\Complex_4627.bin'
+eeprom_path = 'C:\Users\MJBAMA2010\AppData\Roaming\xemu\xemu\eeprom.bin'
+hdd_path = 'E:\Xbox-Emulator-Files\hdd\xbox_hdd.qcow2'
+dvd_path = 'E:\NFL2K5-PC\original\NFL2K5.xiso.iso'
+

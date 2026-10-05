@@ -1,0 +1,18 @@
+{
+  "away": {
+    "name": "Tennessee Titans",
+    "primary": "#0C2340",
+    "logo": "images/fox_logos/titans.png",
+    "score": "0"
+  },
+  "home": {
+    "name": "Dallas Cowboys",
+    "primary": "#041E42",
+    "logo": "images/fox_logos/Cowboys.png",
+    "score": "0"
+  },
+  "down_distance": "1ST & 10",
+  "quarter": "1ST",
+  "clock": "4:56",
+  "play_clock": ""
+}

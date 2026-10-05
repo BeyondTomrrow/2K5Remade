@@ -1,0 +1,16 @@
+{
+  "abbreviation": "JAC",
+  "city": "Jacksonville",
+  "name": "Jaguars",
+  "colors": {
+    "primary": "#006778",
+    "secondary": "#D7A22A",
+    "text": "#FFFFFF"
+  },
+  "logos": {
+    "scorebug": "logos/scorebug.png"
+  },
+  "aliases": [
+    "JAX"
+  ]
+}

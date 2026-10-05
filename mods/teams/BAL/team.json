@@ -1,0 +1,14 @@
+{
+  "abbreviation": "BAL",
+  "city": "Baltimore",
+  "name": "Ravens",
+  "colors": {
+    "primary": "#241773",
+    "secondary": "#9E7C0C",
+    "text": "#FFFFFF"
+  },
+  "logos": {
+    "scorebug": "logos/scorebug.png"
+  },
+  "aliases": []
+}

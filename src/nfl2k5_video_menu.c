@@ -49,6 +49,7 @@ extern void nfl2k5_pres_value_name(int what, int idx, char *buf, size_t n);
 #define GAME_OPTIONS_HEADER 0x00501E48u    /* template for the new screens */
 
 static const uint32_t k_options_headers[] = { 0x00503288u, 0x00503458u, 0x00503628u, 0x005038C8u };
+#define FEATURES_HEADER       0x00525830u   /* front-end Features link menu */
 #define COACH_MATCH_UP_HEADER 0x00585474u   /* pre-game menu: Start Game ... VIP */
 
 /* A settings screen's rows. */
@@ -117,10 +118,28 @@ static int pres_get(int r) { return nfl2k5_pres_get(r); }
 static void pres_set(int r, int v) { nfl2k5_pres_set(r, v); }
 static void pres_name(int r, int v, char *b, size_t n) { nfl2k5_pres_value_name(r, v, b, n); }
 
+/* ---- Mod Packs rows (nfl2k5_mod_packs.c) ---- */
+extern void nfl2k5_modpacks_init(const char *root);
+extern int nfl2k5_modpacks_count(void);
+extern const char *nfl2k5_modpacks_name(int row);
+extern int nfl2k5_modpacks_get(int row);
+extern void nfl2k5_modpacks_set(int row, int on);
+static int mods_toggle(int r) { (void)r; return 1; }
+static int mods_values(int r) { (void)r; return 2; }
+static int mods_get(int r) { return nfl2k5_modpacks_get(r); }
+static void mods_set(int r, int v) { nfl2k5_modpacks_set(r, v != 0); }
+static void mods_name(int r, int v, char *b, size_t n)
+{
+    (void)r;
+    snprintf(b, n, "%s", v ? "On" : "Off");
+}
+
 static const char *s_video_labels[VM_MAX_ROWS];
-static VmScreen s_screens[2] = {
+static const char *s_mod_labels[VM_MAX_ROWS];
+static VmScreen s_screens[3] = {
     { "Video Settings", 0, s_video_labels, vid_toggle, vid_values, vid_get, vid_set, vid_name },
     { "Presentation", 5, k_pres_labels, pres_toggle, pres_values, pres_get, pres_set, pres_name },
+    { "Mod Packs", 0, s_mod_labels, mods_toggle, mods_values, mods_get, mods_set, mods_name },
 };
 #define VM_SCREENS ((int)(sizeof s_screens / sizeof s_screens[0]))
 
@@ -147,6 +166,14 @@ static void vm_row_fn(void)
         sc->name(row, v, name, sizeof name);
         vm_put_wstr(sc->cur[row], name, VM_STR_CHARS);
         g_eax = sc->cur[row];
+        if (getenv("NFL2K5_MENU_LOG")) {
+            static DWORD last[8][8];
+            if (GetTickCount() - last[off / 0x1000u & 7][row & 7] > 2000) {
+                last[off / 0x1000u & 7][row & 7] = GetTickCount();
+                fprintf(stderr, "[VIDEOMENU] %s row %d value %d/%d \"%s\" -> %08X\n",
+                        sc->title, row, v, n, name, (unsigned)g_eax);
+            }
+        }
         break;
     case 6: {
         /* Same as the game's own rows: widest string of table[0..n-1] in
@@ -163,6 +190,8 @@ static void vm_row_fn(void)
         g_edx = 0;
         PUSH32(g_esp, VM_FN_BASE);
         sub_000771A0();
+        if (getenv("NFL2K5_MENU_LOG"))
+            fprintf(stderr, "[VIDEOMENU] %s row %d width of %d values -> %u\n", sc->title, row, n, (unsigned)g_eax);
         break;
     }
     default: g_eax = 0; break;
@@ -268,13 +297,16 @@ static DWORD WINAPI vm_memdump_thread(void *arg)
 
 void nfl2k5_video_menu_install(void)
 {
-    uint32_t video, pres;
+    uint32_t video, pres, mods = 0;
+    char root[MAX_PATH];
     unsigned k;
     int i;
     if (getenv("NFL2K5_MEMDUMP"))
         CloseHandle(CreateThread(NULL, 0, vm_memdump_thread, NULL, 0, NULL));
     xbox_VideoSettingsLoad();
     nfl2k5_presentation_init();
+    if (!GetCurrentDirectoryA(sizeof(root), root)) snprintf(root, sizeof(root), ".");
+    nfl2k5_modpacks_init(root);
     if (getenv("NFL2K5_NO_VIDEO_MENU")) return;
     s_heap_size = 512u * 1024u;
     s_heap = xbox_HeapAlloc(s_heap_size, 16);
@@ -282,8 +314,15 @@ void nfl2k5_video_menu_install(void)
     s_screens[0].rows = xbox_VideoSettingCount();
     for (i = 0; i < s_screens[0].rows && i < VM_MAX_ROWS; i++)
         s_video_labels[i] = xbox_VideoSettingName(i);
+    s_screens[2].rows = nfl2k5_modpacks_count();
+    for (i = 0; i < s_screens[2].rows && i < VM_MAX_ROWS; i++)
+        s_mod_labels[i] = nfl2k5_modpacks_name(i);
     video = vm_build_screen(0);
     pres = vm_build_screen(1);
+    /* Opt-in (NFL2K5_MODPACK_MENU=1) until it has a verified home: linked at
+     * 0x00525830 it took the main menu's default selection, so A on the main
+     * menu switched a code pack on and restarted into it (2026-10-03). */
+    if (s_screens[2].rows > 0 && getenv("NFL2K5_MODPACK_MENU")) mods = vm_build_screen(2);
     if (!video || !pres) { fprintf(stderr, "[VIDEOMENU] build failed\n"); return; }
     for (k = 0; k < sizeof k_options_headers / sizeof k_options_headers[0]; k++) {
         int n = vm_add_link(k_options_headers[k], video, vm_wstr("Video Settings"));
@@ -292,6 +331,9 @@ void nfl2k5_video_menu_install(void)
     /* "Presentation" right under VIP on the pre-game screen. */
     fprintf(stderr, "[VIDEOMENU] Coach Match Up: %d rows\n",
             vm_add_link(COACH_MATCH_UP_HEADER, pres, vm_wstr("Presentation")));
-    fprintf(stderr, "[VIDEOMENU] Video Settings %08X, Presentation %08X, %u bytes\n",
-            (unsigned)video, (unsigned)pres, (unsigned)s_heap_used);
+    if (mods)
+        fprintf(stderr, "[VIDEOMENU] Features: %d rows\n",
+                vm_add_link(FEATURES_HEADER, mods, vm_wstr("Mod Packs")));
+    fprintf(stderr, "[VIDEOMENU] Video Settings %08X, Presentation %08X, Mod Packs %08X, %u bytes\n",
+            (unsigned)video, (unsigned)pres, (unsigned)mods, (unsigned)s_heap_used);
 }

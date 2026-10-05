@@ -1,0 +1,37 @@
+diff --git a/lib/program.dart b/lib/program.dart
+index 61e0462..fea2c1c 100644
+--- a/lib/program.dart
++++ b/lib/program.dart
+@@ -10,6 +10,8 @@ import 'input_parser.dart';
+ import 'enum_definitions.dart';
+ import 'static_utils.dart';
+ import 'logger.dart';
++import 'text_apply.dart';
++import 'player_names.dart';
+ 
+ class Program {
+   static String get Version => '1.0.0';
+@@ -174,7 +176,22 @@ class Program {
+         }
+       }
+       else{
+-        parser.ProcessText( File(dataToApplyTextFile!).readAsStringSync());
++        final text = File(dataToApplyTextFile!).readAsStringSync();
++        final edits = collectEditsFromText(tool, text);
++        if (!edits.names.bypassed && edits.names.requiredBytes > PlayerNames.budget) {
++          edits.names.applyDedup(edits.names.planDedup());
++          if (edits.names.requiredBytesAfterDedup > PlayerNames.budget) {
++            final deficit = edits.names.requiredBytesAfterDedup - PlayerNames.budget;
++            edits.names.applyTruncation(edits.names.planTruncation(targetBytes: deficit));
++          }
++        }
++        final result = commitEditsAndApplyRest(tool, text, edits);
++        if (!result.success) {
++          for (final warning in result.warnings) {
++            stderr.writeln('Error: $warning');
++          }
++          return;
++        }
+       }
+     }
+ 

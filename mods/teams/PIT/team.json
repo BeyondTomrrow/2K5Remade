@@ -1,0 +1,14 @@
+{
+  "abbreviation": "PIT",
+  "city": "Pittsburgh",
+  "name": "Steelers",
+  "colors": {
+    "primary": "#101820",
+    "secondary": "#FFB612",
+    "text": "#FFFFFF"
+  },
+  "logos": {
+    "scorebug": "logos/scorebug.png"
+  },
+  "aliases": []
+}

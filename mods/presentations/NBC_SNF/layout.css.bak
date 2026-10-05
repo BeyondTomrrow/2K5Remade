@@ -1,0 +1,18 @@
+/* Written by Presentation Studio. Overrides scorebug.css; edit freely. */
+[data-element="away-panel"] {
+  width: 290px !important;
+  left: 1px !important;
+}
+[data-element="home-panel"] {
+  width: 264px !important;
+  left: 309px !important;
+}
+[data-element="home-logo"] {
+  opacity: 1 !important;
+  left: 516px !important;
+  top: 24px !important;
+}
+[data-element="away-logo"] {
+  left: -1px !important;
+  top: 20px !important;
+}

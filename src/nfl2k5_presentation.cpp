@@ -28,10 +28,12 @@
 #include <dwrite.h>
 #include <wincodec.h>
 #include "nfl2k5_broadcast.h"
+#include "presentation/presentation_host.h"
 #include <mfapi.h>
 #include <mfidl.h>
 #include <mfreadwrite.h>
 #include <xaudio2.h>
+#include <algorithm>
 #include <atomic>
 #include <cmath>
 #include <cstdint>
@@ -56,7 +58,9 @@
 extern "C" {
 extern ptrdiff_t g_xbox_mem_offset;
 typedef struct { int bb_w, bb_h; float game_x, game_y, game_w, game_h; } XboxHudFrame;
-typedef struct { const void *pixels; int w, h, stride, x, y, changed, dw, dh; } XboxHudImage;
+typedef struct { const void *pixels; int w, h, stride, x, y, changed, dw, dh; void *shared; } XboxHudImage;
+/* Set by the presenter when it cannot open a shared HUD texture: use pixels. */
+extern "C" int xbox_hud_shared_failed;
 typedef int (*XboxHudCallback)(const XboxHudFrame *f, XboxHudImage *img);
 void xbox_PresentSetHudCallback(XboxHudCallback cb);
 void xbox_AudioSetGameGain(float gain);
@@ -417,8 +421,21 @@ extern "C" int nfl2k5_broadcast_get_state(Nfl2k5BroadcastState *state)
 struct Song { std::string title, file; };
 struct Package {
     std::string name, dir;
-    JVal root;
+    JVal root;                    /* presentation.json, or mod.json for an HTML package */
     std::vector<Song> intro, outro;
+    /* HTML/CSS/JS package (mod.json "type": "html"): drawn by the
+     * PresentationHost instead of the JSON element renderer. */
+    bool html = false;
+    std::string entry;
+    int canvas_w = 1920, canvas_h = 1080;
+    /* mod.json "replaces": game graphics the package draws itself, which
+     * the game then leaves out (e.g. "lineup": the after-kickoff starters). */
+    bool replaces_lineup = false;
+    bool replaces_player_cards = false;
+    /* mod.json "canvas": { "fit": "fill_width" }: the page is as wide as the
+     * game picture (e.g. 2580x1080 on 21:9) instead of a centred 16:9
+     * canvas, so full-width graphics reach the screen edges. */
+    bool fill_width = false;
 };
 
 static std::vector<Package> s_pkgs;           /* [0] is the game's own ESPN presentation */
@@ -453,9 +470,32 @@ static void load_packages()
         if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) || fd.cFileName[0] == L'.') continue;
         char dir8[MAX_PATH];
         WideCharToMultiByte(CP_UTF8, 0, fd.cFileName, -1, dir8, sizeof dir8, nullptr, nullptr);
+        if (dir8[0] == '_') continue;     /* shared folders such as _runtime */
         Package p;
         p.dir = std::string("mods/presentations/") + dir8;
-        if (!load_json(p.dir + "/presentation.json", p.root)) continue;
+        if (!load_json(p.dir + "/presentation.json", p.root)) {
+            /* An HTML package describes itself in mod.json; its look lives in
+             * the entry page, not in JSON. */
+            if (!load_json(p.dir + "/mod.json", p.root) || p.root.str("type") != "html") continue;
+            if (!p.root.flag("enabled", true)) continue;
+            p.html = true;
+            p.entry = p.root.str("entry", "index.html");
+            if (const JVal *r = p.root.get("replaces"))
+                for (auto &v : r->a)
+                    if (v.t == JVal::Str) {
+                        if (v.s == "lineup") p.replaces_lineup = true;
+                        if (v.s == "player_cards") p.replaces_player_cards = true;
+                    }
+            if (const JVal *c = p.root.get("canvas")) {
+                p.canvas_w = (int)c->num("width", 1920);
+                p.canvas_h = (int)c->num("height", 1080);
+                p.fill_width = c->str("fit") == "fill_width";
+            }
+            if (!file_exists(p.dir + "/" + p.entry)) {
+                fprintf(stderr, "[PRES] HTML package %s: entry %s missing, skipped\n", dir8, p.entry.c_str());
+                continue;
+            }
+        }
         p.name = p.root.str("name", dir8);
         if (const JVal *m = p.root.get("music")) {
             for (int k = 0; k < 2; k++)
@@ -466,8 +506,8 @@ static void load_packages()
                         (k ? p.outro : p.intro).push_back(song);
                     }
         }
-        fprintf(stderr, "[PRES] package \"%s\" (%zu intro, %zu outro themes)\n",
-                p.name.c_str(), p.intro.size(), p.outro.size());
+        fprintf(stderr, "[PRES] package \"%s\" (%s, %zu intro, %zu outro themes)\n",
+                p.name.c_str(), p.html ? "html" : "json", p.intro.size(), p.outro.size());
         register_package_fonts(p);
         s_pkgs.push_back(std::move(p));
     } while (FindNextFileW(h, &fd));
@@ -537,15 +577,32 @@ extern "C" int nfl2k5_pres_values(int what)
     }
     return 1;
 }
+/* The game sizes a settings screen's value column from its longest value;
+ * when that no longer fits the box, it clips every value on the screen
+ * (2026-09-30: "Classic Broadcast Scorebug v27", 30 characters, blanked the
+ * whole Presentation screen). 23 characters is known to fit. */
+static void menu_text(char *buf, size_t n, const std::string &s)
+{
+    const size_t k_max = 23;
+    if (s.size() <= k_max) snprintf(buf, n, "%s", s.c_str());
+    else snprintf(buf, n, "%s...", s.substr(0, k_max - 3).c_str());
+}
+
 extern "C" void nfl2k5_pres_value_name(int what, int idx, char *buf, size_t n)
 {
     buf[0] = 0;
     switch (what) {
-    case 0: snprintf(buf, n, "%s", nfl2k5_pres_package_name(idx)); break;
+    case 0:
+        /* A package may give a shorter "menu_name" for this screen. */
+        if (idx > 0 && idx < (int)s_pkgs.size() && !s_pkgs[idx].root.str("menu_name").empty())
+            menu_text(buf, n, s_pkgs[idx].root.str("menu_name"));
+        else
+            menu_text(buf, n, nfl2k5_pres_package_name(idx));
+        break;
     case 1: case 2: {
         const auto &l = songs(what);
         if (idx <= 0 || idx > (int)l.size()) snprintf(buf, n, "Off");
-        else snprintf(buf, n, "%s", l[idx - 1].title.c_str());
+        else menu_text(buf, n, l[idx - 1].title);
         break;
     }
     case 3: snprintf(buf, n, "%s", idx ? "On" : "Off"); break;
@@ -864,6 +921,11 @@ struct PlayerStat {
     int tackles = 0, sacks = 0, defensive_interceptions = 0;
     int field_goals_made = 0, field_goals_attempted = 0, longest_field_goal = 0;
 };
+struct PlayerIdentity {
+    std::string name, position, college, portrait;
+    int number = 0;
+};
+std::string nfl2k5_portrait_url(int photo_id);   /* src/presentation/portraits.cpp */
 struct Event {
     std::string name;
     int team = HOME;
@@ -877,6 +939,23 @@ static std::vector<Event> s_queue;
 static std::mutex s_queue_lock;
 static ActiveAnim s_anim;
 static bool s_anim_on;
+
+struct LiveQbSample {
+    PlayerStat player;
+    uint64_t revision = 0;
+};
+static std::mutex s_live_qb_lock;
+static LiveQbSample s_live_qb[2];
+static PlayerIdentity s_live_qb_identity[2];
+static uint64_t s_live_qb_revision;
+/* The following lifecycle state belongs exclusively to the HUD thread. */
+static Event s_live_qb_event;
+static uint64_t s_live_qb_display_revision;
+static bool s_live_qb_visible;
+static uint32_t s_live_qb_match_clock;
+static std::string s_live_qb_match_teams;
+static bool s_live_qb_match_valid;
+static int s_live_qb_match_period;
 
 static void queue_event(Event ev)
 {
@@ -975,6 +1054,20 @@ extern "C" void nfl2k5_broadcast_event(Nfl2k5BroadcastEvent event, int team)
     if (name) queue_event({ name, team == AWAY ? AWAY : HOME, "" });
 }
 
+static PlayerStat copy_player_stat(const Nfl2k5PlayerStat &s)
+{
+    PlayerStat out;
+    out.kind = s.kind; out.name = broadcast_player_name(s.player_name);
+#define COPY_STAT(F) out.F = s.F
+    COPY_STAT(completions); COPY_STAT(attempts); COPY_STAT(passing_yards); COPY_STAT(passing_touchdowns); COPY_STAT(interceptions);
+    COPY_STAT(carries); COPY_STAT(rushing_yards); COPY_STAT(rushing_touchdowns);
+    COPY_STAT(receptions); COPY_STAT(receiving_yards); COPY_STAT(receiving_touchdowns);
+    COPY_STAT(tackles); COPY_STAT(sacks); COPY_STAT(defensive_interceptions);
+    COPY_STAT(field_goals_made); COPY_STAT(field_goals_attempted); COPY_STAT(longest_field_goal);
+#undef COPY_STAT
+    return out;
+}
+
 extern "C" void nfl2k5_broadcast_player_stat(const Nfl2k5PlayerStat *s, int team)
 {
     if (!s || !s->player_name) return;
@@ -982,15 +1075,129 @@ extern "C" void nfl2k5_broadcast_player_stat(const Nfl2k5PlayerStat *s, int team
     ev.name = "player_stat";
     ev.team = team == AWAY ? AWAY : HOME;
     ev.requested_duration = s->display_seconds > 0 ? s->display_seconds : 5.0;
-    ev.player.kind = s->kind; ev.player.name = broadcast_player_name(s->player_name);
-#define COPY_STAT(F) ev.player.F = s->F
-    COPY_STAT(completions); COPY_STAT(attempts); COPY_STAT(passing_yards); COPY_STAT(passing_touchdowns); COPY_STAT(interceptions);
-    COPY_STAT(carries); COPY_STAT(rushing_yards); COPY_STAT(rushing_touchdowns);
-    COPY_STAT(receptions); COPY_STAT(receiving_yards); COPY_STAT(receiving_touchdowns);
-    COPY_STAT(tackles); COPY_STAT(sacks); COPY_STAT(defensive_interceptions);
-    COPY_STAT(field_goals_made); COPY_STAT(field_goals_attempted); COPY_STAT(longest_field_goal);
-#undef COPY_STAT
+    ev.player = copy_player_stat(*s);
     queue_event(std::move(ev));
+}
+
+extern "C" void nfl2k5_broadcast_live_qb_sample(const Nfl2k5PlayerStat *s, int team)
+{
+    if (!s || s->kind != NFL2K5_STAT_QB || !s->player_name || team < AWAY || team > HOME)
+        return;
+    PlayerStat next = copy_player_stat(*s);
+    if (next.name.empty()) return;
+    std::lock_guard<std::mutex> lock(s_live_qb_lock);
+    LiveQbSample &sample = s_live_qb[team];
+    PlayerIdentity &identity = s_live_qb_identity[team];
+    if (s->full_name && *s->full_name) identity.name = s->full_name;
+    if (identity.position.empty()) identity.position = "QB";
+    if (s->jersey_number > 0) identity.number = s->jersey_number;
+    if (s->photo_id > 0) identity.portrait = nfl2k5_portrait_url(s->photo_id);
+    const PlayerStat &old = sample.player;
+    if (!sample.revision || old.name != next.name || old.completions != next.completions ||
+        old.attempts != next.attempts || old.passing_yards != next.passing_yards ||
+        old.passing_touchdowns != next.passing_touchdowns || old.interceptions != next.interceptions) {
+        sample.player = std::move(next);
+        sample.revision = ++s_live_qb_revision;
+    }
+}
+
+extern "C" void nfl2k5_broadcast_live_qb_reset(void)
+{
+    std::lock_guard<std::mutex> lock(s_live_qb_lock);
+    s_live_qb[AWAY] = LiveQbSample();
+    s_live_qb[HOME] = LiveQbSample();
+    s_live_qb_identity[AWAY] = PlayerIdentity();
+    s_live_qb_identity[HOME] = PlayerIdentity();
+}
+
+/* Script opcode 133 asks the selected package whether it can replace one
+ * of the game's ESPN player-stat cards.  Only card families that carry a
+ * player feature are claimed, and only after a roster identity or live QB
+ * sample exists; otherwise the native card remains as the safe fallback. */
+extern "C" int nfl2k5_presentation_playercard(uint32_t kind, const char *native_title)
+{
+    int k = s_sel_pkg.load();
+    if (k <= 0 || k >= (int)s_pkgs.size() || !s_pkgs[k].html ||
+        !s_pkgs[k].replaces_player_cards)
+        return 0;
+    std::string title = native_title ? native_title : "";
+    std::string folded = title;
+    std::transform(folded.begin(), folded.end(), folded.begin(),
+                   [](unsigned char c) { return (char)tolower(c); });
+    bool full = folded.find("career stats") != std::string::npos ||
+                folded.find("last season") != std::string::npos ||
+                folded.find("last year") != std::string::npos;
+    bool compact = folded == "performance" || folded == "today stats" ||
+                   folded == "receiving" || folded == "consecutive incompletions";
+    /* Kind 22 is confirmed by the trigger audit as the career/last-season
+     * family even when a localized build leaves its title blank. Unknown
+     * kinds remain native until their trigger is identified. */
+    if (kind == 22) full = true;
+    if (!full && !compact) return 0;
+    GameState g;
+    if (!read_state(g) || g.poss < 1 || g.poss > 2) return 0;
+    int side = g.poss - 1;
+    LiveQbSample sample;
+    PlayerIdentity identity;
+    {
+        std::lock_guard<std::mutex> ql(s_live_qb_lock);
+        sample = s_live_qb[side];
+        identity = s_live_qb_identity[side];
+    }
+    if (sample.player.name.empty() && identity.name.empty()) return 0;
+    Event ev;
+    ev.name = full ? "player_feature" : "player_stat";
+    ev.team = side;
+    ev.player = sample.player;
+    if (ev.player.name.empty()) ev.player.name = broadcast_player_name(identity.name.c_str());
+    ev.requested_duration = 6.0;
+    queue_event(std::move(ev));
+    fprintf(stderr, "[PRES] replaces ESPN player card kind %u title '%s' as %s for side %d\n",
+            kind, title.c_str(), full ? "PLAYER_FEATURE" : "PLAYER_STAT", side);
+    return 1;
+}
+
+/* The automatic QB is a persistent scorebug component, not a timed insert.
+ * Its copied sample follows possession and remains visible until the live
+ * camera is hidden. It never occupies the broadcast animation queue. */
+static void service_live_qb(const GameState &g, bool visible, const JVal *anims)
+{
+    uint32_t clock = g.valid ? rd32(0x00E6028Cu) : 0;
+    std::string teams = g.t[AWAY].abbr + "|" + g.t[HOME].abbr;
+    bool new_match = g.valid && s_live_qb_match_valid &&
+                     (clock != s_live_qb_match_clock || teams != s_live_qb_match_teams ||
+                      (g.period == 0 && s_live_qb_match_period > 0));
+    if ((!g.valid && s_live_qb_match_valid) || new_match) {
+        nfl2k5_broadcast_live_qb_reset();
+        s_live_qb_display_revision = 0;
+    }
+    s_live_qb_match_valid = g.valid;
+    s_live_qb_match_clock = clock;
+    s_live_qb_match_teams = std::move(teams);
+    s_live_qb_match_period = g.period;
+    s_live_qb_visible = false;
+    if (!g.valid || !visible || !anims || !anims->get("player_stat") ||
+        g.poss < 1 || g.poss > 2)
+        return;
+    int side = g.poss - 1;
+    LiveQbSample sample;
+    {
+        std::lock_guard<std::mutex> lock(s_live_qb_lock);
+        sample = s_live_qb[side];
+    }
+    if (!sample.revision || sample.player.name.empty())
+        return;
+    if (sample.revision != s_live_qb_display_revision || s_live_qb_event.team != side) {
+        s_live_qb_event.name = "player_stat";
+        s_live_qb_event.team = side;
+        s_live_qb_event.player = std::move(sample.player);
+        s_live_qb_display_revision = sample.revision;
+        const PlayerStat &p = s_live_qb_event.player;
+        fprintf(stderr, "[LIVE-QB] %s %d/%d %d YDS TD=%d INT=%d side=%d possession=%d persistent=1\n",
+                p.name.c_str(), p.completions, p.attempts, p.passing_yards,
+                p.passing_touchdowns, p.interceptions, side, g.poss);
+    }
+    s_live_qb_visible = true;
 }
 
 /* ======================================================================
@@ -1551,6 +1758,11 @@ static void draw_layer(const Ctx &c, const JVal &L, double t, double duration)
  * ====================================================================== */
 static std::atomic<int> s_native_visible{ 0 };
 static std::atomic<DWORD> s_native_tick{ 0 };
+/* Game-state globals survive a trip back to the frontend.  They are useful
+ * data, but they are not proof that a match is still on screen.  This tick
+ * is refreshed only by observable match activity (the native bug, a live
+ * clock change, play selection, or the in-game pause controller). */
+static std::atomic<DWORD> s_match_tick{ 0 };
 static int s_loaded_pkg = -1;
 static GameState s_prev;
 static bool s_prev_valid;
@@ -1659,6 +1871,14 @@ extern "C" void nfl2k5_scorebug_hide(void)
             }
         }
     }
+}
+
+/* In a match, pause menu and replays included: the game's own scorebug
+ * updated in the last 30 s. */
+extern "C" int nfl2k5_in_match(void)
+{
+    DWORD t = s_match_tick;
+    return t && GetTickCount() - t < 30000;
 }
 
 extern "C" void nfl2k5_scorebug_native_hook(void)
@@ -1817,6 +2037,547 @@ static void music_logic(const GameState &g, bool native_on)
     }
 }
 
+/* ======================================================================
+ * HTML presentation bridge (Presentation API v1, docs/PRESENTATION-SYSTEM.md)
+ *
+ * The game side reports football STATE and EVENTS as JSON; an HTML package
+ * running in the PresentationHost decides how they look. Nothing here is
+ * specific to a network. The host's transparent frame goes out through the
+ * same HUD image as the JSON renderer, so no graphics backend is involved.
+ * ====================================================================== */
+static std::string json_str(const std::string &s)
+{
+    std::string o = "\"";
+    for (unsigned char c : s) {
+        if (c == '"' || c == '\\') { o += '\\'; o += (char)c; }
+        else if (c < 0x20) { char b[8]; snprintf(b, sizeof b, "\\u%04x", c); o += b; }
+        else o += (char)c;
+    }
+    return o + "\"";
+}
+
+static std::string json_color(const D2D1_COLOR_F &c)
+{
+    char b[16];
+    snprintf(b, sizeof b, "\"#%02X%02X%02X\"", (int)lroundf(c.r * 255), (int)lroundf(c.g * 255), (int)lroundf(c.b * 255));
+    return b;
+}
+
+/* mods/teams/SF/logos/scorebug.png -> https://teams.local/SF/logos/scorebug.png */
+static std::string team_asset_url(const std::string &path)
+{
+    const std::string prefix = "mods/teams/";
+    if (path.compare(0, prefix.size(), prefix) == 0) return "https://teams.local/" + path.substr(prefix.size());
+    return "";
+}
+
+static const char *side_name(int side) { return side == AWAY ? "away" : "home"; }
+
+struct HtmlContext { bool scorebug_visible, play_selection, paused, native_scorebug; };
+
+static std::string html_state_json(const GameState &g, const HtmlContext &cx)
+{
+    std::string j = "{\"apiVersion\":1";
+    j += ",\"valid\":" + std::string(g.valid ? "true" : "false");
+    const char *status = !g.valid ? "inactive" : g.period == 0 ? "pregame" : is_final(g) ? "final" : "in_progress";
+    j += ",\"gameStatus\":" + json_str(status);
+    j += ",\"phase\":" + std::to_string(g.phase);
+    j += ",\"quarter\":" + std::to_string(g.period);
+    char num[64];
+    snprintf(num, sizeof num, "%.2f", g.clock); j += ",\"gameClock\":" + std::string(num);
+    snprintf(num, sizeof num, "%.0f", g.period_len); j += ",\"periodLength\":" + std::string(num);
+    j += ",\"playClock\":" + std::to_string(g.play_clock);
+    bool scrimmage = g.valid && g.phase == 4 && g.down >= 1 && g.down <= 4;
+    j += ",\"down\":" + std::to_string(scrimmage ? g.down : 0);
+    j += ",\"distance\":" + (scrimmage ? std::to_string((int)lroundf(fabsf(g.line - g.ball) / 91.44f)) : std::string("null"));
+    j += ",\"goalToGo\":" + std::string(scrimmage && fabsf(g.line) >= 4572.0f - 1.0f ? "true" : "false");
+    j += ",\"downDistanceText\":" + json_str(down_distance(g));
+    /* Which half of the field the ball is in needs the drive direction,
+     * which is not mapped yet: side and redZone stay null, not guessed. */
+    int yard = std::isfinite(g.ball) ? (int)lroundf(std::max(0.0f, std::min(100.0f, g.ball / 91.44f))) : -1;
+    j += ",\"ballPosition\":{\"yardLine\":" + (scrimmage && yard >= 0 ? std::to_string(std::min(yard, 100 - yard)) : std::string("null"));
+    j += ",\"side\":null,\"text\":" + json_str(ball_position(g)) + "}";
+    j += ",\"redZone\":null";
+    j += ",\"possession\":" + (g.poss == 1 ? std::string("\"away\"") : g.poss == 2 ? std::string("\"home\"") : std::string("null"));
+    for (int side = 0; side < 2; side++) {
+        TeamInfo t = team_info(g.t[side].abbr);
+        j += ",\"" + std::string(side_name(side)) + "\":{";
+        j += "\"abbreviation\":" + json_str(upper(g.t[side].abbr));
+        j += ",\"city\":" + json_str(t.city) + ",\"name\":" + json_str(t.name);
+        j += ",\"logo\":" + json_str(team_asset_url(t.logo));
+        j += ",\"record\":" + json_str(t.record);
+        j += ",\"score\":" + std::to_string(g.t[side].score);
+        j += ",\"timeouts\":" + std::to_string(g.t[side].timeouts);
+        j += ",\"primaryColor\":" + json_color(t.primary) + ",\"secondaryColor\":" + json_color(t.secondary);
+        j += "}";
+    }
+    j += ",\"context\":{\"scorebugVisible\":" + std::string(cx.scorebug_visible ? "true" : "false");
+    j += ",\"playSelection\":" + std::string(cx.play_selection ? "true" : "false");
+    j += ",\"paused\":" + std::string(cx.paused ? "true" : "false");
+    j += ",\"nativeScorebug\":" + std::string(cx.native_scorebug ? "true" : "false");
+    j += ",\"flag\":" + std::string(GetTickCount64() < s_flag_until ? "true" : "false") + "}";
+    return j + "}";
+}
+
+static std::string html_event_json(const char *name, int side, const std::string &extra = "")
+{
+    std::string j = "{\"name\":" + json_str(name);
+    j += ",\"team\":" + (side == AWAY || side == HOME ? json_str(side_name(side)) : std::string("null"));
+    char t[32];
+    snprintf(t, sizeof t, "%.3f", now_s());
+    j += ",\"time\":" + std::string(t) + extra;
+    return j + "}";
+}
+
+static std::string html_player_extra(const PlayerStat &p, const PlayerIdentity &id)
+{
+    std::string j = ",\"player\":{";
+    j += "\"name\":" + json_str(p.name.empty() ? broadcast_player_name(id.name.c_str()) : p.name);
+    j += ",\"fullName\":" + json_str(id.name);
+    j += ",\"position\":" + json_str(id.position.empty() ? "QB" : id.position);
+    j += ",\"number\":" + std::to_string(id.number);
+    j += ",\"college\":" + json_str(id.college);
+    j += ",\"portrait\":" + json_str(id.portrait);
+    j += ",\"completions\":" + std::to_string(p.completions);
+    j += ",\"attempts\":" + std::to_string(p.attempts);
+    j += ",\"passingYards\":" + std::to_string(p.passing_yards);
+    j += ",\"passingTouchdowns\":" + std::to_string(p.passing_touchdowns);
+    j += ",\"interceptions\":" + std::to_string(p.interceptions) + "}";
+    return j;
+}
+
+/* The JSON renderer's event names -> Presentation API names. Quarter
+ * boundaries are derived from state instead (html_state_events). */
+static const char *html_event_name(const std::string &n)
+{
+    static const std::pair<const char *, const char *> map[] = {
+        { "touchdown", "TOUCHDOWN" }, { "field_goal", "FIELD_GOAL" }, { "extra_point", "EXTRA_POINT" },
+        { "two_point", "TWO_POINT_CONVERSION" }, { "safety", "SAFETY" }, { "timeout", "TIMEOUT" },
+        { "first_down", "FIRST_DOWN" }, { "two_minute_warning", "TWO_MINUTE_WARNING" },
+        { "final", "GAME_ENDED" }, { "final_overtime", "GAME_ENDED" }, { "game_end", "GAME_ENDED" },
+        { "penalty", "PENALTY" }, { "interception", "INTERCEPTION" }, { "fumble", "FUMBLE" },
+        { "turnover", "TURNOVER" }, { "sack", "SACK" }, { "injury", "INJURY" },
+        { "replay_begin", "REPLAY_STARTED" }, { "replay_end", "REPLAY_ENDED" },
+        { "game_start", "GAME_STARTED" }, { "drive_start", "DRIVE_STARTED" }, { "player_stat", "PLAYER_STAT" },
+        { "player_feature", "PLAYER_FEATURE" },
+    };
+    for (auto &m : map) if (n == m.first) return m.second;
+    return nullptr;     /* end_q1/end_q3/halftime/quarter_start: from state */
+}
+
+struct HtmlPresentation {
+    std::unique_ptr<nfl2k5::PresentationHost> host;
+    int package = -1;
+    float scale = 1.0f;
+    int canvas_w = 0;                 /* page width in use (fill_width packages follow the picture) */
+    std::string last_state;
+    double last_state_t = 0;
+    GameState prev;
+    bool prev_valid = false, started_game = false;
+};
+static HtmlPresentation s_html;
+
+static void html_post(const std::string &event_json)
+{
+    if (s_html.host) s_html.host->post_event(event_json);
+    if (s_log) fprintf(stderr, "[HTMLPRES] event %s\n", event_json.c_str());
+}
+
+/* Drive tracking for "scoring drive" graphics: plays, yards and time of
+ * possession of the current drive, from the live state. A drive starts with
+ * a new possession and is measured from its first scrimmage snap; each new
+ * down/spot is a play. The game's own Drive Summary (popup text) replaces
+ * these numbers when it appears (DRIVE_SUMMARY). */
+struct DriveTrack {
+    int side = -1;                  /* AWAY / HOME */
+    bool scrimmage = false;         /* first snap seen */
+    float start_ball = 0, last_ball = 0, last_line = 0, start_clock = 0;
+    int start_period = 0, last_down = 0, plays = 0;
+};
+static DriveTrack s_drive;
+
+static int drive_seconds(const GameState &g)
+{
+    if (!s_drive.scrimmage) return 0;
+    float len = g.period_len > 0 ? g.period_len : 900.0f;
+    float used = g.period == s_drive.start_period ? s_drive.start_clock - g.clock
+               : s_drive.start_clock + (g.period - s_drive.start_period - 1) * len + (len - g.clock);
+    return std::max(0, (int)lroundf(used));
+}
+
+/* ,"drive":{...} for a scoring event by `side` (touchdown: to the goal line;
+ * field goal: to the kick spot). */
+static std::string drive_json(const GameState &g, int side, bool touchdown)
+{
+    if (s_drive.side != side || !s_drive.scrimmage) return "";
+    float end = s_drive.last_ball;
+    if (touchdown) end = s_drive.last_ball >= s_drive.start_ball ? 9144.0f : 0.0f;
+    int yards = (int)lroundf(fabsf(end - s_drive.start_ball) / 91.44f);
+    int plays = s_drive.plays + 1;                      /* the scoring play */
+    return ",\"drive\":{\"plays\":" + std::to_string(plays) + ",\"yards\":" + std::to_string(yards) +
+           ",\"timeOfPossession\":" + std::to_string(drive_seconds(g)) + ",\"source\":\"tracked\"}";
+}
+
+static void drive_update(const GameState &p, const GameState &g)
+{
+    if (!g.valid || !g.poss) return;
+    int side = g.poss - 1;
+    if (side != s_drive.side) {                         /* new possession: new drive */
+        s_drive = DriveTrack();
+        s_drive.side = side;
+    }
+    if (g.phase != 4) return;
+    if (!s_drive.scrimmage) {
+        s_drive.scrimmage = true;
+        s_drive.start_ball = s_drive.last_ball = g.ball;
+        s_drive.last_line = g.line; s_drive.last_down = g.down;
+        s_drive.start_clock = g.clock; s_drive.start_period = g.period;
+        return;
+    }
+    if (p.phase == 4 && (g.ball != s_drive.last_ball || g.down != s_drive.last_down || g.line != s_drive.last_line)) {
+        s_drive.plays++;
+        s_drive.last_ball = g.ball; s_drive.last_line = g.line; s_drive.last_down = g.down;
+    }
+}
+
+/* Popup text from src/main.c. Drive Summary: labels and values in order,
+ * e.g. "Drive Summary|Plays|4|Yards|49|Time|0:52". */
+static std::mutex s_popup_lock;
+static std::vector<std::string> s_popup_events;
+extern "C" void nfl2k5_presentation_popup_text(const char *title, const char *text)
+{
+    if (!title || !text) return;
+    std::string t = upper(title);
+    if (t.find("DRIVE SUMMARY") == std::string::npos) return;
+    std::vector<std::string> tok;
+    std::string cur;
+    for (const char *c = text;; c++) {
+        if (*c == '\x1f' || !*c) { if (!cur.empty()) tok.push_back(cur); cur.clear(); if (!*c) break; }
+        else cur += *c;
+    }
+    auto value_after = [&](const char *label, bool time) -> std::string {
+        for (size_t i = 0; i + 1 < tok.size(); i++)
+            if (upper(tok[i]) == label)
+                for (size_t k = i + 1; k < tok.size() && k < i + 6; k++) {
+                    const std::string &v = tok[k];
+                    bool ok = !v.empty();
+                    for (char ch : v) if (!(isdigit((unsigned char)ch) || (time && ch == ':') || ch == '-')) ok = false;
+                    if (ok) return v;
+                }
+        return "";
+    };
+    std::string plays = value_after("PLAYS", false), yards = value_after("YARDS", false), time = value_after("TIME", true);
+    if (s_log) {
+        std::string joined;
+        for (auto &x : tok) joined += (joined.empty() ? "" : "|") + x;
+        fprintf(stderr, "[PRES] drive summary popup: %s -> plays %s yards %s time %s\n",
+                joined.c_str(), plays.c_str(), yards.c_str(), time.c_str());
+    }
+    if (plays.empty() && yards.empty() && time.empty()) return;
+    int secs = 0;
+    if (!time.empty()) {
+        size_t colon = time.find(':');
+        secs = colon == std::string::npos ? atoi(time.c_str()) : atoi(time.substr(0, colon).c_str()) * 60 + atoi(time.substr(colon + 1).c_str());
+    }
+    std::string j = ",\"drive\":{\"plays\":" + (plays.empty() ? std::string("null") : plays) +
+                    ",\"yards\":" + (yards.empty() ? std::string("null") : yards) +
+                    ",\"timeOfPossession\":" + std::to_string(secs) + ",\"source\":\"game\"}";
+    std::lock_guard<std::mutex> lock(s_popup_lock);
+    s_popup_events.push_back(j);
+}
+
+/* The game's after-kickoff lineup ticker (sub_000FFBA0; gen patch
+ * LINEUP_TICKER at its end, 2026-10-02). It shows the offense of the team
+ * with the ball, a few plays later the other team's defense, and the same
+ * after the change of possession. sp is its frame: 11 roster record
+ * pointers at sp+0x1C, lineup position codes at sp+0x48 (text: the pointer
+ * table at 0x4F2688); the names it formats are at 0xBA3274 + i*0x40. A
+ * record keeps its college behind a field-relative pointer at +0x00
+ * (target = field + i32 - 1; the college's name pointer likewise), the
+ * portrait id at +0x06 and the jersey number in bits 3..9 of +0x20. */
+static std::string gtext(uint32_t va, int max = 40)
+{
+    std::string s;
+    uint8_t b[2];
+    if (!gread(va, b, 2)) return s;
+    bool wide = b[1] == 0;
+    for (int i = 0; i < max; i++) {
+        uint32_t c = 0;
+        if (!gread(va + (wide ? i * 2 : i), &c, wide ? 2 : 1) || !c) break;
+        if (c < 32 || c > 126) return "";
+        s += (char)c;
+    }
+    /* A stray pointer lands in fill patterns ("DEADBEEF...", Peerless
+     * Price's college, 2026-10-02) or runs on past any real name. */
+    if (s.find("DEADBEEF") != std::string::npos || s.find("EADBEEFD") != std::string::npos || (int)s.size() >= max)
+        return "";
+    return s;
+}
+
+/* A roster pointer field: on disc field-relative (field + i32 - 1); the
+ * running game may hold it fixed up. Each form is tried in turn. */
+static uint32_t grel(uint32_t field, int form)
+{
+    int32_t v = (int32_t)rd32(field);
+    if (!v) return 0;
+    return form == 0 ? field + v - 1 : form == 1 ? field + v : (uint32_t)v;
+}
+
+static std::string grel_text(uint32_t field)
+{
+    for (int f = 0; f < 3; f++) {
+        std::string s = gtext(grel(field, f));
+        if (s.size() >= 2) return s;
+    }
+    return "";
+}
+
+extern "C" void nfl2k5_portraits_warm(void);
+extern "C" void xbox_PresentRecord(int seconds);   /* nv2a_gpu_present.inc.c, video clips */
+static std::mutex s_lineup_lock;
+struct PendingLineup {
+    bool offense = false;
+    std::string players;
+    PlayerIdentity quarterback;
+};
+static std::vector<PendingLineup> s_lineups;
+
+/* gen patch LINEUP_NATIVE_HIDE: the game skips showing its lineup ticker
+ * (the starters are still read and sent as LINEUP) while the selected HTML
+ * package says it draws the lineup itself. */
+extern "C" int nfl2k5_lineup_hide_native(void)
+{
+    int k = s_sel_pkg.load();
+    fprintf(stderr, "[PRES] game shows its lineup ticker (package %d, html %d)\n", k, s_html.host ? 1 : 0);
+    return k > 0 && k < (int)s_pkgs.size() && s_pkgs[k].html && s_pkgs[k].replaces_lineup && s_html.host ? 1 : 0;
+}
+
+/* While a package's lineup intro plays, the game's own player cards (popup
+ * slot 1: rookie cards, career stats) would cover it; main.c's popup hook
+ * asks this and closes them at once. */
+static volatile DWORD s_lineup_until;
+extern "C" int nfl2k5_lineup_active(void)
+{
+    DWORD until = s_lineup_until;
+    return until && (int32_t)(until - GetTickCount()) > 0;
+}
+
+extern "C" void nfl2k5_lineup_ticker(uint32_t sp)
+{
+    std::string players;
+    bool offense = false;
+    PlayerIdentity quarterback;
+    int n = 0;
+    for (int i = 0; i < 11; i++) {
+        uint32_t rec = rd32(sp + 0x1C + i * 4), code = rd32(sp + 0x48 + i * 4);
+        if (!rec) continue;
+        std::string pos = code < 64 ? gtext(rd32(0x4F2688 + code * 4), 8) : "";
+        std::string name = gtext(0xBA3274 + i * 0x40, 32);
+        std::string first = grel_text(rec + 0x10), last = grel_text(rec + 0x14);
+        std::string college;
+        for (int f = 0; f < 3 && college.size() < 2; f++)
+            if (uint32_t c = grel(rec, f)) college = grel_text(c);
+        uint16_t photo = 0;
+        gread(rec + 6, &photo, 2);
+        int number = (int)((rd32(rec + 0x20) >> 3) & 0x7F);
+        if (name.empty()) name = first + (first.empty() ? "" : " ") + last;
+        if (pos == "QB") {
+            offense = true;
+            quarterback.name = name;
+            quarterback.position = pos;
+            quarterback.college = college;
+            quarterback.number = number;
+            quarterback.portrait = nfl2k5_portrait_url(photo);
+        }
+        players += std::string(n++ ? "," : "") + "{\"position\":" + json_str(pos) + ",\"number\":" + std::to_string(number) +
+                   ",\"name\":" + json_str(name) + ",\"first\":" + json_str(first) + ",\"last\":" + json_str(last) +
+                   ",\"college\":" + json_str(college) + ",\"photoId\":" + std::to_string(photo) +
+                   ",\"portrait\":" + json_str(nfl2k5_portrait_url(photo)) + "}";
+    }
+    fprintf(stderr, "[PRES] lineup %s: %s\n", offense ? "offense" : "defense", players.c_str());
+    if (n) xbox_PresentRecord(36);        /* NFL2K5_REC=<prefix>: record the intro (11 x 2.6 s) */
+    if (n && nfl2k5_lineup_hide_native())  /* the package plays it: keep the game's cards out of its way */
+        s_lineup_until = GetTickCount() + (DWORD)n * 2600u + 1500u;
+    if (!n) return;
+    std::lock_guard<std::mutex> lock(s_lineup_lock);
+    s_lineups.push_back({ offense, players, quarterback });
+}
+
+/* Generic events that follow from two consecutive states. */
+static void html_state_events(const GameState &p, const GameState &g)
+{
+    drive_update(p, g);
+    {
+        /* LINEUP: offense = the team with the ball, defense = the other. */
+        std::vector<PendingLineup> pending;
+        { std::lock_guard<std::mutex> lock(s_lineup_lock); pending.swap(s_lineups); }
+        for (auto &l : pending) {
+            int side = g.poss ? (l.offense ? g.poss - 1 : 2 - g.poss) : -1;
+            if (l.offense && side >= AWAY && side <= HOME && !l.quarterback.name.empty()) {
+                std::lock_guard<std::mutex> ql(s_live_qb_lock);
+                s_live_qb_identity[side] = l.quarterback;
+            }
+            html_post(html_event_json("LINEUP", side, std::string(",\"unit\":\"") + (l.offense ? "offense" : "defense") +
+                                      "\",\"players\":[" + l.players + "]"));
+        }
+    }
+    {
+        std::vector<std::string> pending;
+        { std::lock_guard<std::mutex> lock(s_popup_lock); pending.swap(s_popup_events); }
+        for (auto &j : pending)
+            html_post(html_event_json("DRIVE_SUMMARY", s_drive.side >= 0 ? s_drive.side : -1, j));
+    }
+    if (!g.valid) return;
+    if (!s_html.started_game && g.period >= 1) {
+        s_html.started_game = true;
+        html_post(html_event_json("GAME_STARTED", -1));
+    }
+    if (!s_html.prev_valid) return;
+    for (int s = 0; s < 2; s++)
+        if (g.t[s].score != p.t[s].score)
+            html_post(html_event_json("SCORE_CHANGED", s, ",\"points\":" + std::to_string(g.t[s].score - p.t[s].score) +
+                                      ",\"score\":" + std::to_string(g.t[s].score)));
+    if (g.poss != p.poss && g.poss)
+        html_post(html_event_json("POSSESSION_CHANGED", g.poss - 1));
+    if (g.phase == 4 && (g.down != p.down || p.phase != 4) && g.down >= 1 && g.down <= 4)
+        html_post(html_event_json("DOWN_CHANGED", g.poss ? g.poss - 1 : -1, ",\"down\":" + std::to_string(g.down)));
+    if (g.period > p.period && p.period >= 1) {
+        html_post(html_event_json("QUARTER_ENDED", -1, ",\"quarter\":" + std::to_string(p.period)));
+        if (p.period == 2) html_post(html_event_json("HALFTIME", -1));
+        if (g.period == 5) html_post(html_event_json("OVERTIME", -1));
+        html_post(html_event_json("QUARTER_STARTED", -1, ",\"quarter\":" + std::to_string(g.period)));
+    }
+}
+
+static void html_stop()
+{
+    if (s_html.host) {
+        s_html.host->stop();
+        s_html.host.reset();
+        fprintf(stderr, "[HTMLPRES] host stopped\n");
+    }
+    s_html.package = -1;
+    s_html.last_state.clear();
+}
+
+/* Draws the active HTML package. The page's 1920x1080 canvas maps onto the
+ * largest 16:9 rectangle inside the game picture (broadcast safe): it keeps
+ * its proportions at any resolution and is not stretched across ultrawide. */
+static int html_hud(const XboxHudFrame *f, XboxHudImage *img, const GameState &g, const HtmlContext &cx)
+{
+    int pk = s_sel_pkg;
+    const Package &pkg = s_pkgs[pk];
+    float gw = f->game_w, gh = f->game_h;
+    int cw = pkg.canvas_w;
+    if (pkg.fill_width && gh > 0)
+        cw = std::max(pkg.canvas_w, std::min(pkg.canvas_w * 3, (int)lroundf(pkg.canvas_h * gw / gh)));
+    float dh = std::min(gh, gw * pkg.canvas_h / cw), dw = dh * cw / pkg.canvas_h;
+    /* Rasterise at about the size it is shown (1080p: 1, 1440p: 1.33,
+     * 4K: 2). The window can still be settling when the host starts, so a
+     * shown size that stays well off the current scale for a second
+     * restarts the page at the right one. */
+    float want_scale = std::max(1.0f, std::min(2.0f, dh / pkg.canvas_h));
+    static double scale_off_since;
+    if (s_html.package == pk && (fabsf(want_scale - s_html.scale) > 0.2f || abs(cw - s_html.canvas_w) > 8)) {
+        if (!scale_off_since) scale_off_since = now_s();
+        else if (now_s() - scale_off_since > 1.0) { html_stop(); scale_off_since = 0; }
+    } else scale_off_since = 0;
+    if (s_html.package != pk) {
+        html_stop();
+        nfl2k5::PresentationHostConfig c;
+        c.package_dir = pkg.dir;
+        c.entry = pkg.entry;
+        c.root_dir = "mods/presentations";
+        c.teams_dir = "mods/teams";
+        c.portraits_dir = "cache/portraits";
+        nfl2k5_portraits_warm();
+        c.canvas_width = cw;
+        s_html.canvas_w = cw;
+        c.canvas_height = pkg.canvas_h;
+        c.raster_scale = want_scale;
+        s_html.scale = want_scale;
+        s_html.host = nfl2k5::create_webview2_presentation_host();
+        s_html.host->start(c);
+        s_html.package = pk;
+        s_html.prev_valid = false;
+        s_html.started_game = false;
+        fprintf(stderr, "[HTMLPRES] package \"%s\" at raster scale %.2f\n", pkg.name.c_str(), c.raster_scale);
+    }
+
+    /* State: whenever it changes, and at least twice a second. */
+    std::string st = html_state_json(g, cx);
+    double t = now_s();
+    if (st != s_html.last_state || t - s_html.last_state_t > 0.5) {
+        s_html.host->post_state(st);
+        s_html.last_state = st;
+        s_html.last_state_t = t;
+    }
+
+    /* Test hook: NFL2K5_PRES_EVENT=TOUCHDOWN,FIRST_DOWN,... cycles them every
+     * 5 s. Upper-case names go out as Presentation API events as written;
+     * lower-case ones go through the normal event queue (touchdown, ...). */
+    if (!s_test_event.empty() && g.valid) {
+        static double next;
+        static size_t idx;
+        if (t >= next) {
+            std::vector<std::string> names;
+            size_t a = 0, b;
+            while ((b = s_test_event.find(',', a)) != std::string::npos) { names.push_back(s_test_event.substr(a, b - a)); a = b + 1; }
+            names.push_back(s_test_event.substr(a));
+            const std::string &n = names[idx++ % names.size()];
+            int team = g.poss ? g.poss - 1 : HOME;
+            if (!n.empty() && isupper((unsigned char)n[0]))
+                html_post(html_event_json(n.c_str(), team, ",\"quarter\":" + std::to_string(g.period) + ",\"test\":true"));
+            else
+                queue_event({ n, team, "" });
+            next = t + 5.0;
+        }
+    }
+
+    html_state_events(s_html.prev, g);
+    s_html.prev = g;
+    s_html.prev_valid = g.valid;
+
+    /* Live QB samples are data sources, not presentation triggers.  FOX may
+     * choose a persistent QB treatment in its own package.  HTML packages
+     * receive player graphics only when the title launches the corresponding
+     * ESPN card/popup and queues player_stat/player_feature below. */
+    Event ev;
+    while (pop_event(ev))
+        if (const char *name = html_event_name(ev.name)) {
+            std::string extra;
+            if (ev.name == "touchdown") extra = drive_json(g, ev.team, true);
+            else if (ev.name == "field_goal") extra = drive_json(g, ev.team, false);
+            else if (ev.name == "player_stat" || ev.name == "player_feature") {
+                PlayerIdentity identity;
+                { std::lock_guard<std::mutex> ql(s_live_qb_lock); identity = s_live_qb_identity[ev.team]; }
+                extra = html_player_extra(ev.player, identity);
+            }
+            html_post(html_event_json(name, ev.team, extra));
+        }
+
+    nfl2k5::PresentationSurface surf;
+    nfl2k5::PresentationSharedSurface shared;
+    static uint64_t shown;
+    if (!xbox_hud_shared_failed && s_html.host->acquire_shared(shared)) {
+        /* GPU to GPU: the presenter draws the browser's texture itself. */
+        surf.width = shared.width; surf.height = shared.height;
+        surf.stride = shared.width * 4; surf.serial = shared.serial;
+        img->shared = shared.handle;
+        img->pixels = shared.handle;          /* non-null: "there is an image" */
+    } else {
+        if (!s_html.host->acquire_surface(surf)) return 0;
+        img->pixels = surf.pixels;
+    }
+    img->w = surf.width; img->h = surf.height; img->stride = surf.stride;
+    img->x = (int)lroundf(f->game_x + (gw - dw) / 2);
+    img->y = (int)lroundf(f->game_y + (gh - dh) / 2);
+    img->dw = (int)lroundf(dw); img->dh = (int)lroundf(dh);
+    img->changed = surf.serial != shown;
+    shown = surf.serial;
+    return 1;
+}
+
 static int hud_callback(const XboxHudFrame *f, XboxHudImage *img)
 {
     double t = now_s();
@@ -1859,6 +2620,30 @@ static int hud_callback(const XboxHudFrame *f, XboxHudImage *img)
             fprintf(stderr, "\n");
         }
     }
+    /* Audio test switch: NFL2K5_AUDIO_SLIDERS=v0,v1,... overrides the game's
+     * volume sliders (floats at E601B4.., TV broadcast first) without
+     * touching the saved settings; NFL2K5_PRES_LOG prints their values. */
+    {
+        static DWORD last;
+        if (GetTickCount() - last > 1000) {
+            last = GetTickCount();
+            if (const char *sl = getenv("NFL2K5_AUDIO_SLIDERS")) {
+                const char *c = sl;
+                for (uint32_t a = 0x00E601B4u; *c && a <= 0x00E601CCu; a += 4) {
+                    char *end;
+                    float f = strtof(c, &end);
+                    if (end == c) break;
+                    gwritef(a, f);
+                    c = *end == ',' ? end + 1 : end;
+                }
+            }
+            if (s_log) {
+                fprintf(stderr, "[PRES] sliders E601B4..:");
+                for (uint32_t a = 0x00E601B4u; a <= 0x00E601CCu; a += 4) fprintf(stderr, " %.2f", rdf(a));
+                fprintf(stderr, "\n");
+            }
+        }
+    }
     bool native_on = s_native_visible && GetTickCount() - s_native_tick < 300;
     /* NFL 2K5's play-call overlay has its own four-state controller.  The
      * state is written by sub_00071B50 and consumed every frame by
@@ -1866,8 +2651,39 @@ static int hud_callback(const XboxHudFrame *f, XboxHudImage *img)
      * visible and transition states.  The stock ESPN bug is part of that
      * screen, but modern broadcast bugs should leave the play cards clear. */
     bool playcall_on = rd32(0x00B38C30u) != 0;
+    /* navigation_pause_notitle's enter (sub_00278310) sets AC7444;
+     * its leave (sub_00270600) clears it, and sub_00270BA0 exposes the
+     * same value. Gamecast is a nested pause screen, so a retained phase 4
+     * is not sufficient evidence of a live camera. */
+    bool pause_on = rd32(0x00AC7444u) != 0;
     if (playcall_on) native_on = false;
     if (s_test) native_on = true;
+
+    /* A valid GameState alone is insufficient: the title/frontend leaves
+     * the previous game's clock, teams and phase in memory.  Require fresh
+     * evidence from a moving game/play clock or an in-game controller. */
+    static bool activity_prev_valid;
+    static float activity_prev_clock;
+    static int activity_prev_play_clock = -1;
+    static std::string activity_prev_away, activity_prev_home;
+    DWORD activity_now = GetTickCount();
+    bool same_game = activity_prev_valid && g.valid &&
+                     activity_prev_away == g.t[AWAY].abbr &&
+                     activity_prev_home == g.t[HOME].abbr;
+    bool clock_moved = same_game &&
+        (fabsf(g.clock - activity_prev_clock) > 0.01f ||
+         (g.play_clock >= 0 && activity_prev_play_clock >= 0 &&
+          g.play_clock != activity_prev_play_clock));
+    if (g.valid && (native_on || playcall_on || pause_on || clock_moved || s_test))
+        s_match_tick = activity_now;
+    if (!g.valid) s_match_tick = 0;
+    activity_prev_valid = g.valid;
+    activity_prev_clock = g.clock;
+    activity_prev_play_clock = g.play_clock;
+    activity_prev_away = g.t[AWAY].abbr;
+    activity_prev_home = g.t[HOME].abbr;
+    DWORD match_tick = s_match_tick;
+    bool match_active = match_tick && activity_now - match_tick < 2500;
 
     if (s_log && !g.valid) {
         static DWORD last_raw;
@@ -1925,6 +2741,15 @@ static int hud_callback(const XboxHudFrame *f, XboxHudImage *img)
         dirty = false;
         return 1;
     }
+    if (custom_active() && s_pkgs[s_sel_pkg].html) {
+        HtmlContext cx;
+        cx.play_selection = playcall_on;
+        cx.paused = pause_on;
+        cx.native_scorebug = native_on;
+        cx.scorebug_visible = match_active && g.valid && !playcall_on && !pause_on && (g.phase == 4 || native_on);
+        return html_hud(f, img, g, cx);
+    }
+    if (s_html.host) html_stop();       /* switched back to a JSON package or ESPN */
     if (!custom_active() || !renderer_init()) return 0;
     const Package &pkg = s_pkgs[s_sel_pkg];
     const JVal *sb = pkg.root.get("scorebug");
@@ -1942,12 +2767,15 @@ static int hud_callback(const XboxHudFrame *f, XboxHudImage *img)
      * is not raised consistently by NFL 2K5's live scrimmage cameras. FOX
      * therefore follows verified live game phase too, while the play-call
      * controller remains the authoritative hide signal. */
-    bool fox_live = g.valid && !playcall_on && (g.phase == 4 || native_on);
+    bool fox_live = match_active && g.valid && !playcall_on && !pause_on && (g.phase == 4 || native_on);
     update_bug_lifecycle(sb, fox_live, dt);
 
     /* Next animation. */
     const JVal *anims = pkg.root.get("animations");
     if (s_anim_on && t - s_anim.t0 > s_anim.duration) s_anim_on = false;
+    bool qb_live = fox_live && g.phase == 4 && g.period > 0 && g.clock > 0.0f &&
+                   g.down >= 1 && g.down <= 4;
+    service_live_qb(g, qb_live, anims);
     Event ev;
     while (!s_anim_on && pop_event(ev)) {
         const JVal *def = anims ? anims->get(ev.name.c_str()) : nullptr;
@@ -1998,6 +2826,12 @@ static int hud_callback(const XboxHudFrame *f, XboxHudImage *img)
              var(c, "down_distance").c_str(), var(c, "quarter").c_str(), (g.t[0].abbr + g.t[1].abbr).c_str(),
              g.t[0].score, g.t[1].score, g.t[0].timeouts, g.t[1].timeouts, g.poss * 10 + g.phase);
     std::string sig = sigbuf;
+    /* A finished/cancelled card must clear its pixels even if the match
+     * clock is stopped and none of the scorebug fields changed. */
+    sig += s_anim_on ? "|animation" : "|noanimation";
+    bool draw_live_qb = s_live_qb_visible && !fullscreen;
+    sig += draw_live_qb ? "|qb:" + std::to_string(s_live_qb_display_revision) +
+                         ":" + std::to_string(s_live_qb_event.team) : "|noqb";
     bool changed = s_anim_on || sig != s_last_sig || R.w != W || R.h != H;
     s_last_sig = sig;
 
@@ -2029,6 +2863,16 @@ static int hud_callback(const XboxHudFrame *f, XboxHudImage *img)
         if (!fullscreen || !s_anim.def->flag("hide_scorebug", true))
             if (const JVal *els = sb->get("elements"))
                 for (auto &e : els->a) draw_element(c, e, 1.0f, 0, 0, 1.0f);
+        if (draw_live_qb) {
+            Ctx qc = c;
+            qc.ev = &s_live_qb_event;
+            /* Share the package's unboxed text geometry and typography,
+             * without its temporary-insert entrance/expiry keyframes. The
+             * enclosing scorebug lifecycle still controls opacity. */
+            const JVal *def = anims->get("player_stat");
+            if (const JVal *layers = def->get("layers"))
+                for (auto &L : layers->a) draw_element(qc, L, 1.0f, 0, 0, 1.0f);
+        }
         if (s_anim_on && s_anim.def) {
             Ctx ac = c;
             ac.ev = &s_anim.ev;

@@ -1,0 +1,730 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Presentation Studio</title>
+<style>
+:root { color-scheme: dark; --bg:#0f141b; --panel:#18202b; --line:#2f3b4c; --text:#e8eef6; --muted:#93a3b8; --accent:#4da3ff; --sel:#ffb000; }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 13px/1.35 "Segoe UI", system-ui, sans-serif; }
+body { display: grid; grid-template-columns: 280px 1fr 300px; grid-template-rows: 44px 1fr; height: 100vh; }
+header { grid-column: 1 / 4; display: flex; align-items: center; gap: 10px; padding: 0 12px; background: #121a24; border-bottom: 1px solid var(--line); }
+header h1 { font-size: 15px; margin: 0 12px 0 0; }
+header .spacer { flex: 1; }
+aside { overflow: auto; padding: 10px 12px 40px; background: var(--panel); }
+aside.left { border-right: 1px solid var(--line); }
+aside.right { border-left: 1px solid var(--line); }
+h2 { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 16px 0 6px; }
+label { display: block; color: var(--muted); font-size: 11px; margin: 6px 0 2px; }
+input, select, button, textarea { font: inherit; color: var(--text); background: #0e141c; border: 1px solid var(--line); border-radius: 4px; padding: 4px 6px; }
+input[type=range] { padding: 0; width: 100%; }
+input[type=checkbox] { width: auto; }
+input, select, textarea { width: 100%; }
+button { cursor: pointer; background: #213045; }
+button:hover { border-color: var(--accent); }
+button.on { background: var(--accent); color: #001; }
+.row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+.btns { display: flex; flex-wrap: wrap; gap: 4px; }
+.btns button { flex: 1 1 auto; padding: 4px 6px; font-size: 12px; }
+.check { display: flex; align-items: center; gap: 6px; color: var(--text); font-size: 12px; margin: 6px 0; }
+#list { max-height: 220px; overflow: auto; border: 1px solid var(--line); border-radius: 4px; }
+#list div { padding: 3px 8px; cursor: pointer; white-space: nowrap; }
+#list div:hover { background: #22303f; }
+#list div.sel { background: #3a2f0f; color: var(--sel); }
+#msg { color: var(--muted); }
+main { position: relative; overflow: hidden; background: #0a0d12; }
+#viewport { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+#stage { position: relative; width: 1920px; height: 1080px; transform-origin: 0 0; flex: none;
+         background-color: #263241; background-image: linear-gradient(45deg,#2c3a4b 25%,transparent 25%,transparent 75%,#2c3a4b 75%),
+         linear-gradient(45deg,#2c3a4b 25%,transparent 25%,transparent 75%,#2c3a4b 75%); background-size: 40px 40px; background-position: 0 0, 20px 20px; }
+#stage > * { position: absolute; left: 0; top: 0; }
+#backdrop { width: 1920px; height: 1080px; object-fit: cover; display: none; }
+/* Same color-scheme as the package page, or Chromium paints an opaque
+ * backdrop behind the iframe and hides the transparency. */
+#frame { width: 1920px; height: 1080px; border: 0; background: transparent; color-scheme: normal; }
+.ref { transform-origin: 0 0; pointer-events: none; display: none; max-width: none; }
+#overlay { width: 1920px; height: 1080px; cursor: default; }
+#overlay.refmode { cursor: move; }
+#box { position: absolute; border: 2px solid var(--sel); display: none; pointer-events: none; box-shadow: 0 0 0 1px #000a; }
+#box.hover { border: 1px dashed #ffffff88; box-shadow: none; }
+#sel { position: absolute; display: none; border: 2px solid var(--sel); box-shadow: 0 0 0 1px #000a; cursor: move; }
+#sel .h { position: absolute; width: 14px; height: 14px; background: #fff; border: 2px solid var(--sel); margin: -7px 0 0 -7px; }
+#sel .h[data-h=nw] { left: 0; top: 0; cursor: nwse-resize; }   #sel .h[data-h=n] { left: 50%; top: 0; cursor: ns-resize; }
+#sel .h[data-h=ne] { left: 100%; top: 0; cursor: nesw-resize; } #sel .h[data-h=e] { left: 100%; top: 50%; cursor: ew-resize; }
+#sel .h[data-h=se] { left: 100%; top: 100%; cursor: nwse-resize; } #sel .h[data-h=s] { left: 50%; top: 100%; cursor: ns-resize; }
+#sel .h[data-h=sw] { left: 0; top: 100%; cursor: nesw-resize; } #sel .h[data-h=w] { left: 0; top: 50%; cursor: ew-resize; }
+#sel .tag { position: absolute; left: -2px; top: -26px; background: var(--sel); color: #000; font: 600 14px/22px Consolas, monospace; padding: 0 6px; white-space: nowrap; }
+#code { position: absolute; inset: 0; display: none; grid-template-columns: 220px 1fr; background: var(--bg); }
+body.codeview #code { display: grid; }
+body.codeview #viewport, body.codeview #hint { display: none; }
+#files { overflow: auto; border-right: 1px solid var(--line); padding: 6px 0; }
+#files div { padding: 3px 10px; cursor: pointer; white-space: nowrap; font-family: Consolas, monospace; font-size: 12px; }
+#files div:hover { background: #22303f; }
+#files div.sel { background: #12304f; color: #fff; }
+#files div.bin { color: var(--muted); cursor: default; }
+#editorWrap { display: grid; grid-template-rows: 34px 1fr; min-width: 0; }
+#codeBar { display: flex; align-items: center; gap: 6px; padding: 0 8px; border-bottom: 1px solid var(--line); font-family: Consolas, monospace; }
+#codeBar .spacer { flex: 1; }
+#codeText { width: 100%; height: 100%; resize: none; border: 0; border-radius: 0; padding: 10px 12px; tab-size: 2;
+            font: 13px/1.5 Consolas, "Cascadia Mono", monospace; background: #0b1016; white-space: pre; }
+#codeText.dirty { box-shadow: inset 3px 0 0 var(--sel); }
+dialog { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 8px; width: 520px; padding: 16px 18px; }
+dialog::backdrop { background: #0008; }
+dialog h3 { margin: 0 0 8px; font-size: 15px; }
+dialog p { color: var(--muted); font-size: 12px; margin: 6px 0; }
+dialog .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+#hint { position: absolute; left: 10px; bottom: 8px; color: var(--muted); font-size: 12px; pointer-events: none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Presentation Studio</h1>
+  <select id="pkg" style="width:240px"></select>
+  <button id="importBtn">Import HTML…</button>
+  <button id="viewBtn">Code view</button>
+  <button id="reload">Reload page</button>
+  <button id="save">Save layout (Ctrl+S)</button>
+  <button id="undo">Undo (Ctrl+Z)</button>
+  <span class="spacer"></span>
+  <span id="msg">Start with tools\presentation-studio\serve.ps1</span>
+</header>
+
+<aside class="left">
+  <h2>Elements</h2>
+  <div id="list"></div>
+  <label class="check"><input type="checkbox" id="anyEl"> Click selects any element (not only named ones; Alt+click does this once)</label>
+
+  <h2>Sample game data</h2>
+  <div class="row"><div><label>Away</label><input id="sAway" value="KC"></div><div><label>Home</label><input id="sHome" value="NE"></div></div>
+  <div class="row"><div><label>Away score</label><input id="sAwayScore" type="number" value="14"></div><div><label>Home score</label><input id="sHomeScore" type="number" value="10"></div></div>
+  <div class="row"><div><label>Away timeouts</label><input id="sAwayTO" type="number" min="0" max="3" value="3"></div><div><label>Home timeouts</label><input id="sHomeTO" type="number" min="0" max="3" value="2"></div></div>
+  <div class="row3"><div><label>Quarter</label><input id="sQ" type="number" min="0" max="6" value="2"></div><div><label>Clock (s)</label><input id="sClock" type="number" value="425"></div><div><label>Play clock</label><input id="sPlay" type="number" value="17"></div></div>
+  <div class="row3"><div><label>Down</label><input id="sDown" type="number" min="0" max="4" value="3"></div><div><label>Distance</label><input id="sDist" type="number" value="7"></div><div><label>Possession</label><select id="sPoss"><option>away</option><option selected>home</option><option value="">none</option></select></div></div>
+  <label class="check"><input type="checkbox" id="sVisible" checked> Scorebug visible (live play)</label>
+  <label class="check"><input type="checkbox" id="sPlaycall"> Play selection on screen</label>
+
+  <h2>Send event</h2>
+  <div class="btns" id="events"></div>
+
+  <h2>Background</h2>
+  <label>Game screenshot behind the canvas</label>
+  <input type="file" id="bgFile" accept="image/*">
+  <button id="bgClear" style="margin-top:4px">Checkerboard</button>
+</aside>
+
+<main>
+  <div id="viewport">
+    <div id="stage">
+      <img id="backdrop" alt="">
+      <img id="refUnder" class="ref" alt="">
+      <iframe id="frame" title="presentation"></iframe>
+      <img id="refOver" class="ref" alt="">
+      <div id="overlay">
+        <div id="box"></div>
+        <div id="sel"><div class="tag"></div>
+          <div class="h" data-h="nw"></div><div class="h" data-h="n"></div><div class="h" data-h="ne"></div><div class="h" data-h="e"></div>
+          <div class="h" data-h="se"></div><div class="h" data-h="s"></div><div class="h" data-h="sw"></div><div class="h" data-h="w"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="code">
+    <div id="files"></div>
+    <div id="editorWrap">
+      <div id="codeBar"><span id="codeName">choose a file</span><span class="spacer"></span>
+        <button id="codeSave">Save file (Ctrl+S)</button><button id="codeRevert">Revert</button></div>
+      <textarea id="codeText" spellcheck="false" wrap="off" disabled></textarea>
+    </div>
+  </div>
+  <div id="hint">Click to select. Drag to move, drag a handle or edge to resize (Shift keeps proportions). Arrows nudge 1 px, Shift+arrows 10 px. Esc deselects.</div>
+</main>
+
+<aside class="right">
+  <h2>Selected element</h2>
+  <div id="selName" style="color:var(--sel);font-family:Consolas,monospace">none</div>
+  <div class="row"><div><label>X</label><input id="pX" type="number"></div><div><label>Y</label><input id="pY" type="number"></div></div>
+  <div class="row"><div><label>Width</label><input id="pW" type="number"></div><div><label>Height</label><input id="pH" type="number"></div></div>
+  <div class="row"><div><label>Font size</label><input data-prop="font-size"></div><div><label>Font weight</label><input data-prop="font-weight"></div></div>
+  <label>Font family</label><input data-prop="font-family">
+  <div class="row"><div><label>Text colour</label><input data-prop="color"></div><div><label>Alignment</label><select data-prop="text-align"><option></option><option>left</option><option>center</option><option>right</option></select></div></div>
+  <div class="row"><div><label>Padding</label><input data-prop="padding"></div><div><label>Letter spacing</label><input data-prop="letter-spacing"></div></div>
+  <div class="row"><div><label>Gap (child spacing)</label><input data-prop="gap"></div><div><label>Z-index</label><input data-prop="z-index"></div></div>
+  <label>Opacity</label><input data-prop="opacity" type="range" min="0" max="1" step="0.01">
+  <label>Background</label><input data-prop="background">
+  <label>Border</label><input data-prop="border">
+  <label>Border radius</label><input data-prop="border-radius">
+  <label>Shadow</label><input data-prop="box-shadow">
+  <div class="row"><div><label>Visibility</label><select data-prop="visibility"><option></option><option>visible</option><option>hidden</option></select></div><div><label>Display</label><select data-prop="display"><option></option><option>block</option><option>flex</option><option>grid</option><option>none</option></select></div></div>
+  <label>Replace image / background asset</label><input type="file" id="asset" accept="image/*">
+  <button id="clearEl" style="margin-top:8px;width:100%">Reset this element's edits</button>
+
+  <h2>Reference image</h2>
+  <input type="file" id="refFile" accept="image/*">
+  <div class="btns" style="margin-top:6px"><button id="refShow">Show</button><button id="refHide">Hide</button><button id="refMove">Move / scale</button></div>
+  <label>Opacity <span id="refOpV">50%</span></label><input id="refOp" type="range" min="0" max="100" value="50">
+  <label>Scale <span id="refScV">100%</span></label><input id="refSc" type="range" min="10" max="400" value="100">
+  <div class="row"><div><label>X</label><input id="refX" type="number" value="0"></div><div><label>Y</label><input id="refY" type="number" value="0"></div></div>
+  <label class="check"><input type="checkbox" id="refLock"> Lock reference</label>
+  <label class="check"><input type="checkbox" id="refAbove" checked> Over the scorebug (unchecked: under it)</label>
+  <p style="color:var(--muted);font-size:12px">Move / scale: drag the reference, mouse wheel scales it. Lock prevents accidental changes.</p>
+</aside>
+
+<dialog id="importDlg">
+  <h3>Import HTML as a presentation package</h3>
+  <p>Choose a folder holding an HTML page with its CSS, JavaScript and images, or choose the files directly. They are copied into a new folder under mods/presentations; the originals are not changed.</p>
+  <label>Folder</label><input type="file" id="impFolder" webkitdirectory multiple>
+  <label>…or individual files</label><input type="file" id="impFiles" multiple accept=".html,.htm,.css,.js,.json,.png,.jpg,.jpeg,.gif,.svg,.webp,.ttf,.otf,.woff,.woff2,.mp4,.webm,.mp3">
+  <label>Entry page</label><select id="impEntry"></select>
+  <label>Package name</label><input id="impName" placeholder="My Scorebug">
+  <label class="check"><input type="checkbox" id="impTransparent" checked> Make the page background transparent (the game shows through)</label>
+  <p id="impInfo"></p>
+  <p>The entry page gets two additions so it works in the game and here: the Presentation API runtime (game data and events, <code>NFL2K5.onState</code> / <code>NFL2K5.onEvent</code>) and <code>layout.css</code> for visual edits. Its canvas is 1920×1080.</p>
+  <div class="actions"><button id="impCancel">Cancel</button><button id="impGo">Import</button></div>
+</dialog>
+
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const frame = $('frame'), stage = $('stage'), overlay = $('overlay'), selBox = $('sel'), hoverBox = $('box');
+const EVENTS = ['TOUCHDOWN','FIELD_GOAL','EXTRA_POINT','TWO_POINT_CONVERSION','SAFETY','FIRST_DOWN','INTERCEPTION','FUMBLE',
+                'TURNOVER','PENALTY','TIMEOUT','TWO_MINUTE_WARNING','QUARTER_ENDED','QUARTER_STARTED','HALFTIME','GAME_ENDED'];
+let pkg = null, scale = 1, selected = null, edits = new Map(), history = [], doc = null;
+
+function msg(t) { $('msg').textContent = t; }
+
+/* ---------- stage fit ---------- */
+function fit() {
+  const vp = $('viewport').getBoundingClientRect();
+  scale = Math.min(vp.width / 1920, vp.height / 1080) * 0.96;
+  stage.style.transform = `scale(${scale})`;
+  stage.style.marginRight = (1920 * scale - 1920) + 'px';
+  stage.style.marginBottom = (1080 * scale - 1080) + 'px';
+  drawBoxes();
+}
+window.addEventListener('resize', fit);
+function toCanvas(e) {
+  const r = stage.getBoundingClientRect();
+  return { x: (e.clientX - r.left) / scale, y: (e.clientY - r.top) / scale };
+}
+
+/* ---------- packages ---------- */
+async function loadPackages(want) {
+  try {
+    const list = [].concat(await (await fetch('/api/packages')).json());
+    const sel = $('pkg');
+    sel.innerHTML = '';
+    list.forEach((p, i) => sel.add(new Option(p.name + '  (' + p.folder + ')', i)));
+    sel.packages = list;
+    const i = Math.max(0, list.findIndex(p => p.folder === want));
+    sel.value = i;
+    if (list.length) openPackage(list[i]); else msg('No HTML packages (mod.json "type": "html") in mods/presentations');
+  } catch (e) { msg('Open this page through serve.ps1 (http://127.0.0.1:8735/...)'); }
+}
+$('pkg').onchange = () => openPackage($('pkg').packages[$('pkg').value]);
+$('reload').onclick = () => pkg && openPackage(pkg, true);
+
+async function openPackage(p, keepEdits) {
+  if (!keepEdits && pkg !== p) { codeFile = null; codeOrig = ''; if (document.body.classList.contains('codeview')) setTimeout(loadFileList); }
+  pkg = p;
+  select(null);
+  if (!keepEdits) { edits = new Map(); history = []; }
+  /* Existing layout.css is the starting point for edits. */
+  if (!keepEdits) {
+    try {
+      const r = await fetch(`/mods/presentations/${p.folder}/layout.css`, { cache: 'no-store' });
+      if (r.ok) parseLayout(await r.text());
+    } catch (e) { }
+  }
+  frame.onload = () => {
+    doc = frame.contentDocument;
+    /* layout.css is applied by the editor while editing; the page's own
+     * link to it (if any) is removed so edits are not doubled. */
+    doc.querySelectorAll('link[href$="layout.css"]').forEach(l => l.remove());
+    applyAll();
+    sendState();
+    buildList();
+    const api = frame.contentWindow.NFL2K5;
+    if (!api) msg(`${p.name}: the page does not load the Presentation API runtime (_runtime/nfl2k5-presentation.js), so it cannot receive game data`);
+    else if (!api.listening) msg(`${p.name}: not connected to game data. The page never calls NFL2K5.onState, so it shows fixed values and ignores the sample data and events. See docs/SCOREBUG-AUTHORING-GUIDE.md`);
+    else msg(`${p.name}: connected to game data; ${edits.size} edited element(s)`);
+    loadRefSettings();
+  };
+  frame.src = `/mods/presentations/${p.folder}/${p.entry || 'index.html'}?t=${Date.now()}`;
+}
+
+/* ---------- edits (saved as layout.css) ---------- */
+/* The CSS selector an edit is saved under. It must match exactly this one
+ * element: a data-element name, an id, or a unique class; otherwise a
+ * child path anchored at the nearest uniquely named ancestor or <body>. */
+function uniqueName(n) {
+  if (n.dataset && n.dataset.element) return `[data-element="${n.dataset.element}"]`;
+  if (n.id && /^[A-Za-z][\w-]*$/.test(n.id)) return '#' + n.id;
+  for (const c of n.classList) {
+    if (!/^[A-Za-z_][\w-]*$/.test(c)) continue;
+    const sel = `${n.tagName.toLowerCase()}.${c}`;
+    if (doc.querySelectorAll(sel).length === 1) return sel;
+  }
+  return null;
+}
+function keyOf(el) {
+  const own = uniqueName(el);
+  if (own) return own;
+  const parts = [];
+  let n = el;
+  for (; n && n !== doc.body; n = n.parentElement) {
+    const name = n !== el && uniqueName(n);
+    if (name) { parts.unshift(name); break; }
+    const i = Array.prototype.indexOf.call(n.parentElement.children, n) + 1;
+    parts.unshift(`${n.tagName.toLowerCase()}:nth-child(${i})`);
+  }
+  if (n === doc.body || !n) parts.unshift('body');
+  return parts.join(' > ');
+}
+function parseLayout(css) {
+  const re = /([^{}]+)\{([^}]*)\}/g; let m;
+  while ((m = re.exec(css))) {
+    const key = m[1].trim(), props = {};
+    m[2].split(';').forEach(d => {
+      const i = d.indexOf(':'); if (i < 0) return;
+      props[d.slice(0, i).trim()] = d.slice(i + 1).replace(/!important/, '').trim();
+    });
+    if (key && !key.startsWith('/*')) edits.set(key, props);
+  }
+}
+function layoutCss() {
+  let out = '/* Written by Presentation Studio. Overrides scorebug.css; edit freely. */\n';
+  edits.forEach((props, key) => {
+    const body = Object.entries(props).filter(([, v]) => v !== '').map(([k, v]) => `  ${k}: ${v} !important;`).join('\n');
+    if (body) out += `${key} {\n${body}\n}\n`;
+  });
+  return out;
+}
+function applyAll() {
+  if (!doc) return;
+  let st = doc.getElementById('studio-layout');
+  if (!st) { st = doc.createElement('style'); st.id = 'studio-layout'; doc.head.appendChild(st); }
+  st.textContent = layoutCss();
+  drawBoxes();
+}
+function snapshot() { history.push(JSON.stringify([...edits])); if (history.length > 200) history.shift(); }
+function setProps(el, props, record = true) {
+  if (record) snapshot();
+  const k = keyOf(el), cur = Object.assign({}, edits.get(k) || {});
+  Object.entries(props).forEach(([p, v]) => { if (v === '' || v == null) delete cur[p]; else cur[p] = v; });
+  if (Object.keys(cur).length) edits.set(k, cur); else edits.delete(k);
+  applyAll();
+  showProps();
+}
+$('undo').onclick = undo;
+function undo() { const h = history.pop(); if (!h) return; edits = new Map(JSON.parse(h)); applyAll(); showProps(); }
+$('save').onclick = save;
+async function save() {
+  if (!pkg) return;
+  const r = await fetch(`/api/save-layout?package=${encodeURIComponent(pkg.folder)}`, { method: 'POST', body: layoutCss() });
+  msg(r.ok ? `Saved mods/presentations/${pkg.folder}/layout.css (${edits.size} element(s))` : 'Save failed: ' + await r.text());
+}
+
+/* ---------- selection ---------- */
+function pickable(el) {
+  if (!el || el === doc.documentElement || el === doc.body) return null;
+  return el;
+}
+function elementAt(x, y, any) {
+  if (!doc) return null;
+  const hits = doc.elementsFromPoint(x, y).filter(e => e !== doc.documentElement && e !== doc.body && e.id !== 'canvas');
+  if (!hits.length) return null;
+  if (any) return hits[0];
+  for (const h of hits) { const n = h.closest('[data-element]'); if (n) return n; }
+  return hits[0];
+}
+function select(el) {
+  selected = pickable(el);
+  drawBoxes(); showProps(); buildList(true);
+}
+function rectOf(el) { const r = el.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; }
+function drawBoxes() {
+  if (selected && doc && doc.contains(selected)) {
+    const r = rectOf(selected);
+    Object.assign(selBox.style, { display: 'block', left: r.x + 'px', top: r.y + 'px', width: r.w + 'px', height: r.h + 'px' });
+    selBox.querySelector('.tag').textContent = `${keyOf(selected)}  ${Math.round(r.w)}×${Math.round(r.h)} @ ${Math.round(r.x)},${Math.round(r.y)}`;
+    const hs = Math.max(10, 14 / scale) + 'px';
+    selBox.querySelectorAll('.h').forEach(h => { h.style.width = h.style.height = hs; h.style.margin = `-${parseFloat(hs) / 2}px 0 0 -${parseFloat(hs) / 2}px`; });
+  } else { selBox.style.display = 'none'; }
+}
+function buildList(onlyHighlight) {
+  const list = $('list');
+  if (!doc) return;
+  if (!onlyHighlight) {
+    list.innerHTML = '';
+    /* Pages without data-element names (imported HTML): list elements with
+     * an id or class instead, and let a click select any element. */
+    let els = [...doc.querySelectorAll('[data-element]')];
+    const named = els.length > 0;
+    if (!named) els = [...doc.body.querySelectorAll('[id], [class]')].filter(e => !['SCRIPT', 'STYLE', 'LINK'].includes(e.tagName)).slice(0, 300);
+    $('anyEl').checked = !named;
+    els.forEach(el => {
+      const d = document.createElement('div');
+      d.textContent = named ? el.dataset.element : (el.tagName.toLowerCase() + (el.id ? '#' + el.id : '') + (el.classList.length ? '.' + [...el.classList].join('.') : ''));
+      d.el = el;
+      d.onclick = () => select(el);
+      list.appendChild(d);
+    });
+  }
+  list.querySelectorAll('div').forEach(d => d.classList.toggle('sel', d.el === selected));
+}
+
+/* ---------- geometry ---------- */
+function px(v) { const n = parseFloat(v); return isNaN(n) ? 0 : n; }
+function geometry(el) {
+  const cs = doc.defaultView.getComputedStyle(el);
+  const abs = cs.position === 'absolute' || cs.position === 'fixed';
+  const extraW = cs.boxSizing === 'border-box' ? 0 : px(cs.paddingLeft) + px(cs.paddingRight) + px(cs.borderLeftWidth) + px(cs.borderRightWidth);
+  const extraH = cs.boxSizing === 'border-box' ? 0 : px(cs.paddingTop) + px(cs.paddingBottom) + px(cs.borderTopWidth) + px(cs.borderBottomWidth);
+  return { abs, left: abs ? el.offsetLeft : px(cs.left), top: abs ? el.offsetTop : px(cs.top),
+           w: el.offsetWidth, h: el.offsetHeight, extraW, extraH, position: cs.position };
+}
+let drag = null;
+overlay.addEventListener('pointerdown', e => {
+  if (e.button !== 0 || !doc) return;
+  const p = toCanvas(e);
+  if (refMode) { startRefDrag(e, p); return; }
+  const handle = e.target.classList && e.target.classList.contains('h') ? e.target.dataset.h : null;
+  if (!handle && !(selected && e.target === selBox)) {
+    select(elementAt(p.x, p.y, $('anyEl').checked || e.altKey));
+    if (!selected) return;
+  }
+  const g = geometry(selected);
+  snapshot();
+  drag = { mode: handle || 'move', start: p, g, el: selected, aspect: g.w / Math.max(1, g.h) };
+  overlay.setPointerCapture(e.pointerId);
+  e.preventDefault();
+});
+overlay.addEventListener('pointermove', e => {
+  const p = toCanvas(e);
+  if (refDrag) { moveRefDrag(p); return; }
+  if (!drag) {
+    if (!doc || refMode) return;
+    const h = elementAt(p.x, p.y, $('anyEl').checked || e.altKey);
+    if (h && h !== selected) { const r = rectOf(h); Object.assign(hoverBox.style, { display: 'block', left: r.x + 'px', top: r.y + 'px', width: r.w + 'px', height: r.h + 'px' }); hoverBox.className = 'hover'; }
+    else hoverBox.style.display = 'none';
+    return;
+  }
+  hoverBox.style.display = 'none';
+  let dx = Math.round(p.x - drag.start.x), dy = Math.round(p.y - drag.start.y);
+  const g = drag.g, m = drag.mode, out = {};
+  if (!g.abs && g.position === 'static') out.position = 'relative';
+  if (m === 'move') { out.left = (g.left + dx) + 'px'; out.top = (g.top + dy) + 'px'; }
+  else {
+    let w = g.w, h = g.h, l = g.left, t = g.top;
+    if (m.includes('e')) w = g.w + dx;
+    if (m.includes('w')) { w = g.w - dx; l = g.left + dx; }
+    if (m.includes('s')) h = g.h + dy;
+    if (m.includes('n')) { h = g.h - dy; t = g.top + dy; }
+    if (e.shiftKey && m.length === 2) {           /* corners keep proportions */
+      const nh = Math.round(w / drag.aspect);
+      if (m.includes('n')) t = g.top + (g.h - nh);
+      h = nh;
+    }
+    w = Math.max(1, w); h = Math.max(1, h);
+    if (m.includes('e') || m.includes('w')) out.width = (w - g.extraW) + 'px';
+    if (m.includes('n') || m.includes('s')) out.height = (h - g.extraH) + 'px';
+    if (m.includes('w')) out.left = l + 'px';
+    if (m.includes('n')) out.top = t + 'px';
+  }
+  setProps(drag.el, out, false);
+});
+overlay.addEventListener('pointerup', e => { drag = null; endRefDrag(); try { overlay.releasePointerCapture(e.pointerId); } catch (x) { } });
+overlay.addEventListener('pointerleave', () => { hoverBox.style.display = 'none'; });
+
+document.addEventListener('keydown', e => {
+  if (e.target.matches('input, textarea, select')) return;
+  if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); save(); return; }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undo(); return; }
+  if (e.key === 'Escape') { select(null); return; }
+  if (!selected) return;
+  const step = e.shiftKey ? 10 : 1, d = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[e.key];
+  if (!d) return;
+  e.preventDefault();
+  const g = geometry(selected), out = { left: (g.left + d[0]) + 'px', top: (g.top + d[1]) + 'px' };
+  if (!g.abs && g.position === 'static') out.position = 'relative';
+  setProps(selected, out);
+});
+
+/* ---------- properties panel ---------- */
+function showProps() {
+  $('selName').textContent = selected ? keyOf(selected) : 'none';
+  if (!selected) return;
+  const g = geometry(selected), cs = doc.defaultView.getComputedStyle(selected);
+  $('pX').value = Math.round(g.left); $('pY').value = Math.round(g.top);
+  $('pW').value = Math.round(g.w); $('pH').value = Math.round(g.h);
+  const ed = edits.get(keyOf(selected)) || {};
+  document.querySelectorAll('[data-prop]').forEach(i => {
+    const p = i.dataset.prop;
+    if (document.activeElement === i) return;
+    i.value = ed[p] != null ? ed[p] : (i.type === 'range' ? cs.getPropertyValue(p) : '');
+    i.placeholder = cs.getPropertyValue(p);
+  });
+}
+document.querySelectorAll('[data-prop]').forEach(i => {
+  i.addEventListener('change', () => selected && setProps(selected, { [i.dataset.prop]: i.value }));
+  if (i.type === 'range') i.addEventListener('input', () => selected && setProps(selected, { [i.dataset.prop]: i.value }, false));
+});
+[['pX', 'left'], ['pY', 'top']].forEach(([id, prop]) => $(id).addEventListener('change', () => {
+  if (!selected) return;
+  const g = geometry(selected), out = { [prop]: $(id).value + 'px' };
+  if (!g.abs && g.position === 'static') out.position = 'relative';
+  setProps(selected, out);
+}));
+$('pW').addEventListener('change', () => { if (selected) { const g = geometry(selected); setProps(selected, { width: ($('pW').value - g.extraW) + 'px' }); } });
+$('pH').addEventListener('change', () => { if (selected) { const g = geometry(selected); setProps(selected, { height: ($('pH').value - g.extraH) + 'px' }); } });
+$('clearEl').onclick = () => { if (selected) { snapshot(); edits.delete(keyOf(selected)); applyAll(); showProps(); } };
+$('asset').onchange = async () => {
+  const f = $('asset').files[0];
+  if (!f || !selected || !pkg) return;
+  const r = await fetch(`/api/upload-asset?package=${encodeURIComponent(pkg.folder)}&name=${encodeURIComponent(f.name)}`, { method: 'POST', body: f });
+  if (!r.ok) { msg('Upload failed'); return; }
+  const path = await r.text();
+  /* Chromium replaces an <img>'s picture with CSS `content`; other
+   * elements get it as their background. */
+  if (selected.tagName === 'IMG') setProps(selected, { content: `url("${path}")` });
+  else setProps(selected, { 'background-image': `url("${path}")`, 'background-size': 'contain', 'background-repeat': 'no-repeat', 'background-position': 'center' });
+  msg('Asset copied to ' + path);
+  $('asset').value = '';
+};
+
+/* ---------- sample data and events ---------- */
+function teamObj(abbr, score, to) {
+  abbr = (abbr || '').toUpperCase();
+  return { abbreviation: abbr, city: '', name: abbr, logo: `/mods/teams/${abbr}/logos/scorebug.png`, record: '',
+           score: +score, timeouts: +to, primaryColor: '#333333', secondaryColor: '#CCCCCC' };
+}
+function sampleState() {
+  const q = +$('sQ').value, down = +$('sDown').value, dist = +$('sDist').value, ord = ['', '1ST', '2ND', '3RD', '4TH'];
+  return {
+    apiVersion: 1, valid: true, gameStatus: q ? 'in_progress' : 'pregame', phase: 4, quarter: q,
+    gameClock: +$('sClock').value, periodLength: 900, playClock: +$('sPlay').value,
+    down, distance: down ? dist : null, goalToGo: false,
+    downDistanceText: down ? `${ord[down]} & ${dist}` : '', ballPosition: { yardLine: 35, side: null, text: 'BALL 35' },
+    redZone: null, possession: $('sPoss').value || null,
+    away: teamObj($('sAway').value, $('sAwayScore').value, $('sAwayTO').value),
+    home: teamObj($('sHome').value, $('sHomeScore').value, $('sHomeTO').value),
+    context: { scorebugVisible: $('sVisible').checked, playSelection: $('sPlaycall').checked, paused: false, nativeScorebug: false, flag: false }
+  };
+}
+function post(message) { if (frame.contentWindow) frame.contentWindow.postMessage({ nfl2k5: message }, '*'); }
+function sendState() { post({ type: 'state', state: sampleState() }); setTimeout(drawBoxes, 50); }
+document.querySelectorAll('aside.left input, aside.left select').forEach(i => { if (i.id && i.id[0] === 's') i.addEventListener('input', sendState); });
+EVENTS.forEach(name => {
+  const b = document.createElement('button');
+  b.textContent = name.replace(/_/g, ' ').toLowerCase();
+  b.onclick = () => post({ type: 'event', event: { name, team: $('sPoss').value || 'home', time: performance.now() / 1000, quarter: +$('sQ').value } });
+  $('events').appendChild(b);
+});
+
+/* ---------- background ---------- */
+$('bgFile').onchange = () => { const f = $('bgFile').files[0]; if (!f) return; $('backdrop').src = URL.createObjectURL(f); $('backdrop').style.display = 'block'; };
+$('bgClear').onclick = () => { $('backdrop').style.display = 'none'; };
+
+/* ---------- reference image ---------- */
+const ref = { src: '', x: 0, y: 0, scale: 1, opacity: 0.5, visible: true, locked: false, above: true };
+let refMode = false, refDrag = null;
+function refEls() { return [$('refUnder'), $('refOver')]; }
+function drawRef() {
+  const [under, over] = refEls(), active = ref.above ? over : under, other = ref.above ? under : over;
+  other.style.display = 'none';
+  if (!ref.src) { active.style.display = 'none'; return; }
+  if (active.getAttribute('src') !== ref.src) active.src = ref.src;
+  active.style.display = ref.visible ? 'block' : 'none';
+  active.style.opacity = ref.opacity;
+  active.style.transform = `translate(${ref.x}px, ${ref.y}px) scale(${ref.scale})`;
+  $('refOp').value = Math.round(ref.opacity * 100); $('refOpV').textContent = Math.round(ref.opacity * 100) + '%';
+  $('refSc').value = Math.round(ref.scale * 100); $('refScV').textContent = Math.round(ref.scale * 100) + '%';
+  $('refX').value = Math.round(ref.x); $('refY').value = Math.round(ref.y);
+  $('refLock').checked = ref.locked; $('refAbove').checked = ref.above;
+  $('refMove').classList.toggle('on', refMode);
+  overlay.classList.toggle('refmode', refMode);
+  saveRefSettings();
+}
+function saveRefSettings() { try { if (pkg) localStorage.setItem('ref:' + pkg.folder, JSON.stringify(Object.assign({}, ref, { src: '' }))); } catch (e) { } }
+function loadRefSettings() { try { const s = JSON.parse(localStorage.getItem('ref:' + pkg.folder) || 'null'); if (s) Object.assign(ref, s, { src: ref.src }); } catch (e) { } drawRef(); }
+$('refFile').onchange = () => {
+  const f = $('refFile').files[0]; if (!f) return;
+  ref.src = URL.createObjectURL(f); ref.visible = true;
+  /* A full-frame TV screenshot fills the 1920x1080 canvas by default. */
+  const probe = new Image();
+  probe.onload = () => { if (!ref.locked) { ref.scale = 1920 / probe.naturalWidth; ref.x = 0; ref.y = 0; } drawRef(); };
+  probe.src = ref.src;
+};
+$('refShow').onclick = () => { ref.visible = true; drawRef(); };
+$('refHide').onclick = () => { ref.visible = false; drawRef(); };
+$('refMove').onclick = () => { refMode = !refMode; if (refMode) select(null); drawRef(); };
+$('refOp').oninput = () => { ref.opacity = $('refOp').value / 100; drawRef(); };
+$('refSc').oninput = () => { if (!ref.locked) { ref.scale = $('refSc').value / 100; } drawRef(); };
+$('refX').onchange = () => { if (!ref.locked) ref.x = +$('refX').value; drawRef(); };
+$('refY').onchange = () => { if (!ref.locked) ref.y = +$('refY').value; drawRef(); };
+$('refLock').onchange = () => { ref.locked = $('refLock').checked; drawRef(); };
+$('refAbove').onchange = () => { ref.above = $('refAbove').checked; drawRef(); };
+function startRefDrag(e, p) {
+  if (ref.locked || !ref.src) return;
+  refDrag = { start: p, x: ref.x, y: ref.y };
+  overlay.setPointerCapture(e.pointerId);
+}
+function moveRefDrag(p) { if (!refDrag) return; ref.x = refDrag.x + (p.x - refDrag.start.x); ref.y = refDrag.y + (p.y - refDrag.start.y); drawRef(); }
+function endRefDrag() { refDrag = null; }
+overlay.addEventListener('wheel', e => {
+  if (!refMode || ref.locked || !ref.src) return;
+  e.preventDefault();
+  const p = toCanvas(e), k = e.deltaY < 0 ? 1.02 : 1 / 1.02;
+  /* Scale about the pointer, like an image editor. */
+  ref.x = p.x - (p.x - ref.x) * k; ref.y = p.y - (p.y - ref.y) * k; ref.scale *= k;
+  drawRef();
+}, { passive: false });
+
+/* ---------- import HTML ---------- */
+let impList = [];   /* { path, file } */
+$('importBtn').onclick = () => { impList = []; $('impFolder').value = ''; $('impFiles').value = ''; impRefresh(); $('importDlg').showModal(); };
+$('impCancel').onclick = () => $('importDlg').close();
+function impTake(files, fromFolder) {
+  impList = [...files].map(f => {
+    let p = fromFolder && f.webkitRelativePath ? f.webkitRelativePath.split('/').slice(1).join('/') : f.name;
+    return { path: p, file: f };
+  }).filter(x => x.path && !x.path.split('/').some(s => s.startsWith('.')));
+  if (fromFolder && files.length && files[0].webkitRelativePath) $('impName').value = files[0].webkitRelativePath.split('/')[0];
+  impRefresh();
+}
+$('impFolder').onchange = () => impTake($('impFolder').files, true);
+$('impFiles').onchange = () => impTake($('impFiles').files, false);
+function impRefresh() {
+  const pages = impList.filter(x => /\.html?$/i.test(x.path)).sort((a, b) => a.path.split('/').length - b.path.split('/').length || a.path.localeCompare(b.path));
+  const sel = $('impEntry'); sel.innerHTML = '';
+  pages.forEach(p => sel.add(new Option(p.path, p.path)));
+  const idx = pages.findIndex(p => /(^|\/)(index|scorebug)\.html?$/i.test(p.path));
+  if (idx >= 0) sel.selectedIndex = idx;
+  if (!$('impName').value && pages.length) $('impName').value = pages[0].path.replace(/\.html?$/i, '').split('/').pop();
+  $('impInfo').textContent = impList.length ? `${impList.length} file(s), ${pages.length} HTML page(s)` : '';
+  $('impGo').disabled = !pages.length;
+}
+/* Additions to the entry page: API runtime, layout.css, transparency. Each
+ * is skipped when the page already has it. */
+function prepareEntry(html, entryPath, transparent) {
+  const up = '../'.repeat(entryPath.split('/').length - 1);
+  const headAdd = [];
+  if (!/layout\.css/.test(html)) headAdd.push(`<link rel="stylesheet" href="${up}layout.css">`);
+  if (transparent && !/nfl2k5-transparent/.test(html)) headAdd.push('<style id="nfl2k5-transparent">html, body { background: transparent !important; }</style>');
+  if (headAdd.length) {
+    const block = '<!-- added by Presentation Studio -->\n' + headAdd.join('\n') + '\n';
+    html = /<\/head>/i.test(html) ? html.replace(/<\/head>/i, block + '</head>') : block + html;
+  }
+  if (!/nfl2k5-presentation\.js/.test(html)) {
+    const tag = `<script src="${up}../_runtime/nfl2k5-presentation.js"><\/script>\n`;   /* <\/ : not the end of this block */
+    const m = html.search(/<script\b/i);
+    html = m >= 0 ? html.slice(0, m) + tag + html.slice(m) : (/<\/body>/i.test(html) ? html.replace(/<\/body>/i, tag + '</body>') : html + '\n' + tag);
+  }
+  return html;
+}
+$('impGo').onclick = async () => {
+  const name = $('impName').value.trim().replace(/[\\/:*?"<>|]/g, '').replace(/^[._]+/, '');
+  const entry = $('impEntry').value;
+  if (!name || !entry) return;
+  const mod = { schema: 1, id: name.toLowerCase().replace(/[^a-z0-9]+/g, '_'), name, type: 'html', version: '0.1.0', author: '',
+                description: 'Imported HTML presentation.', enabled: true, entry,
+                canvas: { width: 1920, height: 1080, fit: 'broadcast_safe_16x9' }, dependencies: [], assets: {},
+                compatibility: { game: 'NFL2K5-PC', presentation_api: 1 } };
+  const folder = name;
+  const info = $('impInfo');
+  $('impGo').disabled = true;
+  info.textContent = 'Creating package…';
+  let r;
+  try {
+    r = await fetch(`/api/create-package?name=${encodeURIComponent(folder)}`, { method: 'POST', body: JSON.stringify(mod, null, 2) + '\n' });
+  } catch (e) {
+    info.textContent = 'Cannot reach the editor server. Start it with tools\\presentation-studio\\serve.ps1 and open the page it prints.';
+    $('impGo').disabled = false;
+    return;
+  }
+  if (!r.ok) {
+    const why = await r.text();
+    info.textContent = r.status === 409 ? `A package folder named "${folder}" already exists. Change the package name.` : 'Import failed: ' + why;
+    $('impGo').disabled = false;
+    return;
+  }
+  let done = 0, skipped = [];
+  for (const x of impList) {
+    info.textContent = `Copying ${++done}/${impList.length}: ${x.path}`;
+    let body = x.file;
+    if (x.path === entry) body = prepareEntry(await x.file.text(), entry, $('impTransparent').checked);
+    if (/^mod\.json$/i.test(x.path)) continue;       /* ours replaces any shipped one */
+    r = await fetch(`/api/write?package=${encodeURIComponent(folder)}&path=${encodeURIComponent(x.path)}`, { method: 'POST', body });
+    if (!r.ok) skipped.push(x.path);
+  }
+  if (!impList.some(x => x.path === 'layout.css'))
+    await fetch(`/api/write?package=${encodeURIComponent(folder)}&path=layout.css`, { method: 'POST', body: '/* Written by Presentation Studio. */\n' });
+  $('importDlg').close();
+  $('impGo').disabled = false;
+  await loadPackages(folder);
+  /* openPackage reports whether the page is connected to game data. */
+  if (skipped.length) setTimeout(() => msg(`Imported into mods/presentations/${folder}; skipped (file type not allowed): ${skipped.join(', ')}`), 2500);
+};
+
+/* ---------- code view ---------- */
+const TEXT = /\.(html?|css|js|json|txt|md|svg)$/i;
+let codeFile = null, codeOrig = '';
+$('viewBtn').onclick = () => {
+  const on = !document.body.classList.contains('codeview');
+  document.body.classList.toggle('codeview', on);
+  $('viewBtn').textContent = on ? 'Canvas view' : 'Code view';
+  if (on) loadFileList(); else { fit(); }
+};
+async function loadFileList() {
+  if (!pkg) return;
+  const files = await (await fetch(`/api/files?package=${encodeURIComponent(pkg.folder)}`)).json();
+  const box = $('files'); box.innerHTML = '';
+  [].concat(files).sort().forEach(f => {
+    const d = document.createElement('div');
+    d.textContent = f; d.className = TEXT.test(f) ? '' : 'bin';
+    if (TEXT.test(f)) d.onclick = () => openFile(f);
+    if (f === codeFile) d.classList.add('sel');
+    box.appendChild(d);
+  });
+  if (!codeFile) { const first = [].concat(files).find(f => f === (pkg.entry || 'index.html')) || [].concat(files).find(f => TEXT.test(f)); if (first) openFile(first); }
+}
+async function openFile(f) {
+  if (codeFile && $('codeText').value !== codeOrig && !confirm(`Discard unsaved changes to ${codeFile}?`)) return;
+  const r = await fetch(`/mods/presentations/${pkg.folder}/${f}`, { cache: 'no-store' });
+  codeOrig = r.ok ? await r.text() : '';
+  codeFile = f;
+  const t = $('codeText'); t.value = codeOrig; t.disabled = false; t.classList.remove('dirty');
+  $('codeName').textContent = `${pkg.folder}/${f}`;
+  [...$('files').children].forEach(d => d.classList.toggle('sel', d.textContent === f));
+}
+async function saveFile() {
+  if (!codeFile) return;
+  const text = $('codeText').value;
+  const r = await fetch(`/api/write?package=${encodeURIComponent(pkg.folder)}&path=${encodeURIComponent(codeFile)}`, { method: 'POST', body: text });
+  if (!r.ok) { msg('Save failed: ' + await r.text()); return; }
+  codeOrig = text; $('codeText').classList.remove('dirty');
+  if (codeFile === 'layout.css') { edits = new Map(); parseLayout(text); }
+  msg(`Saved ${codeFile}; page reloaded`);
+  openPackage(pkg, true);
+}
+$('codeSave').onclick = saveFile;
+$('codeRevert').onclick = () => { $('codeText').value = codeOrig; $('codeText').classList.remove('dirty'); };
+$('codeText').addEventListener('input', () => $('codeText').classList.toggle('dirty', $('codeText').value !== codeOrig));
+$('codeText').addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); saveFile(); return; }
+  if (e.key === 'Tab') {               /* indent instead of leaving the editor */
+    e.preventDefault();
+    const t = e.target, s = t.selectionStart;
+    t.setRangeText('  ', s, t.selectionEnd, 'end');
+    t.dispatchEvent(new Event('input'));
+  }
+});
+
+/* Animations move elements; keep the selection box on them. */
+(function track() { if (selected && !drag) drawBoxes(); requestAnimationFrame(track); })();
+fit();
+loadPackages();
+</script>
+</body>
+</html>

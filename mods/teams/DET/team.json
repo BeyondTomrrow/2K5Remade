@@ -1,0 +1,14 @@
+{
+  "abbreviation": "DET",
+  "city": "Detroit",
+  "name": "Lions",
+  "colors": {
+    "primary": "#0076B6",
+    "secondary": "#B0B7BC",
+    "text": "#FFFFFF"
+  },
+  "logos": {
+    "scorebug": "logos/scorebug.png"
+  },
+  "aliases": []
+}

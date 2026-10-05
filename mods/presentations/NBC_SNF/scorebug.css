@@ -1,0 +1,423 @@
+/* NBC Sunday Night Football scorebug: pure HTML/CSS/SVG.
+ *
+ * Layout follows the broadcast reference (reference/reference.png, the bug
+ * at 576x94 design pixels). Panels are full team colour from behind the
+ * logo through the score and darken into the clock pod. Team logos are the
+ * only bitmaps, so it stays sharp at any resolution.
+ *
+ * Typeface: drop the broadcast font in fonts/nbc-snf.otf or .ttf; the
+ * stand-in is Arial Black. scorebug.js fits text to the measured sizes. */
+@font-face { font-family: "NBC SNF"; src: url("fonts/nbc-snf.otf"), url("fonts/nbc-snf.ttf"); font-weight: 900; }
+
+:root {
+  --nbc-font: "NBC SNF", "Arial Black", sans-serif;
+  --tab-font: "Segoe UI", "Arial", sans-serif;
+  --bug-scale: 1.45;           /* 576 design px -> 835 px on the 1920 canvas */
+  --bug-x: 542px;
+  --bug-y: 904px;
+}
+
+html, body { margin: 0; background: transparent; overflow: hidden; }
+/* The game gives the page the picture's full width ("fit": "fill_width"):
+ * the 1920x1080 design is centred and --pad is the extra on each side
+ * (scorebug.js), which full-width graphics reach into. */
+#canvas { position: relative; width: 1920px; height: 1080px; margin-left: var(--pad, 0px); }
+
+#bug {
+  position: absolute; left: var(--bug-x); top: var(--bug-y);
+  width: 576px; height: 120px;
+  transform: scale(var(--bug-scale)); transform-origin: 0 0;
+  transition: opacity 0.4s ease;
+  --away: #1f4fae; --home: #da541b; --g: #4d7cff;
+  --ease: cubic-bezier(0.22, 0.9, 0.24, 1);
+}
+#bug.off-air { opacity: 0; }
+#bug * { box-sizing: border-box; }
+
+/* ---- live quarterback lower third -----------------------------------
+ * Modern SNF uses an unboxed, low-profile player/stat insert immediately
+ * above the scorebug.  It shares the scorebug's safe-area placement and
+ * leaves the field visible through the dark glass. */
+#qb-stat { position: absolute; left: calc(var(--bug-x) - 72px); top: 817px;
+  width: 520px; height: 82px; pointer-events: none; opacity: 0;
+  transform: translateY(15px); transition: opacity .28s ease, transform .34s cubic-bezier(.2,.85,.25,1);
+  color: #f6f8fb; font-family: "Bahnschrift", "Arial Narrow", Arial, sans-serif;
+  background: linear-gradient(105deg, rgba(7,18,34,.96), rgba(18,28,43,.88) 74%, rgba(25,35,52,.28));
+  clip-path: polygon(8% 0,100% 0,94% 100%,0 100%); filter: drop-shadow(0 4px 8px rgba(0,0,0,.42)); }
+#qb-stat.on { opacity: 1; transform: none; }
+#qb-stat .qs-sheen { position:absolute; inset:0; background:linear-gradient(120deg,rgba(82,179,226,.25),transparent 38%,rgba(255,255,255,.06) 65%,transparent); }
+#qb-stat .qs-portrait { position:absolute; left:10px; bottom:0; width:94px; height:94px; object-fit:contain;
+  filter:drop-shadow(4px 0 5px rgba(0,0,0,.45)); }
+#qb-stat.no-photo .qs-portrait { display:none; }
+#qb-stat .qs-position { position:absolute; left:104px; top:9px; padding:2px 5px; font:700 13px/1 Arial,sans-serif;
+  background:#e7ebef; color:#111923; }
+#qb-stat .qs-name { position:absolute; left:137px; top:5px; width:235px; overflow:hidden; text-overflow:ellipsis;
+  font:700 22px/27px "Bahnschrift Condensed","Arial Narrow",Arial,sans-serif; letter-spacing:.5px; text-transform:uppercase; }
+#qb-stat .qs-season { position:absolute; left:372px; top:10px; font:italic 500 11px/1 Arial,sans-serif; color:#c8d0da; }
+#qb-stat .qs-rule { position:absolute; left:101px; right:25px; top:34px; height:1px; background:linear-gradient(90deg,#9faab8,rgba(159,170,184,0)); }
+#qb-stat .qs-fields { position:absolute; left:101px; right:31px; top:40px; height:36px; display:flex; }
+#qb-stat .qs-fields span { flex:1; text-align:center; border-right:1px solid rgba(195,206,218,.25); }
+#qb-stat .qs-fields span:last-child { border:0; }
+#qb-stat .qs-fields b { display:block; font:500 9px/12px Arial,sans-serif; color:#aeb9c6; }
+#qb-stat .qs-fields strong { display:block; font:700 20px/22px "Bahnschrift",Arial,sans-serif; }
+#qb-stat .qs-brand { position:absolute; right:-28px; bottom:-4px; font:italic 800 13px/1 Arial,sans-serif; color:#e6edf4; }
+#qb-stat .qs-brand i { display:inline-block; width:12px; height:12px; margin-right:3px; border-radius:50%;
+  background:conic-gradient(#7137a7,#168ed2,#23a55a,#f6d128,#ef7221,#d52d55,#7137a7); vertical-align:-2px; }
+#qb-stat .qs-brand em { font-style:italic; }
+
+/* ---- player feature / native ESPN card replacement ------------------ */
+#player-feature { position:absolute; left:310px; top:190px; width:1300px; height:650px; overflow:hidden;
+  pointer-events:none; opacity:0; transform:scale(.975) translateY(18px);
+  transition:opacity .3s ease,transform .45s cubic-bezier(.18,.86,.24,1); color:#f8f9fb;
+  font-family:"Bahnschrift","Arial Narrow",Arial,sans-serif; filter:drop-shadow(0 18px 32px rgba(0,0,0,.58)); }
+#player-feature.on { opacity:1; transform:none; }
+.pf-backdrop { position:absolute; inset:0; clip-path:polygon(4% 0,100% 0,96% 100%,0 100%);
+  background:linear-gradient(118deg,#06152a 0,#122942 36%,#321523 70%,#780e29 100%);
+  border:2px solid rgba(197,213,230,.52); box-shadow:inset 0 0 70px rgba(0,0,0,.48); }
+.pf-stadium { position:absolute; inset:0; opacity:.22;
+  background:radial-gradient(ellipse at 50% 108%,rgba(96,178,225,.8),transparent 48%),
+    repeating-linear-gradient(165deg,transparent 0 58px,rgba(255,255,255,.08) 59px 61px); }
+.pf-wedge { position:absolute; left:0; top:0; width:430px; height:650px;
+  clip-path:polygon(0 0,100% 0,72% 100%,0 100%); background:linear-gradient(145deg,rgba(3,13,28,.97),rgba(17,44,73,.84));
+  border-right:2px solid rgba(117,202,242,.38); }
+.pf-logo { position:absolute; left:74px; top:54px; width:170px; height:110px; object-fit:contain; opacity:.45;
+  filter:grayscale(.2) drop-shadow(0 5px 10px #000); }
+.pf-portrait { position:absolute; left:28px; bottom:0; width:405px; height:465px; object-fit:contain; image-rendering:auto;
+  filter:drop-shadow(12px 2px 16px rgba(0,0,0,.7)); }
+#player-feature.no-photo .pf-portrait { display:none; }
+.pf-kicker { position:absolute; left:470px; top:58px; font:italic 600 17px/1 Arial,sans-serif; letter-spacing:2px; color:#8fd3f1; }
+.pf-title { position:absolute; left:466px; top:86px; font:italic 800 47px/1 "Bahnschrift Condensed","Arial Narrow",Arial,sans-serif;
+  letter-spacing:.5px; text-transform:uppercase; }
+.pf-name { position:absolute; left:470px; top:158px; font:700 31px/1 "Bahnschrift Condensed","Arial Narrow",Arial,sans-serif;
+  text-transform:uppercase; }
+.pf-position { position:absolute; left:470px; top:196px; font:600 16px/1 Arial,sans-serif; color:#c4d0dc; letter-spacing:1px; }
+.pf-table { position:absolute; left:470px; top:250px; width:700px; }
+.pf-table div { height:61px; border-top:1px solid rgba(214,224,235,.32); display:flex; align-items:center; }
+.pf-table div:last-child { border-bottom:1px solid rgba(214,224,235,.32); }
+.pf-table span { width:455px; font:500 20px/1 Arial,sans-serif; color:#d2d8df; letter-spacing:.4px; }
+.pf-table b { flex:1; text-align:right; padding-right:28px; font:700 29px/1 "Bahnschrift",Arial,sans-serif; }
+.pf-brand { position:absolute; right:60px; top:52px; font:italic 800 21px/1 Arial,sans-serif; }
+.pf-brand i { display:inline-block; width:20px; height:20px; margin-right:5px; border-radius:50%; vertical-align:-4px;
+  background:conic-gradient(#7137a7,#168ed2,#23a55a,#f6d128,#ef7221,#d52d55,#7137a7); }
+#bug .half, #bug .half > *, #bug > * { position: absolute; }
+#bug .half { left: 0; top: 0; width: 576px; height: 94px;
+  transition: transform 0.55s var(--ease), opacity 0.4s ease; }
+.half.away { --c: var(--away); }
+.half.home { --c: var(--home); }
+
+/* ---- panels: full team colour, darkening into the pod ---- */
+.panel { top: 23px; height: 52px; }
+.away .panel { left: 2px; width: 248px; border-top-left-radius: 5px;
+  background:
+    linear-gradient(to bottom, rgba(255,255,255,0.18) 0, rgba(255,255,255,0.04) 8%, rgba(255,255,255,0) 35%, rgba(0,0,0,0.08) 72%, rgba(0,0,0,0.26) 100%),
+    linear-gradient(90deg, var(--c) 0%, var(--c) 50%, color-mix(in srgb, var(--c) 72%, #0a0d15) 66%,
+                    color-mix(in srgb, var(--c) 30%, #10131a) 84%, #12151c 100%); }
+.home .panel { left: 326px; width: 248px; border-top-right-radius: 5px;
+  background:
+    linear-gradient(to bottom, rgba(255,255,255,0.18) 0, rgba(255,255,255,0.04) 8%, rgba(255,255,255,0) 35%, rgba(0,0,0,0.08) 72%, rgba(0,0,0,0.26) 100%),
+    linear-gradient(90deg, #12151c 0%, color-mix(in srgb, var(--c) 30%, #10131a) 16%, color-mix(in srgb, var(--c) 72%, #0a0d15) 34%,
+                    var(--c) 50%, var(--c) 100%); }
+.panel::before { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 1px 0 rgba(255,255,255,0.3); }
+
+.divider { top: 24px; width: 1.5px; height: 50px;
+  background: linear-gradient(to bottom, rgba(255,255,255,0.10), rgba(255,255,255,0.55) 45%, rgba(255,255,255,0.20)); }
+.away .divider { left: 151px; }
+.home .divider { left: 419.5px; }
+
+/* ---- logos: cut off by the window, like the broadcast ---- */
+.logo-window { top: 23px; height: 52px; overflow: hidden; background: var(--c); }
+.away .logo-window { left: 2px; width: 63px; border-top-left-radius: 5px; }
+.home .logo-window { left: 511px; width: 63px; border-top-right-radius: 5px; }
+.logo-window .logo { position: absolute; height: 70px; top: -9px; filter: drop-shadow(1px 2px 2px rgba(0,0,0,0.5)); }
+.away .logo-window .logo { right: -6px; }
+.home .logo-window .logo { left: -6px; }
+img.logo[src=""], img.logo:not([src]) { visibility: hidden; }
+
+/* ---- text ---- */
+.abbr, .record, .score, .clock, .quarter span { font-family: var(--nbc-font); font-weight: 900; white-space: nowrap; line-height: 1; }
+.abbr, .record { color: #f4f6f9; text-shadow: 0.7px 1px 1px rgba(0,0,0,0.6); }
+.record { color: #e7eaee; }
+.score, .clock { background: linear-gradient(to bottom, #ffffff 0%, #fdfdff 52%, #d8dce2 82%, #c3c8cf 100%);
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0.7px 1px 0.7px rgba(0,0,0,0.6)); }
+.score.pop { animation: pop 1s var(--ease); }
+@keyframes pop {
+  0% { filter: drop-shadow(0.7px 1px 0.7px rgba(0,0,0,0.6)); }
+  25% { filter: drop-shadow(0 0 5px color-mix(in srgb, var(--c) 60%, white)) drop-shadow(0 0 2px #fff); }
+  100% { filter: drop-shadow(0.7px 1px 0.7px rgba(0,0,0,0.6)); } }
+
+/* ---- rail and timeouts ---- */
+.rail { left: 2px; top: 75px; width: 572px; height: 5px; transition: opacity 0.3s ease;
+  background: linear-gradient(90deg, #23262c, #343c47 22%, #2d353f 45%, #2b323b 55%, #353d47 78%, #23262c);
+  box-shadow: 0 1px 0 rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.06); }
+.timeouts i { position: absolute; top: 75.6px; width: 26px; height: 3.2px; border-radius: 0.5px; background: #fbfdff; transition: background 0.4s ease; }
+.timeouts i.used { background: #6f757d; }
+.away .timeouts i:nth-child(1) { left: 50px; }  .away .timeouts i:nth-child(2) { left: 83px; }  .away .timeouts i:nth-child(3) { left: 116px; }
+.home .timeouts i:nth-child(1) { left: 431px; } .home .timeouts i:nth-child(2) { left: 464px; } .home .timeouts i:nth-child(3) { left: 497px; }
+
+/* ---- pod ---- */
+.pod { left: 240px; top: 2.5px; width: 94px; height: 88px; border-radius: 50%; z-index: 3;
+  background:
+    radial-gradient(70% 40% at 50% 12%, rgba(255,255,255,0.20), transparent 70%),
+    radial-gradient(circle at 50% 42%, #384350 0%, #222a33 42%, #11161c 70%, #07090c 100%);
+  box-shadow: 0 0 0 1.6px #5f6b78, 0 0 0 2.4px #1b2028, 0 3px 6px rgba(0,0,0,0.65),
+              inset 0 0 0 3px #161b22, inset 0 0 0 4px rgba(200,215,230,0.32), inset 0 -6px 10px rgba(0,0,0,0.5);
+  transition: transform 0.6s var(--ease), opacity 0.4s ease, background 0.35s ease, box-shadow 0.35s ease; }
+.pod::before, .pod::after { content: ""; position: absolute; left: 43px; width: 8px; height: 5px; background: #06080b; border-radius: 1px; }
+.pod::before { top: -1px; }
+.pod::after { bottom: -1px; }
+.pod > * { position: absolute; }
+.pod .peacock { left: 27px; top: 6px; width: 40px; height: 21px; transition: opacity 0.25s ease, transform 0.35s var(--ease); }
+.pod .pod-line { left: 10px; right: 10px; height: 1px; background: linear-gradient(90deg, transparent, rgba(200,215,230,0.45) 15%, rgba(200,215,230,0.45) 85%, transparent); }
+.pod .pod-line.top { top: 31.5px; }
+.pod .pod-line.bottom { top: 57.5px; }
+.pod .quarter { left: 0; top: 0; }
+.pod .quarter span { position: absolute; color: #f6f9fc; }
+.pod .quarter .ord::after { content: ""; position: absolute; left: 0; right: 0; height: 1.6px; background: #e1e4e7; top: var(--ul-top, 10px); }
+.pod .flag-word { left: 0; right: 0; top: 9px; text-align: center; font: 900 12px/1 var(--nbc-font); letter-spacing: 3px;
+  color: #2a1e00; opacity: 0; transform: scale(1.6); transition: opacity 0.25s ease, transform 0.35s var(--ease), letter-spacing 0.35s var(--ease); }
+.pod .pulse { inset: -2px; border-radius: 50%; border: 1.5px solid rgba(255,214,60,0); pointer-events: none; }
+/* team-colour neon ring (scoring sequence) */
+.pod.glow { box-shadow: 0 0 0 1.6px color-mix(in srgb, var(--g) 60%, white), 0 0 0 2.4px #0b0e14, 0 0 10px var(--g), 0 0 22px var(--g),
+            inset 0 0 0 3px #161b22, inset 0 0 0 4px color-mix(in srgb, var(--g) 50%, white), inset 0 -6px 10px rgba(0,0,0,0.5); }
+
+/* FLAG: the pod turns gold, the word replaces the peacock, rings pulse */
+.pod.flag { background:
+    radial-gradient(70% 40% at 50% 12%, rgba(255,255,255,0.55), transparent 70%),
+    radial-gradient(circle at 50% 42%, #ffe36b 0%, #f2c414 40%, #b98800 72%, #5e4300 100%);
+  box-shadow: 0 0 0 1.6px #ffe27a, 0 0 0 2.4px #5a4100, 0 0 14px rgba(255,210,40,0.75),
+              inset 0 0 0 3px #7c5a00, inset 0 0 0 4px rgba(255,240,180,0.6), inset 0 -6px 10px rgba(0,0,0,0.35); }
+.pod.flag .peacock { opacity: 0; transform: translateY(-6px); }
+.pod.flag .flag-word { opacity: 1; transform: scale(1); letter-spacing: 1.5px; }
+.pod.flag .clock, .pod.flag .quarter span { filter: drop-shadow(0 0 1.5px rgba(70,45,0,0.9)); }
+.pod.flag .pod-line { background: rgba(90,60,0,0.45); }
+.pod.flag .pulse { animation: pulse 1.6s ease-out infinite; }
+.pod.flag .pulse.p2 { animation-delay: 0.8s; }
+@keyframes pulse { 0% { transform: scale(1); border-color: rgba(255,214,60,0.9); box-shadow: 0 0 8px rgba(255,214,60,0.8); }
+                   100% { transform: scale(1.9); border-color: rgba(255,214,60,0); box-shadow: 0 0 2px rgba(255,214,60,0); } }
+
+/* ---- down & distance tab ---- */
+.tab { top: 78px; width: 274px; height: 18px; opacity: 0; transition: opacity 0.3s ease; --t: var(--home);
+  background: linear-gradient(to bottom, #2a313b, #12161c); box-shadow: 0 1px 2px rgba(0,0,0,0.6); }
+.tab.home { left: 300px; --t: var(--home); }
+.tab.away { left: 2px; --t: var(--away); }
+.tab.on { opacity: 1; }
+.tab .tab-fill { position: absolute; inset: 0; clip-path: inset(0 100% 0 0);
+  background: linear-gradient(to bottom, rgba(255,255,255,0.12), rgba(0,0,0,0.25)),
+              linear-gradient(90deg, color-mix(in srgb, var(--t) 45%, #12151b), color-mix(in srgb, var(--t) 85%, #12151b) 50%, color-mix(in srgb, var(--t) 60%, #12151b));
+  transition: clip-path 0.55s var(--ease); }
+.tab.away .tab-fill { clip-path: inset(0 0 0 100%); }
+.tab.on .tab-fill { clip-path: inset(0 0 0 0); }
+.tab .tab-fill::after { content: ""; position: absolute; inset: 0; box-shadow: inset 0 1px 0 rgba(255,255,255,0.18); }
+.tab .tab-text { position: absolute; left: 0; right: 0; top: 0; height: 18px; text-align: center;
+  font: 700 15px/18px var(--tab-font); color: #fff; letter-spacing: 0.2px; text-shadow: 0 1px 1px rgba(0,0,0,0.6);
+  transition: opacity 0.22s ease, transform 0.3s var(--ease); }
+.tab .tab-text.out { opacity: 0; transform: translateY(4px); }
+.chev { position: absolute; top: 5px; width: 22px; height: 8px; }
+.chev.left { left: 50px; } .chev.right { right: 30px; }
+.chev b { position: absolute; top: 0; left: 0; width: 7px; height: 8px; background: color-mix(in srgb, var(--t) 45%, white);
+  clip-path: polygon(0 0, 100% 50%, 0 100%); animation: march 1.6s linear infinite; opacity: 0; }
+.chev b:nth-child(2) { animation-delay: 0.8s; }
+@keyframes march { 0% { transform: translateX(0); opacity: 0; } 25% { opacity: 0.9; } 75% { opacity: 0.9; } 100% { transform: translateX(15px); opacity: 0; } }
+
+.playclock { top: 80px; left: 273px; width: 28px; height: 15px; border-radius: 2px; opacity: 0; z-index: 4;
+  font: 800 12px/15px var(--tab-font); text-align: center; color: #fff;
+  background: linear-gradient(to bottom, #6f8299, #33435a); box-shadow: 0 0 0 1px rgba(190,205,222,0.85), 0 1px 2px rgba(0,0,0,0.6);
+  transition: opacity 0.3s ease; }
+.playclock.on { opacity: 1; }
+.playclock.low { background: linear-gradient(to bottom, #d6343b, #7d1218); }
+
+/* ---- scoring drive (after a touchdown or field goal) ---- */
+.drive-stack { left: -192px; top: 19px; width: 150px; height: 60px; opacity: 0; z-index: 2;
+  clip-path: inset(0 0 0 100%); transition: clip-path 0.5s var(--ease), opacity 0.2s ease; }
+.drive-stack .row { position: absolute; left: 0; width: 150px; height: 30px; overflow: hidden; }
+.drive-stack .row.away { top: 0; --c: var(--away); border-top-left-radius: 4px; }
+.drive-stack .row.home { top: 30px; --c: var(--home); }
+.drive-stack .row { background: linear-gradient(90deg, var(--c) 0%, var(--c) 55%, color-mix(in srgb, var(--c) 45%, #10131a) 100%); }
+.drive-stack .row::after { content: ""; position: absolute; inset: 0; box-shadow: inset 0 1px 0 rgba(255,255,255,0.25); }
+.drive-stack .row.home::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 1px; background: rgba(0,0,0,0.45); z-index: 1; }
+.drive-stack .row .logo { position: absolute; left: -6px; top: -8px; height: 44px; filter: drop-shadow(1px 1px 1px rgba(0,0,0,0.5)); }
+.drive-stack .pts { position: absolute; right: 46px; top: 2px; font: 900 22px/26px var(--nbc-font); color: #fff;
+  text-shadow: 0.7px 1px 1px rgba(0,0,0,0.6); transition: transform 0.4s var(--ease); }
+.drive-stack .pts.tick { animation: tick 0.7s var(--ease); }
+@keyframes tick { 0% { transform: translateY(10px); opacity: 0; } 100% { transform: translateY(0); opacity: 1; } }
+
+.drive-bar { left: 30px; top: 19px; width: 750px; height: 60px; opacity: 0; z-index: 2; overflow: hidden; --c: var(--g);
+  border-top-right-radius: 4px; clip-path: inset(0 100% 0 0); transition: clip-path 0.65s var(--ease), opacity 0.2s ease;
+  background:
+    linear-gradient(to bottom, rgba(255,255,255,0.20) 0, rgba(255,255,255,0.04) 10%, rgba(255,255,255,0) 40%, rgba(0,0,0,0.25) 100%),
+    linear-gradient(90deg, color-mix(in srgb, var(--c) 55%, #0a0d15) 0%, var(--c) 18%, var(--c) 82%, color-mix(in srgb, var(--c) 85%, white) 100%); }
+.drive-bar::after { content: ""; position: absolute; inset: 0; box-shadow: inset 0 1px 0 rgba(255,255,255,0.3); pointer-events: none; }
+.drive-bar > * { position: absolute; transition: opacity 0.35s ease, filter 0.35s ease, transform 0.45s var(--ease); }
+.drive-bar .drive-logo { left: 20px; top: 0; width: 84px; height: 60px; overflow: hidden; }
+.drive-bar .drive-logo .logo { position: absolute; height: 78px; top: -9px; right: -10px; filter: drop-shadow(1px 2px 2px rgba(0,0,0,0.5)); }
+.drive-bar .drive-title { left: 118px; top: 0; height: 60px; font: italic 900 25px/60px var(--nbc-font); color: #fff; letter-spacing: 0.5px;
+  text-shadow: 0.7px 1px 1px rgba(0,0,0,0.6); }
+.drive-bar .stat { top: 0; width: 86px; height: 60px; text-align: center; border-left: 1.5px solid rgba(255,255,255,0.35); }
+.drive-bar .stat.plays { left: 430px; } .drive-bar .stat.yds { left: 516px; } .drive-bar .stat.top { left: 602px; }
+.drive-bar .lbl { position: absolute; left: 0; right: 0; top: 10px; font: 600 11px/1 var(--tab-font); color: #dfe7f1; letter-spacing: 0.4px; }
+.drive-bar .val { position: absolute; left: 0; right: 0; top: 26px; font: 900 21px/1 var(--nbc-font); color: #fff; text-shadow: 0.7px 1px 1px rgba(0,0,0,0.6); }
+.drive-bar .stat .lbl, .drive-bar .stat .val, .drive-bar .drive-title { opacity: 0; transform: translateX(-8px); transition: opacity 0.35s ease, transform 0.45s var(--ease), filter 0.35s ease; }
+.drive-bar .corner { right: 0; top: 0; width: 60px; height: 60px; pointer-events: none;
+  background: linear-gradient(135deg, transparent 0 47%, rgba(255,255,255,0.85) 48.5%, rgba(255,255,255,0.18) 50%, rgba(255,255,255,0.06) 100%); }
+
+/* ---- touchdown / field goal word ---- */
+.takeover { left: -40px; top: -34px; width: 656px; height: 140px; pointer-events: none; opacity: 0; z-index: 5; transition: opacity 0.35s ease; }
+.takeover .neon-logo { position: absolute; left: 50%; top: 50%; width: 220px; height: 150px; transform: translate(-50%, -50%) scale(0.8); opacity: 0;
+  /* the team logo's silhouette, lit in team colour (vapor light) */
+  background: radial-gradient(circle at 50% 40%, color-mix(in srgb, var(--g) 35%, white), var(--g) 70%);
+  -webkit-mask: var(--logo) center / contain no-repeat; mask: var(--logo) center / contain no-repeat;
+  filter: drop-shadow(0 0 4px var(--g)) drop-shadow(0 0 14px var(--g));
+  transition: opacity 0.6s ease, transform 2.6s var(--ease); }
+.takeover .big-word { position: absolute; left: 0; right: 0; top: 46px; text-align: center; white-space: nowrap;
+  font: 900 54px/1 var(--nbc-font); letter-spacing: 14px; opacity: 0; transform: scale(1.3);
+  transition: opacity 0.35s ease, transform 0.6s var(--ease), letter-spacing 0.6s var(--ease), color 0.5s ease, filter 0.5s ease; }
+/* 1: neon letters in team colour */
+.takeover.neon .big-word { opacity: 1; transform: scale(1); letter-spacing: 1px; color: var(--g);
+  -webkit-text-stroke: 1px color-mix(in srgb, var(--g) 40%, white);
+  filter: drop-shadow(0 0 3px var(--g)) drop-shadow(0 0 12px var(--g)); }
+/* 2: chrome letters with a neon edge */
+.takeover.chrome .big-word { color: transparent; -webkit-text-stroke: 0;
+  background: linear-gradient(to bottom, #ffffff 0%, #e7ebf2 40%, #9aa3ae 55%, #f4f6f9 70%, #c4cbd4 100%);
+  -webkit-background-clip: text; background-clip: text;
+  filter: drop-shadow(0 0 2px var(--g)) drop-shadow(0 0 10px var(--g)) drop-shadow(0 2px 2px rgba(0,0,0,0.8)); }
+.takeover.on { opacity: 1; }
+.takeover.on .neon-logo { opacity: 0.55; transform: translate(-50%, -50%) scale(1); }
+.takeover.leaving .big-word { opacity: 0; transform: scale(1.15); filter: blur(4px); }
+.takeover.leaving .neon-logo { opacity: 0; }
+
+/* ---- sequence states, set by scorebug.js ---- */
+#bug.split .half.away { transform: translateX(-90px); opacity: 0; }
+#bug.split .half.home { transform: translateX(90px); opacity: 0; }
+#bug.split .rail, #bug.split .tab, #bug.split .playclock { opacity: 0; }
+#bug.wordphase .pod { opacity: 0; transform: scale(0.6); }
+#bug.compact .pod { opacity: 1; transform: translateX(-287px) translateY(2px) scale(0.86); }
+#bug.compact .drive-stack, #bug.compact .drive-bar { opacity: 1; clip-path: inset(0 0 0 0); }
+#bug.stats .drive-bar .drive-title { opacity: 1; transform: none; }
+#bug.stats .drive-bar .stat .lbl, #bug.stats .drive-bar .stat .val { opacity: 1; transform: none; }
+#bug.stats .drive-bar .stat.yds .lbl, #bug.stats .drive-bar .stat.yds .val { transition-delay: 0.15s; }
+#bug.stats .drive-bar .stat.top .lbl, #bug.stats .drive-bar .stat.top .val { transition-delay: 0.3s; }
+#bug.closing .drive-bar > * { opacity: 0 !important; filter: blur(5px); }
+#bug.closing .drive-bar { clip-path: inset(0 100% 0 0); transition-delay: 0.25s; }
+#bug.closing .drive-stack { clip-path: inset(0 0 0 100%); transition-delay: 0.25s; }
+
+/* ---- starting lineup (LINEUP event) ----------------------------------
+ * Canvas pixels, measured from 1920x1080 frames of the 2025 SNF player
+ * introductions: bar 888-1016 (upper tone to ~953), 2 px edge, ribbon
+ * 1018-1080; silver logo panel behind a curved swoosh from x 1584 at the
+ * top to 1432 at the bottom; tab 810-1115 x 880-922; name caps 931-972,
+ * centred on x 962; sub-line caps 981-1010. Each team gets its own colours:
+ * the bar in its main colour (--lu-base), shading darker into the ribbon,
+ * the swoosh and edge in its second colour (--lu-accent). Dallas keeps the
+ * reference's exact values (bar 0A2C3E over 042232, edge 002646, ribbon
+ * 001421 with 394D58 text), set from scorebug.js. */
+#lineup { position: absolute; left: var(--pad, 0px); top: 0; width: 1920px; height: 1080px; pointer-events: none;
+  opacity: 0; transition: opacity 0.45s ease;
+  --lu-base: #0a2c3e; --lu-accent: #2f86ff;
+  --lu-top: color-mix(in srgb, var(--lu-base) 84%, #000);
+  --lu-bot: color-mix(in srgb, var(--lu-base) 62%, #000);
+  --lu-ribbon: color-mix(in srgb, var(--lu-base) 30%, #000);
+  --lu-ink: color-mix(in srgb, var(--lu-base) 40%, #8f9ca6);
+  --lu-edge: color-mix(in srgb, var(--lu-accent) 50%, var(--lu-base));
+  --lu-swoosh: var(--lu-accent);
+  --lu-font: "Bahnschrift", "Arial Narrow", "Arial", sans-serif; }
+#lineup.on { opacity: 1; }
+#lineup > *, #lineup .lu-bar > * { position: absolute; }
+#lineup .lu-bar { left: 0; top: 888px; width: 1920px; height: 128px; overflow: hidden;
+  background: linear-gradient(to bottom, var(--lu-top) 0, var(--lu-top) 50%, var(--lu-bot) 51%, var(--lu-bot) 100%);
+  transform: translateX(-100%); transition: transform 0.6s cubic-bezier(0.22, 0.9, 0.24, 1); }
+#lineup.on .lu-bar { transform: none; }
+#lineup .lu-ghost { left: 96px; top: -18px; width: 320px; height: 160px; opacity: 0.16; filter: grayscale(1) brightness(2.2); }
+#lineup .lu-ghost img, #lineup .lu-logo img { width: 100%; height: 100%; object-fit: contain; }
+#lineup .lu-panel { left: 1420px; top: 0; width: 500px; height: 128px; }
+#lineup .lu-swoosh { stroke: var(--lu-swoosh); }
+#lineup .lu-line { left: 0; top: 1016px; width: 1920px; height: 2px; background: var(--lu-edge); }
+#lineup .lu-ribbon { left: 0; top: 1018px; width: 1920px; height: 62px; overflow: hidden; background: var(--lu-ribbon); }
+#lineup .lu-track { left: 0; top: 0; height: 62px; width: max-content; white-space: nowrap; display: flex; align-items: center;
+  animation: lu-scroll 30s linear infinite; }
+#lineup .lu-track span { flex: none; font: italic 700 20px/1 var(--lu-font); letter-spacing: 1px; color: var(--lu-ink); padding: 0 58px; }
+#lineup .lu-track i { flex: none; width: 22px; height: 22px; display: block; background: var(--lu-ink);
+  clip-path: polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); opacity: 0.9; }
+@keyframes lu-scroll { to { transform: translateX(-50%); } }
+#lineup .lu-logo { left: 1530px; top: 790px; width: 316px; height: 276px;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.45)); transform: scale(0.6); opacity: 0;
+  transition: transform 0.5s 0.25s cubic-bezier(0.3, 1.5, 0.5, 1), opacity 0.3s 0.25s; }
+#lineup.on .lu-logo { transform: none; opacity: 1; }
+#lineup .lu-portrait { left: 70px; top: 660px; width: 420px; height: 420px; object-fit: contain;
+  filter: drop-shadow(8px 0 18px rgba(0, 0, 0, 0.35)); transition: opacity 0.25s, transform 0.35s; }
+#lineup .lu-card { left: 562px; top: 0; width: 800px; height: 1080px; transition: opacity 0.25s; }
+#lineup .lu-card > * { position: absolute; left: 0; width: 800px; text-align: center; }
+#lineup .lu-tab { left: 248px; width: 305px; top: 880px; height: 42px;
+  clip-path: polygon(0 0, 100% 0, 94% 100%, 6% 100%);
+  background: linear-gradient(to bottom, #f6f8f9, #c9d0d4); color: #0d2434;
+  font: 400 31px/42px var(--lu-font); }
+#lineup .lu-tab .pos { font-weight: 700; margin-right: 10px; }
+#lineup .lu-name { top: 918px; font: italic 700 64px/1 var(--lu-font); font-stretch: condensed; letter-spacing: 0.5px;
+  text-transform: uppercase; background: linear-gradient(to bottom, #ffffff 30%, #bfe2fb); -webkit-background-clip: text;
+  background-clip: text; color: transparent; transform: skewX(-6deg); }
+#lineup .lu-sub { top: 974px; font: italic 700 40px/1 var(--lu-font); font-stretch: semi-condensed; color: #e9f3fa;
+  text-transform: uppercase; transform: skewX(-6deg); }
+#lineup.swap .lu-card, #lineup.swap .lu-portrait { opacity: 0; }
+#lineup.swap .lu-portrait { transform: translateX(-40px); }
+/* Layering as in the reference: the logo's lower points pass behind the
+ * edge and ribbon; the player stands in front of everything. */
+#lineup .lu-bar { z-index: 1; }
+#lineup .lu-logo { z-index: 2; }
+#lineup .lu-line, #lineup .lu-ribbon { z-index: 3; }
+#lineup .lu-card { z-index: 4; }
+#lineup .lu-portrait { z-index: 5; left: 90px; top: 690px; width: 390px; height: 390px; }
+/* The 2024 SNF lineup (user reference, Lions): the bar stays inside the
+ * picture and fades out at both ends rather than running edge to edge. */
+#lineup .lu-bar, #lineup .lu-line, #lineup .lu-ribbon {
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 9%, #000 91%, transparent 100%);
+  mask-image: linear-gradient(90deg, transparent 0, #000 9%, #000 91%, transparent 100%); }
+
+/* Reference correction, 2026-10-04.  These measurements follow the supplied
+ * Hurts lower third and Mahomes playoff panel.  Keep their open/transparent
+ * broadcast geometry; do not turn either into a boxed team-colour card. */
+#qb-stat { left:350px; top:790px; width:590px; height:82px; overflow:visible; clip-path:none; filter:none;
+  background:none !important; transform:translateX(-18px) scale(1.5); transform-origin:left bottom; }
+#qb-stat.on { transform:scale(1.5); }
+#qb-stat::before { content:""; position:absolute; left:93px; top:18px; width:475px; height:57px;
+  background:linear-gradient(90deg,rgba(6,15,28,.94),rgba(8,18,31,.84) 72%,rgba(8,18,31,.18));
+  clip-path:polygon(0 0,100% 0,95% 100%,0 100%); }
+#qb-stat .qs-sheen { left:0; top:7px; width:165px; height:72px; background:none; }
+#qb-stat .qs-sheen::before { content:""; position:absolute; left:20px; bottom:2px; width:164px; height:15px;
+  border-bottom:4px solid #34bce8; border-radius:50%; transform:rotate(-8deg); filter:drop-shadow(0 0 5px #2eb7e6); }
+#qb-stat .qs-portrait { left:15px; bottom:0; width:115px; height:115px; z-index:2; }
+#qb-stat .qs-position { left:105px; top:24px; padding:1px 4px; font-size:11px; background:#e9edf1; }
+#qb-stat .qs-name { left:132px; top:20px; width:215px; font-size:19px; line-height:23px; }
+#qb-stat .qs-season { left:388px; top:25px; font-size:9px; }
+#qb-stat .qs-rule { left:103px; right:32px; top:43px; background:linear-gradient(90deg,#8f9ba8,transparent); }
+#qb-stat .qs-fields { left:102px; right:35px; top:45px; height:29px; }
+#qb-stat .qs-fields b { font-size:8px; line-height:10px; }
+#qb-stat .qs-fields strong { font-size:17px; line-height:19px; }
+#qb-stat .qs-brand { display:none; }
+
+#player-feature { left:0; top:0; width:1920px; height:1080px; filter:none; transform:translateY(20px); overflow:hidden; }
+#player-feature.on { transform:none; }
+.pf-backdrop { left:475px; top:150px; right:auto; bottom:auto; width:1260px; height:790px; border:0; z-index:1;
+  clip-path:polygon(3% 0,91% 0,100% 50%,91% 100%,3% 100%,0 50%);
+  background:linear-gradient(105deg,rgba(41,12,28,.97),rgba(70,16,35,.97) 56%,rgba(126,20,43,.95));
+  box-shadow:inset 0 0 80px rgba(0,0,0,.36); }
+.pf-backdrop::after { content:""; position:absolute; right:0; top:0; width:175px; height:100%;
+  background:linear-gradient(105deg,transparent 0 22%,rgba(222,226,231,.93) 23% 66%,rgba(162,10,39,.95) 67%);
+  clip-path:polygon(43% 0,100% 0,100% 100%,0 100%,54% 50%); }
+.pf-stadium { left:0; top:0; width:1920px; height:1080px; opacity:1; z-index:0;
+  background:linear-gradient(to bottom,rgba(7,54,111,.96) 0 14%,rgba(5,23,45,.10) 14% 87%,rgba(7,54,111,.96) 87% 100%); }
+.pf-wedge { left:35px; top:150px; width:670px; height:790px; border:0; z-index:1; clip-path:polygon(0 0,88% 0,100% 100%,0 100%);
+  background:linear-gradient(120deg,rgba(117,8,27,.98),rgba(196,27,48,.96)); }
+.pf-logo { left:25px; top:270px; width:430px; height:360px; opacity:.62; z-index:1; }
+.pf-portrait { left:45px; bottom:115px; width:650px; height:900px; z-index:2; object-fit:contain; object-position:center bottom; }
+.pf-title { left:650px; top:205px; font-size:52px; line-height:55px; z-index:3; }
+.pf-kicker { left:653px; top:262px; font-size:24px; color:#fff; letter-spacing:.5px; z-index:3; }
+.pf-name { left:95px; top:875px; width:430px; font-size:27px; z-index:4; }
+.pf-position { left:95px; top:910px; width:430px; font-size:16px; z-index:4; }
+.pf-table { left:665px; top:350px; width:740px; z-index:3; }
+.pf-table div { height:88px; border:0; display:grid; grid-template-columns:1fr 150px 150px; align-items:center; }
+.pf-table div:last-child { border:0; }
+.pf-table span { width:auto; font-size:27px; color:#c8cbd1; }
+.pf-table b,.pf-table em { padding:0; text-align:center; font:700 36px/1 "Bahnschrift",Arial,sans-serif; font-style:normal; }
+.pf-table .pf-head { height:45px; }
+.pf-table .pf-head b,.pf-table .pf-head em { font:500 19px/1 Arial,sans-serif; color:#b8bbc1; }
+.pf-brand { right:85px; top:64px; z-index:4; font-size:28px; }

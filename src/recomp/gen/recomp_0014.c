@@ -1,11 +1,67 @@
 /**
  * ESPN NFL 2K5 - Recompiled code chunk 14
- * Functions: 1000 (0x001D57A0 - 0x0020F190)
+ * Functions: 1000 (0x001D5750 - 0x0020F180)
  */
 
 #define RECOMP_GENERATED_CODE
 #include "recomp_funcs.h"
 #include <math.h>
+
+/**
+ * sub_001D5750
+ * Original: 0x001D5750 - 0x001D57A0 (80 bytes, 32 insns)
+ * CC: cdecl, 2 params, returns int_or_void
+ * Frame: fpo_leaf
+ */
+void sub_001D5750(void)
+{
+    uint32_t ebp = 0;
+    ebp = g_ebp;  /* frameless: caller's frame */
+    int _flags = 0; /* fallback flag var */
+    uint32_t _fa = 0, _fb = 0;
+    int32_t _fas = 0, _fbs = 0;
+    (void)_fa; (void)_fb; (void)_fas; (void)_fbs;
+    ebp = g_seh_ebp; /* fpo_leaf: inherit caller's frame */
+
+loc_001D5750: ;
+    PUSH32(esp, edi);
+    edi = MEM32(esp + 0xC);
+    eax = MEM32(edi + 0x10);
+    ecx = MEM32(eax + 0x100);
+    _fa = (uint32_t)(HI8(ecx)) & 0xFFu; _fb = (uint32_t)(4) & 0xFFu;
+    _fas = (int32_t)(int8_t)(_fa); _fbs = (int32_t)(int8_t)(_fb); /* test HI8(ecx), 4 (8-bit) */
+    if (TEST_Z(_fa, _fb)) goto loc_001D5791; /* je: equal / zero */
+
+loc_001D5763: ;
+    PUSH32(esp, esi);
+    esi = MEM32(eax + 0xD0);
+    edx = 0x50F4EC;
+    ecx = edi;
+    PUSH32(esp, 0x001D5776u); RECOMP_ABI_CALL(0x001CD550u, sub_001CD550); /* call 0x001CD550 */
+
+loc_001D5776: ;
+    edx = 0x50F4EC;
+    ecx = esi;
+    PUSH32(esp, 0x001D5782u); RECOMP_ABI_CALL(0x001CD550u, sub_001CD550); /* call 0x001CD550 */
+
+loc_001D5782: ;
+    ecx = esi;
+    PUSH32(esp, 0x001D5789u); RECOMP_ABI_CALL(0x002E41F0u, sub_002E41F0); /* call 0x002E41F0 */
+
+loc_001D5789: ;
+    ecx = edi;
+    PUSH32(esp, 0x001D5790u); RECOMP_ABI_CALL(0x00300B00u, sub_00300B00); /* call 0x00300B00 */
+
+loc_001D5790: ;
+    POP32(esp, esi);
+
+loc_001D5791: ;
+    POP32(esp, edi);
+    esp += 12; return; /* ret 8 */
+
+    g_seh_ebp = ebp; sub_001D57A0(); return; /* fallthrough 0x001D57A0 */
+
+}
 
 /**
  * sub_001D57A0
@@ -132126,6 +132182,8 @@ loc_002049E8: ;
     PUSH32(esp, 0x002049F2u); RECOMP_ABI_CALL(0x00048B50u, sub_00048B50); /* call 0x00048B50 */
 
 loc_002049F2: ;
+    /* NFL2K5-GENPATCH:SIM_PICK_EMPTY */
+    if (!edi) { extern uint32_t nfl2k5_sim_pick_empty(uint32_t team, uint32_t want, uint32_t arg2, uint32_t mask); uint32_t _p = nfl2k5_sim_pick_empty(ebx, MEM32(esp + 0x8C), MEM32(esp + 0x90), ebp); MEM32(esp + 0x10) = _p; edi = 1; }
     edx = 0; /* xor self */
     _fa = (uint32_t)(edx) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* xor result */
     { uint64_t _dividend = ((uint64_t)edx << 32) | eax;
@@ -156930,20 +156988,6 @@ void sub_0020F180(void)
 {
 
 loc_0020F180: ;
-    esp += 4; return; /* ret */
-
-}
-
-/**
- * sub_0020F190
- * Original: 0x0020F190 - 0x0020F191 (1 bytes, 1 insns)
- * CC: cdecl, 0 params, returns int_or_void
- * Frame: fpo_leaf
- */
-void sub_0020F190(void)
-{
-
-loc_0020F190: ;
     esp += 4; return; /* ret */
 
 }

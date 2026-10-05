@@ -1,0 +1,14 @@
+{
+  "abbreviation": "IND",
+  "city": "Indianapolis",
+  "name": "Colts",
+  "colors": {
+    "primary": "#002C5F",
+    "secondary": "#A2AAAD",
+    "text": "#FFFFFF"
+  },
+  "logos": {
+    "scorebug": "logos/scorebug.png"
+  },
+  "aliases": []
+}

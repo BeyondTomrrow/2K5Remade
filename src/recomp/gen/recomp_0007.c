@@ -1,11 +1,87 @@
 /**
  * ESPN NFL 2K5 - Recompiled code chunk 7
- * Functions: 1000 (0x000E3700 - 0x0010D7D0)
+ * Functions: 1000 (0x000E36BA - 0x0010D7C0)
  */
 
 #define RECOMP_GENERATED_CODE
 #include "recomp_funcs.h"
 #include <math.h>
+
+/**
+ * sub_000E36BA
+ * Original: 0x000E36BA - 0x000E3700 (70 bytes, 29 insns)
+ * CC: cdecl, 0 params, returns int_or_void
+ * Frame: fpo_leaf
+ */
+void sub_000E36BA(void)
+{
+    uint32_t ebp = 0;
+    ebp = g_ebp;  /* frameless: caller's frame */
+    uint32_t _fa = 0, _fb = 0;
+    int32_t _fas = 0, _fbs = 0;
+    (void)_fa; (void)_fb; (void)_fas; (void)_fbs;
+    ebp = g_seh_ebp; /* fpo_leaf: inherit caller's frame */
+
+loc_000E36BA: ;
+    edi = edi;
+    ebp--;
+    _fa = (uint32_t)(ebp) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fb = (_fa == 0x7FFFFFFFu); /* dec result/SF/OF; CF unchanged */
+    eax = eax ^ 0x3557000E;
+    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* xor result */
+    PUSH32(esp, 0 /* seg:cs */);
+    _fb = (uint32_t)(HI8(ecx)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
+    MEM8(edx + 0x35) = MEM8(edx + 0x35) + HI8(ecx);
+    _fa = (uint32_t)(MEM8(edx + 0x35)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* add result */
+    PUSH32(esp, 0 /* seg:cs */);
+    _fb = (uint32_t)(HI8(ebx)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
+    MEM8(ebp + 0x35) = MEM8(ebp + 0x35) + HI8(ebx);
+    _fa = (uint32_t)(MEM8(ebp + 0x35)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* add result */
+    PUSH32(esp, 0 /* seg:cs */);
+    _fb = (uint32_t)(LO8(edx)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
+    MEM8(eax + -1560277451) = MEM8(eax + -1560277451) + LO8(edx);
+    _fa = (uint32_t)(MEM8(eax + -1560277451)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* add result */
+    eax = eax ^ 0x35B6000E;
+    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* xor result */
+    PUSH32(esp, 0 /* seg:cs */);
+    _fb = (uint32_t)(LO8(eax)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
+    SET_HI8(edx, HI8(edx) + LO8(eax));
+    _fa = (uint32_t)(HI8(edx)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* add result */
+    eax = eax ^ 0x35D6000E;
+    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* xor result */
+    PUSH32(esp, 0 /* seg:cs */);
+    _fb = (uint32_t)(HI8(eax)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
+    SET_HI8(edx, HI8(edx) + HI8(eax));
+    _fa = (uint32_t)(HI8(edx)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* add result */
+    eax = eax ^ 0x35F6000E;
+    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* xor result */
+    PUSH32(esp, 0 /* seg:cs */);
+    _fb = (uint32_t)(LO8(eax)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
+    MEM8(esi) = MEM8(esi) + LO8(eax);
+    _fa = (uint32_t)(MEM8(esi)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* add result */
+    PUSH32(esp, 0 /* seg:cs */);
+    _fb = (uint32_t)(LO8(edx)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
+    MEM8(esi) = MEM8(esi) + LO8(edx);
+    _fa = (uint32_t)(MEM8(esi)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* add result */
+    PUSH32(esp, 0 /* seg:cs */);
+    _fb = (uint32_t)(HI8(eax)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
+    MEM8(esi) = MEM8(esi) + HI8(eax);
+    _fa = (uint32_t)(MEM8(esi)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* add result */
+    PUSH32(esp, 0 /* seg:cs */);
+    _fb = (uint32_t)(HI8(edx)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
+    MEM8(esi) = MEM8(esi) + HI8(edx);
+    _fa = (uint32_t)(MEM8(esi)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* add result */
+    PUSH32(esp, 0 /* seg:cs */);
+    _fb = (uint32_t)(LO8(edx)) & 0xFFu; _fbs = (int32_t)(int8_t)(_fb); /* add source, before the write */
+    MEM8(eax + -1869574000) = MEM8(eax + -1869574000) + LO8(edx);
+    _fa = (uint32_t)(MEM8(eax + -1869574000)) & 0xFFu; _fas = (int32_t)(int8_t)(_fa); /* add result */
+    /* nop */
+    /* nop */
+    /* nop */
+
+    g_seh_ebp = ebp; sub_000E3700(); return; /* fallthrough 0x000E3700 */
+
+}
 
 /**
  * sub_000E3700
@@ -163612,12 +163688,15 @@ void sub_000FCE70(void)
     #define fp_st1() fp_st(1)
 
 loc_000FCE70: ;
-    /* NFL2K5-GENPATCH:SCOREBUG_HIDE_UPDATE */
-    { extern void nfl2k5_scorebug_hide(void); nfl2k5_scorebug_hide(); }
     /* NFL2K5-GENPATCH:SCOREBUG_SKIP_TEST */
     /* Experiment (NFL2K5_HIDE_SKIP=1): skip the ESPN scorebug update while a
      * custom broadcast package is on, to find out whether it drives the bar. */
     { extern int nfl2k5_scorebug_skip_update(void); if (nfl2k5_scorebug_skip_update()) { esp += 8; return; } }
+    /* NFL2K5-GENPATCH:LIVE_QB_SAMPLE */
+    /* Sample both title-maintained QB records on the guest execution thread. */
+    { extern void nfl2k5_live_qb_guest_tick(void); nfl2k5_live_qb_guest_tick(); }
+    /* NFL2K5-GENPATCH:SCOREBUG_HIDE_UPDATE */
+    { extern void nfl2k5_scorebug_hide(void); nfl2k5_scorebug_hide(); }
     PUSH32(esp, ebp);
     ebp = esp;
     g_ebp = ebp; /* publish frame for frameless callees */
@@ -169299,6 +169378,8 @@ loc_000FFD37: ;
     if ((_fa != 0)) goto loc_000FFC20; /* jne: not equal / not zero */
 
 loc_000FFD54: ;
+    /* NFL2K5-GENPATCH:LINEUP_TICKER */
+    { extern void nfl2k5_lineup_ticker(uint32_t sp); nfl2k5_lineup_ticker(esp); }
     POP32(esp, edi);
     POP32(esp, esi);
     POP32(esp, ebp);
@@ -169346,6 +169427,8 @@ loc_000FFD81: ;
     MEM32(0xBA3218) = 1;
 
 loc_000FFD8B: ;
+    /* NFL2K5-GENPATCH:LINEUP_NATIVE_HIDE */
+    { extern int nfl2k5_lineup_hide_native(void); if (nfl2k5_lineup_hide_native()) { esp += 4; return; } }
     ecx = MEM32(0xBA3534);
     g_seh_ebp = ebp; sub_001775D0(); return; /* tail jmp 0x001775D0 */
 
@@ -205600,76 +205683,6 @@ void sub_0010D7C0(void)
 
 loc_0010D7C0: ;
     eax = MEM32(0xE601E4);
-    esp += 4; return; /* ret */
-
-    esp += 4; return; /* ret */
-
-    esp += 4; return; /* ret */
-
-    esp += 4; return; /* ret */
-
-    esp += 4; return; /* ret */
-
-    esp += 4; return; /* ret */
-
-    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;
-    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test eax, eax (32-bit) */
-    if (TEST_S(_fas, _fbs)) goto loc_0010DB3C; /* jl: less (signed <) */
-
-loc_0010DB29: ;
-    ecx = MEM32(0xB72918);
-    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(MEM32(ecx)) & 0xFFFFFFFFu;
-    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp eax, MEM32(ecx) (32-bit) */
-    if (CMP_GE(_fas, _fbs)) goto loc_0010DB3C; /* jge: greater or equal (signed >=) */
-
-loc_0010DB33: ;
-    edx = MEM32(ecx + 4);
-    eax = (uint32_t)((int32_t)eax * (int32_t)0x54);
-    _fb = (uint32_t)(edx) & 0xFFFFFFFFu; _fbs = (int32_t)(int32_t)(_fb); /* add source, before the write */
-    eax = eax + edx;
-    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* add result */
-    esp += 4; return; /* ret */
-
-loc_0010DB3C: ;
-    eax = 0; /* xor self */
-    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* xor result */
-    esp += 4; return; /* ret */
-
-    g_seh_ebp = ebp; sub_0010DD00(); return; /* fallthrough 0x0010DD00 */
-
-    #undef fp_push
-    #undef fp_pop
-    #undef fp_top
-    #undef fp_st
-    #undef fp_st1
-}
-
-/**
- * sub_0010D7D0
- * Original: 0x0010D7D0 - 0x0010DD00 (1328 bytes, 832 insns)
- * Category: game_vtable
- * CC: cdecl, 0 params, returns int_or_void
- * Frame: fpo_leaf
- */
-void sub_0010D7D0(void)
-{
-    uint32_t ebp = 0;
-    ebp = g_ebp;  /* frameless: caller's frame */
-    int _flags = 0; /* fallback flag var */
-    uint32_t _fa = 0, _fb = 0;
-    int32_t _fas = 0, _fbs = 0;
-    (void)_fa; (void)_fb; (void)_fas; (void)_fbs;
-    #define fp_push(v) do { double _fp_value = (v); \
-        g_fp_top = (g_fp_top + 7u) & 7u; \
-        g_fp_stack[g_fp_top] = _fp_value; } while (0)
-    #define fp_pop() (g_fp_top = (g_fp_top + 1u) & 7u)
-    #define fp_top() g_fp_stack[g_fp_top]
-    #define fp_st(i) g_fp_stack[(g_fp_top + (i)) & 7u]
-    #define fp_st1() fp_st(1)
-    ebp = g_seh_ebp; /* fpo_leaf: inherit caller's frame */
-
-loc_0010D7D0: ;
-    eax = 1;
     esp += 4; return; /* ret */
 
     esp += 4; return; /* ret */

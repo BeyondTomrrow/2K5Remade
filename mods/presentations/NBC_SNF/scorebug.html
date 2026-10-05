@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>NBC Sunday Night Football</title>
+<link rel="stylesheet" href="scorebug.css">
+<link rel="stylesheet" href="layout.css">
+</head>
+<body>
+<div id="canvas">
+  <!-- Pure HTML/CSS/SVG. Inside #bug, units are design pixels: the bug is
+       576x94 (reference/reference.png); the down & distance tab hangs below
+       it and the scoring-drive layout reaches past both sides. The whole
+       bug is scaled with --bug-scale. -->
+  <div id="bug" data-element="bug">
+    <div class="half away" data-element="away-half">
+      <div class="panel"></div>
+      <div class="logo-window" data-element="away-logo"><img class="logo" alt=""></div>
+      <div class="abbr" data-element="away-abbr">AWY</div>
+      <div class="record" data-element="away-record"></div>
+      <div class="divider"></div>
+      <div class="score" data-element="away-score">0</div>
+      <div class="timeouts" data-element="away-timeouts"><i></i><i></i><i></i></div>
+    </div>
+    <div class="half home" data-element="home-half">
+      <div class="panel"></div>
+      <div class="logo-window" data-element="home-logo"><img class="logo" alt=""></div>
+      <div class="abbr" data-element="home-abbr">HOM</div>
+      <div class="record" data-element="home-record"></div>
+      <div class="divider"></div>
+      <div class="score" data-element="home-score">0</div>
+      <div class="timeouts" data-element="home-timeouts"><i></i><i></i><i></i></div>
+    </div>
+    <div class="rail" data-element="rail"></div>
+
+    <!-- down & distance, under the team with the ball -->
+    <div class="tab" data-element="down-tab">
+      <div class="tab-fill"></div>
+      <div class="chev left"><b></b><b></b></div>
+      <div class="tab-text" data-element="down-text"></div>
+      <div class="chev right"><b></b><b></b></div>
+    </div>
+
+    <!-- scoring drive: team stack, then the drive bar -->
+    <div class="drive-stack" data-element="drive-stack">
+      <div class="row away"><img class="logo" alt=""><span class="pts"></span></div>
+      <div class="row home"><img class="logo" alt=""><span class="pts"></span></div>
+    </div>
+    <div class="drive-bar" data-element="drive-bar">
+      <div class="drive-logo"><img class="logo" alt=""></div>
+      <div class="drive-title">SCORING DRIVE</div>
+      <div class="stat plays"><span class="lbl">PLAYS</span><span class="val"></span></div>
+      <div class="stat yds"><span class="lbl">YDS</span><span class="val"></span></div>
+      <div class="stat top"><span class="lbl">T.O.P</span><span class="val"></span></div>
+      <div class="corner"></div>
+    </div>
+
+    <div class="pod" data-element="pod">
+      <div class="pulse"></div><div class="pulse p2"></div>
+      <svg class="peacock" viewBox="-23 -23 46 24" aria-hidden="true">
+        <defs><linearGradient id="feather" x1="0" y1="-1" x2="0" y2="0.2" gradientUnits="objectBoundingBox"><stop offset="0" stop-color="#eef3f8"/><stop offset="1" stop-color="#a9b4c1"/></linearGradient></defs>
+        <g fill="url(#feather)" stroke="#1a2129" stroke-width="0.9" stroke-linejoin="round"><path d="M0 0 C -5.2 -3.5, -6.4 -15.5, 0 -20.5 C 6.4 -15.5, 5.2 -3.5, 0 0 Z" transform="rotate(-75)"/><path d="M0 0 C -5.2 -3.5, -6.4 -15.5, 0 -20.5 C 6.4 -15.5, 5.2 -3.5, 0 0 Z" transform="rotate(-45)"/><path d="M0 0 C -5.2 -3.5, -6.4 -15.5, 0 -20.5 C 6.4 -15.5, 5.2 -3.5, 0 0 Z" transform="rotate(-15)"/><path d="M0 0 C -5.2 -3.5, -6.4 -15.5, 0 -20.5 C 6.4 -15.5, 5.2 -3.5, 0 0 Z" transform="rotate(15)"/><path d="M0 0 C -5.2 -3.5, -6.4 -15.5, 0 -20.5 C 6.4 -15.5, 5.2 -3.5, 0 0 Z" transform="rotate(45)"/><path d="M0 0 C -5.2 -3.5, -6.4 -15.5, 0 -20.5 C 6.4 -15.5, 5.2 -3.5, 0 0 Z" transform="rotate(75)"/></g>
+        <path d="M0 -7 L -3 0.6 L 3 0.6 Z" fill="#eef3f8" stroke="#1a2129" stroke-width="0.7"/>
+      </svg>
+      <div class="flag-word">FLAG</div>
+      <div class="pod-line top"></div>
+      <div class="clock" data-element="clock">15:00</div>
+      <div class="pod-line bottom"></div>
+      <div class="quarter" data-element="quarter"><span class="num">1</span><span class="ord">ST</span></div>
+    </div>
+    <div class="playclock" data-element="play-clock"></div>
+
+    <!-- touchdown / field goal word over the team's neon logo -->
+    <div class="takeover" data-element="takeover">
+      <div class="neon-logo"></div>
+      <div class="big-word"></div>
+    </div>
+  </div>
+  <!-- Live SNF quarterback insert.  The portrait is decoded from NFL 2K5's
+       own roster asset; the numbers come from the live GameCast passing row. -->
+  <div id="qb-stat" data-element="quarterback-stat">
+    <div class="qs-sheen"></div>
+    <img class="qs-portrait" alt="">
+    <div class="qs-position">QB</div>
+    <div class="qs-name"></div>
+    <div class="qs-season">THIS SEASON</div>
+    <div class="qs-rule"></div>
+    <div class="qs-fields">
+      <span><b>COMP PCT</b><strong class="pct">0.0</strong></span>
+      <span><b>YDS</b><strong class="yds">0</strong></span>
+      <span><b>TD</b><strong class="td">0</strong></span>
+      <span><b>INT</b><strong class="int">0</strong></span>
+    </div>
+    <div class="qs-brand"><i></i><em>SNF</em></div>
+  </div>
+  <div id="player-feature" data-element="player-feature">
+    <div class="pf-backdrop"></div>
+    <div class="pf-stadium"></div>
+    <div class="pf-wedge"></div>
+    <img class="pf-logo logo" alt="">
+    <img class="pf-portrait" alt="">
+    <div class="pf-kicker">OVER THE LAST TWO SEASONS</div>
+    <div class="pf-title"></div>
+    <div class="pf-name"></div>
+    <div class="pf-position"></div>
+    <div class="pf-table">
+      <div class="pf-head"><span></span><b>GAME</b><em>SEASON</em></div>
+      <div><span>COMPLETIONS / ATTEMPTS</span><b class="pf-ca"></b><em>—</em></div>
+      <div><span>PASSING YARDS</span><b class="pf-yds"></b><em>—</em></div>
+      <div><span>TOUCHDOWNS</span><b class="pf-td"></b><em>—</em></div>
+      <div><span>INTERCEPTIONS</span><b class="pf-int"></b><em>—</em></div>
+      <div><span>QB RATING</span><b class="pf-rate"></b><em>—</em></div>
+    </div>
+    <div class="pf-brand"><i></i><strong>SNF</strong></div>
+  </div>
+</div>
+<!-- Starting lineup (LINEUP event): one player at a time, laid out from the
+     2025 SNF player introductions (1920x1080 reference frames). Canvas px. -->
+<div id="lineup" data-element="lineup">
+  <div class="lu-bar">
+    <div class="lu-ghost"><img class="logo" alt=""></div>
+    <svg class="lu-panel" viewBox="0 0 500 130" preserveAspectRatio="none" aria-hidden="true">
+      <defs>
+        <linearGradient id="luSilver" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#cfd6da"/><stop offset="1" stop-color="#9eaab0"/></linearGradient>
+        <filter id="luGlow" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="2.5"/></filter>
+      </defs>
+      <path d="M164 0 C 118 0, 86 124, 12 130 L 500 130 L 500 0 Z" fill="url(#luSilver)"/>
+      <path class="lu-swoosh" d="M164 0 C 118 0, 86 124, 12 130" fill="none" stroke-width="9" filter="url(#luGlow)"/>
+      <path class="lu-swoosh" d="M164 0 C 118 0, 86 124, 12 130" fill="none" stroke-width="4"/>
+    </svg>
+  </div>
+  <div class="lu-line"></div>
+  <div class="lu-ribbon"><div class="lu-track"></div></div>
+  <div class="lu-logo"><img class="logo" alt=""></div>
+  <img class="lu-portrait" alt="">
+  <div class="lu-card">
+    <div class="lu-tab"><b class="pos"></b><span class="num"></span></div>
+    <div class="lu-name"></div>
+    <div class="lu-sub"></div>
+  </div>
+</div>
+<script src="../_runtime/nfl2k5-presentation.js"></script>
+<script src="scorebug.js"></script>
+</body>
+</html>

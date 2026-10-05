@@ -935,6 +935,14 @@ void nfl2k5_diag_res(uint32_t res, int load, uint32_t ret, uint32_t r2, uint32_t
  * {type, start, poll} entry at 0xA8F7B8 + op*12. */
 void nfl2k5_diag_script(uint32_t ctx, uint32_t op, uint32_t start)
 {
+    extern int xbox_verbose(void);
+    static int presentation_trace = -1;
+    if (presentation_trace < 0)
+        presentation_trace = getenv("NFL2K5_PRESENTATION_TRACE") != NULL;
+    if (!xbox_verbose() && !presentation_trace) /* thousands of lines a match */
+        return;
+    if (presentation_trace && !start) /* focused audit records command starts */
+        return;
     static uint32_t ctxs[16], last[16];
     static volatile LONG printed;
     const uint8_t *m = (const uint8_t *)xbox_GetMemoryOffset();
@@ -968,6 +976,170 @@ void nfl2k5_diag_stream(uint32_t dst, uint32_t src, uint32_t len, uint32_t eax_,
             m[src + 4], m[src + 5], m[src + 6], m[src + 7], GetTickCount());
 }
 
+/* 2026-10-02: pregame player cards (gen patch PLAYERCARD_PROBE, script op
+ * 133). Finds the 0x54 roster record the card is about: a record's names
+ * are UTF-16 strings behind +0x10 / +0x14 (field-relative, target = field +
+ * i32 - 1, as on disc; absolute also accepted). Logs the card kind, where in
+ * the context the record pointer sits, and the record's identity fields. */
+static int pc_name(const uint8_t *m, uint32_t field, char *out, int n)
+{
+    uint32_t cands[2], c;
+    int k, i;
+    if (field >= 0x4000000u - 8) return 0;
+    cands[0] = field + *(const int32_t *)(m + field) - 1;
+    cands[1] = *(const uint32_t *)(m + field);
+    for (k = 0; k < 2; k++) {
+        c = cands[k];
+        if (c < 0x10000u || c >= 0x4000000u - 64) continue;
+        for (i = 0; i < n - 1; i++) {
+            uint16_t ch = *(const uint16_t *)(m + c + i * 2u);
+            if (!ch) break;
+            if (ch < 32 || ch > 126) { i = -1; break; }
+            out[i] = (char)ch;
+        }
+        if (i >= 2) { out[i] = 0; return 1; }
+    }
+    return 0;
+}
+
+static int pc_player(const uint8_t *m, uint32_t rec, char *first, char *last)
+{
+    if (rec < 0x10000u || rec >= 0x4000000u - 0x54) return 0;
+    return pc_name(m, rec + 0x10u, first, 32) && pc_name(m, rec + 0x14u, last, 32);
+}
+
+static void pc_inline_utf16(const uint8_t *m, uint32_t address, char *out, size_t capacity)
+{
+    size_t i = 0;
+    if (!out || !capacity || address >= 0x4000000u - 2) return;
+    while (i + 1 < capacity && address + i * 2u < 0x4000000u - 2) {
+        uint16_t ch = *(const uint16_t *)(m + address + i * 2u);
+        if (!ch) break;
+        if (ch < 32 || ch > 126) { i = 0; break; }
+        out[i++] = (char)ch;
+    }
+    out[i] = 0;
+}
+
+/* Frame interval (gen patch FRAME_INTERVAL in sub_00027880): the vblanks
+ * each frame lasts, 1 = 60 fps, 2 = 30. The game asks for 2 in its wide and
+ * presentation cameras and while loading -- on the Xbox those shots ran at
+ * 30. The Frame Rate Cap video setting decides: 30 locks 2; 60, 120 and
+ * Unlimited lock 1 (60 fps in every camera; the game is time-based, the play
+ * clock still runs 1.00 s per second, measured 2026-10-03); Original keeps
+ * the game's choice. NFL2K5_FRAME_INTERVAL=1 or 2 overrides the setting;
+ * NFL2K5_CLOCK_LOG=1 logs every request (with the caller) and, every second,
+ * the play clock against wall time. */
+extern int xbox_VideoFpsLimit(void);
+extern void (*g_xbox_fps_limit_changed)(void);
+static uint32_t s_frame_req = 1;          /* the game's last request */
+
+static uint32_t nfl2k5_frame_interval_for(uint32_t requested)
+{
+    static int forced = -1;
+    int limit;
+    if (forced < 0) {
+        const char *e = getenv("NFL2K5_FRAME_INTERVAL");
+        forced = e ? atoi(e) : 0;
+    }
+    if (forced == 1 || forced == 2)
+        return (uint32_t)forced;
+    if (requested == 0 || requested > 2)
+        return requested;                 /* not a frame rate this hook knows */
+    limit = xbox_VideoFpsLimit();
+    if (limit < 0) return requested;      /* Original */
+    return limit == 30 ? 2u : 1u;
+}
+
+/* The setting changed: apply it now rather than at the next camera change. */
+static void nfl2k5_frame_interval_refresh(void)
+{
+    *(volatile uint32_t *)((uint8_t *)xbox_GetMemoryOffset() + 0xA6A9ACu) = nfl2k5_frame_interval_for(s_frame_req);
+}
+
+uint32_t nfl2k5_frame_interval(uint32_t requested, uint32_t caller)
+{
+    static int log = -1;
+    static uint32_t last_req = 0xFFFFFFFFu, last_caller;
+    uint32_t r;
+    if (log < 0) {
+        log = getenv("NFL2K5_CLOCK_LOG") != NULL;
+        g_xbox_fps_limit_changed = nfl2k5_frame_interval_refresh;
+    }
+    s_frame_req = requested;
+    r = nfl2k5_frame_interval_for(requested);
+    if (log && (requested != last_req || caller != last_caller))
+        fprintf(stderr, "  [FRAMEINT] %08X asks %u -> %u\n", caller, requested, r);
+    last_req = requested; last_caller = caller;
+    return r;
+}
+
+static DWORD WINAPI nfl2k5_clock_log_thread(LPVOID unused)
+{
+    const uint8_t *m = (const uint8_t *)xbox_GetMemoryOffset();
+    LARGE_INTEGER fq, t0, t;
+    float last_play = -1.0f, last_game = -1.0f;
+    double last_t = 0;
+    (void)unused;
+    QueryPerformanceFrequency(&fq);
+    QueryPerformanceCounter(&t0);
+    for (;;) {
+        uint32_t pt, ck;
+        float play = -1.0f, game = -1.0f;
+        double now;
+        Sleep(1000);
+        QueryPerformanceCounter(&t);
+        now = (double)(t.QuadPart - t0.QuadPart) / fq.QuadPart;
+        pt = *(const uint32_t *)(m + 0x00E60294u);
+        ck = *(const uint32_t *)(m + 0x00E6028Cu);
+        if (pt && pt < 0x4000000u) play = *(const float *)(m + pt + 0x10);
+        if (ck && ck < 0x4000000u) game = *(const float *)(m + ck + 0x10);
+        if (last_play >= 0 && play >= 0 && play < last_play && last_play - play < 5.0f)
+            fprintf(stderr, "  [CLOCK] t=%.1f play %.2f -> %.2f: %.3f game-s per s; game clock %.2f (vblanks %u)\n",
+                    now, last_play, play, (last_play - play) / (now - last_t), game,
+                    *(const uint32_t *)(m + 0xA6A9B4u));
+        last_play = play; last_game = game; last_t = now;
+    }
+}
+
+void nfl2k5_playercard_probe(uint32_t ctx)
+{
+    static volatile LONG printed;
+    const uint8_t *m = (const uint8_t *)xbox_GetMemoryOffset();
+    char first[32], last[32];
+    uint32_t off, d, off2;
+    if (ctx < 0x10000u || ctx >= 0x4000000u - 0x100)
+        return;
+    {
+        /* The SNF package can replace player feature/stat cards once it has
+         * the active quarterback's live stats and roster portrait.  Close
+         * this native popup only after the package accepts it. */
+        extern int nfl2k5_presentation_playercard(uint32_t kind, const char *title);
+        uint32_t kind = *(const uint32_t *)(m + ctx + 0x48u);
+        char native_title[96];
+        pc_inline_utf16(m, ctx + 0x4Cu, native_title, sizeof native_title);
+        if (nfl2k5_presentation_playercard(kind, native_title))
+            *(float *)((uint8_t *)m + ctx + 8u) = 0.01f;
+    }
+    if (InterlockedIncrement(&printed) > 400)
+        return;
+    fprintf(stderr, "  [CARD] ctx=%08X kind=%u\n", ctx, *(const uint32_t *)(m + ctx + 0x48u));
+    for (off = 0; off < 0x100u; off += 4) {
+        d = *(const uint32_t *)(m + ctx + off);
+        if (pc_player(m, d, first, last)) {
+            fprintf(stderr, "  [CARD]   ctx+%02X -> %08X %s %s pos=%u photo=%u jersey=%u\n", off, d, first, last,
+                    m[d + 0x35u], *(const uint16_t *)(m + d + 6u), (*(const uint32_t *)(m + d + 0x20u) >> 3) & 0x7Fu);
+            continue;
+        }
+        if (d < 0x10000u || d >= 0x4000000u - 0x80) continue;
+        for (off2 = 0; off2 < 0x80u; off2 += 4) {
+            uint32_t d2 = *(const uint32_t *)(m + d + off2);
+            if (pc_player(m, d2, first, last))
+                fprintf(stderr, "  [CARD]   ctx+%02X -> %08X +%02X -> %08X %s %s\n", off, d, off2, d2, first, last);
+        }
+    }
+}
+
 /* 2026-09-25: popups (tools/apply-gen-patches.py DIAG_POPUP*). what 0: shown
  * (obj = the popup being copied into its slot: +0 slot, +8 timeout, +0x4C
  * title, +0xCC message, UTF-16); 1: close(slot); 2: close callback. */
@@ -977,6 +1149,16 @@ void nfl2k5_diag_popup(uint32_t obj, int what)
     if (what == 0) {
         char title[64], msg[128];
         int i;
+        {
+            /* A presentation package is playing its lineup intro: the
+             * game's player card (slot 1) closes at once instead of
+             * covering it (src/nfl2k5_presentation.cpp). */
+            extern int nfl2k5_lineup_active(void);
+            if (*(const int32_t *)(m + obj) == 1 && nfl2k5_lineup_active()) {
+                *(float *)((uint8_t *)m + obj + 8u) = 0.01f;
+                fprintf(stderr, "  [POPUPOP] card closed: lineup intro playing\n");
+            }
+        }
         for (i = 0; i < 63 && *(const uint16_t *)(m + obj + 0x4Cu + i * 2u); i++)
             title[i] = (char)*(const uint16_t *)(m + obj + 0x4Cu + i * 2u);
         title[i] = 0;
@@ -990,6 +1172,32 @@ void nfl2k5_diag_popup(uint32_t obj, int what)
             /* The broadcast theme stops at the coin toss (nfl2k5_presentation.cpp). */
             extern void nfl2k5_presentation_popup(const char *title);
             nfl2k5_presentation_popup(title);
+        }
+        {
+            /* Every UTF-16 string in the popup object (0xF20 bytes), joined
+             * with '\x1f': popups such as Drive Summary keep their table
+             * (labels and values) outside the title/message fields. */
+            extern void nfl2k5_presentation_popup_text(const char *title, const char *text);
+            char all[1024];
+            size_t n = 0;
+            uint32_t off = 0;
+            while (off + 2 <= 0xF20u && n + 70 < sizeof all) {
+                uint32_t start = off, len = 0;
+                while (off + 2 <= 0xF20u) {
+                    uint16_t ch = *(const uint16_t *)(m + obj + off);
+                    if (ch < 32 || ch > 126) break;
+                    len++;
+                    off += 2;
+                }
+                if (len >= 1 && len < 64 && (start & 1u) == 0) {
+                    uint32_t k;
+                    if (n) all[n++] = '\x1f';
+                    for (k = 0; k < len; k++) all[n++] = (char)*(const uint16_t *)(m + obj + start + k * 2u);
+                }
+                off += 2;
+            }
+            all[n] = 0;
+            nfl2k5_presentation_popup_text(title, all);
         }
     } else if (what == 1) {
         uint32_t sl = 0xB61B50u + obj * 0xF20u;
@@ -1070,16 +1278,39 @@ static void nfl2k5_peek_fsms(void)
      * 0x14 bytes): an event is ready when every requested bit in the low 12
      * of its +8 word is also set in the high 12 (sub_000254C0). */
     {
-        uint32_t tl = *(const uint32_t *)(m + 0xA92890u);
-        if (tl >= 0x10000u && tl < 0x84000000u) {
-            uint32_t n = *(const uint32_t *)(m + tl + 0xCu), ev = *(const uint32_t *)(m + tl + 0x10u);
-            fprintf(stderr, "  [MATCHTL] time=%g flags=%08X events=%u:", *(const float *)(m + tl + 4u),
-                    *(const uint32_t *)(m + tl + 8u), n);
-            for (uint32_t k = 0; k < n && k < 12u && ev >= 0x10000u && ev < 0x84000000u; k++)
-                fprintf(stderr, " [%08X %08X %08X]", *(const uint32_t *)(m + ev + k * 0x14u),
-                        *(const uint32_t *)(m + ev + k * 0x14u + 4u),
-                        *(const uint32_t *)(m + ev + k * 0x14u + 8u));
+        uint32_t tl = 0, n = 0, ev = 0, flags = 0, count = 0;
+        uint32_t events[12][3];
+        float time = 0;
+        int readable = 0;
+        /* This diagnostic runs with the guest lock dropped. Leaving the
+         * demo can retire/reuse the timeline between samples, and the broad
+         * guest-VA check does not establish that its event pointer is mapped.
+         * Snapshot only diagnostic reads under SEH; never alter guest state
+         * or catch exceptions from execution of the game itself. */
+        __try {
+            tl = *(const uint32_t *)(m + 0xA92890u);
+            if (tl >= 0x10000u && tl <= 0x84000000u - 0x14u) {
+                time = *(const float *)(m + tl + 4u);
+                flags = *(const uint32_t *)(m + tl + 8u);
+                n = *(const uint32_t *)(m + tl + 0xCu);
+                ev = *(const uint32_t *)(m + tl + 0x10u);
+                count = n < 12u ? n : 12u;
+                if (count && (ev < 0x10000u || ev > 0x84000000u - count * 0x14u))
+                    __leave;
+                for (uint32_t k = 0; k < count; k++)
+                    memcpy(events[k], m + ev + k * 0x14u, sizeof events[k]);
+                readable = 1;
+            }
+        } __except (EXCEPTION_EXECUTE_HANDLER) {
+            /* An obsolete debug pointer must not crash a running match. */
+        }
+        if (readable) {
+            fprintf(stderr, "  [MATCHTL] time=%g flags=%08X events=%u:", time, flags, n);
+            for (uint32_t k = 0; k < count; k++)
+                fprintf(stderr, " [%08X %08X %08X]", events[k][0], events[k][1], events[k][2]);
             fprintf(stderr, "\n");
+        } else if (tl >= 0x10000u && tl < 0x84000000u) {
+            fprintf(stderr, "  [MATCHTL] unreadable diagnostic snapshot timeline=%08X events=%08X\n", tl, ev);
         }
     }
 }
@@ -1124,6 +1355,56 @@ void nfl2k5_diag_pbbegin(void)
 
 /* Fixed-interval flush of the above, independent of kernel_bridge.c's own
  * dispatch-count-gated summary (see call site in main() for why). */
+/* RECOMP_FIND_TEXT=word[,word...]: every 2 s, search guest RAM for each word
+ * as UTF-16 and log every address not seen before, with the UTF-16 strings
+ * around it and the dwords anywhere in RAM that point at it. Finds the
+ * objects behind on-screen text (the lineup ticker, 2026-10-02). */
+static DWORD WINAPI nfl2k5_find_text_thread(LPVOID arg)
+{
+    const char *spec = (const char *)arg;
+    static uint32_t seen[512];
+    unsigned nseen = 0;
+    for (;;) {
+        const uint8_t *m = (const uint8_t *)xbox_GetMemoryOffset();
+        char words[256], *w, *ctx = NULL;
+        Sleep(2000);
+        strncpy(words, spec, sizeof words - 1);
+        words[sizeof words - 1] = 0;
+        for (w = strtok_s(words, ",", &ctx); w; w = strtok_s(NULL, ",", &ctx)) {
+            uint16_t needle[64];
+            size_t n = strlen(w), i;
+            uint32_t a;
+            if (!n || n > 63) continue;
+            for (i = 0; i < n; i++) needle[i] = (uint8_t)w[i];
+            for (a = 0x10000u; a + n * 2 < 0x4000000u; a += 2) {
+                unsigned k;
+                if (*(const uint16_t *)(m + a) != needle[0] || memcmp(m + a, needle, n * 2)) continue;
+                for (k = 0; k < nseen && seen[k] != a; k++) {}
+                if (k < nseen || nseen >= 512) continue;
+                seen[nseen++] = a;
+                {
+                    char around[200];
+                    size_t o = 0;
+                    uint32_t b = a >= 96 ? a - 96 : a, p;
+                    for (; b < a + 96 && o + 2 < sizeof around; b += 2) {
+                        uint16_t ch = *(const uint16_t *)(m + b);
+                        around[o++] = ch >= 32 && ch < 127 ? (char)ch : '.';
+                    }
+                    around[o] = 0;
+                    fprintf(stderr, "  [FINDTEXT] '%s' at %08X t=%lu: %s\n", w, a, GetTickCount(), around);
+                    for (p = 0x10000u; p + 4 < 0x4000000u; p += 4) {
+                        uint32_t v = *(const uint32_t *)(m + p);
+                        if (v >= a - 0x20 && v <= a)
+                            fprintf(stderr, "  [FINDTEXT]   ref at %08X -> %08X\n", p, v);
+                    }
+                }
+            }
+        }
+        fflush(stderr);
+    }
+    return 0;
+}
+
 static DWORD WINAPI nfl2k5_execwatch_timer_thread(LPVOID unused)
 {
     (void)unused;
@@ -2315,13 +2596,81 @@ static DWORD WINAPI profile_thread(LPVOID arg)
     return 0;
 }
 
+/* The XBE this build was compiled from: retail, or a mod pack's patched one
+ * (CMake NFL2K5_XBE_SHA256, set by tools/build.ps1 -Pack). */
+#define NFL2K5_RETAIL_XBE_SHA256 "73105b17a3161c546fea792a1c84ce37f9966a67c416f474cdbfab74b911a4a9"
+#ifndef NFL2K5_XBE_SHA256
+#define NFL2K5_XBE_SHA256 NFL2K5_RETAIL_XBE_SHA256
+#endif
+
+static int nfl2k5_file_sha256(const char *path, char hex[65])
+{
+    FILE *f = fopen(path, "rb");
+    BCRYPT_ALG_HANDLE alg = NULL;
+    BCRYPT_HASH_HANDLE h = NULL;
+    unsigned char buf[1 << 16], dig[32];
+    size_t n;
+    int ok = 0;
+    if (!f) return 0;
+    if (BCryptOpenAlgorithmProvider(&alg, BCRYPT_SHA256_ALGORITHM, NULL, 0) >= 0
+            && BCryptCreateHash(alg, &h, NULL, 0, NULL, 0, 0) >= 0) {
+        while ((n = fread(buf, 1, sizeof buf, f)) > 0)
+            BCryptHashData(h, buf, (ULONG)n, 0);
+        if (BCryptFinishHash(h, dig, sizeof dig, 0) >= 0) {
+            for (int i = 0; i < 32; i++) sprintf(hex + i * 2, "%02x", dig[i]);
+            ok = 1;
+        }
+    }
+    if (h) BCryptDestroyHash(h);
+    if (alg) BCryptCloseAlgorithmProvider(alg, 0);
+    fclose(f);
+    return ok;
+}
+
 int main(int argc, char **argv)
 {
+    /* Like any PC game: keep the display and the machine awake while it
+     * runs. Without this a controller-only session (the pad is not "input"
+     * to Windows) let the monitor sleep mid-game, and presentation stalled. */
+    SetThreadExecutionState(ES_CONTINUOUS | ES_DISPLAY_REQUIRED | ES_SYSTEM_REQUIRED);
     /* A retail disc extraction has the XBE and its split vc_53450030 archive
      * segments beneath original/disc.  Mount that directory as D: when it is
      * available; keeping the original directory as the fallback preserves the
      * compact XBE-only development layout. */
     const char *root = nfl2k5_project_root();
+    /* Explorer sets the process working directory to the executable's
+     * folder.  In a development build that is build/Release, while all
+     * movable runtime content (mods, team logos, presentation settings,
+     * fonts, music and logs) lives at the resolved project/install root.
+     * Normalize the working directory before any subsystem opens a relative
+     * path so directly double-clicking NFL2K5.exe behaves like the launcher. */
+    if (!SetCurrentDirectoryA(root)) {
+        fprintf(stderr, "[BOOT] Could not use runtime root %s (error %lu)\n",
+                root, (unsigned long)GetLastError());
+    }
+    {
+        /* Launched by double-click (stderr goes nowhere): keep the session's
+         * output in logs/session.log, so a crash or freeze in normal play
+         * still leaves its report behind. Scripts that redirect stderr keep
+         * their own file. */
+        DWORD type = GetFileType(GetStdHandle(STD_ERROR_HANDLE));
+        if (type != FILE_TYPE_DISK && type != FILE_TYPE_PIPE) {
+            CreateDirectoryA("logs", NULL);
+            if (freopen("logs/session.log", "w", stderr))
+                setvbuf(stderr, NULL, _IOLBF, 1 << 16);
+        }
+    }
+    /* The desktop shortcut always points at the retail build.  If the player
+     * selected a native code pack in Features > Mod Packs, hand off before
+     * any Xbox state is created.  Pack builds use the same path to return to
+     * retail when the selected pack is turned off. */
+    if (!getenv("NFL2K5_NO_PACK_DISPATCH")) {
+        extern int nfl2k5_modpacks_boot_dispatch(const char *root);
+        if (nfl2k5_modpacks_boot_dispatch(root)) {
+            SetThreadExecutionState(ES_CONTINUOUS);
+            return 0;
+        }
+    }
     char disc_dir[MAX_PATH], disc_xbe[MAX_PATH], original_dir[MAX_PATH], original_xbe[MAX_PATH], save_dir[MAX_PATH];
     snprintf(disc_dir, sizeof disc_dir, "%s/original/disc", root);
     snprintf(disc_xbe, sizeof disc_xbe, "%s/default.xbe", disc_dir);
@@ -2330,6 +2679,44 @@ int main(int argc, char **argv)
     snprintf(save_dir, sizeof save_dir, "%s/saves", root);
     const char *game_dir = GetFileAttributesA(disc_xbe) != INVALID_FILE_ATTRIBUTES ? disc_dir : original_dir;
     const char *xbe_path = GetFileAttributesA(disc_xbe) != INVALID_FILE_ATTRIBUTES ? disc_xbe : original_xbe;
+    /* A mod pack build (tools/build.ps1 -Pack) is compiled from that pack's
+     * patched default.xbe: it runs that XBE, from the pack's installed folder
+     * (tools/pack-install.py), with the pack's disc overlay. The folder is
+     * found by the XBE's hash under mods\packs, or named by NFL2K5_PACK. */
+    static char pack_xbe[MAX_PATH], pack_dir[MAX_PATH];
+    if (strcmp(NFL2K5_XBE_SHA256, NFL2K5_RETAIL_XBE_SHA256) != 0) {
+        const char *env = getenv("NFL2K5_PACK");
+        if (env && *env) {
+            snprintf(pack_dir, sizeof pack_dir, "%s", env);
+        } else {
+            char pattern[MAX_PATH];
+            WIN32_FIND_DATAA fd;
+            HANDLE fh;
+            snprintf(pattern, sizeof pattern, "%s/mods/packs/*", root);
+            fh = FindFirstFileA(pattern, &fd);
+            if (fh != INVALID_HANDLE_VALUE) {
+                do {
+                    char cand[MAX_PATH], hex[65];
+                    if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) || fd.cFileName[0] == '.') continue;
+                    snprintf(cand, sizeof cand, "%s/mods/packs/%s/default.xbe", root, fd.cFileName);
+                    if (nfl2k5_file_sha256(cand, hex) && !strcmp(hex, NFL2K5_XBE_SHA256)) {
+                        snprintf(pack_dir, sizeof pack_dir, "%s/mods/packs/%s", root, fd.cFileName);
+                        break;
+                    }
+                } while (FindNextFileA(fh, &fd));
+                FindClose(fh);
+            }
+        }
+        if (!pack_dir[0]) {
+            fprintf(stderr, "[BOOT] This build is for a mod pack whose default.xbe has SHA-256 %s;\n"
+                            "       install the pack with tools/pack-install.py first.\n", NFL2K5_XBE_SHA256);
+            return 2;
+        }
+        snprintf(pack_xbe, sizeof pack_xbe, "%s/default.xbe", pack_dir);
+        xbe_path = pack_xbe;
+        _putenv_s("NFL2K5_PACK", pack_dir);
+        printf("[BOOT] Mod pack: %s\n", pack_dir);
+    }
     const int validate_only = argc == 2 && strcmp(argv[1], "--validate") == 0;
     if (argc > 1 && !validate_only && !(argc == 2 && strcmp(argv[1], "--run") == 0)) {
         fprintf(stderr, "Usage: NFL2K5.exe [--validate | --run]\n");
@@ -2370,6 +2757,16 @@ int main(int argc, char **argv)
          * RECOMP_GPU=0 goes back to software. */
         if (!getenv("RECOMP_GPU")) _putenv_s("RECOMP_GPU", "1");
         if (!getenv("RECOMP_GPU_VP")) _putenv_s("RECOMP_GPU_VP", "1");   /* vertex programs on the GPU */
+        /* Vertex programs decode the guest's raw vertex bytes themselves
+         * (nv2a_gpu_vp.inc.c, 2026-10-02): the CPU no longer converts every
+         * vertex. RECOMP_GPU_RAWVB=0 goes back to CPU conversion. */
+        if (!getenv("RECOMP_GPU_RAWVB")) _putenv_s("RECOMP_GPU_RAWVB", "1");
+        /* Commands run on a render thread while the game builds its next
+         * frame (xbox_memory_layout.c; each kick's segment is captured, so
+         * the render thread never walks memory D3D has reused). 60 fps in
+         * every camera at 2x-8x, 2026-10-03. RECOMP_GPU_ASYNC=0 goes back
+         * to running them inside the kick. */
+        if (!getenv("RECOMP_GPU_ASYNC")) _putenv_s("RECOMP_GPU_ASYNC", "1");
         /* RECOMP_GPU_VP_SKIP_START remains available for shader diagnosis.
          * Program 46 no longer needs the reference fallback: its corruption
          * was the translated shader's overly large near-zero w clamp. */
@@ -2401,7 +2798,7 @@ int main(int argc, char **argv)
     BCRYPT_ALG_HANDLE sha = NULL;
     unsigned char digest[32];
     char digest_hex[65];
-    const char *expected_sha = "73105b17a3161c546fea792a1c84ce37f9966a67c416f474cdbfab74b911a4a9";
+    const char *expected_sha = NFL2K5_XBE_SHA256;
     if (BCryptOpenAlgorithmProvider(&sha, BCRYPT_SHA256_ALGORITHM, NULL, 0) < 0) {
         free(data); return 2;
     }
@@ -2419,7 +2816,9 @@ int main(int argc, char **argv)
     if (memcmp(data, "XBEH", 4) || cert < base ||
         (uint64_t)(cert - base) + 12 > (uint64_t)length ||
         read32(data, cert - base + 8) != 0x53450030 ||
-        (read32(data, 0x128) ^ 0xA8FC57AB) != 0x00016BD1) {
+        /* Retail entry point; a pack may start in its own code (its XBE
+         * hash was checked above). */
+        (!strcmp(NFL2K5_XBE_SHA256, NFL2K5_RETAIL_XBE_SHA256) && (read32(data, 0x128) ^ 0xA8FC57AB) != 0x00016BD1)) {
         fprintf(stderr, "XBE does not match this NFL 2K5 integration. Reanalyze before rebuilding.\n");
         free(data); return 2;
     }
@@ -2468,12 +2867,35 @@ int main(int argc, char **argv)
     }
     printf("[BOOT] Game data preserved across memory initialization.\n");
     xbox_kernel_init();
+    {   /* Keep UDATA compatible with the Xbox title while exposing saves as
+         * saves/franchise, saves/rosters, saves/settings and saves/vip. */
+        extern void nfl2k5_save_library_start(const char *save_root);
+        nfl2k5_save_library_start(save_dir);
+    }
     xbox_path_init(game_dir, save_dir);
+    {   /* NFL2K5_PACK=<mods\packs\<pack> folder>: that mod pack's disc files
+         * (tools/pack-install.py) read over the retail ones. Its data only
+         * matches its own code build; the Extras menu will choose packs. */
+        extern int xbox_overlay_load(const char *dir, const char *disc);
+        const char *pack = getenv("NFL2K5_PACK");
+        if (pack && *pack)
+            xbox_overlay_load(pack, game_dir);
+    }
+    if (getenv("RECOMP_FIND_TEXT"))
+        CreateThread(NULL, 0, nfl2k5_find_text_thread, (LPVOID)getenv("RECOMP_FIND_TEXT"), 0, NULL);
+    if (getenv("NFL2K5_CLOCK_LOG"))
+        CreateThread(NULL, 0, nfl2k5_clock_log_thread, NULL, 0, NULL);
+    {   /* <root>/Music folders -> Xbox custom soundtracks (saves/Soundtracks) */
+        extern void nfl2k5_local_music_start(const char *root, const char *save_dir);
+        nfl2k5_local_music_start(root, save_dir);
+    }
     xbox_kernel_bridge_init();
     if (!validate_only && getenv("RECOMP_AC97_READY")) {
         g_apu_state = mcpx_apu_init_standalone((uint8_t *)(uintptr_t)xbox_GetMemoryOffset());
         { extern int (*g_xbox_apu_irq_line)(void); extern int mcpx_apu_irq_line(void);
-          g_xbox_apu_irq_line = mcpx_apu_irq_line; }   /* deliver APU interrupts */
+          g_xbox_apu_irq_line = mcpx_apu_irq_line; }
+        { extern void (*g_apu_irq_wake)(void); extern void xbox_kernel_irq_wake(void);
+          g_apu_irq_wake = xbox_kernel_irq_wake; }   /* ...without the 10 ms poll delay */   /* deliver APU interrupts */
         if (!g_apu_state || !AddVectoredExceptionHandler(1, audio_mmio)) {
             fprintf(stderr, "[BOOT] Failed to initialize APU compatibility.\n");
             return 3;
@@ -3057,4 +3479,194 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous, LPSTR command_line, i
 {
     (void)instance; (void)previous; (void)command_line; (void)show;
     return main(__argc, __argv);
+}
+
+/* 2026-10-01: music player play (1) / stop (0) commands, gen patches
+ * DIAG_MUSICPLAY / DIAG_MUSICSTOP. RECOMP_MUSIC_LOG=1 prints the track
+ * handle and the guest return addresses on the stack. */
+void nfl2k5_diag_music(int what, uint32_t handle_ptr, uint32_t esp_)
+{
+    static int on = -1;
+    const uint8_t *m = (const uint8_t *)xbox_GetMemoryOffset();
+    int k, shown = 0;
+    if (on < 0) on = getenv("RECOMP_MUSIC_LOG") != NULL;
+    if (!on) return;
+    fprintf(stderr, "[MUSIC] %s handle %d dsflag468CD0=%u t=%lu stack:", what ? "play" : "stop",
+            (int)*(const uint32_t *)(m + handle_ptr), *(const uint32_t *)(m + 0x468CD0u), GetTickCount());
+    for (k = 0; k < 64 && shown < 10; k++) {
+        uint32_t w = *(const uint32_t *)(m + esp_ + k * 4u);
+        if (w >= 0x00011000u && w < 0x00480000u) { fprintf(stderr, " %08X", w); shown++; }
+    }
+    fprintf(stderr, "\n");
+}
+
+/* 2026-10-01: sub_00040870 per channel record (esi): [esi] and [esi-4] are
+ * the positions it compares with the track cursor (0xA6D8E0 via
+ * sub_0003D3F0); delta is what it computed. end = the stop branch. */
+static void diag_music_rec(const char *what, uint32_t mgr, uint32_t rec, uint32_t delta, uint32_t chan)
+{
+    static int on = -1;
+    static DWORD last_fill;
+    const uint8_t *m = (const uint8_t *)xbox_GetMemoryOffset();
+    if (on < 0) on = getenv("RECOMP_MUSIC_LOG") != NULL;
+    if (!on) return;
+    if (what[0] == 'f' && GetTickCount() - last_fill < 500) return;
+    if (what[0] == 'f') last_fill = GetTickCount();
+    fprintf(stderr, "[MUSIC] %s mgr=%08X chan=%u delta=%d rec[-12..+12]=%d %d %d %d %d %d %d t=%lu\n", what, mgr, chan, (int)delta,
+            *(const int32_t *)(m + rec - 12), *(const int32_t *)(m + rec - 8), *(const int32_t *)(m + rec - 4),
+            *(const int32_t *)(m + rec), *(const int32_t *)(m + rec + 4), *(const int32_t *)(m + rec + 8),
+            *(const int32_t *)(m + rec + 12), GetTickCount());
+}
+void nfl2k5_diag_music_end(uint32_t mgr, uint32_t rec, uint32_t delta, uint32_t chan) { diag_music_rec("end", mgr, rec, delta, chan); }
+void nfl2k5_diag_music_fill(uint32_t mgr, uint32_t rec, uint32_t delta, uint32_t chan) { diag_music_rec("fill", mgr, rec, delta, chan); }
+
+/* 2026-10-01: sub_0003DBC0's track cursor check: cursor >= limit leaves the
+ * track position at 0 (= finished). Logs every rejection and one sample a
+ * second per slot. */
+void nfl2k5_diag_music_cursor(uint32_t slot_off, uint32_t cursor, uint32_t limit)
+{
+    static int on = -1;
+    static DWORD last[16];
+    const uint8_t *m = (const uint8_t *)xbox_GetMemoryOffset();
+    unsigned slot = slot_off / 192u;
+    if (on < 0) on = getenv("RECOMP_MUSIC_LOG") != NULL;
+    if (!on) return;
+    if (cursor < limit && slot < 16 && GetTickCount() - last[slot] < (slot < 2 ? 250u : 1000u)) return;
+    if (slot < 16) last[slot] = GetTickCount();
+    fprintf(stderr, "[MUSIC] cursor slot %u cursor %u limit %u %s playing %d state %d handle %d t=%lu\n", slot, cursor, limit,
+            cursor < limit ? "ok" : "REJECTED",
+            *(const int32_t *)(m + slot_off + 0xA6D844u), *(const int32_t *)(m + slot_off + 0xA6D85Cu),
+            *(const int32_t *)(m + slot_off + 0xA6D834u), GetTickCount());
+}
+
+/* Custom-soundtrack (WMA) song player, sub_00328130: the result of each step
+ * (open, decoder create, ...), to see where a song is rejected. */
+void nfl2k5_diag_wma(const char *what, uint32_t v)
+{
+    fprintf(stderr, "[WMA] %s %08X t=%lu\n", what, v, GetTickCount());
+}
+void nfl2k5_diag_wma3(const char *what, uint32_t a, uint32_t b, uint32_t c)
+{
+    static int on = -1;   /* every decoder read: RECOMP_WMA_LOG=1 only */
+    if (on < 0) on = getenv("RECOMP_WMA_LOG") != NULL;
+    if (!on) return;
+    fprintf(stderr, "[WMA] %s %08X %08X %08X\n", what, a, b, c);
+}
+
+/* Jukebox album art: the TXTR resource sub_000449E0 returned for an album's
+ * collection_NN name, dumped with the objects it points to (RECOMP_ART_LOG). */
+void nfl2k5_diag_txtr(uint32_t res, uint32_t album)
+{
+    const uint8_t *gm = (const uint8_t *)xbox_GetMemoryOffset();
+#define MEM32(a) (*(const uint32_t *)(gm + (uint32_t)(a)))
+    static int on = -1;
+    if (on < 0) on = getenv("RECOMP_ART_LOG") != NULL;
+    if (!on) return;
+    static uint32_t last_res;
+    if (res == last_res) return;   /* once per album change */
+    last_res = res;
+    fprintf(stderr, "[ART] album %u res %08X\n", album, res);
+    if (!res) return;
+    for (int i = 0; i < 0x60; i += 16)
+        fprintf(stderr, "[ART]   +%02X %08X %08X %08X %08X\n", i, MEM32(res + i), MEM32(res + i + 4),
+                MEM32(res + i + 8), MEM32(res + i + 12));
+    for (int k = 0; k < 0x30; k += 4) {
+        uint32_t p = MEM32(res + k);
+        if (p > 0x10000 && (p < 0x04000000u || (p >= 0x80000000u && p < 0x84000000u)))
+            fprintf(stderr, "[ART]   [+%02X]->%08X: %08X %08X %08X %08X %08X %08X %08X %08X\n", k, p,
+                    MEM32(p), MEM32(p + 4), MEM32(p + 8), MEM32(p + 12), MEM32(p + 16), MEM32(p + 20),
+                    MEM32(p + 24), MEM32(p + 28));
+    }
+}
+#undef MEM32
+
+/* The frontend task scheduler (sub_00038CD0) found a function slot that is
+ * not code: dump its table (0xB04D1C count, 0xB04D20 {busy, fn} x 32). */
+void nfl2k5_diag_sched(uint32_t idx)
+{
+    const uint8_t *gm = (const uint8_t *)xbox_GetMemoryOffset();
+    static int n;
+    if (n++ > 3) return;
+    fprintf(stderr, "[SCHED] bad task %u: count %u\n", idx, *(const uint32_t *)(gm + 0xB04D1Cu));
+    for (uint32_t i = 0; i < 40; i++)
+        fprintf(stderr, "[SCHED]   %2u busy %08X fn %08X\n", i, *(const uint32_t *)(gm + 0xB04D20u + i * 8),
+                *(const uint32_t *)(gm + 0xB04D24u + i * 8));
+}
+
+/* sub_00204930 found no candidate (gen patch SIM_PICK_EMPTY): log the team's
+ * in-game player list and return any active, healthy entry instead (0 if
+ * there is none), so the game thread doesn't die dividing by zero. */
+uint32_t nfl2k5_sim_pick_empty(uint32_t team, uint32_t want, uint32_t arg2, uint32_t mask)
+{
+    const uint8_t *m = (const uint8_t *)xbox_GetMemoryOffset();
+    uint32_t count = *(const uint32_t *)(m + team + 0x38u), base = *(const uint32_t *)(m + team + 0x60u);
+    uint32_t pick = 0, loose = 0;
+    static int logged;
+    int log = logged++ < 4;
+    if (log)
+        fprintf(stderr, "[SIMPICK] empty: team %08X (slot %d) count %u base %08X want group %u arg2 %08X mask %08X\n",
+                team, team >= 0xB75A40u ? (int)((team - 0xB75A40u) / 0x13390u) : -1, count, base, want, arg2, mask);
+    for (uint32_t i = 0; base && i < count && i < 80; i++) {
+        uint32_t e = base + i * 0x60u, fl = *(const uint32_t *)(m + e + 4u);
+        if (log)
+            fprintf(stderr, "[SIMPICK]   %2u %08X flags %08X group %u%s%s\n", i, e, fl, (fl >> 6) & 7,
+                    (fl & 0x80000000u) ? " active" : "", (fl & 0x400000u) ? " out" : "");
+        if ((fl & 0x80000000u) && !(fl & 0x400000u) && !pick) pick = e;
+        if ((fl & 0x80000000u) && !loose) loose = e;
+    }
+    if (!pick) pick = loose;
+    if (!pick && base && count) pick = base;
+    fprintf(stderr, "[SIMPICK] fallback -> %08X\n", pick);
+    fflush(stderr);
+    return pick;
+}
+
+/* Commentary entry validation result (gen patch DIAG_COMMVALID): entry, the
+ * validator's return (0 = valid), its words and name. First 40 only. */
+void nfl2k5_diag_commvalid(uint32_t entry, uint32_t ret)
+{
+    static int n;
+    const uint8_t *m = (const uint8_t *)xbox_GetMemoryOffset();
+    if (n++ >= 40) return;
+    const uint32_t *w = (const uint32_t *)(m + entry);
+    char name[64] = { 0 };
+    uint32_t np = w[0];
+    if (np && np < 0x04000000u)
+        for (int i = 0; i < 63; i++) { uint16_t c = *(const uint16_t *)(m + np + i * 2); if (!c) break; name[i] = c < 128 ? (char)c : '?'; }
+    fprintf(stderr, "[COMMVALID] %08X ret %08X w %08X %08X %08X %08X %08X %08X name \"%s\"\n",
+            entry, ret, w[0], w[1], w[2], w[3], w[4], w[5], name);
+}
+
+/* Play validation failure point (gen patch DIAG_PLAYVALID_FAIL, sub_001A9840's
+ * "Invalid play" exit): which player slot it reached and the counters. */
+void nfl2k5_diag_playfail(uint32_t entry, uint32_t esi_, uint32_t ebp_, uint32_t ebx_, uint32_t edi_,
+                          uint32_t s10, uint32_t s14, uint32_t s18, uint32_t eax_)
+{
+    static int n;
+    const uint8_t *m = (const uint8_t *)xbox_GetMemoryOffset();
+    if (n++ >= 30) return;
+    fprintf(stderr, "[PLAYFAIL] entry %08X flags %08X slot_off %+d ebp %u ebx %u edi %u s10 %u s14 %u s18 %u eax %08X\n",
+            entry, *(const uint32_t *)(m + entry + 4), (int)(esi_ - entry), ebp_, ebx_, edi_, s10, s14, s18, eax_);
+}
+
+void nfl2k5_diag_playstep(int which, uint32_t eax_, uint32_t esi_, uint32_t ebp_)
+{
+    static int n;
+    const uint8_t *m = (const uint8_t *)xbox_GetMemoryOffset();
+    if (n++ >= 24) return;
+    uint32_t nodes = *(const uint32_t *)(m + esi_ + 4);
+    fprintf(stderr, "[PLAYSTEP] %s ret %08X slot %u word %08X %08X", which == 1 ? "1A91A0" : "1A96B0",
+            eax_, ebp_, *(const uint32_t *)(m + esi_), nodes);
+    if (nodes && nodes < 0x04000000u)
+        for (int k = 0; k < 6; k++)
+            fprintf(stderr, " [%08X %08X]", *(const uint32_t *)(m + nodes + k * 8),
+                    *(const uint32_t *)(m + nodes + k * 8 + 4));
+    fprintf(stderr, "\n");
+}
+
+void nfl2k5_diag_slot(const char *where, uint32_t a, uint32_t b, uint32_t c, uint32_t d)
+{
+    static int n;
+    if (n++ >= 60) return;
+    fprintf(stderr, "[SLOT] %s: %08X %08X %08X %08X\n", where, a, b, c, d);
 }

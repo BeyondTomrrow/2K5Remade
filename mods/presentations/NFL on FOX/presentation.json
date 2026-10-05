@@ -1,0 +1,996 @@
+{
+  "format": 1,
+  "name": "NFL on FOX",
+  "network": "FOX NFL",
+  "description": "Compact FOX-style broadcast scorebug with oversized team logos, stacked clock and quarter, timeout markers, and a live down-and-distance tab.",
+  "font": "Human PE Narrow",
+  "scorebug": {
+    "canvas": {
+      "width": 572,
+      "height": 95,
+      "overflow_top": 82,
+      "overflow_left": 230,
+      "overflow_right": 230
+    },
+    "placement": {
+      "center_x": 0.5,
+      "center_y": 0.8896,
+      "width": 0.446875
+    },
+    "team_slots": {
+      "away": {
+        "block": [
+          0,
+          0,
+          242,
+          95
+        ],
+        "score_box": [
+          148,
+          6,
+          94,
+          63
+        ],
+        "timeouts": [
+          153,
+          73,
+          84,
+          8
+        ]
+      },
+      "home": {
+        "block": [
+          338,
+          0,
+          234,
+          95
+        ],
+        "score_box": [
+          338,
+          6,
+          94,
+          63
+        ],
+        "timeouts": [
+          343,
+          73,
+          84,
+          8
+        ]
+      }
+    },
+    "elements": [
+      {
+        "type": "box",
+        "x": 242,
+        "y": 10,
+        "w": 96,
+        "h": 64,
+        "radius": 0,
+        "gradient": {
+          "top": "#2E3030B8",
+          "bottom": "#151718A8"
+        },
+        "shadow": "#00000055"
+      },
+      {
+        "type": "text",
+        "text": "{clock}",
+        "x": 242,
+        "y": 9,
+        "w": 96,
+        "h": 35,
+        "size": 28,
+        "weight": 900,
+        "stretch": "condensed",
+        "color": "#FFFFFF",
+        "align": "center",
+        "shadow": "#00000088"
+      },
+      {
+        "type": "text",
+        "text": "{quarter}",
+        "x": 242,
+        "y": 41,
+        "w": 96,
+        "h": 31,
+        "size": 23,
+        "weight": 900,
+        "stretch": "condensed",
+        "color": "#FFFFFF",
+        "align": "center",
+        "shadow": "#00000088"
+      },
+      {
+        "type": "text",
+        "text": "{away.score}",
+        "x": 148,
+        "y": 1,
+        "w": 94,
+        "h": 70,
+        "size": 61,
+        "weight": 900,
+        "stretch": "condensed",
+        "color": "#F2F2F2",
+        "align": "center",
+        "shadow": "#00000055"
+      },
+      {
+        "type": "text",
+        "text": "{home.score}",
+        "x": 338,
+        "y": 1,
+        "w": 94,
+        "h": 70,
+        "size": 61,
+        "weight": 900,
+        "stretch": "condensed",
+        "color": "#F2F2F2",
+        "align": "center",
+        "shadow": "#00000055"
+      },
+      {
+        "type": "box",
+        "x": -40,
+        "y": -34,
+        "w": 282,
+        "h": 28,
+        "radius": 0,
+        "gradient": {
+          "top": "{away.primary}|lighten:0.14",
+          "bottom": "{away.primary}|darken:0.18"
+        },
+        "shadow": "#00000077",
+        "show": "possession:away"
+      },
+      {
+        "type": "text",
+        "text": "{down_distance}",
+        "x": -28,
+        "y": -34,
+        "w": 194,
+        "h": 28,
+        "size": 20,
+        "weight": 900,
+        "stretch": "condensed",
+        "color": "#FFFFFF",
+        "align": "center",
+        "shadow": "#00000088",
+        "show": "possession:away"
+      },
+      {
+        "type": "box",
+        "x": 166,
+        "y": -29,
+        "w": 1,
+        "h": 18,
+        "fill": "#FFFFFF88",
+        "show": "possession:away && play_clock_available"
+      },
+      {
+        "type": "text",
+        "text": "{play_clock}",
+        "x": 170,
+        "y": -34,
+        "w": 59,
+        "h": 28,
+        "size": 20,
+        "weight": 900,
+        "stretch": "condensed",
+        "color": "#FFFFFF",
+        "align": "center",
+        "show": "possession:away && play_clock_available"
+      },
+      {
+        "type": "box",
+        "x": 330,
+        "y": -34,
+        "w": 282,
+        "h": 28,
+        "radius": 0,
+        "gradient": {
+          "top": "{home.primary}|lighten:0.14",
+          "bottom": "{home.primary}|darken:0.18"
+        },
+        "shadow": "#00000077",
+        "show": "possession:home"
+      },
+      {
+        "type": "text",
+        "text": "{down_distance}",
+        "x": 342,
+        "y": -34,
+        "w": 194,
+        "h": 28,
+        "size": 20,
+        "weight": 900,
+        "stretch": "condensed",
+        "color": "#FFFFFF",
+        "align": "center",
+        "shadow": "#00000088",
+        "show": "possession:home"
+      },
+      {
+        "type": "box",
+        "x": 536,
+        "y": -29,
+        "w": 1,
+        "h": 18,
+        "fill": "#FFFFFF88",
+        "show": "possession:home && play_clock_available"
+      },
+      {
+        "type": "text",
+        "text": "{play_clock}",
+        "x": 540,
+        "y": -34,
+        "w": 59,
+        "h": 28,
+        "size": 20,
+        "weight": 900,
+        "stretch": "condensed",
+        "color": "#FFFFFF",
+        "align": "center",
+        "show": "possession:home && play_clock_available"
+      },
+      {
+        "type": "timeouts",
+        "team": "away",
+        "x": 153,
+        "y": 73,
+        "count": 3,
+        "bar_w": 23,
+        "bar_h": 8,
+        "gap": 5,
+        "radius": 0,
+        "on": "#F1F1F1",
+        "off": "#5A5A5A"
+      },
+      {
+        "type": "timeouts",
+        "team": "home",
+        "x": 343,
+        "y": 73,
+        "count": 3,
+        "bar_w": 23,
+        "bar_h": 8,
+        "gap": 5,
+        "radius": 0,
+        "on": "#F1F1F1",
+        "off": "#5A5A5A"
+      },
+      {
+        "type": "image",
+        "src": "assets/logos/{away.abbr}.png",
+        "x": 0,
+        "y": 0,
+        "w": 151,
+        "h": 95
+      },
+      {
+        "type": "image",
+        "src": "assets/logos/{home.abbr}.png",
+        "x": 425,
+        "y": 0,
+        "w": 147,
+        "h": 95
+      },
+      {
+        "type": "box",
+        "x": 147,
+        "y": 69,
+        "w": 6,
+        "h": 13,
+        "fill": "{away.primary}|lighten:0.1",
+        "show": "possession:away"
+      },
+      {
+        "type": "box",
+        "x": 427,
+        "y": 69,
+        "w": 6,
+        "h": 13,
+        "fill": "{home.primary}|lighten:0.1",
+        "show": "possession:home"
+      }
+    ],
+    "lifecycle": {
+      "fade_in": {
+        "duration": 0.34,
+        "ease": "cubic_out",
+        "from_y": 8,
+        "from_scale": 0.985
+      },
+      "fade_out": {
+        "duration": 0.22,
+        "ease": "cubic_in",
+        "from_y": 5,
+        "from_scale": 0.99
+      }
+    }
+  },
+  "music": {
+    "volume": 0.35,
+    "fade_out": 2.5,
+    "duck_game_audio": 1.0,
+    "mute_game_music": true,
+    "duck_under_announcers": 0.35,
+    "announcer_level": 0.02,
+    "intro": [
+      {
+        "title": "NFL on FOX Theme",
+        "file": "music/NFL on FOX Theme Song.mp3"
+      }
+    ],
+    "outro": [
+      {
+        "title": "NFL on FOX Theme",
+        "file": "music/NFL on FOX Theme Song.mp3"
+      }
+    ]
+  },
+  "animations": {
+    "pregame": {
+      "duration": 4.0,
+      "layers": [
+        {
+          "type": "box",
+          "x": 60,
+          "y": -66,
+          "w": 440,
+          "h": 52,
+          "radius": 3,
+          "gradient": {
+            "top": "#243F68",
+            "bottom": "#08182F"
+          },
+          "end": 4.0,
+          "keyframes": [
+            {
+              "time": 0.0,
+              "y": 18,
+              "scale": 0.96,
+              "opacity": 0.0
+            },
+            {
+              "time": 0.32,
+              "y": 0,
+              "scale": 1.0,
+              "opacity": 1.0,
+              "ease": "cubic_out"
+            },
+            {
+              "time": 3.55,
+              "y": 0,
+              "scale": 1.0,
+              "opacity": 1.0
+            },
+            {
+              "time": 4.0,
+              "y": -8,
+              "scale": 0.99,
+              "opacity": 0.0,
+              "ease": "cubic_in"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": "NFL ON FOX",
+          "x": 60,
+          "y": -66,
+          "w": 440,
+          "h": 52,
+          "size": 34,
+          "weight": 900,
+          "stretch": "condensed",
+          "italic": true,
+          "color": "#FFFFFF",
+          "align": "center",
+          "start": 0.4,
+          "end": 4.0,
+          "keyframes": [
+            {
+              "time": 0.0,
+              "y": 18,
+              "scale": 0.96,
+              "opacity": 0.0
+            },
+            {
+              "time": 0.32,
+              "y": 0,
+              "scale": 1.0,
+              "opacity": 1.0,
+              "ease": "cubic_out"
+            },
+            {
+              "time": 3.55,
+              "y": 0,
+              "scale": 1.0,
+              "opacity": 1.0
+            },
+            {
+              "time": 4.0,
+              "y": -8,
+              "scale": 0.99,
+              "opacity": 0.0,
+              "ease": "cubic_in"
+            }
+          ]
+        }
+      ]
+    },
+    "touchdown": {
+      "duration": 4.5,
+      "layers": [
+        {
+          "type": "box",
+          "x": 116,
+          "y": -50,
+          "w": 328,
+          "h": 42,
+          "radius": 2,
+          "gradient": {
+            "top": "{team.primary}|lighten:0.12",
+            "bottom": "{team.primary}|darken:0.35"
+          },
+          "enter": {
+            "type": "slide_up",
+            "time": 0.3
+          },
+          "exit": {
+            "type": "slide_down",
+            "time": 0.3
+          }
+        },
+        {
+          "type": "text",
+          "text": "TOUCHDOWN  {team.abbr}",
+          "x": 116,
+          "y": -50,
+          "w": 328,
+          "h": 42,
+          "size": 29,
+          "weight": 900,
+          "stretch": "condensed",
+          "italic": true,
+          "color": "#FFFFFF",
+          "align": "center",
+          "enter": {
+            "type": "slide_up",
+            "time": 0.3
+          },
+          "exit": {
+            "type": "slide_down",
+            "time": 0.3
+          }
+        },
+        {
+          "type": "box",
+          "at": "team.score_box",
+          "radius": 2,
+          "fill": "#F4C430",
+          "blink": {
+            "period": 0.4,
+            "until": 3.0
+          }
+        },
+        {
+          "type": "text",
+          "at": "team.score_box",
+          "text": "{team.score}",
+          "size": 57,
+          "weight": 800,
+          "stretch": "condensed",
+          "color": "#111318",
+          "align": "center",
+          "blink": {
+            "period": 0.4,
+            "until": 3.0
+          }
+        }
+      ]
+    },
+    "field_goal": {
+      "duration": 3.5,
+      "layers": [
+        {
+          "type": "box",
+          "x": 204,
+          "y": -25,
+          "w": 152,
+          "h": 29,
+          "radius": 2,
+          "gradient": {
+            "top": "#F4C430",
+            "bottom": "#C89700"
+          },
+          "enter": {
+            "type": "wipe_x",
+            "time": 0.25
+          },
+          "exit": {
+            "type": "fade",
+            "time": 0.25
+          }
+        },
+        {
+          "type": "text",
+          "text": "FIELD GOAL",
+          "x": 204,
+          "y": -25,
+          "w": 152,
+          "h": 29,
+          "size": 20,
+          "weight": 900,
+          "stretch": "condensed",
+          "color": "#111318",
+          "align": "center",
+          "enter": {
+            "type": "wipe_x",
+            "time": 0.25
+          },
+          "exit": {
+            "type": "fade",
+            "time": 0.25
+          }
+        }
+      ]
+    },
+    "extra_point": {
+      "duration": 2.5,
+      "layers": [
+        {
+          "type": "box",
+          "x": 204,
+          "y": -25,
+          "w": 152,
+          "h": 29,
+          "radius": 2,
+          "fill": "#E8E8E8",
+          "enter": {
+            "type": "fade",
+            "time": 0.2
+          },
+          "exit": {
+            "type": "fade",
+            "time": 0.25
+          }
+        },
+        {
+          "type": "text",
+          "text": "PAT GOOD",
+          "x": 204,
+          "y": -25,
+          "w": 152,
+          "h": 29,
+          "size": 20,
+          "weight": 900,
+          "stretch": "condensed",
+          "color": "#0B2347",
+          "align": "center"
+        }
+      ]
+    },
+    "two_point": {
+      "duration": 3.0,
+      "layers": [
+        {
+          "type": "box",
+          "x": 204,
+          "y": -25,
+          "w": 152,
+          "h": 29,
+          "radius": 2,
+          "fill": "#0B2347",
+          "enter": {
+            "type": "wipe_x",
+            "time": 0.25
+          },
+          "exit": {
+            "type": "fade",
+            "time": 0.25
+          }
+        },
+        {
+          "type": "text",
+          "text": "2-PT GOOD",
+          "x": 204,
+          "y": -25,
+          "w": 152,
+          "h": 29,
+          "size": 20,
+          "weight": 900,
+          "stretch": "condensed",
+          "color": "#FFFFFF",
+          "align": "center"
+        }
+      ]
+    },
+    "safety": {
+      "duration": 3.5,
+      "layers": [
+        {
+          "type": "box",
+          "x": 204,
+          "y": -25,
+          "w": 152,
+          "h": 29,
+          "radius": 2,
+          "fill": "#F4C430",
+          "enter": {
+            "type": "wipe_x",
+            "time": 0.25
+          },
+          "exit": {
+            "type": "fade",
+            "time": 0.25
+          }
+        },
+        {
+          "type": "text",
+          "text": "SAFETY",
+          "x": 204,
+          "y": -25,
+          "w": 152,
+          "h": 29,
+          "size": 20,
+          "weight": 900,
+          "stretch": "condensed",
+          "color": "#111318",
+          "align": "center"
+        }
+      ]
+    },
+    "timeout": {
+      "duration": 3.0,
+      "layers": [
+        {
+          "type": "box",
+          "x": 204,
+          "y": -25,
+          "w": 152,
+          "h": 29,
+          "radius": 2,
+          "gradient": {
+            "top": "{team.primary}|lighten:0.1",
+            "bottom": "{team.primary}|darken:0.3"
+          },
+          "enter": {
+            "type": "wipe_x",
+            "time": 0.25
+          },
+          "exit": {
+            "type": "fade",
+            "time": 0.25
+          }
+        },
+        {
+          "type": "text",
+          "text": "TIMEOUT {team.abbr}",
+          "x": 204,
+          "y": -25,
+          "w": 152,
+          "h": 29,
+          "size": 19,
+          "weight": 900,
+          "stretch": "condensed",
+          "color": "#FFFFFF",
+          "align": "center"
+        }
+      ]
+    },
+    "first_down": {
+      "duration": 2.0,
+      "layers": [
+        {
+          "type": "box",
+          "x": 204,
+          "y": -25,
+          "w": 152,
+          "h": 29,
+          "radius": 2,
+          "gradient": {
+            "top": "#F4C430",
+            "bottom": "#C89700"
+          },
+          "enter": {
+            "type": "wipe_x",
+            "time": 0.22
+          },
+          "exit": {
+            "type": "fade",
+            "time": 0.22
+          }
+        },
+        {
+          "type": "text",
+          "text": "FIRST DOWN",
+          "x": 204,
+          "y": -25,
+          "w": 152,
+          "h": 29,
+          "size": 20,
+          "weight": 900,
+          "stretch": "condensed",
+          "color": "#111318",
+          "align": "center"
+        }
+      ]
+    },
+    "two_minute_warning": {
+      "duration": 3.5,
+      "layers": [
+        {
+          "type": "box",
+          "x": 204,
+          "y": -25,
+          "w": 152,
+          "h": 29,
+          "radius": 2,
+          "fill": "#0B2347",
+          "enter": {
+            "type": "wipe_x",
+            "time": 0.25
+          },
+          "exit": {
+            "type": "fade",
+            "time": 0.25
+          }
+        },
+        {
+          "type": "text",
+          "text": "2:00 WARNING",
+          "x": 204,
+          "y": -25,
+          "w": 152,
+          "h": 29,
+          "size": 19,
+          "weight": 900,
+          "stretch": "condensed",
+          "color": "#FFFFFF",
+          "align": "center"
+        }
+      ]
+    },
+    "end_of_quarter": {
+      "duration": 4.0,
+      "layers": [
+        {
+          "type": "box",
+          "x": 204,
+          "y": -25,
+          "w": 152,
+          "h": 29,
+          "radius": 2,
+          "fill": "#22252B",
+          "enter": {
+            "type": "wipe_x",
+            "time": 0.25
+          },
+          "exit": {
+            "type": "fade",
+            "time": 0.25
+          }
+        },
+        {
+          "type": "text",
+          "text": "END {ended_quarter}",
+          "x": 204,
+          "y": -25,
+          "w": 152,
+          "h": 29,
+          "size": 19,
+          "weight": 900,
+          "stretch": "condensed",
+          "color": "#FFFFFF",
+          "align": "center"
+        }
+      ]
+    },
+    "halftime": {
+      "duration": 5.0,
+      "layers": [
+        {
+          "type": "box",
+          "x": 116,
+          "y": -50,
+          "w": 328,
+          "h": 42,
+          "radius": 2,
+          "gradient": {
+            "top": "#243F68",
+            "bottom": "#08182F"
+          },
+          "enter": {
+            "type": "slide_up",
+            "time": 0.3
+          },
+          "exit": {
+            "type": "slide_down",
+            "time": 0.3
+          }
+        },
+        {
+          "type": "text",
+          "text": "FOX NFL HALFTIME",
+          "x": 116,
+          "y": -50,
+          "w": 328,
+          "h": 42,
+          "size": 28,
+          "weight": 900,
+          "stretch": "condensed",
+          "italic": true,
+          "color": "#FFFFFF",
+          "align": "center",
+          "enter": {
+            "type": "slide_up",
+            "time": 0.3
+          },
+          "exit": {
+            "type": "slide_down",
+            "time": 0.3
+          }
+        }
+      ]
+    },
+    "player_stat": {
+      "duration": 5.0,
+      "layers": [
+        {
+          "type": "text",
+          "show": "event_team:away",
+          "text": "{player.name}",
+          "x": -224,
+          "y": 32,
+          "w": 214,
+          "h": 26,
+          "size": 18,
+          "weight": 900,
+          "stretch": "condensed",
+          "italic": true,
+          "color": "#FFFFFF",
+          "align": "right",
+          "shadow": "#000000CC",
+          "keyframes": [
+            {
+              "time": 0,
+              "x": 10,
+              "opacity": 0
+            },
+            {
+              "time": 0.25,
+              "x": 0,
+              "opacity": 1,
+              "ease": "cubic_out"
+            },
+            {
+              "time": 4.65,
+              "opacity": 1
+            },
+            {
+              "time": 5.0,
+              "opacity": 0,
+              "ease": "cubic_in"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "show": "event_team:away",
+          "text": "{player.line}",
+          "x": -224,
+          "y": 56,
+          "w": 214,
+          "h": 22,
+          "size": 15,
+          "weight": 900,
+          "stretch": "condensed",
+          "italic": true,
+          "color": "#FFFFFF",
+          "align": "right",
+          "shadow": "#000000CC",
+          "keyframes": [
+            {
+              "time": 0.08,
+              "x": 10,
+              "opacity": 0
+            },
+            {
+              "time": 0.3,
+              "x": 0,
+              "opacity": 1,
+              "ease": "cubic_out"
+            },
+            {
+              "time": 4.65,
+              "opacity": 1
+            },
+            {
+              "time": 5.0,
+              "opacity": 0,
+              "ease": "cubic_in"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "show": "event_team:home",
+          "text": "{player.name}",
+          "x": 582,
+          "y": 32,
+          "w": 214,
+          "h": 26,
+          "size": 18,
+          "weight": 900,
+          "stretch": "condensed",
+          "italic": true,
+          "color": "#FFFFFF",
+          "align": "left",
+          "shadow": "#000000CC",
+          "keyframes": [
+            {
+              "time": 0,
+              "x": -10,
+              "opacity": 0
+            },
+            {
+              "time": 0.25,
+              "x": 0,
+              "opacity": 1,
+              "ease": "cubic_out"
+            },
+            {
+              "time": 4.65,
+              "opacity": 1
+            },
+            {
+              "time": 5.0,
+              "opacity": 0,
+              "ease": "cubic_in"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "show": "event_team:home",
+          "text": "{player.line}",
+          "x": 582,
+          "y": 56,
+          "w": 214,
+          "h": 22,
+          "size": 15,
+          "weight": 900,
+          "stretch": "condensed",
+          "italic": true,
+          "color": "#FFFFFF",
+          "align": "left",
+          "shadow": "#000000CC",
+          "keyframes": [
+            {
+              "time": 0.08,
+              "x": -10,
+              "opacity": 0
+            },
+            {
+              "time": 0.3,
+              "x": 0,
+              "opacity": 1,
+              "ease": "cubic_out"
+            },
+            {
+              "time": 4.65,
+              "opacity": 1
+            },
+            {
+              "time": 5.0,
+              "opacity": 0,
+              "ease": "cubic_in"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

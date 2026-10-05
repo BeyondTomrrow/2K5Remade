@@ -1,0 +1,14 @@
+{
+  "abbreviation": "PHI",
+  "city": "Philadelphia",
+  "name": "Eagles",
+  "colors": {
+    "primary": "#004C54",
+    "secondary": "#A5ACAF",
+    "text": "#FFFFFF"
+  },
+  "logos": {
+    "scorebug": "logos/scorebug.png"
+  },
+  "aliases": []
+}

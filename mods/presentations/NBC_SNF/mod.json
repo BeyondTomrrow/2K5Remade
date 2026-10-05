@@ -1,0 +1,24 @@
+{
+  "schema": 1,
+  "id": "nbc_snf",
+  "name": "NBC Sunday Night Football",
+  "menu_name": "NBC SNF",
+  "type": "html",
+  "version": "0.2.0",
+  "author": "NFL2K5-PC",
+  "description": "NBC Sunday Night Football scorebug in pure HTML/CSS/SVG, laid out from the broadcast reference and styled after the 2022 SNF package: glass, texture, the curve, vapor lights. Down & distance tab with play clock, flag state, touchdown takeover.",
+  "enabled": true,
+  "entry": "scorebug.html",
+  "replaces": ["lineup", "player_cards"],
+  "canvas": {
+    "width": 1920,
+    "height": 1080,
+    "fit": "fill_width"
+  },
+  "dependencies": [],
+  "assets": {},
+  "compatibility": {
+    "game": "NFL2K5-PC",
+    "presentation_api": 1
+  }
+}

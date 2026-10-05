@@ -72,10 +72,23 @@ typedef struct Nfl2k5PlayerStat {
     int tackles, sacks, defensive_interceptions;
     int field_goals_made, field_goals_attempted, longest_field_goal;
     float display_seconds;
+    /* Optional roster identity carried with a live stat sample.  These are
+     * copied by the presentation layer before the guest callback returns. */
+    const char *full_name;
+    int photo_id;
+    int jersey_number;
 } Nfl2k5PlayerStat;
 
 void nfl2k5_broadcast_event(Nfl2k5BroadcastEvent event, int team);
 void nfl2k5_broadcast_player_stat(const Nfl2k5PlayerStat *stat, int team);
+/* Guest-context extraction publishes each team's current quarterback here.
+ * The call copies the name and values before returning; no guest pointers
+ * survive in the presentation cache. Team is 0 away, 1 home. The presenter
+ * chooses possession and keeps the sample visible throughout live gameplay,
+ * hiding it with the scorebug on play selection, pause and broadcast cuts.
+ * A new-match/roster teardown may explicitly invalidate both cached samples. */
+void nfl2k5_broadcast_live_qb_sample(const Nfl2k5PlayerStat *stat, int team);
+void nfl2k5_broadcast_live_qb_reset(void);
 int nfl2k5_broadcast_get_state(Nfl2k5BroadcastState *state);
 
 #ifdef __cplusplus
