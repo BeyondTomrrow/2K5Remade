@@ -72,6 +72,11 @@ typedef struct Nfl2k5PlayerStat {
     int tackles, sacks, defensive_interceptions;
     int field_goals_made, field_goals_attempted, longest_field_goal;
     float display_seconds;
+    /* Optional roster identity carried with a live stat sample.  These are
+     * copied by the presentation layer before the guest callback returns. */
+    const char *full_name;
+    int photo_id;
+    int jersey_number;
 } Nfl2k5PlayerStat;
 
 void nfl2k5_broadcast_event(Nfl2k5BroadcastEvent event, int team);

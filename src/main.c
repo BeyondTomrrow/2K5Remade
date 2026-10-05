@@ -936,7 +936,12 @@ void nfl2k5_diag_res(uint32_t res, int load, uint32_t ret, uint32_t r2, uint32_t
 void nfl2k5_diag_script(uint32_t ctx, uint32_t op, uint32_t start)
 {
     extern int xbox_verbose(void);
-    if (!xbox_verbose())          /* thousands of lines a match */
+    static int presentation_trace = -1;
+    if (presentation_trace < 0)
+        presentation_trace = getenv("NFL2K5_PRESENTATION_TRACE") != NULL;
+    if (!xbox_verbose() && !presentation_trace) /* thousands of lines a match */
+        return;
+    if (presentation_trace && !start) /* focused audit records command starts */
         return;
     static uint32_t ctxs[16], last[16];
     static volatile LONG printed;
@@ -1001,6 +1006,19 @@ static int pc_player(const uint8_t *m, uint32_t rec, char *first, char *last)
 {
     if (rec < 0x10000u || rec >= 0x4000000u - 0x54) return 0;
     return pc_name(m, rec + 0x10u, first, 32) && pc_name(m, rec + 0x14u, last, 32);
+}
+
+static void pc_inline_utf16(const uint8_t *m, uint32_t address, char *out, size_t capacity)
+{
+    size_t i = 0;
+    if (!out || !capacity || address >= 0x4000000u - 2) return;
+    while (i + 1 < capacity && address + i * 2u < 0x4000000u - 2) {
+        uint16_t ch = *(const uint16_t *)(m + address + i * 2u);
+        if (!ch) break;
+        if (ch < 32 || ch > 126) { i = 0; break; }
+        out[i++] = (char)ch;
+    }
+    out[i] = 0;
 }
 
 /* Frame interval (gen patch FRAME_INTERVAL in sub_00027880): the vblanks
@@ -1090,7 +1108,20 @@ void nfl2k5_playercard_probe(uint32_t ctx)
     const uint8_t *m = (const uint8_t *)xbox_GetMemoryOffset();
     char first[32], last[32];
     uint32_t off, d, off2;
-    if (InterlockedIncrement(&printed) > 400 || ctx < 0x10000u || ctx >= 0x4000000u - 0x100)
+    if (ctx < 0x10000u || ctx >= 0x4000000u - 0x100)
+        return;
+    {
+        /* The SNF package can replace player feature/stat cards once it has
+         * the active quarterback's live stats and roster portrait.  Close
+         * this native popup only after the package accepts it. */
+        extern int nfl2k5_presentation_playercard(uint32_t kind, const char *title);
+        uint32_t kind = *(const uint32_t *)(m + ctx + 0x48u);
+        char native_title[96];
+        pc_inline_utf16(m, ctx + 0x4Cu, native_title, sizeof native_title);
+        if (nfl2k5_presentation_playercard(kind, native_title))
+            *(float *)((uint8_t *)m + ctx + 8u) = 0.01f;
+    }
+    if (InterlockedIncrement(&printed) > 400)
         return;
     fprintf(stderr, "  [CARD] ctx=%08X kind=%u\n", ctx, *(const uint32_t *)(m + ctx + 0x48u));
     for (off = 0; off < 0x100u; off += 4) {
@@ -2836,6 +2867,11 @@ int main(int argc, char **argv)
     }
     printf("[BOOT] Game data preserved across memory initialization.\n");
     xbox_kernel_init();
+    {   /* Keep UDATA compatible with the Xbox title while exposing saves as
+         * saves/franchise, saves/rosters, saves/settings and saves/vip. */
+        extern void nfl2k5_save_library_start(const char *save_root);
+        nfl2k5_save_library_start(save_dir);
+    }
     xbox_path_init(game_dir, save_dir);
     {   /* NFL2K5_PACK=<mods\packs\<pack> folder>: that mod pack's disc files
          * (tools/pack-install.py) read over the retail ones. Its data only

@@ -154,13 +154,15 @@ static int nfl2k5_guest_text(uint32_t address, char *out, size_t capacity)
     return i != 0;
 }
 
-static int nfl2k5_guest_player_name(uint32_t player, char *out, size_t capacity)
+static int nfl2k5_guest_player_identity(uint32_t player, char *short_name, size_t short_capacity,
+                                       char *full_name, size_t full_capacity)
 {
     char first[32] = {0}, last[40] = {0};
     if (!nfl2k5_guest_text(nfl2k5_qb_rd32(player + 0x10u), first, sizeof first) ||
         !nfl2k5_guest_text(nfl2k5_qb_rd32(player + 0x14u), last, sizeof last))
         return 0;
-    _snprintf_s(out, capacity, _TRUNCATE, "%c. %s", first[0], last);
+    _snprintf_s(short_name, short_capacity, _TRUNCATE, "%c. %s", first[0], last);
+    _snprintf_s(full_name, full_capacity, _TRUNCATE, "%s %s", first, last);
     return 1;
 }
 
@@ -194,11 +196,11 @@ void nfl2k5_live_qb_guest_tick(void)
         unsigned char count = 0;
         uint32_t player = 0;
         Nfl2k5PlayerStat stat;
-        char name[48];
+        char name[48], full_name[80];
         nfl2k5_qb_read(count_address, &count, sizeof count);
         if (count > 71u || !nfl2k5_guest_current_qb(side, table, count, &player)) continue;
         memset(&stat, 0, sizeof stat);
-        if (!nfl2k5_guest_player_name(player, name, sizeof name) ||
+        if (!nfl2k5_guest_player_identity(player, name, sizeof name, full_name, sizeof full_name) ||
             !nfl2k5_guest_player_stat(player, 0x04u, &stat.completions) ||
             !nfl2k5_guest_player_stat(player, 0x23u, &stat.attempts) ||
             !nfl2k5_guest_player_stat(player, 0x4Cu, &stat.passing_yards) ||
@@ -212,6 +214,10 @@ void nfl2k5_live_qb_guest_tick(void)
             continue;
         stat.kind = NFL2K5_STAT_QB;
         stat.player_name = name;
+        stat.full_name = full_name;
+        nfl2k5_qb_read(player + 6u, &stat.photo_id, sizeof(uint16_t));
+        stat.photo_id &= 0xFFFF;
+        stat.jersey_number = (int)((nfl2k5_qb_rd32(player + 0x20u) >> 3) & 0x7Fu);
         stat.display_seconds = 5.0f;
         nfl2k5_broadcast_live_qb_sample(&stat, side);
         if (diagnostics++ < 2)

@@ -9,7 +9,7 @@
   "description": "NBC Sunday Night Football scorebug in pure HTML/CSS/SVG, laid out from the broadcast reference and styled after the 2022 SNF package: glass, texture, the curve, vapor lights. Down & distance tab with play clock, flag state, touchdown takeover.",
   "enabled": true,
   "entry": "scorebug.html",
-  "replaces": ["lineup"],
+  "replaces": ["lineup", "player_cards"],
   "canvas": {
     "width": 1920,
     "height": 1080,

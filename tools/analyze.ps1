@@ -33,6 +33,14 @@ try {
   RunPython @('-m','tools.func_id',$xbe,'--functions',"$an\disasm\functions.json",'--strings',"$an\disasm\strings.json",'--xrefs',"$an\disasm\xrefs.json",'--output',"$an\func_id")
   RunPython @('-m','tools.abi_analysis',$xbe,'--disasm-dir',"$an\disasm",'--func-id-dir',"$an\func_id",'--output-dir',"$an\abi")
   if ($Recompile) {
+    # Mod detour helpers sometimes return a comparison in EFLAGS for the
+    # caller's next conditional jump. Re-scan after disassembly and pass the
+    # result into the lifter so pack conversion is reproducible.
+    $flagReturns = "$an\flag_return_funcs.json"
+    RunPython @('-m','tools.recomp.flag_return_scan',$xbe,"$an\disasm",$flagReturns)
+    $oldFlagReturns = $env:RECOMP_FLAG_RETURN_FUNCS
+    $env:RECOMP_FLAG_RETURN_FUNCS = $flagReturns
     RunPython @('-m','tools.recomp',$xbe,'--all','--split','1000','--game-name','ESPN NFL 2K5','--disasm-dir',"$an\disasm",'--func-id-dir',"$an\func_id",'--abi-dir',"$an\abi",'--output-dir',"$an\recomp",'--gen-dir',$gendir)
+    $env:RECOMP_FLAG_RETURN_FUNCS = $oldFlagReturns
   }
 } finally { Pop-Location }

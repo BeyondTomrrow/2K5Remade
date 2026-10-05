@@ -3,7 +3,7 @@
 ; junction to it at {app}\original\disc.
 
 #define MyAppName "ESPN NFL 2K5 Native PC"
-#define MyAppVersion "0.1.0-dev"
+#define MyAppVersion "0.1.0-preview"
 #define MyAppExeName "NFL2K5.exe"
 
 [Setup]
@@ -34,12 +34,29 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Source: "..\build\Release\NFL2K5.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "assets\nfl2k5.ico"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\tools\extract-xiso.exe"; DestDir: "{app}\tools"; Flags: ignoreversion
-Source: "..\build\Release\nfl2k5_video.ini"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
-Source: "..\mods\*"; DestDir: "{app}\mods"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\nfl2k5_video.ini"; DestDir: "{app}"; Flags: ignoreversion
+; Ship editable presentation definitions and art by an explicit extension
+; allow-list. This cannot accidentally capture local packs, Xbox executables,
+; debug symbols, saves, or user-supplied audio/video.
+Source: "..\mods\README.md"; DestDir: "{app}\mods"; Flags: ignoreversion
+Source: "..\mods\presentation.ini"; DestDir: "{app}\mods"; Flags: ignoreversion
+Source: "..\mods\presentations\*.html"; DestDir: "{app}\mods\presentations"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\mods\presentations\*.css"; DestDir: "{app}\mods\presentations"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\mods\presentations\*.js"; DestDir: "{app}\mods\presentations"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\mods\presentations\*.json"; DestDir: "{app}\mods\presentations"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\mods\presentations\*.png"; DestDir: "{app}\mods\presentations"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\mods\presentations\*.ttf"; DestDir: "{app}\mods\presentations"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\mods\presentations\*.md"; DestDir: "{app}\mods\presentations"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\mods\presentations\*.txt"; DestDir: "{app}\mods\presentations"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\mods\teams\*.json"; DestDir: "{app}\mods\teams"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\mods\teams\*.png"; DestDir: "{app}\mods\teams"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\Music\README.txt"; DestDir: "{app}\Music"; Flags: ignoreversion
 Source: "..\original\README.md"; DestDir: "{app}\original"; Flags: ignoreversion
 Source: "..\README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\PROJECT_STATUS.md"; DestDir: "{app}\docs"; Flags: ignoreversion
 Source: "..\docs\HANDOFF-CHATGPT.md"; DestDir: "{app}\docs"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "..\docs\RELEASE-NOTES.md"; DestDir: "{app}\docs"; Flags: ignoreversion
+Source: "..\docs\third-party\extract-xiso-LICENSE.txt"; DestDir: "{app}\docs\third-party"; Flags: ignoreversion
 
 [Dirs]
 Name: "{app}\original"

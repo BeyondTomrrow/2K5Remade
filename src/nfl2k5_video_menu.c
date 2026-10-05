@@ -319,7 +319,10 @@ void nfl2k5_video_menu_install(void)
         s_mod_labels[i] = nfl2k5_modpacks_name(i);
     video = vm_build_screen(0);
     pres = vm_build_screen(1);
-    if (s_screens[2].rows > 0) mods = vm_build_screen(2);
+    /* Opt-in (NFL2K5_MODPACK_MENU=1) until it has a verified home: linked at
+     * 0x00525830 it took the main menu's default selection, so A on the main
+     * menu switched a code pack on and restarted into it (2026-10-03). */
+    if (s_screens[2].rows > 0 && getenv("NFL2K5_MODPACK_MENU")) mods = vm_build_screen(2);
     if (!video || !pres) { fprintf(stderr, "[VIDEOMENU] build failed\n"); return; }
     for (k = 0; k < sizeof k_options_headers / sizeof k_options_headers[0]; k++) {
         int n = vm_add_link(k_options_headers[k], video, vm_wstr("Video Settings"));

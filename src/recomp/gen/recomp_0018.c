@@ -6778,6 +6778,13 @@ void sub_00280620(void)
     #define fp_st1() fp_st(1)
 
 loc_00280620: ;
+    /* NFL2K5-GENPATCH:LOCALMUSIC_RETAIL_NEXT */
+    { extern int nfl2k5_retail_music_take_next(void); if (nfl2k5_retail_music_take_next()) {
+        uint32_t keep_eax = eax, keep_ecx = ecx, keep_edx = edx;
+        PUSH32(esp, 0x00280620u); RECOMP_ABI_CALL(0x0027FEC0u, sub_0027FEC0);
+        PUSH32(esp, 0x00280620u); RECOMP_ABI_CALL(0x0027F040u, sub_0027F040);
+        eax = keep_eax; ecx = keep_ecx; edx = keep_edx;
+    } }
     PUSH32(esp, 0x00280625u); RECOMP_ABI_CALL(0x0027F690u, sub_0027F690); /* call 0x0027F690 */
 
 loc_00280625: ;

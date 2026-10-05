@@ -387,6 +387,16 @@ PATCHES = [
 """),
     ("DIAG_MUSICFILL", "sub_00040870", "loc_000408DF: ;", "after", """    { extern void nfl2k5_diag_music_fill(uint32_t mgr, uint32_t rec, uint32_t delta, uint32_t chan); nfl2k5_diag_music_fill(ebx, esi, ecx, ebp); }
 """),
+    # R3 for original-disc music is consumed on the retail player's own guest
+    # frame. Stop its active stream, then use the game's real advance routine;
+    # this selects a new index and lets the normal state-2 dispatcher start it.
+    ("LOCALMUSIC_RETAIL_NEXT", "sub_00280620", "loc_00280620: ;", "after", """    { extern int nfl2k5_retail_music_take_next(void); if (nfl2k5_retail_music_take_next()) {
+        uint32_t keep_eax = eax, keep_ecx = ecx, keep_edx = edx;
+        PUSH32(esp, 0x00280620u); RECOMP_ABI_CALL(0x0027FEC0u, sub_0027FEC0);
+        PUSH32(esp, 0x00280620u); RECOMP_ABI_CALL(0x0027F040u, sub_0027F040);
+        eax = keep_eax; ecx = keep_ecx; edx = keep_edx;
+    } }
+"""),
     # Track cursor read in the music state machine (sub_0003DBC0): the play
     # cursor DirectSound returned and the limit it must be under, else the
     # track position stays 0. RECOMP_MUSIC_LOG=1.

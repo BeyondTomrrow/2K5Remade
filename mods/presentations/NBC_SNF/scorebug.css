@@ -33,6 +33,72 @@ html, body { margin: 0; background: transparent; overflow: hidden; }
 }
 #bug.off-air { opacity: 0; }
 #bug * { box-sizing: border-box; }
+
+/* ---- live quarterback lower third -----------------------------------
+ * Modern SNF uses an unboxed, low-profile player/stat insert immediately
+ * above the scorebug.  It shares the scorebug's safe-area placement and
+ * leaves the field visible through the dark glass. */
+#qb-stat { position: absolute; left: calc(var(--bug-x) - 72px); top: 817px;
+  width: 520px; height: 82px; pointer-events: none; opacity: 0;
+  transform: translateY(15px); transition: opacity .28s ease, transform .34s cubic-bezier(.2,.85,.25,1);
+  color: #f6f8fb; font-family: "Bahnschrift", "Arial Narrow", Arial, sans-serif;
+  background: linear-gradient(105deg, rgba(7,18,34,.96), rgba(18,28,43,.88) 74%, rgba(25,35,52,.28));
+  clip-path: polygon(8% 0,100% 0,94% 100%,0 100%); filter: drop-shadow(0 4px 8px rgba(0,0,0,.42)); }
+#qb-stat.on { opacity: 1; transform: none; }
+#qb-stat .qs-sheen { position:absolute; inset:0; background:linear-gradient(120deg,rgba(82,179,226,.25),transparent 38%,rgba(255,255,255,.06) 65%,transparent); }
+#qb-stat .qs-portrait { position:absolute; left:10px; bottom:0; width:94px; height:94px; object-fit:contain;
+  filter:drop-shadow(4px 0 5px rgba(0,0,0,.45)); }
+#qb-stat.no-photo .qs-portrait { display:none; }
+#qb-stat .qs-position { position:absolute; left:104px; top:9px; padding:2px 5px; font:700 13px/1 Arial,sans-serif;
+  background:#e7ebef; color:#111923; }
+#qb-stat .qs-name { position:absolute; left:137px; top:5px; width:235px; overflow:hidden; text-overflow:ellipsis;
+  font:700 22px/27px "Bahnschrift Condensed","Arial Narrow",Arial,sans-serif; letter-spacing:.5px; text-transform:uppercase; }
+#qb-stat .qs-season { position:absolute; left:372px; top:10px; font:italic 500 11px/1 Arial,sans-serif; color:#c8d0da; }
+#qb-stat .qs-rule { position:absolute; left:101px; right:25px; top:34px; height:1px; background:linear-gradient(90deg,#9faab8,rgba(159,170,184,0)); }
+#qb-stat .qs-fields { position:absolute; left:101px; right:31px; top:40px; height:36px; display:flex; }
+#qb-stat .qs-fields span { flex:1; text-align:center; border-right:1px solid rgba(195,206,218,.25); }
+#qb-stat .qs-fields span:last-child { border:0; }
+#qb-stat .qs-fields b { display:block; font:500 9px/12px Arial,sans-serif; color:#aeb9c6; }
+#qb-stat .qs-fields strong { display:block; font:700 20px/22px "Bahnschrift",Arial,sans-serif; }
+#qb-stat .qs-brand { position:absolute; right:-28px; bottom:-4px; font:italic 800 13px/1 Arial,sans-serif; color:#e6edf4; }
+#qb-stat .qs-brand i { display:inline-block; width:12px; height:12px; margin-right:3px; border-radius:50%;
+  background:conic-gradient(#7137a7,#168ed2,#23a55a,#f6d128,#ef7221,#d52d55,#7137a7); vertical-align:-2px; }
+#qb-stat .qs-brand em { font-style:italic; }
+
+/* ---- player feature / native ESPN card replacement ------------------ */
+#player-feature { position:absolute; left:310px; top:190px; width:1300px; height:650px; overflow:hidden;
+  pointer-events:none; opacity:0; transform:scale(.975) translateY(18px);
+  transition:opacity .3s ease,transform .45s cubic-bezier(.18,.86,.24,1); color:#f8f9fb;
+  font-family:"Bahnschrift","Arial Narrow",Arial,sans-serif; filter:drop-shadow(0 18px 32px rgba(0,0,0,.58)); }
+#player-feature.on { opacity:1; transform:none; }
+.pf-backdrop { position:absolute; inset:0; clip-path:polygon(4% 0,100% 0,96% 100%,0 100%);
+  background:linear-gradient(118deg,#06152a 0,#122942 36%,#321523 70%,#780e29 100%);
+  border:2px solid rgba(197,213,230,.52); box-shadow:inset 0 0 70px rgba(0,0,0,.48); }
+.pf-stadium { position:absolute; inset:0; opacity:.22;
+  background:radial-gradient(ellipse at 50% 108%,rgba(96,178,225,.8),transparent 48%),
+    repeating-linear-gradient(165deg,transparent 0 58px,rgba(255,255,255,.08) 59px 61px); }
+.pf-wedge { position:absolute; left:0; top:0; width:430px; height:650px;
+  clip-path:polygon(0 0,100% 0,72% 100%,0 100%); background:linear-gradient(145deg,rgba(3,13,28,.97),rgba(17,44,73,.84));
+  border-right:2px solid rgba(117,202,242,.38); }
+.pf-logo { position:absolute; left:74px; top:54px; width:170px; height:110px; object-fit:contain; opacity:.45;
+  filter:grayscale(.2) drop-shadow(0 5px 10px #000); }
+.pf-portrait { position:absolute; left:28px; bottom:0; width:405px; height:465px; object-fit:contain; image-rendering:auto;
+  filter:drop-shadow(12px 2px 16px rgba(0,0,0,.7)); }
+#player-feature.no-photo .pf-portrait { display:none; }
+.pf-kicker { position:absolute; left:470px; top:58px; font:italic 600 17px/1 Arial,sans-serif; letter-spacing:2px; color:#8fd3f1; }
+.pf-title { position:absolute; left:466px; top:86px; font:italic 800 47px/1 "Bahnschrift Condensed","Arial Narrow",Arial,sans-serif;
+  letter-spacing:.5px; text-transform:uppercase; }
+.pf-name { position:absolute; left:470px; top:158px; font:700 31px/1 "Bahnschrift Condensed","Arial Narrow",Arial,sans-serif;
+  text-transform:uppercase; }
+.pf-position { position:absolute; left:470px; top:196px; font:600 16px/1 Arial,sans-serif; color:#c4d0dc; letter-spacing:1px; }
+.pf-table { position:absolute; left:470px; top:250px; width:700px; }
+.pf-table div { height:61px; border-top:1px solid rgba(214,224,235,.32); display:flex; align-items:center; }
+.pf-table div:last-child { border-bottom:1px solid rgba(214,224,235,.32); }
+.pf-table span { width:455px; font:500 20px/1 Arial,sans-serif; color:#d2d8df; letter-spacing:.4px; }
+.pf-table b { flex:1; text-align:right; padding-right:28px; font:700 29px/1 "Bahnschrift",Arial,sans-serif; }
+.pf-brand { position:absolute; right:60px; top:52px; font:italic 800 21px/1 Arial,sans-serif; }
+.pf-brand i { display:inline-block; width:20px; height:20px; margin-right:5px; border-radius:50%; vertical-align:-4px;
+  background:conic-gradient(#7137a7,#168ed2,#23a55a,#f6d128,#ef7221,#d52d55,#7137a7); }
 #bug .half, #bug .half > *, #bug > * { position: absolute; }
 #bug .half { left: 0; top: 0; width: 576px; height: 94px;
   transition: transform 0.55s var(--ease), opacity 0.4s ease; }
@@ -305,3 +371,53 @@ img.logo[src=""], img.logo:not([src]) { visibility: hidden; }
 #lineup .lu-bar, #lineup .lu-line, #lineup .lu-ribbon {
   -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 9%, #000 91%, transparent 100%);
   mask-image: linear-gradient(90deg, transparent 0, #000 9%, #000 91%, transparent 100%); }
+
+/* Reference correction, 2026-10-04.  These measurements follow the supplied
+ * Hurts lower third and Mahomes playoff panel.  Keep their open/transparent
+ * broadcast geometry; do not turn either into a boxed team-colour card. */
+#qb-stat { left:350px; top:790px; width:590px; height:82px; overflow:visible; clip-path:none; filter:none;
+  background:none !important; transform:translateX(-18px) scale(1.5); transform-origin:left bottom; }
+#qb-stat.on { transform:scale(1.5); }
+#qb-stat::before { content:""; position:absolute; left:93px; top:18px; width:475px; height:57px;
+  background:linear-gradient(90deg,rgba(6,15,28,.94),rgba(8,18,31,.84) 72%,rgba(8,18,31,.18));
+  clip-path:polygon(0 0,100% 0,95% 100%,0 100%); }
+#qb-stat .qs-sheen { left:0; top:7px; width:165px; height:72px; background:none; }
+#qb-stat .qs-sheen::before { content:""; position:absolute; left:20px; bottom:2px; width:164px; height:15px;
+  border-bottom:4px solid #34bce8; border-radius:50%; transform:rotate(-8deg); filter:drop-shadow(0 0 5px #2eb7e6); }
+#qb-stat .qs-portrait { left:15px; bottom:0; width:115px; height:115px; z-index:2; }
+#qb-stat .qs-position { left:105px; top:24px; padding:1px 4px; font-size:11px; background:#e9edf1; }
+#qb-stat .qs-name { left:132px; top:20px; width:215px; font-size:19px; line-height:23px; }
+#qb-stat .qs-season { left:388px; top:25px; font-size:9px; }
+#qb-stat .qs-rule { left:103px; right:32px; top:43px; background:linear-gradient(90deg,#8f9ba8,transparent); }
+#qb-stat .qs-fields { left:102px; right:35px; top:45px; height:29px; }
+#qb-stat .qs-fields b { font-size:8px; line-height:10px; }
+#qb-stat .qs-fields strong { font-size:17px; line-height:19px; }
+#qb-stat .qs-brand { display:none; }
+
+#player-feature { left:0; top:0; width:1920px; height:1080px; filter:none; transform:translateY(20px); overflow:hidden; }
+#player-feature.on { transform:none; }
+.pf-backdrop { left:475px; top:150px; right:auto; bottom:auto; width:1260px; height:790px; border:0; z-index:1;
+  clip-path:polygon(3% 0,91% 0,100% 50%,91% 100%,3% 100%,0 50%);
+  background:linear-gradient(105deg,rgba(41,12,28,.97),rgba(70,16,35,.97) 56%,rgba(126,20,43,.95));
+  box-shadow:inset 0 0 80px rgba(0,0,0,.36); }
+.pf-backdrop::after { content:""; position:absolute; right:0; top:0; width:175px; height:100%;
+  background:linear-gradient(105deg,transparent 0 22%,rgba(222,226,231,.93) 23% 66%,rgba(162,10,39,.95) 67%);
+  clip-path:polygon(43% 0,100% 0,100% 100%,0 100%,54% 50%); }
+.pf-stadium { left:0; top:0; width:1920px; height:1080px; opacity:1; z-index:0;
+  background:linear-gradient(to bottom,rgba(7,54,111,.96) 0 14%,rgba(5,23,45,.10) 14% 87%,rgba(7,54,111,.96) 87% 100%); }
+.pf-wedge { left:35px; top:150px; width:670px; height:790px; border:0; z-index:1; clip-path:polygon(0 0,88% 0,100% 100%,0 100%);
+  background:linear-gradient(120deg,rgba(117,8,27,.98),rgba(196,27,48,.96)); }
+.pf-logo { left:25px; top:270px; width:430px; height:360px; opacity:.62; z-index:1; }
+.pf-portrait { left:45px; bottom:115px; width:650px; height:900px; z-index:2; object-fit:contain; object-position:center bottom; }
+.pf-title { left:650px; top:205px; font-size:52px; line-height:55px; z-index:3; }
+.pf-kicker { left:653px; top:262px; font-size:24px; color:#fff; letter-spacing:.5px; z-index:3; }
+.pf-name { left:95px; top:875px; width:430px; font-size:27px; z-index:4; }
+.pf-position { left:95px; top:910px; width:430px; font-size:16px; z-index:4; }
+.pf-table { left:665px; top:350px; width:740px; z-index:3; }
+.pf-table div { height:88px; border:0; display:grid; grid-template-columns:1fr 150px 150px; align-items:center; }
+.pf-table div:last-child { border:0; }
+.pf-table span { width:auto; font-size:27px; color:#c8cbd1; }
+.pf-table b,.pf-table em { padding:0; text-align:center; font:700 36px/1 "Bahnschrift",Arial,sans-serif; font-style:normal; }
+.pf-table .pf-head { height:45px; }
+.pf-table .pf-head b,.pf-table .pf-head em { font:500 19px/1 Arial,sans-serif; color:#b8bbc1; }
+.pf-brand { right:85px; top:64px; z-index:4; font-size:28px; }

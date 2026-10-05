@@ -33,6 +33,7 @@
 #include <mfidl.h>
 #include <mfreadwrite.h>
 #include <xaudio2.h>
+#include <algorithm>
 #include <atomic>
 #include <cmath>
 #include <cstdint>
@@ -430,6 +431,7 @@ struct Package {
     /* mod.json "replaces": game graphics the package draws itself, which
      * the game then leaves out (e.g. "lineup": the after-kickoff starters). */
     bool replaces_lineup = false;
+    bool replaces_player_cards = false;
     /* mod.json "canvas": { "fit": "fill_width" }: the page is as wide as the
      * game picture (e.g. 2580x1080 on 21:9) instead of a centred 16:9
      * canvas, so full-width graphics reach the screen edges. */
@@ -480,7 +482,10 @@ static void load_packages()
             p.entry = p.root.str("entry", "index.html");
             if (const JVal *r = p.root.get("replaces"))
                 for (auto &v : r->a)
-                    if (v.t == JVal::Str && v.s == "lineup") p.replaces_lineup = true;
+                    if (v.t == JVal::Str) {
+                        if (v.s == "lineup") p.replaces_lineup = true;
+                        if (v.s == "player_cards") p.replaces_player_cards = true;
+                    }
             if (const JVal *c = p.root.get("canvas")) {
                 p.canvas_w = (int)c->num("width", 1920);
                 p.canvas_h = (int)c->num("height", 1080);
@@ -916,6 +921,11 @@ struct PlayerStat {
     int tackles = 0, sacks = 0, defensive_interceptions = 0;
     int field_goals_made = 0, field_goals_attempted = 0, longest_field_goal = 0;
 };
+struct PlayerIdentity {
+    std::string name, position, college, portrait;
+    int number = 0;
+};
+std::string nfl2k5_portrait_url(int photo_id);   /* src/presentation/portraits.cpp */
 struct Event {
     std::string name;
     int team = HOME;
@@ -936,6 +946,7 @@ struct LiveQbSample {
 };
 static std::mutex s_live_qb_lock;
 static LiveQbSample s_live_qb[2];
+static PlayerIdentity s_live_qb_identity[2];
 static uint64_t s_live_qb_revision;
 /* The following lifecycle state belongs exclusively to the HUD thread. */
 static Event s_live_qb_event;
@@ -1076,6 +1087,11 @@ extern "C" void nfl2k5_broadcast_live_qb_sample(const Nfl2k5PlayerStat *s, int t
     if (next.name.empty()) return;
     std::lock_guard<std::mutex> lock(s_live_qb_lock);
     LiveQbSample &sample = s_live_qb[team];
+    PlayerIdentity &identity = s_live_qb_identity[team];
+    if (s->full_name && *s->full_name) identity.name = s->full_name;
+    if (identity.position.empty()) identity.position = "QB";
+    if (s->jersey_number > 0) identity.number = s->jersey_number;
+    if (s->photo_id > 0) identity.portrait = nfl2k5_portrait_url(s->photo_id);
     const PlayerStat &old = sample.player;
     if (!sample.revision || old.name != next.name || old.completions != next.completions ||
         old.attempts != next.attempts || old.passing_yards != next.passing_yards ||
@@ -1090,6 +1106,55 @@ extern "C" void nfl2k5_broadcast_live_qb_reset(void)
     std::lock_guard<std::mutex> lock(s_live_qb_lock);
     s_live_qb[AWAY] = LiveQbSample();
     s_live_qb[HOME] = LiveQbSample();
+    s_live_qb_identity[AWAY] = PlayerIdentity();
+    s_live_qb_identity[HOME] = PlayerIdentity();
+}
+
+/* Script opcode 133 asks the selected package whether it can replace one
+ * of the game's ESPN player-stat cards.  Only card families that carry a
+ * player feature are claimed, and only after a roster identity or live QB
+ * sample exists; otherwise the native card remains as the safe fallback. */
+extern "C" int nfl2k5_presentation_playercard(uint32_t kind, const char *native_title)
+{
+    int k = s_sel_pkg.load();
+    if (k <= 0 || k >= (int)s_pkgs.size() || !s_pkgs[k].html ||
+        !s_pkgs[k].replaces_player_cards)
+        return 0;
+    std::string title = native_title ? native_title : "";
+    std::string folded = title;
+    std::transform(folded.begin(), folded.end(), folded.begin(),
+                   [](unsigned char c) { return (char)tolower(c); });
+    bool full = folded.find("career stats") != std::string::npos ||
+                folded.find("last season") != std::string::npos ||
+                folded.find("last year") != std::string::npos;
+    bool compact = folded == "performance" || folded == "today stats" ||
+                   folded == "receiving" || folded == "consecutive incompletions";
+    /* Kind 22 is confirmed by the trigger audit as the career/last-season
+     * family even when a localized build leaves its title blank. Unknown
+     * kinds remain native until their trigger is identified. */
+    if (kind == 22) full = true;
+    if (!full && !compact) return 0;
+    GameState g;
+    if (!read_state(g) || g.poss < 1 || g.poss > 2) return 0;
+    int side = g.poss - 1;
+    LiveQbSample sample;
+    PlayerIdentity identity;
+    {
+        std::lock_guard<std::mutex> ql(s_live_qb_lock);
+        sample = s_live_qb[side];
+        identity = s_live_qb_identity[side];
+    }
+    if (sample.player.name.empty() && identity.name.empty()) return 0;
+    Event ev;
+    ev.name = full ? "player_feature" : "player_stat";
+    ev.team = side;
+    ev.player = sample.player;
+    if (ev.player.name.empty()) ev.player.name = broadcast_player_name(identity.name.c_str());
+    ev.requested_duration = 6.0;
+    queue_event(std::move(ev));
+    fprintf(stderr, "[PRES] replaces ESPN player card kind %u title '%s' as %s for side %d\n",
+            kind, title.c_str(), full ? "PLAYER_FEATURE" : "PLAYER_STAT", side);
+    return 1;
 }
 
 /* The automatic QB is a persistent scorebug component, not a timed insert.
@@ -1693,6 +1758,11 @@ static void draw_layer(const Ctx &c, const JVal &L, double t, double duration)
  * ====================================================================== */
 static std::atomic<int> s_native_visible{ 0 };
 static std::atomic<DWORD> s_native_tick{ 0 };
+/* Game-state globals survive a trip back to the frontend.  They are useful
+ * data, but they are not proof that a match is still on screen.  This tick
+ * is refreshed only by observable match activity (the native bug, a live
+ * clock change, play selection, or the in-game pause controller). */
+static std::atomic<DWORD> s_match_tick{ 0 };
 static int s_loaded_pkg = -1;
 static GameState s_prev;
 static bool s_prev_valid;
@@ -1807,7 +1877,7 @@ extern "C" void nfl2k5_scorebug_hide(void)
  * updated in the last 30 s. */
 extern "C" int nfl2k5_in_match(void)
 {
-    DWORD t = s_native_tick;
+    DWORD t = s_match_tick;
     return t && GetTickCount() - t < 30000;
 }
 
@@ -2059,6 +2129,23 @@ static std::string html_event_json(const char *name, int side, const std::string
     return j + "}";
 }
 
+static std::string html_player_extra(const PlayerStat &p, const PlayerIdentity &id)
+{
+    std::string j = ",\"player\":{";
+    j += "\"name\":" + json_str(p.name.empty() ? broadcast_player_name(id.name.c_str()) : p.name);
+    j += ",\"fullName\":" + json_str(id.name);
+    j += ",\"position\":" + json_str(id.position.empty() ? "QB" : id.position);
+    j += ",\"number\":" + std::to_string(id.number);
+    j += ",\"college\":" + json_str(id.college);
+    j += ",\"portrait\":" + json_str(id.portrait);
+    j += ",\"completions\":" + std::to_string(p.completions);
+    j += ",\"attempts\":" + std::to_string(p.attempts);
+    j += ",\"passingYards\":" + std::to_string(p.passing_yards);
+    j += ",\"passingTouchdowns\":" + std::to_string(p.passing_touchdowns);
+    j += ",\"interceptions\":" + std::to_string(p.interceptions) + "}";
+    return j;
+}
+
 /* The JSON renderer's event names -> Presentation API names. Quarter
  * boundaries are derived from state instead (html_state_events). */
 static const char *html_event_name(const std::string &n)
@@ -2072,6 +2159,7 @@ static const char *html_event_name(const std::string &n)
         { "turnover", "TURNOVER" }, { "sack", "SACK" }, { "injury", "INJURY" },
         { "replay_begin", "REPLAY_STARTED" }, { "replay_end", "REPLAY_ENDED" },
         { "game_start", "GAME_STARTED" }, { "drive_start", "DRIVE_STARTED" }, { "player_stat", "PLAYER_STAT" },
+        { "player_feature", "PLAYER_FEATURE" },
     };
     for (auto &m : map) if (n == m.first) return m.second;
     return nullptr;     /* end_q1/end_q3/halftime/quarter_start: from state */
@@ -2244,11 +2332,15 @@ static std::string grel_text(uint32_t field)
     return "";
 }
 
-std::string nfl2k5_portrait_url(int photo_id);   /* src/presentation/portraits.cpp */
 extern "C" void nfl2k5_portraits_warm(void);
 extern "C" void xbox_PresentRecord(int seconds);   /* nv2a_gpu_present.inc.c, video clips */
 static std::mutex s_lineup_lock;
-static std::vector<std::pair<bool, std::string>> s_lineups;   /* offense?, players JSON */
+struct PendingLineup {
+    bool offense = false;
+    std::string players;
+    PlayerIdentity quarterback;
+};
+static std::vector<PendingLineup> s_lineups;
 
 /* gen patch LINEUP_NATIVE_HIDE: the game skips showing its lineup ticker
  * (the starters are still read and sent as LINEUP) while the selected HTML
@@ -2274,6 +2366,7 @@ extern "C" void nfl2k5_lineup_ticker(uint32_t sp)
 {
     std::string players;
     bool offense = false;
+    PlayerIdentity quarterback;
     int n = 0;
     for (int i = 0; i < 11; i++) {
         uint32_t rec = rd32(sp + 0x1C + i * 4), code = rd32(sp + 0x48 + i * 4);
@@ -2288,7 +2381,14 @@ extern "C" void nfl2k5_lineup_ticker(uint32_t sp)
         gread(rec + 6, &photo, 2);
         int number = (int)((rd32(rec + 0x20) >> 3) & 0x7F);
         if (name.empty()) name = first + (first.empty() ? "" : " ") + last;
-        if (pos == "QB") offense = true;
+        if (pos == "QB") {
+            offense = true;
+            quarterback.name = name;
+            quarterback.position = pos;
+            quarterback.college = college;
+            quarterback.number = number;
+            quarterback.portrait = nfl2k5_portrait_url(photo);
+        }
         players += std::string(n++ ? "," : "") + "{\"position\":" + json_str(pos) + ",\"number\":" + std::to_string(number) +
                    ",\"name\":" + json_str(name) + ",\"first\":" + json_str(first) + ",\"last\":" + json_str(last) +
                    ",\"college\":" + json_str(college) + ",\"photoId\":" + std::to_string(photo) +
@@ -2300,7 +2400,7 @@ extern "C" void nfl2k5_lineup_ticker(uint32_t sp)
         s_lineup_until = GetTickCount() + (DWORD)n * 2600u + 1500u;
     if (!n) return;
     std::lock_guard<std::mutex> lock(s_lineup_lock);
-    s_lineups.push_back({ offense, players });
+    s_lineups.push_back({ offense, players, quarterback });
 }
 
 /* Generic events that follow from two consecutive states. */
@@ -2309,12 +2409,16 @@ static void html_state_events(const GameState &p, const GameState &g)
     drive_update(p, g);
     {
         /* LINEUP: offense = the team with the ball, defense = the other. */
-        std::vector<std::pair<bool, std::string>> pending;
+        std::vector<PendingLineup> pending;
         { std::lock_guard<std::mutex> lock(s_lineup_lock); pending.swap(s_lineups); }
         for (auto &l : pending) {
-            int side = g.poss ? (l.first ? g.poss - 1 : 2 - g.poss) : -1;
-            html_post(html_event_json("LINEUP", side, std::string(",\"unit\":\"") + (l.first ? "offense" : "defense") +
-                                      "\",\"players\":[" + l.second + "]"));
+            int side = g.poss ? (l.offense ? g.poss - 1 : 2 - g.poss) : -1;
+            if (l.offense && side >= AWAY && side <= HOME && !l.quarterback.name.empty()) {
+                std::lock_guard<std::mutex> ql(s_live_qb_lock);
+                s_live_qb_identity[side] = l.quarterback;
+            }
+            html_post(html_event_json("LINEUP", side, std::string(",\"unit\":\"") + (l.offense ? "offense" : "defense") +
+                                      "\",\"players\":[" + l.players + "]"));
         }
     }
     {
@@ -2433,12 +2537,22 @@ static int html_hud(const XboxHudFrame *f, XboxHudImage *img, const GameState &g
     html_state_events(s_html.prev, g);
     s_html.prev = g;
     s_html.prev_valid = g.valid;
+
+    /* Live QB samples are data sources, not presentation triggers.  FOX may
+     * choose a persistent QB treatment in its own package.  HTML packages
+     * receive player graphics only when the title launches the corresponding
+     * ESPN card/popup and queues player_stat/player_feature below. */
     Event ev;
     while (pop_event(ev))
         if (const char *name = html_event_name(ev.name)) {
             std::string extra;
             if (ev.name == "touchdown") extra = drive_json(g, ev.team, true);
             else if (ev.name == "field_goal") extra = drive_json(g, ev.team, false);
+            else if (ev.name == "player_stat" || ev.name == "player_feature") {
+                PlayerIdentity identity;
+                { std::lock_guard<std::mutex> ql(s_live_qb_lock); identity = s_live_qb_identity[ev.team]; }
+                extra = html_player_extra(ev.player, identity);
+            }
             html_post(html_event_json(name, ev.team, extra));
         }
 
@@ -2545,6 +2659,32 @@ static int hud_callback(const XboxHudFrame *f, XboxHudImage *img)
     if (playcall_on) native_on = false;
     if (s_test) native_on = true;
 
+    /* A valid GameState alone is insufficient: the title/frontend leaves
+     * the previous game's clock, teams and phase in memory.  Require fresh
+     * evidence from a moving game/play clock or an in-game controller. */
+    static bool activity_prev_valid;
+    static float activity_prev_clock;
+    static int activity_prev_play_clock = -1;
+    static std::string activity_prev_away, activity_prev_home;
+    DWORD activity_now = GetTickCount();
+    bool same_game = activity_prev_valid && g.valid &&
+                     activity_prev_away == g.t[AWAY].abbr &&
+                     activity_prev_home == g.t[HOME].abbr;
+    bool clock_moved = same_game &&
+        (fabsf(g.clock - activity_prev_clock) > 0.01f ||
+         (g.play_clock >= 0 && activity_prev_play_clock >= 0 &&
+          g.play_clock != activity_prev_play_clock));
+    if (g.valid && (native_on || playcall_on || pause_on || clock_moved || s_test))
+        s_match_tick = activity_now;
+    if (!g.valid) s_match_tick = 0;
+    activity_prev_valid = g.valid;
+    activity_prev_clock = g.clock;
+    activity_prev_play_clock = g.play_clock;
+    activity_prev_away = g.t[AWAY].abbr;
+    activity_prev_home = g.t[HOME].abbr;
+    DWORD match_tick = s_match_tick;
+    bool match_active = match_tick && activity_now - match_tick < 2500;
+
     if (s_log && !g.valid) {
         static DWORD last_raw;
         if (GetTickCount() - last_raw > 5000) {
@@ -2606,7 +2746,7 @@ static int hud_callback(const XboxHudFrame *f, XboxHudImage *img)
         cx.play_selection = playcall_on;
         cx.paused = pause_on;
         cx.native_scorebug = native_on;
-        cx.scorebug_visible = g.valid && !playcall_on && !pause_on && (g.phase == 4 || native_on);
+        cx.scorebug_visible = match_active && g.valid && !playcall_on && !pause_on && (g.phase == 4 || native_on);
         return html_hud(f, img, g, cx);
     }
     if (s_html.host) html_stop();       /* switched back to a JSON package or ESPN */
@@ -2627,7 +2767,7 @@ static int hud_callback(const XboxHudFrame *f, XboxHudImage *img)
      * is not raised consistently by NFL 2K5's live scrimmage cameras. FOX
      * therefore follows verified live game phase too, while the play-call
      * controller remains the authoritative hide signal. */
-    bool fox_live = g.valid && !playcall_on && !pause_on && (g.phase == 4 || native_on);
+    bool fox_live = match_active && g.valid && !playcall_on && !pause_on && (g.phase == 4 || native_on);
     update_bug_lifecycle(sb, fox_live, dt);
 
     /* Next animation. */

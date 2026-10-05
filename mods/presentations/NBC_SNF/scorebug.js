@@ -126,6 +126,64 @@
   var pod = q('.pod'), flagUntil = 0;
   function updateFlag(on) { pod.classList.toggle('flag', on || Date.now() < flagUntil); }
 
+  /* ---- live quarterback stats ---- */
+  var qbStat = document.getElementById('qb-stat'), qbStatData = null, qbTimer = 0, broadcastLive = false;
+  function qsq(s) { return qbStat.querySelector(s); }
+  function setQbStat(e) {
+    var p = e && e.player;
+    if (!p) return;
+    qbStatData = p;
+    qsq('.qs-name').textContent = p.name || p.fullName || '';
+    qsq('.qs-position').textContent = p.position || 'QB';
+    var portrait = qsq('.qs-portrait');
+    portrait.src = p.portrait || '';
+    qbStat.classList.toggle('no-photo', !p.portrait);
+    var att = Number(p.attempts) || 0, cmp = Number(p.completions) || 0;
+    qsq('.pct').textContent = att ? (100 * cmp / att).toFixed(1) : '0.0';
+    qsq('.yds').textContent = String(Number(p.passingYards) || 0);
+    qsq('.td').textContent = String(Number(p.passingTouchdowns) || 0);
+    qsq('.int').textContent = String(Number(p.interceptions) || 0);
+    var s = NFL2K5.state, team = s && e.team && s[e.team];
+  }
+
+  var playerFeature = document.getElementById('player-feature'), featureTimer = 0;
+  function passerRating(p) {
+    var a = Number(p.attempts) || 0, c = Number(p.completions) || 0;
+    if (!a) return '0.0';
+    var x = Math.max(0, Math.min(2.375, (c / a - .3) * 5));
+    var y = Math.max(0, Math.min(2.375, ((Number(p.passingYards) || 0) / a - 3) * .25));
+    var z = Math.max(0, Math.min(2.375, (Number(p.passingTouchdowns) || 0) / a * 20));
+    var w = Math.max(0, Math.min(2.375, 2.375 - (Number(p.interceptions) || 0) / a * 25));
+    return (((x + y + z + w) / 6) * 100).toFixed(1);
+  }
+  function showPlayerFeature(e) {
+    var p = e && e.player, s = NFL2K5.state, team = s && e.team && s[e.team];
+    if (!p) return;
+    clearTimeout(featureTimer);
+    playerFeature.querySelector('.pf-name').textContent = p.fullName || p.name || '';
+    var surname = (p.fullName || p.name || '').trim().split(/\s+/).pop().toUpperCase();
+    playerFeature.querySelector('.pf-title').textContent = surname + ' PLAYOFF MAGIC';
+    playerFeature.querySelector('.pf-position').textContent = (p.position || 'QB') + (p.number ? '  |  #' + p.number : '');
+    playerFeature.querySelector('.pf-ca').textContent = (Number(p.completions) || 0) + ' / ' + (Number(p.attempts) || 0);
+    playerFeature.querySelector('.pf-yds').textContent = String(Number(p.passingYards) || 0);
+    playerFeature.querySelector('.pf-td').textContent = String(Number(p.passingTouchdowns) || 0);
+    playerFeature.querySelector('.pf-int').textContent = String(Number(p.interceptions) || 0);
+    playerFeature.querySelector('.pf-rate').textContent = passerRating(p);
+    var portrait = playerFeature.querySelector('.pf-portrait'); portrait.src = p.portrait || '';
+    playerFeature.classList.toggle('no-photo', !p.portrait);
+    var logo = playerFeature.querySelector('.pf-logo'); if (team) setLogo(logo, team); else logo.removeAttribute('src');
+    playerFeature.classList.add('on');
+    bug.classList.add('off-air');
+    qbStat.classList.remove('on');
+    featureTimer = setTimeout(function () {
+      playerFeature.classList.remove('on');
+      if (broadcastLive && !luOn) {
+        bug.classList.remove('off-air');
+        if (qbStatData) qbStat.classList.add('on');
+      }
+    }, 6500);
+  }
+
   /* ---- scoring sequence (touchdown / field goal / safety) ----
    * split -> neon word -> chrome word -> collapse into the pod -> scoring
    * drive bar (score ticks up) -> back to the scorebug. ~10.5 s; the
@@ -235,7 +293,7 @@
   function lineup(e) {
     var s = NFL2K5.state, t = s && e.team && s[e.team];
     var players = (e.players || []).filter(function (p) { return p && (p.name || p.last); });
-    if (!t || !players.length || busy) return;
+    if (!broadcastLive || !t || !players.length || busy) return;
     luClear();
     luColors(t);
     setLogo(luq('.lu-logo .logo'), t);
@@ -266,8 +324,17 @@
      * (it would cover the play art) and the pause menu, never during a
      * scoring sequence. */
     var cx = s.context || {};
-    bug.classList.toggle('off-air', luOn || (!busy && !!(cx.playSelection || cx.paused)) || s.valid === false);
-    if (luOn && (cx.paused || s.valid === false)) luEnd();
+    var scorebugVisible = cx.scorebugVisible === true;
+    broadcastLive = s.valid !== false && scorebugVisible;
+    var featureOn = playerFeature.classList.contains('on');
+    bug.classList.toggle('off-air', featureOn || luOn || (!busy && (!scorebugVisible || !!(cx.playSelection || cx.paused))) || s.valid === false);
+    qbStat.classList.toggle('on', !!qbStatData && scorebugVisible && !featureOn && !luOn && !cx.playSelection && !cx.paused);
+    if (!broadcastLive) {
+      if (luOn) luEnd();
+      qbStat.classList.remove('on');
+      playerFeature.classList.remove('on');
+      clearTimeout(featureTimer);
+    } else if (luOn && cx.paused) luEnd();
     var down = niceDown(s.downDistanceText);
     setTab(s.possession, down, !!s.possession && !!down);
     var pc = s.playClock;
@@ -284,7 +351,15 @@
     case 'FIELD_GOAL': scoring('FIELD GOAL', e.team, e.drive); break;
     case 'SAFETY': scoring('SAFETY', e.team, null); break;
     case 'DRIVE_SUMMARY': lastDrive = e.drive; if (busy && e.drive) showDrive(e.drive); break;
-    case 'LINEUP': lineup(e); break;
+    case 'LINEUP': if (broadcastLive) lineup(e); break;
+    case 'PLAYER_STAT':
+      setQbStat(e);
+      clearTimeout(qbTimer);
+      if (broadcastLive) qbStat.classList.add('on');
+      qbTimer = setTimeout(function () { qbStat.classList.remove('on'); }, 5500);
+      break;
+    case 'PLAYER_STAT_HIDE': clearTimeout(qbTimer); qbStat.classList.remove('on'); break;
+    case 'PLAYER_FEATURE': if (broadcastLive) showPlayerFeature(e); break;
     case 'PENALTY': flagUntil = Date.now() + 8000; updateFlag(true); setTimeout(function () { updateFlag(false); }, 8100); break;
     }
   });
@@ -319,6 +394,22 @@
           { position: 'QB', number: 4, name: 'Dak Prescott', college: 'Mississippi State', portrait: '' }] } });
         var freeze = (/[?&]t=(\d+)/.exec(location.search) || [])[1];
         if (freeze) setTimeout(function () { document.getAnimations().forEach(function (a) { a.pause(); }); }, +freeze);
+      }, 200);
+    }
+    if (pv === 'qb-stat') {
+      setTimeout(function () {
+        NFL2K5.dispatch({ type: 'event', event: { name: 'PLAYER_STAT', team: 'home', player: {
+          name: 'J. HURTS', fullName: 'Jalen Hurts', position: 'QB', number: 1, portrait: '',
+          completions: 24, attempts: 31, passingYards: 286, passingTouchdowns: 3, interceptions: 1
+        } } });
+      }, 200);
+    }
+    if (pv === 'player-feature') {
+      setTimeout(function () {
+        NFL2K5.dispatch({ type: 'event', event: { name: 'PLAYER_FEATURE', team: 'home', player: {
+          name: 'P. MAHOMES', fullName: 'Patrick Mahomes', position: 'QB', number: 15, portrait: '',
+          completions: 27, attempts: 38, passingYards: 3278, passingTouchdowns: 29, interceptions: 10
+        } } });
       }, 200);
     }
     if (pv === 'touchdown') { st.away.score = 48; st.possession = 'away'; st.downDistanceText = 'PAT'; }

@@ -172,3 +172,130 @@ don't need it.
     `HalReturnToFirmware`, so `tools\stackdump\stackdump.exe` can show the native
     call chain.
   - `NFL2K5_CMAKE_EXTRA` (`build.ps1`) passes extra CMake `-D` options.
+
+## Codex follow-up: Start-menu crashes and exact current state (2026-10-03)
+
+This section records every change made after the progress log above so the next
+developer can continue without repeating the investigation. No commit was made.
+
+### Converter and analysis changes
+
+- `external/xboxrecomp/tools/recomp/flag_return_scan.py`: expanded the terminal
+  flag-setting instruction scan to include `xor`. The SOFTDRINK detector function
+  `sub_014E4850` has a false-return path ending in `xor eax,eax; pop eax; ret`, and
+  its caller branches on those returned flags. The previous scanner only accepted
+  `cmp`/`test`, so that path was missed.
+- `external/xboxrecomp/tools/recomp/lifter.py`: when a flag-return function ends in
+  `xor`, export the XOR result with test semantics:
+  `g_rf_kind=2; g_rf_a=_fa; g_rf_b=_fa; g_rf_as=_fas; g_rf_bs=_fas`.
+  This file already contains substantial earlier work; do not revert the whole
+  file. The small Codex addition is specifically the XOR return-flags block.
+- `tools/analyze.ps1`: `-Recompile` now runs
+  `tools.recomp.flag_return_scan`, writes
+  `analysis-<pack>/flag_return_funcs.json`, temporarily sets
+  `RECOMP_FLAG_RETURN_FUNCS`, runs the recompiler, and restores the previous
+  environment value.
+- Regenerated SOFTDRINK from `mods/packs/softdrink_default.xbe`. The installed
+  pack's `default.xbe` was rejected by the filename-integrity check even though
+  the hashes matched. Regeneration translated all 33,935 functions with 0 failed
+  and found 1,231 flag-return functions after XOR support.
+- The first rebuild completed with only the two known lenient misses:
+  `DIAG_FSMPUSH` and `DIAG_GAMECAST_STATVALUE`.
+
+### Crash sequence after pressing Start
+
+1. The original custom-pack log reported:
+   - `[UNRESOLVED] undetected function 014DFBA5 ran as an empty stub`
+   - `[FLAGS] unresolved branch at 014E8131 reached`
+   - crash in `sub_00048870+0x96`, with an invalid address near `0x10000FF80`.
+   Investigation of `sub_014E4850` produced the XOR flag-return fixes above.
+2. The pack still crashed in `sub_00048870`. In the first case `ecx == 0`, so the
+   generated resource-release code wrapped when reading `ecx - 0x80`. A later run
+   reached the same function with `ecx=0x0044C89C`, but its resource header owner
+   was `3` and its size was impossible.
+3. `tools/apply-gen-patches.py` now has `NULL_RESOURCE_RELEASE_48870`, which returns
+   when `ecx < 0x80u` or `MEM32(ecx - 0x80u) < 0x10000u`. The first draft only
+   checked `ecx < 0x80`; it was tightened after the second bad-resource crash.
+4. The next crash was `sub_0016A260+0xA8`. `eax` held the stale return address
+   `0x0016D2D9`, `ecx` was mode 1, and the function expected a table index from
+   0 through 8. The caller was `sub_0016D550`, returning at `0x0016D695`.
+5. `tools/apply-gen-patches.py` now also has `MENU_STATE_INDEX_16A260`. It forces
+   `eax=0`, advances `esp` by four, writes registers out, and returns when
+   `ecx == 1u && eax >= 9u`. This was a diagnostic defensive guard, not a proven
+   root-cause correction.
+6. The next crash moved to `sub_0006E4E5+0x720`, generated at
+   `build/gen-softdrink-locals/recomp_0003.c:16280`, while reading
+   `MEM32(edi + ecx*8)`. The invalid address was `0xB007686A`; registers were
+   `eax=0 ecx=00A84B18 edx=18 esp=01801EC0 ebx=10 esi=004E7CD8 edi=00064C82`.
+   This points to a corrupted state-object pointer/index rather than a single bad
+   resource.
+- ABI logging also reported violations including
+  `sub_00048870: esp (epilogue never ran)` and
+  `sub_0016D010: ebx esi edi`, along with other preserved-register failures. The
+  working hypothesis is that `gen-reg-locals.py` applies retail ABI assumptions
+  that are unsafe for SOFTDRINK's detour caves and private register conventions.
+
+### Temporary retail-code workaround (removed)
+
+- A temporary `retail-code.flag` and compatibility path in
+  `src/nfl2k5_mod_packs.c` made the SOFTDRINK asset pack run through the retail
+  executable. This reached stable CPU gameplay at 60 FPS with the overlay active
+  and proved that the changed disc files can load.
+- That workaround bypassed SOFTDRINK's custom XBE code, so it could not validate
+  SoFi Stadium or other executable modifications. It also showed the missing
+  face/body vertex regressions the user said were previously fixed.
+- The temporary `retail-code.flag` was deleted and every compatibility change in
+  `src/nfl2k5_mod_packs.c` was reverted. Custom SOFTDRINK native dispatch is now
+  restored. Do not reintroduce the retail-code fallback as the final solution.
+- The team-selection automation used 12 left-trigger taps but produced San
+  Francisco at Cincinnati, not the Rams. No valid Rams-at-SoFi video was made.
+
+### Raw generated-code build attempt
+
+- `tools/build.ps1` was changed so pack builds use `build/gen-<pack>` directly for
+  both the generated and locals source inputs and skip `gen-reg-locals.py`. Retail
+  builds still use the optimized locals tree. The goal is to test conservative
+  global-register generated code and avoid the suspected register-local ABI
+  corruption.
+- `tools/build.ps1 -Game -Pack softdrink` compiled all generated translation units
+  but failed during link. Exact final error:
+  `recomp_0011.c.obj : error LNK2019: unresolved external symbol RECOMP_REGS_OUT referenced in function sub_0016A260`, followed by `LNK1120`.
+- The unresolved symbol comes from the `MENU_STATE_INDEX_16A260` injected patch:
+  `RECOMP_REGS_OUT()` exists in the register-locals form but not in the raw
+  generated tree. Make this guard compatible with both forms, scope it only to
+  register-locals output, or remove it while testing the raw tree. The new raw
+  build did **not** produce an executable and was not run.
+
+### Repository state and generated files
+
+- `mods/active-pack.ini` selects `SOFTDRINK_2K28-2K28`.
+- Files intentionally changed in this follow-up are:
+  - `tools/analyze.ps1`
+  - `tools/apply-gen-patches.py`
+  - `tools/build.ps1`
+  - the small XOR additions inside the nested
+    `external/xboxrecomp/tools/recomp/flag_return_scan.py` and `lifter.py`
+- `src/nfl2k5_mod_packs.c` has no remaining Codex compatibility diff.
+- Running the generic generated-code patcher also modified retail generated files
+  `src/recomp/gen/recomp_0001.c` and `src/recomp/gen/recomp_0011.c` with the two
+  defensive guards. These SOFTDRINK-specific guards should be scoped to pack
+  output or removed from retail after the root cause is fixed.
+- `xbox_kernel.log` changed as a runtime artifact. There are many unrelated user
+  and Claude files in the tree; do not clean, stage, or revert them wholesale.
+- The previously installed pack executable was observed at
+  `mods/packs/SOFTDRINK_2K28-2K28/native/NFL2K5.exe` with timestamp 20:54:34 and
+  size 63,711,744 bytes. The failed raw build did not replace it.
+
+### Recommended next steps
+
+1. Fix or temporarily remove the raw-tree-incompatible `RECOMP_REGS_OUT()` call,
+   rebuild the SOFTDRINK pack without register-locals, and test Start first.
+2. If the raw build reaches menus/gameplay, remove the two defensive guards one at
+   a time to determine whether either is still needed; neither should be treated
+   as the root fix without proof.
+3. Confirm the process is using the SOFTDRINK custom native executable and XBE,
+   then visually choose the Rams as the home team and select SoftDrink's SoFi
+   stadium. Do not rely on the previous 12-trigger automation count.
+4. Recheck the player face/body vertex fixes under the true custom pack before
+   recording. Capture the requested boot-to-gameplay video only after Start,
+   team/stadium selection, and gameplay are stable.
