@@ -34,7 +34,7 @@ extern uint32_t xbox_HeapAlloc(uint32_t size, uint32_t alignment);
 extern void xbox_path_map_disc_dir(const char *name, const char *host_dir);
 
 #define MAX_TEAMS 512
-typedef struct { char folder[96], code[8], base[8]; } TeamFiles;
+typedef struct { char folder[96], code[8], base[8]; uint32_t primary, secondary, entry; } TeamFiles;
 static TeamFiles s_teams[MAX_TEAMS];
 static int s_n = -1, s_log = -1;
 static uint32_t s_names;                         /* guest buffers for rewritten names */
@@ -57,6 +57,14 @@ static int json_str(const char *text, const char *key, char *out, size_t n)
     memcpy(out, p, (size_t)(q - p));
     out[q - p] = 0;
     return 1;
+}
+
+/* "key": "#RRGGBB" -> 0xFFRRGGBB; 0 when missing. */
+static uint32_t json_color(const char *text, const char *key)
+{
+    char v[16];
+    if (!json_str(text, key, v, sizeof v) || v[0] != '#' || strlen(v) != 7) return 0;
+    return 0xFF000000u | (uint32_t)strtoul(v + 1, NULL, 16);
 }
 
 static void scan(void)
@@ -85,6 +93,8 @@ static void scan(void)
         snprintf(t.folder, sizeof t.folder, "%s", fd.cFileName);
         if (!json_str(text, "code", t.code, sizeof t.code) || (toupper((unsigned char)t.code[0]) != 'Z' && toupper((unsigned char)t.code[0]) != 'Q')) continue;
         if (!json_str(text, "base", t.base, sizeof t.base)) strcpy(t.base, "22");
+        t.primary = json_color(text, "primary");
+        t.secondary = json_color(text, "secondary");
         s_teams[s_n++] = t;
     } while (FindNextFileA(h, &fd));
     FindClose(h);
@@ -121,7 +131,18 @@ uint32_t nfl2k5_asset_hash_name(uint32_t name)
         low[i] = (char)tolower((unsigned char)a[i]);
     }
     a[i] = low[i] = 0;
-    if (strchr(a, ':') || (k = team_of(low, &hit)) < 0 || own_file(k, a)) return name;
+    if (strchr(a, ':') || (k = team_of(low, &hit)) < 0) return name;
+    {
+        static int hl = -1, hn;
+        static char seen[256][40];
+        int j;
+        if (hl < 0) hl = getenv("NFL2K5_HASH_LOG") != NULL;
+        for (j = 0; hl && j < hn && strncmp(seen[j], a, 39); j++) {}
+        if (hl && j == hn && hn < 256) snprintf(seen[hn++], 40, "%s", a);
+        else j = -1;
+        if (j >= 0) fprintf(stderr, "[HASH] %s%s\n", a, own_file(k, a) ? " (own file)" : "");
+    }
+    if (own_file(k, a)) return name;
     snprintf(other, sizeof other, "%.*s%s%s", (int)(hit - low), a, s_teams[k].base, a + (hit - low) + strlen(s_teams[k].code));
     {
         uint32_t g = guest_wstr(other);
@@ -431,4 +452,45 @@ void nfl2k5_team_roster(const char *rost_path, uint32_t slot)
     }
     fclose(f);
     fprintf(stderr, "[TEAMFILES] %s: %d players from roster.csv\n", p, row);
+}
+
+
+/* ---- team colours (2026-10-09) ---------------------------------------------
+ *
+ * The front end's team colours -- the Team Rosters backdrop, row highlights,
+ * chiclet backgrounds -- come from a table of 80 entries of 0x1C bytes at
+ * 0x4E7FE0: {code string, brightness float, primary, secondary, two u16 flags,
+ * accent, shadow}. Seven lookups (0x68D70 ...) walk it comparing the team's
+ * asset code, falling back to blue 0xFF0065E6. For an added team (gen patch
+ * TEAM_COLOR_ENTRY) the walk starts at an entry of its own built from
+ * team.json's colours, placed so the lookups' index arithmetic
+ * (0x4E7FE0 + i * 0x1C) lands on it; the first compare then matches. */
+uint32_t nfl2k5_team_color_entry(uint32_t code)
+{
+    int k, i;
+    if (s_n < 0) scan();
+    if (!code || !s_n) return 0;
+    for (k = 0; k < s_n; k++) {
+        TeamFiles *t = &s_teams[k];
+        uint32_t e, r, g, b;
+        for (i = 0; t->code[i] && toupper((unsigned char)t->code[i]) == toupper(MEM16(code + 2u * (uint32_t)i) & 0xFF) && MEM16(code + 2u * (uint32_t)i) < 0x100; i++) {}
+        if (t->code[i] || MEM16(code + 2u * (uint32_t)i) || !t->primary) continue;
+        if (!t->entry) {
+            uint32_t blk = xbox_HeapAlloc(0x1C * 3, 4);
+            if (!blk) return 0;
+            e = blk + (0x1Cu - (blk - 0x4E7FE0u) % 0x1Cu) % 0x1Cu;
+            r = (t->primary >> 16) & 0xFF; g = (t->primary >> 8) & 0xFF; b = t->primary & 0xFF;
+            MEM32(e + 0x04) = 0x3F800000u;                                 /* brightness 1.0 */
+            MEM32(e + 0x08) = t->primary;
+            MEM32(e + 0x0C) = t->secondary ? t->secondary : 0xFFFFFFFFu;
+            MEM16(e + 0x10) = 0; MEM16(e + 0x12) = 0;
+            MEM32(e + 0x14) = t->primary;                                  /* accent */
+            MEM32(e + 0x18) = 0xC0000000u | ((r / 2) << 16) | ((g / 2) << 8) | (b / 2);   /* shadow */
+            t->entry = e;
+            if (s_log > 0) fprintf(stderr, "[TEAMFILES] %s colours %08X/%08X at %08X\n", t->code, t->primary, MEM32(e + 0x0C), e);
+        }
+        MEM32(t->entry) = code;               /* the walk compares this with the team's code: same string */
+        return t->entry;
+    }
+    return 0;
 }

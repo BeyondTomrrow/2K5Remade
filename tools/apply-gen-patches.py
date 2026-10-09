@@ -648,6 +648,35 @@ PATCHES = [
     ("TEAM_FILTER_ADDED", "sub_000E2E50", "loc_000E2E50: ;", "after", """\
     { extern int nfl2k5_team_filter(uint32_t, uint32_t, uint32_t); int _tf = nfl2k5_team_filter(ecx, edx, MEM32(esp)); if (_tf >= 0) { eax = (uint32_t)_tf; esp += 4; return; } }
 """),
+    # The case-sensitive name CRC (0x38600): logos.cdf's per-team art (Team Select
+    # cards unif_/helm_, logo_ backgrounds) is found through it -- an added team's
+    # names hash as its base team's until it has art of its own there.
+    ("ASSET_HASH_HOOK_CS", "sub_00038600", "loc_00038600: ;", "after", """\
+    { extern uint32_t nfl2k5_asset_hash_name(uint32_t); ecx = nfl2k5_asset_hash_name(ecx); }
+"""),
+    # Team colours: the front end's lookups of the 80-entry colour table at 0x4E7FE0
+    # start at an added team's own entry (team.json colours; src/nfl2k5_team_files.c).
+    ("TEAM_COLOR_ENTRY_1", "sub_00068D70", "esi = 0x4E7FE0;", "after", """\
+    { extern uint32_t nfl2k5_team_color_entry(uint32_t); uint32_t _e = nfl2k5_team_color_entry(ebx); if (_e) { esi = _e; edi = (_e - 0x4E7FE0u) / 0x1Cu; } }
+"""),
+    ("TEAM_COLOR_ENTRY_2", "sub_00068DC0", "esi = 0x4E7FE0;", "after", """\
+    { extern uint32_t nfl2k5_team_color_entry(uint32_t); uint32_t _e = nfl2k5_team_color_entry(ebx); if (_e) { esi = _e; edi = (_e - 0x4E7FE0u) / 0x1Cu; } }
+"""),
+    ("TEAM_COLOR_ENTRY_3", "sub_00068E10", "esi = 0x4E7FE0;", "after", """\
+    { extern uint32_t nfl2k5_team_color_entry(uint32_t); uint32_t _e = nfl2k5_team_color_entry(ebx); if (_e) { esi = _e; edi = (_e - 0x4E7FE0u) / 0x1Cu; } }
+"""),
+    ("TEAM_COLOR_ENTRY_4", "sub_00068E60", "esi = 0x4E7FE0;", "after", """\
+    { extern uint32_t nfl2k5_team_color_entry(uint32_t); uint32_t _e = nfl2k5_team_color_entry(ebx); if (_e) { esi = _e; edi = (_e - 0x4E7FE0u) / 0x1Cu; } }
+"""),
+    ("TEAM_COLOR_ENTRY_5", "sub_00068EB0", "esi = 0x4E7FE0;", "after", """\
+    { extern uint32_t nfl2k5_team_color_entry(uint32_t); uint32_t _e = nfl2k5_team_color_entry(ebx); if (_e) { esi = _e; edi = (_e - 0x4E7FE0u) / 0x1Cu; } }
+"""),
+    ("TEAM_COLOR_ENTRY_6", "sub_00068F10", "esi = 0x4E7FE0;", "after", """\
+    { extern uint32_t nfl2k5_team_color_entry(uint32_t); uint32_t _e = nfl2k5_team_color_entry(ebx); if (_e) { esi = _e; edi = (_e - 0x4E7FE0u) / 0x1Cu; } }
+"""),
+    ("TEAM_COLOR_ENTRY_7", "sub_0006B5B0", "esi = 0x4E7FE0;", "after", """\
+    { extern uint32_t nfl2k5_team_color_entry(uint32_t); uint32_t _e = nfl2k5_team_color_entry(ebx); if (_e) { esi = _e; edi = (_e - 0x4E7FE0u) / 0x1Cu; } }
+"""),
 ]
 
 

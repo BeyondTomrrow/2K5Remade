@@ -2310,6 +2310,8 @@ loc_00068D77: ;
     edi = 0; /* xor self */
     _fa = (uint32_t)(edi) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* xor result */
     esi = 0x4E7FE0;
+    /* NFL2K5-GENPATCH:TEAM_COLOR_ENTRY_1 */
+    { extern uint32_t nfl2k5_team_color_entry(uint32_t); uint32_t _e = nfl2k5_team_color_entry(ebx); if (_e) { esi = _e; edi = (_e - 0x4E7FE0u) / 0x1Cu; } }
 
 loc_00068D84: ;
     ecx = MEM32(esi);
@@ -2376,6 +2378,8 @@ loc_00068DC7: ;
     edi = 0; /* xor self */
     _fa = (uint32_t)(edi) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* xor result */
     esi = 0x4E7FE0;
+    /* NFL2K5-GENPATCH:TEAM_COLOR_ENTRY_2 */
+    { extern uint32_t nfl2k5_team_color_entry(uint32_t); uint32_t _e = nfl2k5_team_color_entry(ebx); if (_e) { esi = _e; edi = (_e - 0x4E7FE0u) / 0x1Cu; } }
 
 loc_00068DD4: ;
     ecx = MEM32(esi);
@@ -2442,6 +2446,8 @@ loc_00068E17: ;
     edi = 0; /* xor self */
     _fa = (uint32_t)(edi) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* xor result */
     esi = 0x4E7FE0;
+    /* NFL2K5-GENPATCH:TEAM_COLOR_ENTRY_3 */
+    { extern uint32_t nfl2k5_team_color_entry(uint32_t); uint32_t _e = nfl2k5_team_color_entry(ebx); if (_e) { esi = _e; edi = (_e - 0x4E7FE0u) / 0x1Cu; } }
 
 loc_00068E24: ;
     ecx = MEM32(esi);
@@ -2508,6 +2514,8 @@ loc_00068E67: ;
     edi = 0; /* xor self */
     _fa = (uint32_t)(edi) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* xor result */
     esi = 0x4E7FE0;
+    /* NFL2K5-GENPATCH:TEAM_COLOR_ENTRY_4 */
+    { extern uint32_t nfl2k5_team_color_entry(uint32_t); uint32_t _e = nfl2k5_team_color_entry(ebx); if (_e) { esi = _e; edi = (_e - 0x4E7FE0u) / 0x1Cu; } }
 
 loc_00068E74: ;
     ecx = MEM32(esi);
@@ -2575,6 +2583,8 @@ loc_00068EB7: ;
     edi = 0; /* xor self */
     _fa = (uint32_t)(edi) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* xor result */
     esi = 0x4E7FE0;
+    /* NFL2K5-GENPATCH:TEAM_COLOR_ENTRY_5 */
+    { extern uint32_t nfl2k5_team_color_entry(uint32_t); uint32_t _e = nfl2k5_team_color_entry(ebx); if (_e) { esi = _e; edi = (_e - 0x4E7FE0u) / 0x1Cu; } }
 
 loc_00068EC4: ;
     ecx = MEM32(esi);
@@ -2654,6 +2664,8 @@ loc_00068F17: ;
     edi = 0; /* xor self */
     _fa = (uint32_t)(edi) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* xor result */
     esi = 0x4E7FE0;
+    /* NFL2K5-GENPATCH:TEAM_COLOR_ENTRY_6 */
+    { extern uint32_t nfl2k5_team_color_entry(uint32_t); uint32_t _e = nfl2k5_team_color_entry(ebx); if (_e) { esi = _e; edi = (_e - 0x4E7FE0u) / 0x1Cu; } }
 
 loc_00068F24: ;
     ecx = MEM32(esi);
@@ -8786,6 +8798,8 @@ loc_0006B5B7: ;
     edi = 0; /* xor self */
     _fa = (uint32_t)(edi) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* xor result */
     esi = 0x4E7FE0;
+    /* NFL2K5-GENPATCH:TEAM_COLOR_ENTRY_7 */
+    { extern uint32_t nfl2k5_team_color_entry(uint32_t); uint32_t _e = nfl2k5_team_color_entry(ebx); if (_e) { esi = _e; edi = (_e - 0x4E7FE0u) / 0x1Cu; } }
 
 loc_0006B5C4: ;
     ecx = MEM32(esi);
@@ -43217,6 +43231,9 @@ void sub_00077230(void)
     RECOMP_INTERP_GATE(0x00077230u);
 
 loc_00077230: ;
+    /* NFL2K5-GENPATCH:CONTROLLER_SETUP_PORT_LAYOUT */
+    { extern volatile long nfl2k5_cs_custom_ports; uint32_t _cs = MEM32(ecx * 0x1Cu + 0xE5FE90u);
+      if (_cs > 2u || (ecx < 4u && ((nfl2k5_cs_custom_ports >> ecx) & 1))) { extern uint32_t nfl2k5_cs_port_layout(uint32_t, uint32_t, uint32_t); uint32_t _p = ecx; ecx = ecx * 0x1Cu; eax = nfl2k5_cs_port_layout(_p, _cs, MEM32(esp)); esp += 4; return; } }
     ecx = (uint32_t)((int32_t)ecx * (int32_t)0x1C);
     eax = MEM32(ecx + 0xE5FE90);
     esp += 4; return; /* ret */

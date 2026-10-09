@@ -22862,6 +22862,8 @@ void sub_00038600(void)
     (void)_fa; (void)_fb; (void)_fas; (void)_fbs;
 
 loc_00038600: ;
+    /* NFL2K5-GENPATCH:ASSET_HASH_HOOK_CS */
+    { extern uint32_t nfl2k5_asset_hash_name(uint32_t); ecx = nfl2k5_asset_hash_name(ecx); }
     PUSH32(esp, ecx);
     PUSH32(esp, ebx);
     ebx = ecx;
@@ -22939,6 +22941,8 @@ void sub_00038650(void)
     (void)_fa; (void)_fb; (void)_fas; (void)_fbs;
 
 loc_00038650: ;
+    /* NFL2K5-GENPATCH:ASSET_HASH_HOOK */
+    { extern uint32_t nfl2k5_asset_hash_name(uint32_t); ecx = nfl2k5_asset_hash_name(ecx); }
     PUSH32(esp, ecx);
     PUSH32(esp, ebx);
     ebx = ecx;
@@ -59265,6 +59269,8 @@ loc_000425D2: ;
     PUSH32(esp, 0x000425DDu); RECOMP_ABI_CALL(0x0003ADD0u, sub_0003ADD0); /* call 0x0003ADD0 */
 
 loc_000425DD: ;
+    /* NFL2K5-GENPATCH:ARCHIVE_EXTRA_PACK */
+    { extern void nfl2k5_archive_extend(void); RECOMP_REGS_OUT(); nfl2k5_archive_extend(); RECOMP_REGS_IN(); }
     eax = MEM32(0xA764FC);
     _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;
     _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test eax, eax (32-bit) */
@@ -79595,6 +79601,8 @@ void sub_00049090(void)
     (void)_fa; (void)_fb; (void)_fas; (void)_fbs;
 
 loc_00049090: ;
+    /* NFL2K5-GENPATCH:ASSET_NAME_HOOK */
+    { extern uint32_t nfl2k5_asset_name(uint32_t); ecx = nfl2k5_asset_name(ecx); }
     _fb = (uint32_t)(8) & 0xFFFFFFFFu; _fbs = (int32_t)(int32_t)(_fb); /* sub source, before the write */
     esp = esp - 8;
     _fa = (uint32_t)(esp) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* sub result */
