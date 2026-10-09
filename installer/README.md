@@ -15,6 +15,12 @@ Setup verifies `default.xbe` and `vc_53450030`, then makes an NTFS junction at
 never an uninstall target; if Windows leaves the link behind, it is safe to
 remove that link without touching its target.
 
+Setup can also import a supported 2K5 Mod Studio `.2k5patch`. The standalone
+importer validates the exact clean USA retail source, reconstructs the native
+disc overlay, verifies every changed file, and looks up the native executable
+by the patched `default.xbe` SHA-256. A patch is never paired with code built
+for a different XBE. Original ESPN NFL 2K5 remains installed separately.
+
 Build after a Release game build:
 
 ```powershell

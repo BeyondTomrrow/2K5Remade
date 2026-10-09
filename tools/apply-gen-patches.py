@@ -31,6 +31,48 @@ LENIENT = "--lenient" in sys.argv
 
 # (id, function, anchor line (stripped match), insert 'before' or 'after', code)
 PATCHES = [
+    ("CELEBRATION_PREVIEW_CUSTOM", "sub_001B6B40", "loc_001B6B40: ;", "after", """\
+    if (ecx >= 37u) { extern uint32_t nfl2k5_celebration_resource(uint32_t); eax = nfl2k5_celebration_resource(ecx); esp += 4; return; }
+"""),
+    ("CELEBRATION_SELECT_SAVE", "sub_001B6B50", "loc_001B6BD7: ;", "after", """\
+    uint32_t nfl2k5_custom_selector_row = 0;
+    if (eax >= 37u) { extern uint32_t nfl2k5_celebration_selector_row(uint32_t); nfl2k5_custom_selector_row = nfl2k5_celebration_selector_row(eax); }
+"""),
+    ("CELEBRATION_SELECT_APPLY", "sub_001B6B50", "eax = eax * 4 + 0x50CFC8;", "after", """\
+    if (nfl2k5_custom_selector_row) {
+        eax = nfl2k5_custom_selector_row;
+        ecx = MEM32(eax);
+        _fa = ecx; _fb = ecx; _fas = (int32_t)ecx; _fbs = (int32_t)ecx;
+    }
+"""),
+    # Team touchdown celebrations: sub_001B68F0 rolls rand % 24 -- 0-1 two
+    # dancers, 2-18 three, 19-23 four -- then draws a clip of that size. The
+    # custom duos (My World) replace both two-dancer clips; force_duo makes
+    # every team celebration a duo (custom-animations\\team.ini).
+    ("TEAM_CELEBRATION_FORCE_DUO", "sub_001B68F0", "_fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp edx, 2 (32-bit) */", "after", """\
+    { extern int nfl2k5_team_force_duo(void); if (nfl2k5_team_force_duo()) { _fas = 0; _fbs = 2; } }
+"""),
+    ("CELEBRATION_VISIBLE_SAVE", "sub_00369650", "loc_0036967B: ;", "after", """\
+    uint32_t nfl2k5_custom_visible_remaining = edi;
+"""),
+    ("CELEBRATION_VISIBLE_CUSTOM", "sub_00369650", "eax = 0x25;", "after", """\
+    { extern uint32_t nfl2k5_celebration_after_retail(uint32_t); eax = nfl2k5_celebration_after_retail(nfl2k5_custom_visible_remaining); }
+"""),
+    ("CELEBRATION_COUNT_CUSTOM", "sub_00369A50", "eax = edi;", "before", """\
+    edi += 4u;
+"""),
+    ("CELEBRATION_LABEL_PROFILE", "sub_00369A00", "eax = MEM32(eax * 8 + 0x5858D4);", "before", """\
+    uint32_t nfl2k5_custom_label_profile_index = eax;
+"""),
+    ("CELEBRATION_LABEL_PROFILE_DONE", "sub_00369A00", "eax = MEM32(eax * 8 + 0x5858D4);", "after", """\
+    if (nfl2k5_custom_label_profile_index >= 37u) { extern uint32_t nfl2k5_celebration_label(uint32_t); eax = nfl2k5_celebration_label(nfl2k5_custom_label_profile_index); }
+"""),
+    ("CELEBRATION_LABEL_LIST", "sub_00369AB0", "eax = MEM32(eax * 8 + 0x5858D4);", "before", """\
+    uint32_t nfl2k5_custom_label_list_index = eax;
+"""),
+    ("CELEBRATION_LABEL_LIST_DONE", "sub_00369AB0", "eax = MEM32(eax * 8 + 0x5858D4);", "after", """\
+    if (nfl2k5_custom_label_list_index >= 37u) { extern uint32_t nfl2k5_celebration_label(uint32_t); eax = nfl2k5_celebration_label(nfl2k5_custom_label_list_index); }
+"""),
     ("AC97_RESET_ACK", "sub_004542EA", "MEM8(eax + -20971253) = 2;", "after", """\
     { extern void nfl2k5_ack_ac97_reset(uint32_t address); nfl2k5_ack_ac97_reset(eax + 0xFEC0010Bu); }
 """),
@@ -170,12 +212,88 @@ PATCHES = [
     ("JOIN_221ABB_TEST", "sub_00221A30", "loc_00221ABB: ;", "after", """\
     if (TEST_Z(_fa, _fb)) goto loc_00221ACD;
 """),
+    # sub_002FA9C0: the same test/cmp join before a je at 0x002FAD42. The
+    # fallback never branched, so the loop kept the wrong index (SOFTDRINK
+    # Play Now crashed on a freed object right after, 2026-10-08).
+    ("JOIN_2FAD42_TEST", "sub_002FA9C0", "goto loc_002FAD42;", "before", """    if (TEST_Z(_fa, _fb)) goto loc_002FAD46;
+    goto loc_002FAD44;
+"""),
+    ("JOIN_2FAD42_CMP", "sub_002FA9C0", "loc_002FAD42: ;", "after", """    if (CMP_EQ(_fa, _fb)) goto loc_002FAD46;
+"""),
     ("JOIN_2F7CA4_TEST", "sub_002F7C50", "goto loc_002F7CA4;", "before", """\
     if (TEST_Z(_fa, _fb)) goto loc_002F7CE3;
     goto loc_002F7CA6;
 """),
     ("JOIN_2F7CA4_CMP", "sub_002F7C50", "loc_002F7CA4: ;", "after", """\
     if (CMP_EQ(_fa, _fb)) goto loc_002F7CE3;
+"""),
+    # Press Start/front-end path (2026-10-06): both predecessors have already
+    # populated _fa/_fb (test eax,eax or cmp edi,eax), so the joined `jne`
+    # can use the preserved operands directly.  The generic fallback always
+    # returned false and sent the title state machine down the wrong path.
+    ("JOIN_3D4CFB_NE", "sub_003D4C02", "if (RECOMP_FLAGS_FALLBACK(0x003D4CFBu, _flags) /* jne: not equal / not zero */) goto loc_003D4D01;", "before", """\
+    if (CMP_NE(_fa, _fb)) goto loc_003D4D01;
+    goto loc_003D4CFD;
+"""),
+    # Defensive bound for the title's UTF-16 strlen helper.  A malformed
+    # front-end/save-library string currently has no terminator and otherwise
+    # monopolises the guest CPU forever immediately after Press Start.  Log
+    # the guest pointer/caller so the producer can be corrected separately.
+    ("WSTRLEN_BOUND_INIT", "sub_00030A60", "loc_00030A60: ;", "after", """\
+    uint32_t nfl2k5_wstrlen_start = ecx, nfl2k5_wstrlen_count = 0;
+"""),
+    ("WSTRLEN_BOUND_LOOP", "sub_00030A60", "loc_00030A70: ;", "after", """\
+    if (++nfl2k5_wstrlen_count >= 0x10000u) {
+        extern int __cdecl fprintf(void *, const char *, ...);
+        extern void *__cdecl __acrt_iob_func(unsigned);
+        fprintf(__acrt_iob_func(2), "  [WSTRLEN] unterminated ptr=%08X caller=%08X; capped at %u chars\\n",
+                nfl2k5_wstrlen_start, MEM32(esp), nfl2k5_wstrlen_count);
+        eax = nfl2k5_wstrlen_start + nfl2k5_wstrlen_count * 2u;
+        goto loc_00030A79;
+    }
+"""),
+    # SD2K28 Press Start: sub_0016AC40 asks this provider for a 48-byte
+    # front-end record, then interprets dword +0x24 as a UTF-16 name pointer.
+    # Log the provider and returned record only for that exact caller so we
+    # can compare its layout with the working retail PC build without spam.
+    ("DIAG_RECORD_3A960", "sub_0003A960", "loc_0003A9BE: ;", "after", """\
+    if (MEM32(esp + 8) == 0x0016ACC2u) {
+        static int nfl2k5_record_logs;
+        if (nfl2k5_record_logs++ < 40) {
+            extern int __cdecl fprintf(void *, const char *, ...);
+            extern void *__cdecl __acrt_iob_func(unsigned);
+            uint32_t nfl2k5_record_base = MEM32(ebx + 0x1A0);
+            uint32_t nfl2k5_record_src = nfl2k5_record_base + edx * 48u;
+            fprintf(__acrt_iob_func(2),
+                    "  [RECORD3A960] provider=%08X count=%u base=%08X index=%u src=%08X dst=%08X "
+                    "words=%08X,%08X,%08X,%08X,%08X,%08X,%08X,%08X,%08X,%08X,%08X,%08X\\n",
+                    ebx, MEM32(ebx + 0x19C), nfl2k5_record_base, edx,
+                    nfl2k5_record_src, eax,
+                    MEM32(nfl2k5_record_src + 0x00), MEM32(nfl2k5_record_src + 0x04),
+                    MEM32(nfl2k5_record_src + 0x08), MEM32(nfl2k5_record_src + 0x0C),
+                    MEM32(nfl2k5_record_src + 0x10), MEM32(nfl2k5_record_src + 0x14),
+                    MEM32(nfl2k5_record_src + 0x18), MEM32(nfl2k5_record_src + 0x1C),
+                    MEM32(nfl2k5_record_src + 0x20), MEM32(nfl2k5_record_src + 0x24),
+                    MEM32(nfl2k5_record_src + 0x28), MEM32(nfl2k5_record_src + 0x2C));
+        }
+    }
+"""),
+    # NFL 2K5's front-end save list owns 15 fixed 48-byte rows.  SD2K28 can
+    # expose more UDATA containers through the PC save library, but returning
+    # the larger count makes the stock loop walk beyond those rows and treat
+    # unrelated floats as UTF-16 pointers.  Keep the on-screen list within
+    # its actual storage; the categorized PC library still retains every save.
+    ("SAVE_ENUM_CAP_15", "sub_0003A950", "eax = MEM32(ecx + 0x19C);", "after", """\
+    if (ecx == 0x00A7DF38u && eax > 15u) {
+        static int nfl2k5_save_cap_logged;
+        if (!nfl2k5_save_cap_logged++) {
+            extern int __cdecl fprintf(void *, const char *, ...);
+            extern void *__cdecl __acrt_iob_func(unsigned);
+            fprintf(__acrt_iob_func(2),
+                    "  [SAVE-LIST] capped %u records to the menu's 15-row capacity\\n", eax);
+        }
+        eax = 15u;
+    }
 """),
     # Texture bound with address 0 (2026-09-25, black field / bodies): log
     # the D3D texture object sub_00031FA0 is writing (esi) and the caller.
@@ -458,6 +576,20 @@ PATCHES = [
      * whether the game shows its scorebug this frame, and hide the ESPN one
      * when another package draws its own. */
     { extern void nfl2k5_scorebug_native_hook(void); nfl2k5_scorebug_native_hook(); }
+"""),
+    # SOFTDRINK 2K28's menu shuffle plays through the Crib's stream player at
+    # 0xC3CC10, but nothing opens that player's stream outside the Crib, so
+    # every song request failed silently -- in xemu too (2026-10-08). Open it
+    # the way the loading-music player is opened (sub_000F5410: edx = 0,
+    # jmp sub_000CF0F0) the first time a bank is set on it. Pack builds only.
+    ("PACK_MENU_MUSIC_PLAYER", "sub_000CEF80", "loc_000CEF80: ;", "after", """\
+    { extern int nfl2k5_pack_build;
+      if (nfl2k5_pack_build && ecx == 0x00C3CC10u && MEM32(0x00C3CC10u) == 0 && MEM32(0x00C3CC14u)) {
+        uint32_t keep_eax = eax, keep_ecx = ecx, keep_edx = edx;
+        edx = 0;
+        PUSH32(esp, 0x000CEF80u); RECOMP_ABI_CALL(0x000CF0F0u, sub_000CF0F0);
+        eax = keep_eax; ecx = keep_ecx; edx = keep_edx;
+      } }
 """),
 ]
 

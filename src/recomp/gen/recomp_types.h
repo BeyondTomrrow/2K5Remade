@@ -162,7 +162,7 @@ extern uint32_t g_xbox_code_hi;
 extern RECOMP_TLS uint32_t g_eax, g_ecx, g_edx, g_esp;
 extern RECOMP_TLS uint32_t g_ebx, g_esi, g_edi;
 /* Flags handed back by a flag-returning function (kernel: xbox_memory_layout.c). */
-extern RECOMP_TLS uint32_t g_rf_kind, g_rf_a, g_rf_b;
+extern RECOMP_TLS uint32_t g_rf_kind, g_rf_a, g_rf_b, g_rf_cf;
 extern RECOMP_TLS int32_t g_rf_as, g_rf_bs;
 
 /* x87 stack. Per-thread for the same reason the integer registers are:
@@ -634,7 +634,10 @@ void recomp_todo_hit(uint32_t address);
 /* A call target the analysis did not detect as a function ran; its stub
  * does nothing (recomp_stubs_unresolved.c). */
 void recomp_unresolved_hit(uint32_t address);
-#define RECOMP_UNRESOLVED(addr) recomp_unresolved_hit(addr)
+#define RECOMP_UNRESOLVED(addr) do { \
+    if (g_interp_active) { recomp_interp_call(addr); return; } \
+    recomp_unresolved_hit(addr); \
+} while (0)
 #define RECOMP_FLAGS_FALLBACK(addr, f) (recomp_flags_fallback_hit(addr), (f))
 #define CMP_EQ(a, b)  ((uint32_t)(a) == (uint32_t)(b))
 #define CMP_NE(a, b)  ((uint32_t)(a) != (uint32_t)(b))
@@ -789,6 +792,32 @@ static inline int recomp_parity8(uint32_t x) {
 }
 #define RECOMP_PARITY8(x) recomp_parity8((uint32_t)(x))
 
+/* Flags a function handed back to its caller (lifter: flag-return calls).
+ * g_rf_kind: 1 cmp a,b; 2 test a,b; 3 result a (CF in g_rf_cf); 4 carry only.
+ * cc is the x86 condition encoding: 0 o 1 no 2 b 3 ae 4 e 5 ne 6 be 7 a
+ * 8 s 9 ns 10 p 11 np 12 l 13 ge 14 le 15 g. */
+static inline int recomp_rf_cond(int cc) {
+    uint32_t k = g_rf_kind, a = g_rf_a, b = g_rf_b;
+    uint32_t r = k == 1 ? a - b : k == 2 ? (a & b) : a;
+    int zf = k == 4 ? 0 : r == 0;
+    int cf = k == 1 ? a < b : (k == 3 || k == 4) ? (int)(g_rf_cf & 1u) : 0;
+    int sf = (int32_t)r < 0;
+    int of = k == 1 ? (int)((((a ^ b) & (a ^ r)) >> 31) & 1u) : 0;
+    int lt = k == 1 ? g_rf_as < g_rf_bs : sf != of;
+    switch (cc) {
+    case 0: return of;          case 1: return !of;
+    case 2: return cf;          case 3: return !cf;
+    case 4: return zf;          case 5: return !zf;
+    case 6: return cf || zf;    case 7: return !cf && !zf;
+    case 8: return sf;          case 9: return !sf;
+    case 10: return recomp_parity8(r);  case 11: return !recomp_parity8(r);
+    case 12: return lt;         case 13: return !lt;
+    case 14: return zf || lt;   case 15: return !zf && !lt;
+    }
+    return 0;
+}
+
+
 /** Pop a 32-bit value from the simulated stack. */
 #define POP32(sp, dst) do { \
     (dst) = MEM32(sp); \
@@ -828,6 +857,15 @@ static inline uint16_t BSWAP16(uint16_t v) {
  */
 #ifndef RECOMP_DISPATCH_H  /* avoid conflict with recomp_dispatch.h */
 typedef void (*recomp_func_t)(void);
+
+/* Mod packs (src/interp/x86_interp.c): code the pack changed or added runs in
+ * the interpreter. Every converted function starts with this gate. */
+extern int g_interp_active;
+int recomp_interp_dirty(uint32_t va);
+void recomp_interp_call(uint32_t va);
+#define RECOMP_INTERP_GATE(va) do { \
+    if (g_interp_active && recomp_interp_dirty(va)) { recomp_interp_call(va); return; } \
+} while (0)
 
 /**
  * Look up a recompiled function by its Xbox VA.
@@ -960,6 +998,7 @@ static inline void recomp_icall_g(uint32_t _va, int safe, uint32_t saved_esp, in
     if (!_fn) _fn = recomp_lookup(_va);
     if (!_fn) _fn = recomp_lookup_kernel(_va);
     if (_fn) { RECOMP_ICALL_OBSERVE(_va, RECOMP_ICALL_SEEN_RESOLVED); _fn(); }
+    else if (g_interp_active) { recomp_interp_call(_va); }
     else {
         RECOMP_ICALL_OBSERVE(_va, RECOMP_ICALL_SEEN_UNRESOLVED);
         recomp_icall_fail_log(_va);
@@ -998,7 +1037,7 @@ static inline void recomp_icall_g(uint32_t _va, int safe, uint32_t saved_esp, in
     if (_fn) { RECOMP_ICALL_OBSERVE(_va, RECOMP_ICALL_SEEN_RESOLVED); \
                RECOMP_ABI_CALL(_va, _fn); } \
     else { RECOMP_ICALL_OBSERVE(_va, RECOMP_ICALL_SEEN_UNRESOLVED); \
-           recomp_icall_fail_log(_va); g_esp += 4; eax = 0; } \
+           if (g_interp_active) recomp_interp_call(_va); else { recomp_icall_fail_log(_va); g_esp += 4; eax = 0; } } \
 } while(0)
 
 /**
@@ -1025,7 +1064,7 @@ static inline void recomp_icall_g(uint32_t _va, int safe, uint32_t saved_esp, in
     if (_fn) { RECOMP_ICALL_OBSERVE(_va, RECOMP_ICALL_SEEN_RESOLVED); \
                RECOMP_ABI_CALL(_va, _fn); } \
     else { RECOMP_ICALL_OBSERVE(_va, RECOMP_ICALL_SEEN_UNRESOLVED); \
-           recomp_icall_fail_log(_va); g_esp = (saved_esp); eax = 0; } \
+           if (g_interp_active) recomp_interp_call(_va); else { recomp_icall_fail_log(_va); g_esp = (saved_esp); eax = 0; } } \
 } while(0)
 
 /**
@@ -1043,7 +1082,7 @@ static inline void recomp_icall_g(uint32_t _va, int safe, uint32_t saved_esp, in
     if (_fn) { RECOMP_ICALL_OBSERVE(_va, RECOMP_ICALL_SEEN_RESOLVED); \
                RECOMP_ABI_CALL(_va, _fn); } \
     else { RECOMP_ICALL_OBSERVE(_va, RECOMP_ICALL_SEEN_UNRESOLVED); \
-           recomp_icall_fail_log(_va); g_esp += 4; g_eax = 0; } \
+           if (g_interp_active) recomp_interp_call(_va); else { recomp_icall_fail_log(_va); g_esp += 4; g_eax = 0; } } \
 } while(0)
 #endif /* RECOMP_REG_LOCALS */
 

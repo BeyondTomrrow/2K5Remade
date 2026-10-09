@@ -13,6 +13,11 @@ Run `NFL2K5-PC-Setup.exe`, choose any installation folder, then either:
 - select your own Xbox ISO/XISO and a destination. Setup creates an
   `ESPN NFL 2K5` folder there and extracts the disc.
 
+Setup optionally accepts a supported 2K5 Mod Studio `.2k5patch`. It verifies
+the clean source and all rebuilt files, then installs a native executable
+matched to the patched XBE. The mod can be switched from **Features > Mod
+Packs**, while the original game stays available.
+
 The selected game-data folder is linked into the installation and is not
 deleted when the application is uninstalled.
 
@@ -38,3 +43,6 @@ This product includes `extract-xiso` 2.7.1, developed by in
 <in@fishtank.com>, for extracting a user's own Xbox disc image. Its copyright,
 license conditions, and warranty disclaimer are installed at
 `docs\third-party\extract-xiso-LICENSE.txt`.
+
+Compatibility with the `.2k5patch` format and credits for 2K5 Mod Studio and
+SOFTDRINK 2K28 are installed under `docs\third-party`.

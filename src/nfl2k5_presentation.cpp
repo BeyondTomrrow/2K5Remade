@@ -94,11 +94,29 @@ struct JVal {
 
 class JParser {
 public:
-    explicit JParser(const std::string &text) : p(text.c_str()), e(text.c_str() + text.size()) {}
+    explicit JParser(const std::string &text) : base(text.c_str()), p(text.c_str()), e(text.c_str() + text.size()) {}
     bool parse(JVal &out) { ws(); return value(out); }
+    /* Where parsing stopped: 1-based line and column of the offending character. */
+    void where(int *line, int *col) const {
+        const char *q = base; *line = 1; *col = 1;
+        for (; q < p && q < e; q++) { if (*q == '\n') { (*line)++; *col = 1; } else (*col)++; }
+    }
 private:
-    const char *p, *e;
-    void ws() { while (p < e && (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n')) p++; }
+    const char *base, *p, *e;
+    /* Whitespace and, as hand-edited packages have them, // and slash-star comments. */
+    void ws() {
+        for (;;) {
+            while (p < e && (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n')) p++;
+            if (p + 1 < e && p[0] == '/' && p[1] == '/') { while (p < e && *p != '\n') p++; continue; }
+            if (p + 1 < e && p[0] == '/' && p[1] == '*') {
+                p += 2;
+                while (p + 1 < e && !(p[0] == '*' && p[1] == '/')) p++;
+                p = p + 1 < e ? p + 2 : e;
+                continue;
+            }
+            break;
+        }
+    }
     bool lit(const char *w) { size_t n = strlen(w); if ((size_t)(e - p) < n || memcmp(p, w, n)) return false; p += n; return true; }
     bool string(std::string &out) {
         if (p >= e || *p != '"') return false;
@@ -109,6 +127,9 @@ private:
                 switch (*p) {
                 case 'n': out += '\n'; break;
                 case 't': out += '\t'; break;
+                case 'r': out += '\r'; break;
+                case 'b': out += '\b'; break;
+                case 'f': out += '\f'; break;
                 case 'u': {
                     unsigned cp = 0;
                     for (int i = 1; i <= 4 && p + i < e; i++) {
@@ -144,7 +165,7 @@ private:
                 ws(); if (p >= e || *p != ':') return false; p++;
                 if (!value(item)) return false;
                 v.o.emplace_back(std::move(k), std::move(item));
-                ws(); if (p < e && *p == ',') { p++; continue; }
+                ws(); if (p < e && *p == ',') { p++; ws(); if (p < e && *p == '}') { p++; return true; } continue; }
                 if (p < e && *p == '}') { p++; return true; }
                 return false;
             }
@@ -156,7 +177,7 @@ private:
                 JVal item;
                 if (!value(item)) return false;
                 v.a.push_back(std::move(item));
-                ws(); if (p < e && *p == ',') { p++; continue; }
+                ws(); if (p < e && *p == ',') { p++; ws(); if (p < e && *p == ']') { p++; return true; } continue; }
                 if (p < e && *p == ']') { p++; return true; }
                 return false;
             }
@@ -189,8 +210,24 @@ static bool load_json(const std::string &path, JVal &out)
 {
     std::string text;
     if (!read_file(path, text)) return false;
+    /* Editors add a byte-order mark: UTF-8 (EF BB BF) or UTF-16 (FF FE). */
+    if (text.size() >= 3 && (unsigned char)text[0] == 0xEF && (unsigned char)text[1] == 0xBB && (unsigned char)text[2] == 0xBF) {
+        text.erase(0, 3);
+    } else if (text.size() >= 2 && (unsigned char)text[0] == 0xFF && (unsigned char)text[1] == 0xFE) {
+        const wchar_t *w = (const wchar_t *)(text.data() + 2);
+        int wn = (int)((text.size() - 2) / 2);
+        int n = WideCharToMultiByte(CP_UTF8, 0, w, wn, nullptr, 0, nullptr, nullptr);
+        std::string u8((size_t)(n > 0 ? n : 0), '\0');
+        if (n > 0) WideCharToMultiByte(CP_UTF8, 0, w, wn, &u8[0], n, nullptr, nullptr);
+        text.swap(u8);
+    }
     JParser jp(text);
-    if (!jp.parse(out)) { fprintf(stderr, "[PRES] JSON error in %s\n", path.c_str()); return false; }
+    if (!jp.parse(out)) {
+        int line, col;
+        jp.where(&line, &col);
+        fprintf(stderr, "[PRES] JSON error in %s at line %d, column %d\n", path.c_str(), line, col);
+        return false;
+    }
     return true;
 }
 
@@ -440,6 +477,8 @@ struct Package {
 
 static std::vector<Package> s_pkgs;           /* [0] is the game's own ESPN presentation */
 static std::atomic<int> s_sel_pkg{ 0 }, s_sel_intro{ 1 }, s_sel_outro{ 1 }, s_sel_anim{ 1 }, s_sel_vol{ 8 };
+static std::atomic<int> s_sel_commentary{ 0 };
+static std::string s_commentary_dir = "E:\\cfbsound";
 
 /* The package may carry its fonts. Registering them privately makes the
  * broadcast reproducible without installing anything into Windows. */
@@ -522,9 +561,10 @@ static void save_settings()
     if (!f) return;
     int pk = s_sel_pkg;
     fprintf(f, "; Broadcast presentation (Coach Match Up > Presentation edits this)\n");
-    fprintf(f, "package = %s\nintro = %d\noutro = %d\nanimations = %d\ntheme_volume = %d\n",
+    fprintf(f, "package = %s\nintro = %d\noutro = %d\nanimations = %d\ntheme_volume = %d\ncustom_commentary = %d\ncommentary_dir = %s\n",
             pk > 0 && pk < (int)s_pkgs.size() ? s_pkgs[pk].name.c_str() : "ESPN (Original)",
-            (int)s_sel_intro, (int)s_sel_outro, (int)s_sel_anim, (int)s_sel_vol * 10);
+            (int)s_sel_intro, (int)s_sel_outro, (int)s_sel_anim, (int)s_sel_vol * 10,
+            (int)s_sel_commentary, s_commentary_dir.c_str());
     fclose(f);
 }
 
@@ -542,6 +582,8 @@ static void load_settings()
         else if (!strcmp(key, "outro")) s_sel_outro = atoi(val);
         else if (!strcmp(key, "animations")) s_sel_anim = atoi(val) ? 1 : 0;
         else if (!strcmp(key, "theme_volume")) s_sel_vol = std::max(0, std::min(10, atoi(val) / 10));
+        else if (!strcmp(key, "custom_commentary")) s_sel_commentary = atoi(val) ? 1 : 0;
+        else if (!strcmp(key, "commentary_dir")) s_commentary_dir = val;
     }
     fclose(f);
 }
@@ -557,6 +599,7 @@ extern "C" int nfl2k5_pres_get(int what)
     case 2: return s_sel_outro;
     case 3: return s_sel_anim;
     case 4: return s_sel_vol;
+    case 5: return s_sel_commentary;
     }
     return 0;
 }
@@ -574,6 +617,7 @@ extern "C" int nfl2k5_pres_values(int what)
     case 1: case 2: return 1 + (int)songs(what).size();
     case 3: return 2;
     case 4: return 11;
+    case 5: return 2;
     }
     return 1;
 }
@@ -607,6 +651,7 @@ extern "C" void nfl2k5_pres_value_name(int what, int idx, char *buf, size_t n)
     }
     case 3: snprintf(buf, n, "%s", idx ? "On" : "Off"); break;
     case 4: snprintf(buf, n, "%d%%", idx * 10); break;
+    case 5: snprintf(buf, n, "%s", idx ? "On" : "Off"); break;
     }
 }
 extern "C" void nfl2k5_pres_set(int what, int v)
@@ -624,6 +669,7 @@ extern "C" void nfl2k5_pres_set(int what, int v)
     case 2: s_sel_outro = v; break;
     case 3: s_sel_anim = v; break;
     case 4: s_sel_vol = v; break;
+    case 5: s_sel_commentary = v; break;
     }
     save_settings();
 }
@@ -708,6 +754,278 @@ static bool decode_mp3(const std::string &path, std::vector<int16_t> &out)
     }
     attr->Release();
     return ok;
+}
+
+/* ======================================================================
+ * Optional situation commentary
+ *
+ * E:\cfbsound is a flat library whose filenames describe the situation
+ * (PRE_4TH_GOAL, POST_INT, Q4, GETS_1ST, and so on).  Keep only an index in
+ * memory and decode one selected WAV on demand.  The game's commentary
+ * centre channel is muted independently, leaving crowd, music and effects
+ * intact.  This works with ESPN Original as well as custom scorebugs.
+ * ====================================================================== */
+struct CommentaryClip {
+    std::string path, key;
+};
+struct CommentaryAudio {
+    IXAudio2 *xa = nullptr;
+    IXAudio2MasteringVoice *master = nullptr;
+    IXAudio2SourceVoice *voice = nullptr;
+    std::vector<int16_t> pcm;
+    std::vector<CommentaryClip> clips;
+    std::mutex lock;
+    std::atomic<int> state{ 0 };       /* 0 idle, 1 decoding, 2 playing */
+    std::atomic<int> generation{ 0 };
+    std::atomic<int> indexed{ 0 };
+    size_t last_pick = (size_t)-1;
+    DWORD last_request = 0;
+} s_commentary;
+static std::string s_commentary_test;
+static std::atomic<ULONGLONG> s_commentary_pass_serial{ 0 };
+static std::atomic<DWORD> s_commentary_last_pass_tick{ 0 };
+
+static std::string narrow(const std::wstring &w)
+{
+    if (w.empty()) return "";
+    int n = WideCharToMultiByte(CP_UTF8, 0, w.c_str(), (int)w.size(), nullptr, 0, nullptr, nullptr);
+    std::string s((size_t)n, '\0');
+    WideCharToMultiByte(CP_UTF8, 0, w.c_str(), (int)w.size(), &s[0], n, nullptr, nullptr);
+    return s;
+}
+
+static DWORD WINAPI commentary_index_thread(void *)
+{
+    std::wstring dir = widen(s_commentary_dir), mask = dir + L"\\*.wav";
+    WIN32_FIND_DATAW fd;
+    HANDLE h = FindFirstFileW(mask.c_str(), &fd);
+    std::vector<CommentaryClip> found;
+    if (h != INVALID_HANDLE_VALUE) {
+        do {
+            if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
+            std::string name = narrow(fd.cFileName);
+            found.push_back({ narrow(dir + L"\\" + fd.cFileName), upper(name) });
+        } while (FindNextFileW(h, &fd));
+        FindClose(h);
+    }
+    size_t count = 0;
+    {
+        std::lock_guard<std::mutex> g(s_commentary.lock);
+        s_commentary.clips.swap(found);
+        count = s_commentary.clips.size();
+    }
+    s_commentary.indexed = 1;
+    fprintf(stderr, "[COMMENTARY] indexed %zu clips from %s\n",
+            count, s_commentary_dir.c_str());
+    return 0;
+}
+
+static bool key_has(const std::string &key, const char *token)
+{
+    return token && *token && key.find(token) != std::string::npos;
+}
+
+static int commentary_context_score(const std::string &key, const GameState &g, int prior_down)
+{
+    int score = key_has(key, "_GEN") ? 8 : 0;
+    char q[8]; snprintf(q, sizeof q, "Q%d", g.period);
+    if (g.period >= 1 && g.period <= 4) {
+        if (key_has(key, q)) score += 7;
+        for (int i = 1; i <= 4; i++) {
+            char other[8]; snprintf(other, sizeof other, "Q%d", i);
+            if (i != g.period && key_has(key, other)) score -= 15;
+        }
+    }
+    bool goal = g.phase == 4 && fabsf(g.line) >= 4571.0f;
+    if (goal && key_has(key, "GOAL")) score += 10;
+    if (!goal && key_has(key, "GOAL")) score -= 16;
+    for (int d = 1; d <= 4; d++) {
+        char now_down[16], was_down[16];
+        snprintf(now_down, sizeof now_down, "NOW_%d%s", d, d == 1 ? "ST" : d == 2 ? "ND" : d == 3 ? "RD" : "TH");
+        snprintf(was_down, sizeof was_down, "WAS_%d%s", d, d == 1 ? "ST" : d == 2 ? "ND" : d == 3 ? "RD" : "TH");
+        if (key_has(key, now_down)) score += d == g.down ? 10 : -18;
+        if (key_has(key, was_down)) score += d == prior_down ? 10 : -18;
+    }
+    if (g.period == 4 && g.clock <= 5.5f) {
+        if (key_has(key, "LESS_5_SEC") || key_has(key, "5SEC") || key_has(key, "5_SEC")) score += 14;
+    } else if (key_has(key, "LESS_5_SEC") || key_has(key, "5SEC")) score -= 20;
+    /* These describe college-only context that NFL 2K5 cannot verify. */
+    static const char *avoid[] = { "CDM_", "HEIS_", "TOP25", "RANK", "RECRUIT", "HFA_",
+                                   "RIVAL", "BOWL_", "SNOW", "RAIN", "WEEK_", "SEAS_" };
+    for (const char *a : avoid) if (key_has(key, a)) score -= 12;
+    return score;
+}
+
+static void commentary_play(const std::string &path, const std::string &key)
+{
+    if (s_commentary.state != 0) return;
+    int gen = ++s_commentary.generation;
+    s_commentary.state = 1;
+    std::thread([path, key, gen]() {
+        std::vector<int16_t> pcm;
+        CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+        bool ok = decode_mp3(path, pcm);
+        CoUninitialize();
+        std::lock_guard<std::mutex> g(s_commentary.lock);
+        if (gen != s_commentary.generation || s_commentary.state != 1) return;
+        if (!ok) {
+            fprintf(stderr, "[COMMENTARY] could not decode %s\n", path.c_str());
+            s_commentary.state = 0;
+            return;
+        }
+        if (!s_commentary.xa &&
+            (FAILED(XAudio2Create(&s_commentary.xa, 0, XAUDIO2_DEFAULT_PROCESSOR)) ||
+             FAILED(s_commentary.xa->CreateMasteringVoice(&s_commentary.master)))) {
+            s_commentary.state = 0;
+            return;
+        }
+        WAVEFORMATEX wf = {};
+        wf.wFormatTag = WAVE_FORMAT_PCM; wf.nChannels = 2; wf.nSamplesPerSec = 48000;
+        wf.wBitsPerSample = 16; wf.nBlockAlign = 4; wf.nAvgBytesPerSec = 48000 * 4;
+        if (FAILED(s_commentary.xa->CreateSourceVoice(&s_commentary.voice, &wf))) {
+            s_commentary.state = 0;
+            return;
+        }
+        s_commentary.pcm.swap(pcm);
+        XAUDIO2_BUFFER b = {};
+        b.AudioBytes = (UINT32)(s_commentary.pcm.size() * sizeof(int16_t));
+        b.pAudioData = (const BYTE *)s_commentary.pcm.data();
+        b.Flags = XAUDIO2_END_OF_STREAM;
+        s_commentary.voice->SubmitSourceBuffer(&b);
+        s_commentary.voice->SetVolume(1.0f);
+        s_commentary.voice->Start();
+        s_commentary.state = 2;
+        fprintf(stderr, "[COMMENTARY] playing %s (%.1f s)\n", key.c_str(),
+                s_commentary.pcm.size() / 96000.0);
+    }).detach();
+}
+
+/* marker2 may be null, or it may narrow a broad family such as POST + INT. */
+static void commentary_request(const char *marker1, const char *marker2, const GameState &g, int prior_down = 0)
+{
+    if (!s_sel_commentary || !s_commentary.indexed || s_commentary.state != 0) return;
+    DWORD now = GetTickCount();
+    if (now - s_commentary.last_request < 1800) return;
+    int best = -100000;
+    std::vector<size_t> choices;
+    {
+        std::lock_guard<std::mutex> lock(s_commentary.lock);
+        for (size_t i = 0; i < s_commentary.clips.size(); i++) {
+            const std::string &key = s_commentary.clips[i].key;
+            if (!key_has(key, marker1) || (marker2 && !key_has(key, marker2))) continue;
+            int score = commentary_context_score(key, g, prior_down);
+            if (key_has(key, "2MAN")) score += 1;
+            if (i == s_commentary.last_pick) score -= 30;
+            if (score > best) { best = score; choices.clear(); choices.push_back(i); }
+            else if (score == best) choices.push_back(i);
+        }
+        if (choices.empty()) {
+            fprintf(stderr, "[COMMENTARY] no clip for %s%s%s\n", marker1,
+                    marker2 ? " + " : "", marker2 ? marker2 : "");
+            return;
+        }
+        size_t pick = choices[(GetTickCount64() / 1000u + choices.size()) % choices.size()];
+        s_commentary.last_pick = pick;
+        s_commentary.last_request = now;
+        commentary_play(s_commentary.clips[pick].path, s_commentary.clips[pick].key);
+    }
+}
+
+static void commentary_tick(const GameState &g, bool match_active)
+{
+    static GameState prev;
+    static bool prev_valid;
+    static bool muted;
+    static bool pending_run;
+    static DWORD pending_run_due;
+    static ULONGLONG pending_pass_serial;
+    static GameState pending_before, pending_after;
+    if (!s_sel_commentary || !match_active || !g.valid) {
+        if (muted) xbox_AudioSetCommentaryGain(1.0f);
+        muted = false;
+        prev_valid = false;
+        pending_run = false;
+        if (!s_sel_commentary && s_commentary.state != 0) {
+            std::lock_guard<std::mutex> lock(s_commentary.lock);
+            ++s_commentary.generation;
+            if (s_commentary.voice) {
+                s_commentary.voice->Stop();
+                s_commentary.voice->DestroyVoice();
+                s_commentary.voice = nullptr;
+            }
+            s_commentary.pcm.clear();
+            s_commentary.state = 0;
+        }
+        return;
+    }
+    if (!muted) xbox_AudioSetCommentaryGain(0.0f);
+    muted = true;
+    if (s_commentary.state == 2) {
+        std::lock_guard<std::mutex> lock(s_commentary.lock);
+        XAUDIO2_VOICE_STATE vs = {};
+        if (s_commentary.voice) s_commentary.voice->GetState(&vs, XAUDIO2_VOICE_NOSAMPLESPLAYED);
+        if (!s_commentary.voice || vs.BuffersQueued == 0) {
+            if (s_commentary.voice) { s_commentary.voice->DestroyVoice(); s_commentary.voice = nullptr; }
+            s_commentary.pcm.clear();
+            s_commentary.state = 0;
+        }
+    }
+    if (!s_commentary_test.empty() && s_commentary.indexed) {
+        commentary_request(s_commentary_test.c_str(), nullptr, g);
+        s_commentary_test.clear();
+    }
+    if (!prev_valid) {
+        prev = g; prev_valid = true;
+        return;
+    }
+    DWORD now = GetTickCount();
+    if (pending_run && (int32_t)(now - pending_run_due) >= 0) {
+        pending_run = false;
+        if (s_commentary_pass_serial == pending_pass_serial && s_commentary.state == 0) {
+            bool got_first = pending_before.down > 1 && pending_after.down == 1 &&
+                             pending_before.poss == pending_after.poss;
+            commentary_request("POST_RUN_", got_first ? "GETS_1ST" : nullptr,
+                               pending_after, pending_before.down);
+        }
+    }
+    for (int side = 0; side < 2; side++) {
+        int points = g.t[side].score - prev.t[side].score;
+        if (points >= 6) {
+            bool pass_score = now - s_commentary_last_pass_tick.load() < 1800;
+            commentary_request(pass_score ? "TD_ANALYSIS_PASS_" : "TD_ANALYSIS_RUSH_", nullptr, g);
+        }
+        else if (points == 3) commentary_request("FG_SCORED_", nullptr, g);
+        else if (points == 2) commentary_request("POST_2PT", nullptr, g);
+    }
+    /* At five seconds the library has no safe standalone clock call.  The
+     * normal PRE_* request below still chooses a fourth-quarter clip without
+     * accidentally matching filenames containing 45SEC. */
+    if (g.period > prev.period && prev.period == 2)
+        commentary_request("HALFTIME_", nullptr, g);
+    bool new_down = g.phase == 4 && g.down >= 1 && g.down <= 4 &&
+                    (prev.phase != 4 || g.down != prev.down || g.poss != prev.poss || g.line != prev.line);
+    if (new_down) {
+        bool first_scrimmage = prev.phase != 4 || !prev.poss || g.poss != prev.poss;
+        bool completed_play = prev.phase == 4 && prev.poss && g.poss &&
+                              (g.down != prev.down || g.poss != prev.poss || fabsf(g.ball - prev.ball) > 10.0f);
+        if (g.down == 4 && fabsf(g.line) >= 4571.0f) {
+            pending_run = false;
+            commentary_request("PRE_4TH_GOAL", nullptr, g);
+        } else if (first_scrimmage) {
+            commentary_request("PRE_1ST_DOWN_GEN", nullptr, g);
+        } else if (completed_play &&
+                   g.t[0].score == prev.t[0].score && g.t[1].score == prev.t[1].score) {
+            /* QB stats arrive on the guest thread just after the spot changes.
+             * Give that sample a moment to identify pass/incompletion.  If no
+             * attempt changed, the completed play was a run. */
+            pending_run = true;
+            pending_run_due = now + 650;
+            pending_pass_serial = s_commentary_pass_serial;
+            pending_before = prev;
+            pending_after = g;
+        }
+    }
+    prev = g;
 }
 
 static void music_stop_now()
@@ -1085,19 +1403,43 @@ extern "C" void nfl2k5_broadcast_live_qb_sample(const Nfl2k5PlayerStat *s, int t
         return;
     PlayerStat next = copy_player_stat(*s);
     if (next.name.empty()) return;
-    std::lock_guard<std::mutex> lock(s_live_qb_lock);
-    LiveQbSample &sample = s_live_qb[team];
-    PlayerIdentity &identity = s_live_qb_identity[team];
-    if (s->full_name && *s->full_name) identity.name = s->full_name;
-    if (identity.position.empty()) identity.position = "QB";
-    if (s->jersey_number > 0) identity.number = s->jersey_number;
-    if (s->photo_id > 0) identity.portrait = nfl2k5_portrait_url(s->photo_id);
-    const PlayerStat &old = sample.player;
-    if (!sample.revision || old.name != next.name || old.completions != next.completions ||
-        old.attempts != next.attempts || old.passing_yards != next.passing_yards ||
-        old.passing_touchdowns != next.passing_touchdowns || old.interceptions != next.interceptions) {
-        sample.player = std::move(next);
-        sample.revision = ++s_live_qb_revision;
+    bool pass_attempt = false, complete = false, intercepted = false, pass_td = false;
+    {
+        std::lock_guard<std::mutex> lock(s_live_qb_lock);
+        LiveQbSample &sample = s_live_qb[team];
+        PlayerIdentity &identity = s_live_qb_identity[team];
+        if (s->full_name && *s->full_name) identity.name = s->full_name;
+        if (identity.position.empty()) identity.position = "QB";
+        if (s->jersey_number > 0) identity.number = s->jersey_number;
+        if (s->photo_id > 0) identity.portrait = nfl2k5_portrait_url(s->photo_id);
+        const PlayerStat &old = sample.player;
+        if (sample.revision && old.name == next.name && next.attempts > old.attempts) {
+            pass_attempt = true;
+            complete = next.completions > old.completions;
+            intercepted = next.interceptions > old.interceptions;
+            pass_td = next.passing_touchdowns > old.passing_touchdowns;
+        }
+        if (!sample.revision || old.name != next.name || old.completions != next.completions ||
+            old.attempts != next.attempts || old.passing_yards != next.passing_yards ||
+            old.passing_touchdowns != next.passing_touchdowns || old.interceptions != next.interceptions) {
+            sample.player = next;
+            sample.revision = ++s_live_qb_revision;
+        }
+    }
+    if (pass_attempt) {
+        ++s_commentary_pass_serial;
+        GameState g;
+        if (read_state(g) && g.valid && g.phase == 4 && g.poss == team + 1) {
+            if (intercepted)
+                commentary_request("POST_INT_", nullptr, g);
+            else if (pass_td)
+                commentary_request("TD_ANALYSIS_PASS_", nullptr, g);
+            else if (complete) {
+                bool got_first = g.down == 1;
+                commentary_request("POST_PASS_COMP_", got_first ? "GETS_1ST" : nullptr, g);
+            } else
+                commentary_request("POST_PASS_INCOMP_", nullptr, g);
+        }
     }
 }
 
@@ -1928,11 +2270,21 @@ extern "C" void nfl2k5_presentation_popup(const char *title)
     std::string t = upper(title);
     if (t.find("COIN TOSS") != std::string::npos) s_coin_toss = 1;
     int team = s_prev.poss ? s_prev.poss - 1 : HOME;
+    GameState cg;
+    read_state(cg);
     if (t.find("PENALTY") != std::string::npos || t.find("FLAG") != std::string::npos) {
         s_flag_until = GetTickCount64() + 8000;
         queue_event({ "penalty", team, "" });
-    } else if (t.find("INTERCEPTION") != std::string::npos) queue_event({ "interception", team, "" });
-    else if (t.find("FUMBLE") != std::string::npos) queue_event({ "fumble", team, "" });
+    } else if (t.find("INTERCEPTION") != std::string::npos) {
+        queue_event({ "interception", team, "" });
+        commentary_request("POST_INT_", nullptr, cg);
+    } else if (t.find("FUMBLE") != std::string::npos) {
+        queue_event({ "fumble", team, "" });
+        commentary_request("POST_FUM", nullptr, cg);
+    } else if (t.find("SACK") != std::string::npos) {
+        queue_event({ "sack", team, "" });
+        commentary_request("POST_SACK_", nullptr, cg);
+    }
     else if (t.find("TURNOVER") != std::string::npos) queue_event({ "turnover", team, "" });
     else if (t.find("INJURY") != std::string::npos) queue_event({ "injury", team, "" });
     else if (t.find("REPLAY") != std::string::npos) queue_event({ "replay_begin", team, "" });
@@ -2134,7 +2486,10 @@ static std::string html_player_extra(const PlayerStat &p, const PlayerIdentity &
     std::string j = ",\"player\":{";
     j += "\"name\":" + json_str(p.name.empty() ? broadcast_player_name(id.name.c_str()) : p.name);
     j += ",\"fullName\":" + json_str(id.name);
-    j += ",\"position\":" + json_str(id.position.empty() ? "QB" : id.position);
+    /* A native non-QB card has no live-QB identity record.  Preserve that
+     * as empty so the package can choose its family from populated stats
+     * instead of incorrectly labelling every player a quarterback. */
+    j += ",\"position\":" + json_str(id.position);
     j += ",\"number\":" + std::to_string(id.number);
     j += ",\"college\":" + json_str(id.college);
     j += ",\"portrait\":" + json_str(id.portrait);
@@ -2142,7 +2497,23 @@ static std::string html_player_extra(const PlayerStat &p, const PlayerIdentity &
     j += ",\"attempts\":" + std::to_string(p.attempts);
     j += ",\"passingYards\":" + std::to_string(p.passing_yards);
     j += ",\"passingTouchdowns\":" + std::to_string(p.passing_touchdowns);
-    j += ",\"interceptions\":" + std::to_string(p.interceptions) + "}";
+    j += ",\"interceptions\":" + std::to_string(p.interceptions);
+    /* Keep the complete stat payload here.  HTML packages decide which
+     * family applies to a player; limiting this bridge to QB fields made an
+     * SNF replacement impossible for ESPN's RB/WR/defense/kicker cards. */
+    j += ",\"kind\":" + std::to_string(p.kind);
+    j += ",\"carries\":" + std::to_string(p.carries);
+    j += ",\"rushingYards\":" + std::to_string(p.rushing_yards);
+    j += ",\"rushingTouchdowns\":" + std::to_string(p.rushing_touchdowns);
+    j += ",\"receptions\":" + std::to_string(p.receptions);
+    j += ",\"receivingYards\":" + std::to_string(p.receiving_yards);
+    j += ",\"receivingTouchdowns\":" + std::to_string(p.receiving_touchdowns);
+    j += ",\"tackles\":" + std::to_string(p.tackles);
+    j += ",\"sacks\":" + std::to_string(p.sacks);
+    j += ",\"defensiveInterceptions\":" + std::to_string(p.defensive_interceptions);
+    j += ",\"fieldGoalsMade\":" + std::to_string(p.field_goals_made);
+    j += ",\"fieldGoalsAttempted\":" + std::to_string(p.field_goals_attempted);
+    j += ",\"longestFieldGoal\":" + std::to_string(p.longest_field_goal) + "}";
     return j;
 }
 
@@ -2685,6 +3056,8 @@ static int hud_callback(const XboxHudFrame *f, XboxHudImage *img)
     DWORD match_tick = s_match_tick;
     bool match_active = match_tick && activity_now - match_tick < 2500;
 
+    commentary_tick(g, match_active);
+
     if (s_log && !g.valid) {
         static DWORD last_raw;
         if (GetTickCount() - last_raw > 5000) {
@@ -2741,7 +3114,10 @@ static int hud_callback(const XboxHudFrame *f, XboxHudImage *img)
         dirty = false;
         return 1;
     }
-    if (custom_active() && s_pkgs[s_sel_pkg].html) {
+    /* Presentation HTML belongs to an active match.  Starting its WebView in
+     * the title/front-end path kept an overlay process alive before gameplay
+     * and made Press Start contend with presentation startup. */
+    if (match_active && custom_active() && s_pkgs[s_sel_pkg].html) {
         HtmlContext cx;
         cx.play_selection = playcall_on;
         cx.paused = pause_on;
@@ -2901,16 +3277,36 @@ static int hud_callback(const XboxHudFrame *f, XboxHudImage *img)
 }
 
 /* Called once at startup (nfl2k5_video_menu_install). */
+/* For the presenter (nv2a_gpu_present.inc.c): a match is on screen. */
+extern "C" int (*xbox_present_in_match_fn)(void);
+static int in_match(void)
+{
+    /* The play-call cards and pause screens are 4:3 panels: drawn at F = 1
+     * they fill the picture instead of sitting in a middle strip. */
+    GameState g;
+    if (rd32(0x00B38C30u) != 0 || rd32(0x00AC7444u) != 0) return 0;
+    return read_state(g) ? 1 : 0;
+}
+
 extern "C" void nfl2k5_presentation_init(void)
 {
+    xbox_present_in_match_fn = in_match;
     MFStartup(MF_VERSION, MFSTARTUP_LITE);
     load_teams();
     load_packages();
     load_settings();
+    {
+        HANDLE t = CreateThread(nullptr, 0, commentary_index_thread, nullptr, 0, nullptr);
+        if (t) { SetThreadPriority(t, THREAD_PRIORITY_BELOW_NORMAL); CloseHandle(t); }
+    }
     s_test = getenv("NFL2K5_PRES_TEST") != nullptr;
     s_log = getenv("NFL2K5_PRES_LOG") != nullptr;
     s_probe = getenv("NFL2K5_PRES_PROBE") != nullptr;
     if (const char *ev = getenv("NFL2K5_PRES_EVENT")) s_test_event = ev;
+    if (const char *ev = getenv("NFL2K5_COMMENTARY_TEST")) {
+        s_commentary_test = upper(ev);
+        s_sel_commentary = 1;
+    }
     xbox_PresentSetHudCallback(hud_callback);
     xbox_AudioSetCaptureMix(capture_mix);
     fprintf(stderr, "[PRES] %zu presentations, selected \"%s\"\n", s_pkgs.size(), nfl2k5_pres_package_name(s_sel_pkg));

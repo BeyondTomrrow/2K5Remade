@@ -34,10 +34,14 @@ if ($Game) {
   $patchArgs = if ($Pack) { @('--gen', $genDir, '--lenient') } else { @() }
   & python "$root/tools/apply-gen-patches.py" @patchArgs
   if ($LASTEXITCODE) { throw 'Re-applying generated-code patches failed; see tools/apply-gen-patches.py.' }
-  # Guest registers in locals: a transformed copy in build/gen-locals that
-  # config/game.cmake compiles (NFL2K5_REG_LOCALS, default ON).
-  & python "$root/tools/gen-reg-locals.py" --gen $genDir --out $localsDir
-  if ($LASTEXITCODE) { throw 'tools/gen-reg-locals.py failed.' }
+  # Retail uses the faster register-locals conversion. Large code packs can
+  # contain detour caves with private register/flag conventions that the
+  # retail ABI assumptions do not preserve, so compile their generated code
+  # directly until the converter can prove those boundaries safely.
+  if (-not $Pack) {
+    & python "$root/tools/gen-reg-locals.py" --gen $genDir --out $localsDir
+    if ($LASTEXITCODE) { throw 'tools/gen-reg-locals.py failed.' }
+  }
   $audioSource = (Get-Content -Raw -Path "$genDir/recomp_*.c")
   if (-not ($audioSource -join "").Contains('nfl2k5_ack_ac97_reset(eax + 0xFEC0010Bu)')) {
     if ($Pack) { Write-Warning 'AC97 reset hook is not in this pack build.' }
@@ -53,8 +57,16 @@ $gameOption = if ($Game) { 'ON' } else { 'OFF' }
 # variant in build\<Configuration>-od; -Optimize keeps building -opt as before.
 $buildDir = if ($Pack) { "$root\build\$Configuration-$Pack" } elseif ($Optimize) { "$root\build\$Configuration-opt" } elseif ($DebugGen) { "$root\build\$Configuration-od" } else { "$root\build\$Configuration" }
 if (-not $DebugGen) { $Optimize = $true }
+# The converted functions' address ranges, for the mod-pack interpreter
+# (src/interp/interp_setup.c).
+if ($Game) {
+  $rangeAnalysis = if ($Pack) { "$root\analysis-$Pack" } else { "$root\analysis" }
+  & python "$root/tools/gen-func-ranges.py" $rangeAnalysis "$buildDir\generated\nfl2k5_func_ranges.c"
+  if ($LASTEXITCODE) { throw 'tools/gen-func-ranges.py failed.' }
+}
 $extra = if ($Optimize) { @('-DNFL2K5_OPTIMIZE=ON', '-DNFL2K5_FORCE_UNBLOCK_AUDIO_LOCK=ON', '-DNFL2K5_FORCE_UNBLOCK_33660_DRAIN=ON', '-DNFL2K5_FORCE_UNBLOCK_NETPOLL=ON', '-DNFL2K5_FORCE_UNBLOCK_STATE9_READY=ON') } else { @() }
 if ($Game) { $extra += @("-DNFL2K5_GEN_DIR=$genDir", "-DNFL2K5_LOCALS_DIR=$localsDir") }
+if ($Game -and $Pack) { $extra += '-DNFL2K5_REG_LOCALS=OFF' }
 if ($Game) {
   # The XBE this tree was generated from (tools/analyze.ps1 records it).
   $shaFile = if ($Pack) { "$root\analysis-$Pack\input-sha256.json" } else { '' }

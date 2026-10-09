@@ -36,6 +36,7 @@ extern void xbox_VideoSettingSet(int i, int idx);
 
 /* src/nfl2k5_presentation.cpp */
 extern void nfl2k5_presentation_init(void);
+extern void nfl2k5_discord_init(void);
 extern int nfl2k5_pres_values(int what);
 extern int nfl2k5_pres_get(int what);
 extern void nfl2k5_pres_set(int what, int v);
@@ -111,8 +112,8 @@ static void vid_name(int r, int v, char *b, size_t n) { xbox_VideoSettingValueNa
 
 /* ---- Presentation rows (nfl2k5_presentation.cpp) ---- */
 static const char *const k_pres_labels[] = { "Broadcast Package", "Intro Theme", "Outro Theme",
-                                             "Scorebug Animations", "Theme Volume" };
-static int pres_toggle(int r) { return r == 3; }
+                                             "Scorebug Animations", "Theme Volume", "Custom Commentary" };
+static int pres_toggle(int r) { return r == 3 || r == 5; }
 static int pres_values(int r) { return nfl2k5_pres_values(r); }
 static int pres_get(int r) { return nfl2k5_pres_get(r); }
 static void pres_set(int r, int v) { nfl2k5_pres_set(r, v); }
@@ -136,9 +137,77 @@ static void mods_name(int r, int v, char *b, size_t n)
 
 static const char *s_video_labels[VM_MAX_ROWS];
 static const char *s_mod_labels[VM_MAX_ROWS];
+static const char *const k_custom_labels[] = { "Griddy", "Slide", "Stank", "Slickback" };
+static const char *const k_custom_resources[] = { "ANM_CUSTOM_GRIDDY_01", "ANM_CUSTOM_SLIDE_001",
+                                                  "ANM_CUSTOM_STANK_001", "ANM_CUSTOM_SLICKBACK1" };
+static uint32_t s_custom_label_names[4];
+static uint32_t s_custom_resource_names[4];
+static uint32_t s_custom_selector_rows;
+
+uint32_t nfl2k5_celebration_label(uint32_t index)
+{
+    static int logs;
+    if (logs++ < 16)
+        fprintf(stderr, "[CELEBRATIONS] label index=%u ptr=%08X first=%04X\n",
+                (unsigned)index,
+                (unsigned)(index >= 37u && index < 41u ? s_custom_label_names[index - 37u] : 0),
+                (unsigned)(index >= 37u && index < 41u && s_custom_label_names[index - 37u]
+                    ? MEM16(s_custom_label_names[index - 37u]) : 0));
+    if (index < 37u) return MEM32(0x005858D4u + index * 8u);
+    return index < 41u ? s_custom_label_names[index - 37u] : 0;
+}
+
+uint32_t nfl2k5_celebration_selector_row(uint32_t index)
+{
+    if (index < 37u) return 0x0050CFC8u + index * 12u;
+    return index < 41u ? s_custom_selector_rows + (index - 37u) * 12u : 0;
+}
+
+uint32_t nfl2k5_celebration_resource(uint32_t index)
+{
+    uint32_t row = nfl2k5_celebration_selector_row(index);
+    static int logs;
+    if (logs++ < 16)
+        fprintf(stderr, "[CELEBRATIONS] resource index=%u row=%08X name=%08X first=%04X\n",
+                (unsigned)index, (unsigned)row, (unsigned)(row ? MEM32(row + 4u) : 0),
+                (unsigned)(row && MEM32(row + 4u) ? MEM16(MEM32(row + 4u)) : 0));
+    return row ? MEM32(row + 4u) : 0;
+}
+
+/* Team touchdown celebrations always two dancers (the custom duos such as My
+ * World replace both two-dancer clips). NFL2K5_FORCE_DUO=0/1 or
+ * custom-animations\team.ini "force_duo = 1". */
+int nfl2k5_team_force_duo(void)
+{
+    static int force = -1;
+    if (force < 0) {
+        const char *e = getenv("NFL2K5_FORCE_DUO");
+        force = 0;
+        if (e) {
+            force = atoi(e) != 0;
+        } else {
+            FILE *f = fopen("custom-animations\\team.ini", "r");
+            char line[128];
+            int v;
+            if (f) {
+                while (fgets(line, sizeof line, f))
+                    if (sscanf(line, " force_duo = %d", &v) == 1) { force = v != 0; break; }
+                fclose(f);
+            }
+        }
+        fprintf(stderr, "[CELEBRATIONS] team celebrations: %s\n", force ? "always the duo (My World)" : "game's own mix");
+    }
+    return force;
+}
+
+uint32_t nfl2k5_celebration_after_retail(uint32_t remaining)
+{
+    return remaining < 4u ? 37u + remaining : 41u;
+}
+
 static VmScreen s_screens[3] = {
     { "Video Settings", 0, s_video_labels, vid_toggle, vid_values, vid_get, vid_set, vid_name },
-    { "Presentation", 5, k_pres_labels, pres_toggle, pres_values, pres_get, pres_set, pres_name },
+    { "Presentation", 6, k_pres_labels, pres_toggle, pres_values, pres_get, pres_set, pres_name },
     { "Mod Packs", 0, s_mod_labels, mods_toggle, mods_values, mods_get, mods_set, mods_name },
 };
 #define VM_SCREENS ((int)(sizeof s_screens / sizeof s_screens[0]))
@@ -305,12 +374,29 @@ void nfl2k5_video_menu_install(void)
         CloseHandle(CreateThread(NULL, 0, vm_memdump_thread, NULL, 0, NULL));
     xbox_VideoSettingsLoad();
     nfl2k5_presentation_init();
+    nfl2k5_discord_init();
     if (!GetCurrentDirectoryA(sizeof(root), root)) snprintf(root, sizeof(root), ".");
     nfl2k5_modpacks_init(root);
     if (getenv("NFL2K5_NO_VIDEO_MENU")) return;
     s_heap_size = 512u * 1024u;
     s_heap = xbox_HeapAlloc(s_heap_size, 16);
     if (!s_heap) { fprintf(stderr, "[VIDEOMENU] no guest memory\n"); return; }
+    s_custom_selector_rows = vm_alloc(4u * 12u);
+    if (!s_custom_selector_rows) { fprintf(stderr, "[VIDEOMENU] no celebration rows\n"); return; }
+    for (i = 0; i < 4; ++i) {
+        uint32_t row = s_custom_selector_rows + (uint32_t)i * 12u;
+        s_custom_label_names[i] = vm_wstr(k_custom_labels[i]);
+        s_custom_resource_names[i] = vm_wstr(k_custom_resources[i]);
+        MEM32(row) = 0;
+        MEM32(row + 4u) = s_custom_resource_names[i];
+        /* Same as retail row 2 (ANM_CELEBRATE_USER_34), the clip every
+         * custom record was built from: no left-hand variant, field 0x15. */
+        MEM32(row + 8u) = 0x15u;
+        fprintf(stderr, "[CELEBRATIONS] init %d label=%08X/%04X resource=%08X/%04X row=%08X\n",
+                i, (unsigned)s_custom_label_names[i], (unsigned)MEM16(s_custom_label_names[i]),
+                (unsigned)s_custom_resource_names[i], (unsigned)MEM16(s_custom_resource_names[i]),
+                (unsigned)row);
+    }
     s_screens[0].rows = xbox_VideoSettingCount();
     for (i = 0; i < s_screens[0].rows && i < VM_MAX_ROWS; i++)
         s_video_labels[i] = xbox_VideoSettingName(i);
@@ -319,10 +405,10 @@ void nfl2k5_video_menu_install(void)
         s_mod_labels[i] = nfl2k5_modpacks_name(i);
     video = vm_build_screen(0);
     pres = vm_build_screen(1);
-    /* Opt-in (NFL2K5_MODPACK_MENU=1) until it has a verified home: linked at
+    /* Options > Mod Packs, under Video Settings. (Linked at FEATURES_HEADER
      * 0x00525830 it took the main menu's default selection, so A on the main
-     * menu switched a code pack on and restarted into it (2026-10-03). */
-    if (s_screens[2].rows > 0 && getenv("NFL2K5_MODPACK_MENU")) mods = vm_build_screen(2);
+     * menu switched a code pack on and restarted into it, 2026-10-03.) */
+    if (s_screens[2].rows > 0 && !getenv("NFL2K5_NO_MODPACK_MENU")) mods = vm_build_screen(2);
     if (!video || !pres) { fprintf(stderr, "[VIDEOMENU] build failed\n"); return; }
     for (k = 0; k < sizeof k_options_headers / sizeof k_options_headers[0]; k++) {
         int n = vm_add_link(k_options_headers[k], video, vm_wstr("Video Settings"));
@@ -332,8 +418,9 @@ void nfl2k5_video_menu_install(void)
     fprintf(stderr, "[VIDEOMENU] Coach Match Up: %d rows\n",
             vm_add_link(COACH_MATCH_UP_HEADER, pres, vm_wstr("Presentation")));
     if (mods)
-        fprintf(stderr, "[VIDEOMENU] Features: %d rows\n",
-                vm_add_link(FEATURES_HEADER, mods, vm_wstr("Mod Packs")));
-    fprintf(stderr, "[VIDEOMENU] Video Settings %08X, Presentation %08X, Mod Packs %08X, %u bytes\n",
+        for (k = 0; k < sizeof k_options_headers / sizeof k_options_headers[0]; k++)
+            fprintf(stderr, "[VIDEOMENU] Options menu %08X: Mod Packs, %d rows\n",
+                    (unsigned)k_options_headers[k], vm_add_link(k_options_headers[k], mods, vm_wstr("Mod Packs")));
+    fprintf(stderr, "[VIDEOMENU] Video Settings %08X, Presentation %08X, Mod Packs %08X, Celebrations 37-40, %u bytes\n",
             (unsigned)video, (unsigned)pres, (unsigned)mods, (unsigned)s_heap_used);
 }

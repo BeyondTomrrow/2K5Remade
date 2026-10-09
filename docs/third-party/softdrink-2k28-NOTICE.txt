@@ -1,0 +1,10 @@
+SOFTDRINK 2K28
+https://github.com/cruuz/softdrink-2k28
+
+SOFTDRINK 2K28 is an unofficial community modification prepared for Noah
+(SOFTDRINKTV), with work by cruuz, Claude, and Codex. NFL2K5-PC does not bundle
+the .2k5patch; the player supplies a patch obtained from its official release.
+
+The patch contains no playable retail game by itself. A clean, legally owned
+USA Xbox copy of ESPN NFL 2K5 is required. Team, league, game, and broadcast
+names and marks belong to their respective owners.

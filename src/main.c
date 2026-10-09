@@ -252,15 +252,12 @@ void nfl2k5_coverage_print(void)
     fprintf(stderr, "  [COVERAGE] %ld/%zu functions entered (%.1f%%)\n",
             unique, total, total ? (100.0 * unique / (double)total) : 0.0);
 
-    static LONG dumped;
-    if (InterlockedCompareExchange(&dumped, 1, 0) != 0)
-        return;
-    /* One-shot: give the process a little runway before the first dump so
-     * boot has a chance to populate the table; called from the same 3s
-     * periodic tick as everything else, so this just skips the first few. */
+    /* Rewritten on every periodic tick (after a short runway so boot can
+     * populate the table): the dump has to reflect the end of the run, not
+     * the first few seconds. Coverage builds only. */
     static LONG tick_count;
     if (InterlockedIncrement(&tick_count) < 10)
-        { InterlockedExchange(&dumped, 0); return; }
+        return;
 
     FILE *f = fopen("logs/coverage_hit.dump", "w");
     if (f) {
@@ -2599,8 +2596,19 @@ static DWORD WINAPI profile_thread(LPVOID arg)
 /* The XBE this build was compiled from: retail, or a mod pack's patched one
  * (CMake NFL2K5_XBE_SHA256, set by tools/build.ps1 -Pack). */
 #define NFL2K5_RETAIL_XBE_SHA256 "73105b17a3161c546fea792a1c84ce37f9966a67c416f474cdbfab74b911a4a9"
+#include "nfl2k5_widescreen_patch.h"
+/* 0 for the retail game (with or without the built-in widescreen patch),
+ * nonzero for a mod pack's own build -- the old strcmp(hash, retail). */
+#define NFL2K5_BASE_CMP(h) (strcmp((h), NFL2K5_RETAIL_XBE_SHA256) && strcmp((h), NFL2K5_WIDESCREEN_XBE_SHA256))
+/* Nonzero when running a mod pack's executable: its own native build, or the
+ * retail build with the interpreter (g_interp_pack). Generated-code patches
+ * that only apply to packs test it. */
+int nfl2k5_pack_build;
+static int g_interp_pack;
+unsigned nfl2k5_interp_setup(const uint8_t *base, size_t base_len);
+unsigned nfl2k5_interp_force(uint32_t lo, uint32_t hi);
 #ifndef NFL2K5_XBE_SHA256
-#define NFL2K5_XBE_SHA256 NFL2K5_RETAIL_XBE_SHA256
+#define NFL2K5_XBE_SHA256 NFL2K5_WIDESCREEN_XBE_SHA256   /* converted from retail + built-in widescreen */
 #endif
 
 static int nfl2k5_file_sha256(const char *path, char hex[65])
@@ -2684,7 +2692,7 @@ int main(int argc, char **argv)
      * (tools/pack-install.py), with the pack's disc overlay. The folder is
      * found by the XBE's hash under mods\packs, or named by NFL2K5_PACK. */
     static char pack_xbe[MAX_PATH], pack_dir[MAX_PATH];
-    if (strcmp(NFL2K5_XBE_SHA256, NFL2K5_RETAIL_XBE_SHA256) != 0) {
+    if (NFL2K5_BASE_CMP(NFL2K5_XBE_SHA256) != 0) {
         const char *env = getenv("NFL2K5_PACK");
         if (env && *env) {
             snprintf(pack_dir, sizeof pack_dir, "%s", env);
@@ -2716,6 +2724,36 @@ int main(int argc, char **argv)
         xbe_path = pack_xbe;
         _putenv_s("NFL2K5_PACK", pack_dir);
         printf("[BOOT] Mod pack: %s\n", pack_dir);
+    } else {
+        /* The retail build running a mod pack that has no native build of its
+         * own (mods\active-pack.ini, or NFL2K5_INTERP_PACK=<folder>): its
+         * executable runs on this native code, and whatever it changed or
+         * added runs in the interpreter (src/interp). */
+        char active[MAX_PATH] = "", cand[MAX_PATH], native_exe[MAX_PATH];
+        const char *env = getenv("NFL2K5_INTERP_PACK");
+        if (env && *env) snprintf(active, sizeof active, "%s", env);
+        else {
+            char ini[MAX_PATH];
+            FILE *af;
+            snprintf(ini, sizeof ini, "%s/mods/active-pack.ini", root);
+            if ((af = fopen(ini, "rb")) != NULL) {
+                if (fgets(active, sizeof active, af)) active[strcspn(active, "\r\n \t")] = 0;
+                fclose(af);
+            }
+        }
+        if (active[0] && !strpbrk(active, "/\\:")) {
+            snprintf(cand, sizeof cand, "%s/mods/packs/%s/default.xbe", root, active);
+            snprintf(native_exe, sizeof native_exe, "%s/mods/packs/%s/native/NFL2K5.exe", root, active);
+            if (GetFileAttributesA(cand) != INVALID_FILE_ATTRIBUTES &&
+                (getenv("NFL2K5_INTERP_PACK") || GetFileAttributesA(native_exe) == INVALID_FILE_ATTRIBUTES)) {
+                snprintf(pack_dir, sizeof pack_dir, "%s/mods/packs/%s", root, active);
+                snprintf(pack_xbe, sizeof pack_xbe, "%s", cand);
+                xbe_path = pack_xbe;
+                g_interp_pack = 1;
+                _putenv_s("NFL2K5_PACK", pack_dir);
+                printf("[BOOT] Mod pack (interpreted): %s\n", pack_dir);
+            }
+        }
     }
     const int validate_only = argc == 2 && strcmp(argv[1], "--validate") == 0;
     if (argc > 1 && !validate_only && !(argc == 2 && strcmp(argv[1], "--run") == 0)) {
@@ -2807,7 +2845,45 @@ int main(int argc, char **argv)
     if (hash_status < 0) { free(data); return 2; }
     for (unsigned i = 0; i < sizeof digest; ++i)
         sprintf(digest_hex + i * 2, "%02x", digest[i]);
-    if (strcmp(digest_hex, expected_sha)) {
+    /* This build was converted from the retail executable with the built-in
+     * widescreen patch (src/nfl2k5_widescreen_patch.h): the player's disc has
+     * the plain retail one, so patch it in memory the same way. Whether the
+     * picture is widened is the Video Settings "Widescreen" option. */
+    if (!strcmp(expected_sha, NFL2K5_WIDESCREEN_XBE_SHA256) && !strcmp(digest_hex, NFL2K5_RETAIL_XBE_SHA256)) {
+        for (unsigned r = 0; r < sizeof k_widescreen_runs / sizeof k_widescreen_runs[0]; r++)
+            if ((uint64_t)k_widescreen_runs[r].offset + k_widescreen_runs[r].length <= (uint64_t)length)
+                memcpy(data + k_widescreen_runs[r].offset, k_widescreen_runs[r].bytes, k_widescreen_runs[r].length);
+        if (BCryptOpenAlgorithmProvider(&sha, BCRYPT_SHA256_ALGORITHM, NULL, 0) >= 0) {
+            BCryptHash(sha, NULL, 0, data, (ULONG)length, digest, sizeof digest);
+            BCryptCloseAlgorithmProvider(sha, 0);
+            for (unsigned i = 0; i < sizeof digest; ++i)
+                sprintf(digest_hex + i * 2, "%02x", digest[i]);
+        }
+        printf("[BOOT] Built-in widescreen patch applied to the retail executable\n");
+    }
+    /* An interpreted pack runs its own executable: what the native code was
+     * converted from is the disc's, patched the same way, and the two are
+     * compared function by function once the pack's is loaded. */
+    unsigned char *base_data = NULL;
+    long base_len = 0;
+    if (g_interp_pack) {
+        char base_path[MAX_PATH];
+        FILE *bf;
+        snprintf(base_path, sizeof base_path, "%s/default.xbe", game_dir);
+        bf = fopen(base_path, "rb");
+        if (bf) {
+            fseek(bf, 0, SEEK_END); base_len = ftell(bf); rewind(bf);
+            base_data = base_len > 0 ? malloc((size_t)base_len) : NULL;
+            if (base_data && fread(base_data, 1, (size_t)base_len, bf) != (size_t)base_len) { free(base_data); base_data = NULL; }
+            fclose(bf);
+        }
+        if (!base_data) { fprintf(stderr, "[BOOT] Missing %s (needed to run a mod pack)\n", base_path); free(data); return 2; }
+        if (!strcmp(expected_sha, NFL2K5_WIDESCREEN_XBE_SHA256))
+            for (unsigned r = 0; r < sizeof k_widescreen_runs / sizeof k_widescreen_runs[0]; r++)
+                if ((uint64_t)k_widescreen_runs[r].offset + k_widescreen_runs[r].length <= (uint64_t)base_len)
+                    memcpy(base_data + k_widescreen_runs[r].offset, k_widescreen_runs[r].bytes, k_widescreen_runs[r].length);
+        printf("[BOOT] Pack executable %s\n", digest_hex);
+    } else if (strcmp(digest_hex, expected_sha)) {
         fprintf(stderr, "[BOOT] XBE hash changed. Reanalyze and rebuild the matching game integration.\n");
         free(data); return 2;
     }
@@ -2818,11 +2894,68 @@ int main(int argc, char **argv)
         read32(data, cert - base + 8) != 0x53450030 ||
         /* Retail entry point; a pack may start in its own code (its XBE
          * hash was checked above). */
-        (!strcmp(NFL2K5_XBE_SHA256, NFL2K5_RETAIL_XBE_SHA256) && (read32(data, 0x128) ^ 0xA8FC57AB) != 0x00016BD1)) {
+        (!NFL2K5_BASE_CMP(NFL2K5_XBE_SHA256) && !g_interp_pack && (read32(data, 0x128) ^ 0xA8FC57AB) != 0x00016BD1)) {
         fprintf(stderr, "XBE does not match this NFL 2K5 integration. Reanalyze before rebuilding.\n");
         free(data); return 2;
     }
+    /* This SoftDrink build needs K128 room for its expanded assets.  Its 64 MB
+     * fallback exhausts the guest heap during boot and leaves a blank, slow
+     * display, so native code-pack builds always use 128 MB. */
+    if (NFL2K5_BASE_CMP(NFL2K5_XBE_SHA256) != 0 || g_interp_pack) {
+        xbox_SetTotalRam(XBOX_DEVKIT_RAM);
+        xbox_SetMapSize(XBOX_DEVKIT_RAM);
+        printf("[BOOT] Mod pack: 128 MB Xbox RAM\n");
+    }
     if (!xbox_MemoryLayoutInit(data, (size_t)length)) { free(data); return 3; }
+    if (g_interp_pack) {
+        nfl2k5_interp_setup(base_data, (size_t)base_len);
+        free(base_data);
+    }
+    {
+        /* NFL2K5_INTERP_FORCE=lo-hi[,lo-hi...] (hex VAs, diagnostics): run the
+         * converted functions starting in those ranges in the interpreter --
+         * bisects a conversion bug by finding what makes it go away. */
+        const char *fr = getenv("NFL2K5_INTERP_FORCE");
+        while (fr && *fr) {
+            char *e;
+            unsigned long lo = strtoul(fr, &e, 16), hi = lo;
+            if (*e == '-') hi = strtoul(e + 1, &e, 16);
+            printf("[BOOT] interpreting functions in %08lX-%08lX: %u\n", lo, hi,
+                   nfl2k5_interp_force((uint32_t)lo, (uint32_t)hi));
+            if (*e != ',') break;
+            fr = e + 1;
+        }
+    }
+    /* SoftDrink's MyCareer row stores its injected UTF-16 label at
+     * 0x014E8698.  The native menu path accepts the row and action but the
+     * original renderer only resolves labels in the retail image's string
+     * range, leaving this one row blank.  Reuse the original First Person
+     * Football label storage, which is known to render, while preserving the
+     * mod's MyCareer action at 0x005014BC.  Guard every patched value so this
+     * compatibility path can never alter retail or another code pack. */
+    nfl2k5_pack_build = NFL2K5_BASE_CMP(NFL2K5_XBE_SHA256) != 0 || g_interp_pack;
+    if (nfl2k5_pack_build) {
+        uint8_t *guest = (uint8_t *)(uintptr_t)xbox_GetMemoryOffset();
+        uint32_t *row_kind = (uint32_t *)(guest + 0x00501494u);
+        uint32_t *row_text = (uint32_t *)(guest + 0x00501498u);
+        uint32_t *row_flags = (uint32_t *)(guest + 0x0050149Cu);
+        uint32_t *row_action = (uint32_t *)(guest + 0x005014BCu);
+        if (*row_kind == 9u && *row_text == 0x014E8698u &&
+            *row_flags == 0u && *row_action == 0x014E6550u) {
+            static const uint16_t mycareer[] = {
+                'M','y','C','a','r','e','e','r',0
+            };
+            memcpy(guest + 0x00E7D5C4u, mycareer, sizeof(mycareer));
+            *row_text = 0x00E7D5C4u;
+            fprintf(stderr,
+                    "[MYCAREER] Restored visible label at %08X; action=%08X\n",
+                    *row_text, *row_action);
+        } else {
+            fprintf(stderr,
+                    "[MYCAREER] Row differs: kind=%u text=%08X flags=%u action=%08X\n",
+                    *row_kind, *row_text, *row_flags, *row_action);
+        }
+    }
     if (getenv("RECOMP_WATCH_PB_WRITE")) {
         /* See pb_write_watch's own comment for what this is and why. Default
          * address is the fixed, reproducible location this session found
@@ -3454,14 +3587,17 @@ int main(int argc, char **argv)
         { extern void xbox_ggl_enter(void); xbox_ggl_enter(); }
         __try { entry(); }
         __except(crash_report(GetExceptionInformation())) {
-            /* 2026-09-21: forced-display path -- a guest crash used to exit
-             * main() and take the whole process (and the display thread
-             * with it) down. Keep the process alive so the forced synthetic
-             * window keeps painting regardless of what the guest logic did;
-             * only Ctrl+C or closing the window should end the run now. */
             { extern int xbox_ggl_release_all(void); xbox_ggl_release_all(); }
-            fprintf(stderr, "[BOOT] Guest crashed; process kept alive for the forced display window.\n");
-            for (;;) Sleep(1000);
+            /* Only the explicit synthetic-display diagnostic should survive
+             * a guest crash. Otherwise background audio/timer threads made a
+             * dead game look like a responding, still-running process. */
+            if (getenv("NFL2K5_FORCED_DISPLAY")) {
+                fprintf(stderr, "[BOOT] Guest crashed; process kept alive for the forced display window.\n");
+                for (;;) Sleep(1000);
+            }
+            fprintf(stderr, "[BOOT] Guest crashed; exiting with failure.\n");
+            fflush(stderr);
+            ExitProcess(1);
         }
         printf("[BOOT] Guest entry returned.\n");
     }

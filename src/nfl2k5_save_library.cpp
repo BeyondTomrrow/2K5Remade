@@ -438,7 +438,10 @@ static void process_import_inbox(const std::string &base)
         bool ok = false;
         if (lower(file).size() >= 4 && lower(file).compare(lower(file).size() - 4, 4, ".zip") == 0)
             ok = extract_save_zip(input, work, type);
-        if (!ok && is_file(converter) && run_converter(converter, input, zip_out))
+        if (!ok && !is_file(converter))
+            fprintf(stderr, "[SAVE-IMPORT] %s needs tools\\nfl2k5-save-converter.exe, which is not installed\n",
+                    file.c_str());
+        else if (!ok && run_converter(converter, input, zip_out))
             ok = extract_save_zip(zip_out, work, type);
         DeleteFileA(zip_out.c_str());
         if (ok) {

@@ -217,9 +217,20 @@ private:
             DispatchMessageW(&msg);
         }
 
-        /* Teardown on this thread, in reverse order. */
+        /* Teardown on this thread, in reverse order.  FrameArrived is raised
+         * by a free-threaded capture worker, so remove the handler before
+         * closing the capture objects and wait for an in-flight callback.
+         * Otherwise PresentationHost can be destroyed while on_frame() is
+         * still writing its frame vectors. */
+        if (pool_ && frame_handler_registered_) {
+            pool_.FrameArrived(frame_arrived_token_);
+            frame_handler_registered_ = false;
+        }
         if (session_) { session_.Close(); session_ = nullptr; }
         if (pool_) { pool_.Close(); pool_ = nullptr; }
+        {
+            std::lock_guard<std::mutex> g(capture_callback_lock_);
+        }
         if (controller_) controller_->Close();
         webview_.Reset(); comp_controller_.Reset(); controller_.Reset();
         root_ = nullptr; compositor_ = nullptr;
@@ -230,11 +241,30 @@ private:
 
     void create_webview(int pw, int ph)
     {
+        // The browser profile needs a writable folder. Next to the exe is not one
+        // when the game sits under C:\Program Files (a user's composition
+        // controller failed there, 2026-10-08), so use the user's local app data.
         std::wstring user_data = full_path("cache/webview2");
+        {
+            wchar_t local[MAX_PATH];
+            DWORD n = GetEnvironmentVariableW(L"LOCALAPPDATA", local, MAX_PATH);
+            if (n > 0 && n < MAX_PATH) {
+                std::wstring dir = std::wstring(local) + L"\\NFL2K5-PC";
+                CreateDirectoryW(dir.c_str(), nullptr);
+                dir += L"\\webview2";
+                CreateDirectoryW(dir.c_str(), nullptr);
+                if (GetFileAttributesW(dir.c_str()) != INVALID_FILE_ATTRIBUTES) user_data = dir;
+            }
+        }
         HRESULT hr = CreateCoreWebView2EnvironmentWithOptions(nullptr, user_data.c_str(), nullptr,
             Callback<ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler>(
                 [this, pw, ph](HRESULT r, ICoreWebView2Environment *env) -> HRESULT {
-                    if (FAILED(r) || !env) { set_status("error: WebView2 runtime not available"); return S_OK; }
+                    if (FAILED(r) || !env) {
+                        char msg[96];
+                        snprintf(msg, sizeof msg, "error: WebView2 runtime not available (0x%08lX)", (unsigned long)r);
+                        set_status(msg);
+                        return S_OK;
+                    }
                     ComPtr<ICoreWebView2Environment3> env3;
                     if (FAILED(env->QueryInterface(IID_PPV_ARGS(&env3)))) {
                         set_status("error: WebView2 runtime too old (no composition hosting)");
@@ -243,7 +273,12 @@ private:
                     env3->CreateCoreWebView2CompositionController(hwnd_,
                         Callback<ICoreWebView2CreateCoreWebView2CompositionControllerCompletedHandler>(
                             [this, pw, ph](HRESULT r2, ICoreWebView2CompositionController *cc) -> HRESULT {
-                                if (FAILED(r2) || !cc) { set_status("error: composition controller failed"); return S_OK; }
+                                if (FAILED(r2) || !cc) {
+                                    char msg[96];
+                                    snprintf(msg, sizeof msg, "error: composition controller failed (0x%08lX)", (unsigned long)r2);
+                                    set_status(msg);
+                                    return S_OK;
+                                }
                                 comp_controller_ = cc;
                                 setup_webview(pw, ph);
                                 return S_OK;
@@ -364,7 +399,9 @@ private:
         auto item = wgc::GraphicsCaptureItem::CreateFromVisual(root_);
         pool_ = wgc::Direct3D11CaptureFramePool::CreateFreeThreaded(
             device, wgd::DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, { pw, ph });
-        pool_.FrameArrived([this](wgc::Direct3D11CaptureFramePool const &sender, auto const &) { on_frame(sender); });
+        frame_arrived_token_ = pool_.FrameArrived(
+            [this](wgc::Direct3D11CaptureFramePool const &sender, auto const &) { on_frame(sender); });
+        frame_handler_registered_ = true;
         session_ = pool_.CreateCaptureSession(item);
         session_.IsCursorCaptureEnabled(false);
         try { session_.IsBorderRequired(false); } catch (...) { }
@@ -374,6 +411,8 @@ private:
 
     void on_frame(wgc::Direct3D11CaptureFramePool const &sender)
     {
+        std::lock_guard<std::mutex> callback_guard(capture_callback_lock_);
+        if (quitting_) return;
         auto frame = sender.TryGetNextFrame();
         if (!frame) return;
         auto access = frame.Surface().as<::Windows::Graphics::DirectX::Direct3D11::IDirect3DDxgiInterfaceAccess>();
@@ -479,6 +518,9 @@ private:
     int staging_w_ = 0, staging_h_ = 0;
     wgc::Direct3D11CaptureFramePool pool_{ nullptr };
     wgc::GraphicsCaptureSession session_{ nullptr };
+    winrt::event_token frame_arrived_token_{};
+    bool frame_handler_registered_ = false;
+    std::mutex capture_callback_lock_;
 
     std::mutex frame_lock_;
     std::vector<uint8_t> back_, front_, consumer_;

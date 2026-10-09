@@ -1782,5 +1782,9 @@
   {
     "start": "0x00284C50",
     "note": "Indirect-call target 'mov cl,[ecx+0Dh]; jmp 0BBA60h', called hundreds of times while a game loads; unresolved since before 2026-10-01."
+  },
+  {
+    "start": "0x002B9950",
+    "note": "Menu callback reached through a table (unresolved stub before, 2026-10-08)."
   }
 ]

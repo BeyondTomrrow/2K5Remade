@@ -1,4 +1,4 @@
-﻿param([string[]]$Side = @('left'), [string]$Tag = 'qd', [int]$PlaySeconds = 300, [int]$ShotEvery = 30, [string]$Exe = 'build\Release\NFL2K5.exe', [int]$TapEvery = 0, [switch]$NoSkip, [string[]]$HomeTeam = @())
+﻿param([string[]]$Side = @('left'), [string]$Tag = 'qd', [int]$PlaySeconds = 300, [int]$ShotEvery = 30, [string]$Exe = 'build\Release\NFL2K5.exe', [int]$TapEvery = 0, [string]$TapButton = 'a', [switch]$NoSkip, [string[]]$HomeTeam = @())
 # Drive a CPU-vs-CPU Quick Game: title -> main menu -> Quick Game -> Team
 # Select (the controller starts on the HOME side; the default one Left press
 # moves it to the middle = CPU vs CPU) -> Coach Matchup -> Start Game ->
@@ -12,6 +12,30 @@ $env:NFL2K5_SKIP_INTRO = '1'
 $env:NFL2K5_PRESS_FILE = "$root\logs\press.txt"
 $env:NFL2K5_NO_HOST_PAD = '1'
 Remove-Item Env:NFL2K5_AUTO_PRESS -ErrorAction SilentlyContinue
+# logs\game.lock: whoever runs the game writes it, others wait (two sessions
+# share this machine and each start used to kill the other's game). A lock
+# older than two hours is stale.
+$lock = "$root\logs\game.lock"
+function LockLive {
+    if (-not (Test-Path $lock)) { return $false }
+    $t = Get-Content $lock -Raw
+    if ($t -match "drive-quickgame $PID\b") { return $false }
+    if (((Get-Date) - (Get-Item $lock).LastWriteTime).TotalHours -ge 2) { return $false }
+    # A drive-quickgame lock whose script is gone is stale.
+    if ($t -match '^drive-quickgame (\d+)' -and -not (Get-Process -Id ([int]$Matches[1]) -ErrorAction SilentlyContinue)) { return $false }
+    return $true
+}
+while (LockLive) {
+    Start-Sleep 15
+}
+"drive-quickgame $PID $(Get-Date -Format s) $Tag" | Set-Content $lock -Encoding ascii
+# A game already running is someone playing it: wait for them to finish
+# (up to 30 minutes) rather than closing it.
+$waitStart = Get-Date
+while ((Get-Process NFL2K5 -ErrorAction SilentlyContinue) -and ((Get-Date) - $waitStart).TotalMinutes -lt 30) {
+    "drive-quickgame $PID $(Get-Date -Format s) $Tag" | Set-Content $lock -Encoding ascii
+    Start-Sleep 20
+}
 Get-Process NFL2K5 -ErrorAction SilentlyContinue | Stop-Process -Force
 $p = Start-Process $Exe -WorkingDirectory $root -PassThru `
      -RedirectStandardError "logs\$Tag.stderr.log" -RedirectStandardOutput "logs\$Tag.stdout.log"
@@ -38,7 +62,7 @@ while (-not $p.HasExited -and ((Get-Date) - $t0).TotalSeconds -lt $PlaySeconds) 
     }
     # -TapEvery N: press A every N seconds of play (skips pregame segments).
     if ($TapEvery -gt 0 -and $s -ge $nextTap) {
-        & "$PSScriptRoot\press.ps1" a
+        & "$PSScriptRoot\press.ps1" $TapButton
         $nextTap += $TapEvery
     }
     Start-Sleep 2
@@ -50,3 +74,4 @@ if ($p.HasExited) {
     "RUNNING after $PlaySeconds s of play"
     Stop-Process -Id $p.Id -Force
 }
+Remove-Item "$root\logs\game.lock" -ErrorAction SilentlyContinue

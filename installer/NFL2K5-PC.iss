@@ -24,7 +24,13 @@ WizardSmallImageFile=assets\wizard-small.bmp
 SetupIconFile=assets\nfl2k5.ico
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
-PrivilegesRequired=admin
+; Per-user by default: the game writes saves, logs, caches and settings next to
+; its exe, and under C:\Program Files that needs Administrator (a user reported
+; having to "Run as administrator" and a failed saves\TDATA create, 2026-10-08).
+; A user who picks Program Files at the admin prompt still gets a writable folder
+; through the [Dirs] permissions below.
+PrivilegesRequired=lowest
+PrivilegesRequiredOverridesAllowed=dialog
 UninstallDisplayName={#MyAppName}
 
 [Languages]
@@ -34,12 +40,17 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Source: "..\build\Release\NFL2K5.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "assets\nfl2k5.ico"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\tools\extract-xiso.exe"; DestDir: "{app}\tools"; Flags: ignoreversion
-Source: "..\nfl2k5_video.ini"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\build\tools\NFL2K5-ModPack-Installer.exe"; DestDir: "{app}\tools"; Flags: ignoreversion
+; PS2/Xbox save import (saves\import) converts through this tool
+Source: "..\tools\nfl2k5-save-converter.exe"; DestDir: "{app}\tools"; Flags: ignoreversion
+Source: "..\release\code-packs\*"; DestDir: "{app}\mods\code-packs"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
+Source: "nfl2k5_video.default.ini"; DestName: "nfl2k5_video.ini"; DestDir: "{app}"; Flags: onlyifdoesntexist
 ; Ship editable presentation definitions and art by an explicit extension
 ; allow-list. This cannot accidentally capture local packs, Xbox executables,
 ; debug symbols, saves, or user-supplied audio/video.
 Source: "..\mods\README.md"; DestDir: "{app}\mods"; Flags: ignoreversion
 Source: "..\mods\presentation.ini"; DestDir: "{app}\mods"; Flags: ignoreversion
+Source: "..\mods\discord.ini"; DestDir: "{app}\mods"; Flags: onlyifdoesntexist
 Source: "..\mods\presentations\*.html"; DestDir: "{app}\mods\presentations"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\mods\presentations\*.css"; DestDir: "{app}\mods\presentations"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\mods\presentations\*.js"; DestDir: "{app}\mods\presentations"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -57,10 +68,18 @@ Source: "..\PROJECT_STATUS.md"; DestDir: "{app}\docs"; Flags: ignoreversion
 Source: "..\docs\HANDOFF-CHATGPT.md"; DestDir: "{app}\docs"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "..\docs\RELEASE-NOTES.md"; DestDir: "{app}\docs"; Flags: ignoreversion
 Source: "..\docs\third-party\extract-xiso-LICENSE.txt"; DestDir: "{app}\docs\third-party"; Flags: ignoreversion
+Source: "..\docs\third-party\2k-football-mod-tools-NOTICE.txt"; DestDir: "{app}\docs\third-party"; Flags: ignoreversion
+Source: "..\docs\third-party\softdrink-2k28-NOTICE.txt"; DestDir: "{app}\docs\third-party"; Flags: ignoreversion
+Source: "..\docs\third-party\nfl2k5tool-NOTICE.txt"; DestDir: "{app}\docs\third-party"; Flags: ignoreversion
 
 [Dirs]
-Name: "{app}\original"
-Name: "{app}\saves"
+Name: "{app}"; Permissions: users-modify
+Name: "{app}\original"; Permissions: users-modify
+Name: "{app}\saves"; Permissions: users-modify
+Name: "{app}\logs"; Permissions: users-modify
+Name: "{app}\cache"; Permissions: users-modify
+Name: "{app}\mods"; Permissions: users-modify
+Name: "{app}\mods\packs"; Permissions: users-modify
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\nfl2k5.ico"
@@ -78,9 +97,12 @@ var
   SourceTypePage: TInputOptionWizardPage;
   IsoFilePage: TInputFileWizardPage;
   IsoDestinationPage: TInputDirWizardPage;
+  ModChoicePage: TInputOptionWizardPage;
+  ModPatchPage: TInputFileWizardPage;
   GameSourceDir: String;
   IsoPath: String;
   IsoOutputParent: String;
+  ModPatchPath: String;
 
 function DiscXbe(const Dir: String): String;
 begin
@@ -132,6 +154,23 @@ begin
   IsoDestinationPage.Add('Parent extraction folder:');
   IsoDestinationPage.Values[0] := ExpandConstant('{param:EXTRACTTO|}');
   if IsoFilePage.Values[0] <> '' then SourceTypePage.SelectedValueIndex := 1;
+
+  ModChoicePage := CreateInputOptionPage(IsoDestinationPage.ID,
+    'Choose a game version',
+    'Install the original game or add a supported native mod package',
+    'Original ESPN NFL 2K5 is always installed. A mod package is kept separate and can be turned on or off from Features > Mod Packs.',
+    True, False);
+  ModChoicePage.Add('Original ESPN NFL 2K5 only');
+  ModChoicePage.Add('Install a supported 2K5 Mod Studio .2k5patch');
+  ModChoicePage.SelectedValueIndex := 0;
+
+  ModPatchPage := CreateInputFilePage(ModChoicePage.ID,
+    'Choose your mod package',
+    'Select a supported 2K5 Mod Studio patch',
+    'Setup validates the clean retail files, rebuilds the package, verifies every changed file, and installs only a native executable made for that exact patched XBE.');
+  ModPatchPage.Add('2K5 Mod Studio patch:', '2K5 patch files|*.2k5patch|All files|*.*', '.2k5patch');
+  ModPatchPage.Values[0] := ExpandConstant('{param:MODPATCH|}');
+  if ModPatchPage.Values[0] <> '' then ModChoicePage.SelectedValueIndex := 1;
 end;
 
 function UsingIso: Boolean;
@@ -142,7 +181,8 @@ end;
 function ShouldSkipPage(PageID: Integer): Boolean;
 begin
   Result := ((PageID = GameDirPage.ID) and UsingIso) or
-            (((PageID = IsoFilePage.ID) or (PageID = IsoDestinationPage.ID)) and not UsingIso);
+            (((PageID = IsoFilePage.ID) or (PageID = IsoDestinationPage.ID)) and not UsingIso) or
+            ((PageID = ModPatchPage.ID) and (ModChoicePage.SelectedValueIndex = 0));
 end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;
@@ -172,6 +212,38 @@ begin
       MsgBox('Select where ESPN NFL 2K5 should be extracted.', mbError, MB_OK);
       Result := False;
     end;
+  end else if CurPageID = ModPatchPage.ID then begin
+    ModPatchPath := ModPatchPage.Values[0];
+    if (not FileExists(ModPatchPath)) or (Lowercase(ExtractFileExt(ModPatchPath)) <> '.2k5patch') then begin
+      MsgBox('Select an existing .2k5patch file from 2K5 Mod Studio.', mbError, MB_OK);
+      Result := False;
+    end;
+  end;
+end;
+
+function InstallingModPack: Boolean;
+begin
+  Result := (ExpandConstant('{param:MODPATCH|}') <> '') or
+            (ModChoicePage.SelectedValueIndex = 1);
+end;
+
+procedure InstallModPack;
+var
+  ResultCode: Integer;
+  ToolPath, Params: String;
+begin
+  ModPatchPath := ModPatchPage.Values[0];
+  if ModPatchPath = '' then ModPatchPath := ExpandConstant('{param:MODPATCH|}');
+  ToolPath := ExpandConstant('{app}\tools\NFL2K5-ModPack-Installer.exe');
+  WizardForm.StatusLabel.Caption := 'Validating and installing the mod package...';
+  Params := '"' + ModPatchPath + '" --root "' + ExpandConstant('{app}') +
+            '" --disc "' + InstalledDiscDir + '" --verify --replace' +
+            ' --native-catalog "' + ExpandConstant('{app}\mods\code-packs') + '" --require-native' +
+            ' --activate --log "' + ExpandConstant('{app}\logs\modpack-install.log') + '"';
+  if (not Exec(ToolPath, Params, ExpandConstant('{app}'), SW_HIDE,
+               ewWaitUntilTerminated, ResultCode)) or (ResultCode <> 0) then begin
+    MsgBox('The mod package was not installed. It may require a different retail disc or a native code pack that is not included in this release.' + #13#10 + #13#10 +
+           'Original ESPN NFL 2K5 was installed and remains available. Details were saved to logs\modpack-install.log.', mbError, MB_OK);
   end;
 end;
 
@@ -239,5 +311,6 @@ begin
     if not FileExists(DiscXbe(GameSourceDir)) then
       RaiseException('Setup needs a complete extracted game folder. Restart setup and select it, or use /GAMEPATH="C:\\Your\\Extracted\\Disc".');
     CreateDiscLink;
+    if InstallingModPack then InstallModPack;
   end;
 end;

@@ -12,14 +12,22 @@ public class W32 {
   [DllImport("user32.dll")] public static extern IntPtr FindWindow(string c, string t);
   [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
   [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll")] public static extern void keybd_event(byte k, byte s, uint f, UIntPtr e);
+  [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int n);
 }
 "@
 # -Process xemu: that process's main window (xemu's title carries its version).
 if ($Process) { $h = (Get-Process $Process -ErrorAction SilentlyContinue | Select -First 1).MainWindowHandle; if (-not $h) { $h = [IntPtr]::Zero } }
 else { $h = [W32]::FindWindow($Title, [NullString]::Value) }
 if ($h -eq [IntPtr]::Zero) { 'no window'; exit 1 }
+# Windows only lets a background process take focus right after input, so tap
+# Alt first (standard trick), restore the window if minimised, then focus it.
+[W32]::keybd_event(0x12, 0, 0, [UIntPtr]::Zero); [W32]::keybd_event(0x12, 0, 2, [UIntPtr]::Zero)
+[W32]::ShowWindow($h, 9) | Out-Null
 [W32]::SetForegroundWindow($h) | Out-Null
 Start-Sleep -Milliseconds 400
+if ([W32]::GetForegroundWindow() -ne $h) { "warning: game window not in front; capture may show another window" }
 $r = New-Object W32+RECT
 [W32]::GetWindowRect($h, [ref]$r) | Out-Null
 $w = $r.R - $r.L; $hh = $r.B - $r.T

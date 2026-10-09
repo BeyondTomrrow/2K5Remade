@@ -1,0 +1,8 @@
+nfl2k5tool_dart (tools\nfl2k5-save-converter.exe)
+https://github.com/BAD-AL/nfl2k5tool_dart
+
+Created by BAD-AL. NFL2K5-PC uses it to convert PS2 (.max/.psu) and Xbox
+saves dropped into saves\import. Built by tools\build-save-converter.ps1 from
+upstream revision e3afeece61896380a95e506ab43ae1abda0ae8a5 with
+tools\nfl2k5tool-name-pool.patch applied. All credit for the save format work
+belongs to its author.

@@ -2403,3 +2403,26 @@ Reached natively (user-verified): intro movies, legal/SEGA screens, title, main 
 - **Verified in game (3440x1440, CPU match):** HTML_Test transparent over live play with live teams/scores/clock/down; hidden on play selection (play art intact); real TOUCHDOWN and EXTRA_POINT events; test-cycled TOUCHDOWN/FIRST_DOWN/INTERCEPTION/PENALTY/QUARTER_STARTED animations rendered.
 - **Presentation Studio** (`tools/presentation-studio/serve.ps1`): select, move, 8-handle mouse resize, properties, reference image (opacity, lock, move, scale, over/under), sample data/events, import of HTML folders/files as packages, in-editor code editing. Edits save to the package's `layout.css`.
 - **Open:** CBS not re-run in game after this change (user switched the package mid-run); `CBS_Style_Football_Scorebug/presentation.json` fails to parse (pre-existing); player/portrait API, DRIVE/PLAY/SACK events, `full_viewport` canvas fit not built yet.
+
+## 2026-10-08 — SOFTDRINK 2K28 plays; Mod Studio widescreen; Mod Packs menu
+
+- **SOFTDRINK (ISO-built pack `mods/packs/SOFTDRINK_2K28-iso`, XBE 2b0fbbbb…)**: boots, plays full CPU games (15 min, no crash), MyCareer menu opens. Fixes: contiguous window back to 64 MB with physical floor = image minus section holes (xemu oracle), heap now skips pack sections above 0xF80000 (game allocations were erasing mod tables), lifter: `push imm; jmp/fallthrough` continuation idiom, fxsave/fxrstor/fnsave/frstor/fninit, alias closure for backward jumps, `.HDRCODE` pseudo-section (code in grown XBE header), pack-seeds: retail-patch targets, UTF-16 text filter, handlers found in LZ tables unpacked by sub_014E5185; gen patch JOIN_2FAD42.
+- **Widescreen**: SOFTDRINK carries Mod Studio's Hor+ patch (constants at VA 0x10254); presenter rewrites F for the window aspect (`pr_anamorphic_update`). Retail gets a `Widescreen` pack: `tools/patches/widescreen-16x9.xdiff` (byte diff of the Mod Studio patch) applied by pack-install at Setup, native exe in `release/code-packs/81d6e16c…`.
+- **Mod Packs**: Options > Mod Packs by default; `mods\patches` drop folder (.2k5patch/.iso/.xiso) installs in background; pack-install accepts ISO images and .xdiff.
+- **Kernel**: kernel-call counter saturates (overflow switched per-call logging on forever after ~2^31 calls — candidate for late-session slowdown/audio problems).
+- Open: Berman face triangles, audio deep-voice/beep not reproduced in 10-min retail WAV, FPS >60 needs interpolation.
+
+## 2026-10-08 (late) — drop-in mod packs via interpreter: working
+- Main game regenerated with RECOMP_INTERP_GATE at every function; retail run unchanged (coin toss, widescreen fill).
+- End-to-end: SOFTDRINK v0.4 .iso dropped into mods\patches, game installed it with no native build, enabled via active-pack.ini, main build ran it with 1122/33530 functions interpreted at a locked 60 fps for 4 min, no crash, no unknown opcodes.
+- NFL2K5_INTERP_PACK=<folder> forces interpreted mode (boot handoff skipped) for testing.
+
+## 2026-10-09 — player face / body holes FIXED (strip split at DRAW_ARRAYS<->ARRAY_ELEMENT)
+- Symptom: dark triangles on faces (Berman, players' cheeks/eyes) and holes in player bodies; xemu clean.
+- Cause (external/xboxrecomp nv2a_pb_exec.c): in one BEGIN/END the title mixes DRAW_ARRAYS runs and ARRAY_ELEMENT16/32 indices in the same triangle strip. The executor flushed at each switch, so the strip was cut and the two triangles bridging each cut were lost; the dark triangle was the inside of the head (scalp texture) seen through the hole.
+- Fix: follow xemu pgraph_expand_draw_arrays -- ARRAY_ELEMENT continues the pending run; a DRAW_ARRAYS after elements in the same BEGIN appends.
+- Evidence: RECOMP_GPU_PICK at the cheek showed the face batch never wrote the pixel; RECOMP_IDX_DUMP (new: per-draw indices, attributes, constants, VP temporaries, BEGIN sequence) showed 4-vertex boundary holes exactly at draw boundaries inside one BEGIN. xemu oracle (logs\xemu-oracle, private config) coin toss vs ours: #81 cheek now matches. 4-minute CPU game at locked 60, no field wedges.
+- Also this session: drop-in mod packs via the x86 interpreter (SOFTDRINK v0.4/v0.5 interpreted on the main build, 1122/33530 functions, 60 fps); v0.5 install failure was a modified base disc (original/disc vc 0/3/4 restored from the retail ISO; modified copies kept as *.griddy-current); SportsCenter 2D cards stretch to fill (2D-only frame detection); old Widescreen pack retired from the menu.
+- Diagnostics added: NFL2K5_INTERP_FORCE=lo-hi (interpret ranges), RECOMP_FACE_TRACE, RECOMP_SKIP_DRAW, RECOMP_NO_ATEST, RECOMP_TEX_FULLHASH, RECOMP_IDX_DUMP.
+- Machine: C: was full (0 bytes; NVIDIA DXCache 24 GB) -- builds/tools fail randomly when it is.
+- Known open: NBC_SNF HTML package renders unstyled (giant peacocks, grey box) -- its files have uncommitted edits from another session.

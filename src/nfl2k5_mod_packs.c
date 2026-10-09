@@ -42,7 +42,8 @@ static void mp_read_json_name(const char *path, char *out, size_t cap)
     n = fread(buf, 1, sizeof(buf) - 1, f);
     fclose(f);
     buf[n] = 0;
-    p = strstr(buf, "\"name\"");
+    p = strstr(buf, "\"display_name\"");
+    if (!p) p = strstr(buf, "\"name\"");
     if (!p || !(p = strchr(p, ':')) || !(p = strchr(p, '"'))) return;
     p++;
     q = strchr(p, '"');
@@ -77,6 +78,9 @@ static void mp_read_active(char *out, size_t cap)
 static int mp_safe_folder(const char *s)
 {
     if (!s || !*s || strstr(s, "..") || strchr(s, '/') || strchr(s, '\\') || strchr(s, ':')) return 0;
+    /* The old Widescreen pack: widescreen is built in now (Video Settings), and
+     * its own native build would never get later fixes. */
+    if (!_stricmp(s, "Widescreen")) return 0;
     return 1;
 }
 
@@ -145,20 +149,99 @@ int nfl2k5_modpacks_boot_dispatch(const char *root)
 {
     char folder[MAX_PATH], target[MAX_PATH], current[MAX_PATH];
     snprintf(s_root, sizeof(s_root), "%s", root);
+    /* NFL2K5_INTERP_PACK (testing): run that pack interpreted in this process. */
+    if (getenv("NFL2K5_INTERP_PACK") && *getenv("NFL2K5_INTERP_PACK")) return 0;
     mp_read_active(folder, sizeof(folder));
     if (*folder && mp_safe_folder(folder))
         snprintf(target, sizeof(target), "%s\\mods\\packs\\%s\\native\\NFL2K5.exe", root, folder);
     else
         mp_retail_exe(target, sizeof(target));
     if (!mp_file_exists(target)) {
-        if (*folder)
-            fprintf(stderr, "[MODPACK] Selected pack '%s' has no native build; using retail.\n", folder);
-        mp_write_active("");
+        char xbe[MAX_PATH];
+        snprintf(xbe, sizeof xbe, "%s\\mods\\packs\\%s\\default.xbe", root, folder);
+        if (*folder && mp_safe_folder(folder) && mp_file_exists(xbe)) {
+            /* No native build of its own: the retail build runs it, with the
+             * pack's changes in the interpreter (src/main.c, src/interp). */
+            fprintf(stderr, "[MODPACK] Pack '%s' runs on the main build (interpreted changes).\n", folder);
+        } else {
+            if (*folder)
+                fprintf(stderr, "[MODPACK] Selected pack '%s' is not installed; using retail.\n", folder);
+            mp_write_active("");
+        }
         mp_retail_exe(target, sizeof(target));
     }
     if (!mp_current_exe(current, sizeof(current)) || mp_same_path(current, target)) return 0;
     fprintf(stderr, "[MODPACK] Handing off to %s\n", target);
     return mp_launch(target);
+}
+
+/* mods\patches drop folder: a .2k5patch, or a patched .iso/.xiso, placed
+ * there is installed into mods\packs in the background (the bundled mod pack
+ * installer, with the release's native code packs), then offered under
+ * Options > Mod Packs after a restart. <file>.installed / <file>.failed mark
+ * files already handled; delete the marker to install again. */
+extern void xbox_PresentToast(const char *header, const char *line1, const char *line2, unsigned ms);
+
+static DWORD WINAPI mp_patch_thread(void *arg)
+{
+    WIN32_FIND_DATAA fd;
+    HANDLE h;
+    char pattern[MAX_PATH], tool[MAX_PATH], py[MAX_PATH];
+    (void)arg;
+    Sleep(8000);                                  /* let the game get to its menus first */
+    snprintf(tool, sizeof tool, "%s\\tools\\NFL2K5-ModPack-Installer.exe", s_root);
+    snprintf(py, sizeof py, "%s\\tools\\pack-install.py", s_root);
+    snprintf(pattern, sizeof pattern, "%s\\mods\\patches\\*", s_root);
+    h = FindFirstFileA(pattern, &fd);
+    if (h == INVALID_HANDLE_VALUE) return 0;
+    do {
+        char file[MAX_PATH], done[MAX_PATH], failed[MAX_PATH], cmd[4 * MAX_PATH], logp[MAX_PATH];
+        const char *ext = strrchr(fd.cFileName, '.');
+        STARTUPINFOA si;
+        PROCESS_INFORMATION pi;
+        DWORD code = 1;
+        if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY || !ext) continue;
+        if (_stricmp(ext, ".2k5patch") && _stricmp(ext, ".iso") && _stricmp(ext, ".xiso")) continue;
+        snprintf(file, sizeof file, "%s\\mods\\patches\\%s", s_root, fd.cFileName);
+        snprintf(done, sizeof done, "%s.installed", file);
+        snprintf(failed, sizeof failed, "%s.failed", file);
+        if (mp_file_exists(done) || mp_file_exists(failed)) continue;
+        snprintf(logp, sizeof logp, "%s\\logs\\patch-install-%s.log", s_root, fd.cFileName);
+        if (mp_file_exists(tool))
+            snprintf(cmd, sizeof cmd, "\"%s\" \"%s\" --root \"%s\" --native-catalog \"%s\\mods\\code-packs\" --replace --log \"%s\"",
+                     tool, file, s_root, s_root, logp);
+        else if (mp_file_exists(py))
+            snprintf(cmd, sizeof cmd, "python \"%s\" \"%s\" --root \"%s\" --native-catalog \"%s\\release\\code-packs\" --replace --log \"%s\"",
+                     py, file, s_root, s_root, logp);
+        else
+            continue;
+        xbox_PresentToast("MOD PACKS", "Installing", fd.cFileName, 8000);
+        fprintf(stderr, "[MODPACK] installing %s\n", file);
+        memset(&si, 0, sizeof si);
+        memset(&pi, 0, sizeof pi);
+        si.cb = sizeof si;
+        si.dwFlags = STARTF_USESHOWWINDOW;
+        si.wShowWindow = SW_HIDE;
+        if (CreateProcessA(NULL, cmd, NULL, NULL, FALSE, CREATE_NO_WINDOW | BELOW_NORMAL_PRIORITY_CLASS,
+                           NULL, s_root, &si, &pi)) {
+            WaitForSingleObject(pi.hProcess, INFINITE);
+            GetExitCodeProcess(pi.hProcess, &code);
+            CloseHandle(pi.hThread);
+            CloseHandle(pi.hProcess);
+        }
+        {
+            FILE *m = fopen(code == 0 ? done : failed, "w");
+            if (m) { fprintf(m, "see %s\n", logp); fclose(m); }
+        }
+        fprintf(stderr, "[MODPACK] %s: installer exit %lu (log %s)\n", fd.cFileName, (unsigned long)code, logp);
+        if (code == 0)
+            xbox_PresentToast("MOD PACKS", "Installed - restart the game, then",
+                              "Options > Mod Packs to turn it on", 15000);
+        else
+            xbox_PresentToast("MOD PACKS", "Could not install", fd.cFileName, 15000);
+    } while (FindNextFileA(h, &fd));
+    FindClose(h);
+    return 0;
 }
 
 void nfl2k5_modpacks_init(const char *root)
@@ -169,6 +252,14 @@ void nfl2k5_modpacks_init(const char *root)
     snprintf(s_root, sizeof(s_root), "%s", root);
     s_pack_count = 0;
     s_active = -1;
+    {
+        char patches[MAX_PATH];
+        HANDLE th;
+        snprintf(patches, sizeof patches, "%s\\mods\\patches", root);
+        CreateDirectoryA(patches, NULL);
+        th = CreateThread(NULL, 0, mp_patch_thread, NULL, 0, NULL);
+        if (th) CloseHandle(th);
+    }
     mp_read_active(active, sizeof(active));
     snprintf(pattern, sizeof(pattern), "%s\\mods\\packs\\*", root);
     h = FindFirstFileA(pattern, &fd);
@@ -183,7 +274,8 @@ void nfl2k5_modpacks_init(const char *root)
         snprintf(json, sizeof(json), "%s\\mods\\packs\\%s\\pack.json", root, p->folder);
         snprintf(xbe, sizeof(xbe), "%s\\mods\\packs\\%s\\default.xbe", root, p->folder);
         snprintf(p->exe, sizeof(p->exe), "%s\\mods\\packs\\%s\\native\\NFL2K5.exe", root, p->folder);
-        if (!mp_file_exists(json) || !mp_file_exists(xbe) || !mp_file_exists(p->exe)) continue;
+        if (!mp_file_exists(json) || !mp_file_exists(xbe)) continue;
+        if (!mp_file_exists(p->exe)) mp_retail_exe(p->exe, sizeof(p->exe));   /* interpreted on the main build */
         mp_read_json_name(json, p->name, sizeof(p->name));
         if (!p->name[0]) snprintf(p->name, sizeof(p->name), "%s", p->folder);
         if (!_stricmp(active, p->folder)) s_active = s_pack_count;
