@@ -61,6 +61,9 @@ Source: "..\mods\presentations\*.md"; DestDir: "{app}\mods\presentations"; Flags
 Source: "..\mods\presentations\*.txt"; DestDir: "{app}\mods\presentations"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\mods\teams\*.json"; DestDir: "{app}\mods\teams"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\mods\teams\*.png"; DestDir: "{app}\mods\teams"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..ssets\controls\*.png"; DestDir: "{app}ssets\controls"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..ssets\controls\*.json"; DestDir: "{app}ssets\controls"; Flags: ignoreversion
+Source: "..\docs	hird-party\kenney-input-prompts-LICENSE.txt"; DestDir: "{app}\docs	hird-party"; Flags: ignoreversion
 Source: "..\Music\README.txt"; DestDir: "{app}\Music"; Flags: ignoreversion
 Source: "..\original\README.md"; DestDir: "{app}\original"; Flags: ignoreversion
 Source: "..\README.md"; DestDir: "{app}"; Flags: ignoreversion

@@ -591,6 +591,29 @@ PATCHES = [
         eax = keep_eax; ecx = keep_ecx; edx = keep_edx;
       } }
 """),
+    # Controller Setup's fourth layout, Custom Control (src/nfl2k5_controller_setup.c).
+    ("CONTROLLER_SETUP_NEXT", "sub_00357400", "loc_0035741D: ;", "after", """\
+    { extern int nfl2k5_cs_pages(void); if (nfl2k5_cs_pages() == 4) { MEM32(0xAEA034) = MEM32(0xAEA034) >= 3u ? 0u : MEM32(0xAEA034) + 1u; g_seh_ebp = ebp; sub_00357370(); return; } }
+"""),
+    ("CONTROLLER_SETUP_PREV", "sub_00357450", "loc_0035746D: ;", "after", """\
+    { extern int nfl2k5_cs_pages(void); if (nfl2k5_cs_pages() == 4) { MEM32(0xAEA034) = MEM32(0xAEA034) == 0u ? 3u : MEM32(0xAEA034) - 1u; g_seh_ebp = ebp; sub_00357370(); return; } }
+"""),
+    ("CONTROLLER_SETUP_LABELS", "sub_00357350", "loc_00357350: ;", "after", """\
+    if (eax == 3u) { extern uint32_t nfl2k5_cs_labels(void); uint32_t _cs = nfl2k5_cs_labels(); if (_cs) { eax = _cs; esp += 4; return; } }
+"""),
+    ("CONTROLLER_SETUP_NAME", "sub_00357360", "loc_00357360: ;", "after", """\
+    if (eax == 3u) { extern uint32_t nfl2k5_cs_name(void); uint32_t _cs = nfl2k5_cs_name(); if (_cs) { eax = _cs; esp += 4; return; } }
+"""),
+    ("CONTROLLER_SETUP_PORT_LAYOUT", "sub_00077230", "loc_00077230: ;", "after", """\
+    { extern volatile long nfl2k5_cs_custom_ports; uint32_t _cs = MEM32(ecx * 0x1Cu + 0xE5FE90u);
+      if (_cs > 2u || (ecx < 4u && ((nfl2k5_cs_custom_ports >> ecx) & 1))) { extern uint32_t nfl2k5_cs_port_layout(uint32_t, uint32_t, uint32_t); uint32_t _p = ecx; ecx = ecx * 0x1Cu; eax = nfl2k5_cs_port_layout(_p, _cs, MEM32(esp)); esp += 4; return; } }
+"""),
+    ("CONTROLLER_SETUP_APPLY", "sub_00357370", "loc_00357370: ;", "after", """\
+    { extern void nfl2k5_cs_applied(uint32_t, uint32_t); nfl2k5_cs_applied(MEM32(0xAEA030), MEM32(0xAEA034)); }
+"""),
+    ("CONTROLLER_SETUP_ROW_COLOR", "sub_00357530", "edx = 0xFFE0E0E0u;", "after", """\
+    { extern uint32_t nfl2k5_cs_row_color(uint32_t, uint32_t); edx = nfl2k5_cs_row_color(esi, edx); }
+"""),
 ]
 
 

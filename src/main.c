@@ -3014,6 +3014,10 @@ int main(int argc, char **argv)
     }
     if (!g_interp_pack && NFL2K5_BASE_CMP(NFL2K5_XBE_SHA256) == 0)   /* retail only: packs bring their own */
         nfl2k5_expand_limits();
+    {   /* Options > Controller Setup: the Custom Control layout */
+        extern void nfl2k5_controller_setup_init(void);
+        nfl2k5_controller_setup_init();
+    }
     {
         /* NFL2K5_INTERP_FORCE=lo-hi[,lo-hi...] (hex VAs, diagnostics): run the
          * converted functions starting in those ranges in the interpreter --
@@ -3128,7 +3132,9 @@ int main(int argc, char **argv)
     {   /* controllers (Xbox, PlayStation), keyboard, mouse; F1 Controls pages */
         extern void nfl2k5_controls_start(void);
         extern void nfl2k5_save_library_menu_init(void);
+        extern void nfl2k5_controller_art_init(void);
         nfl2k5_controls_start();
+        nfl2k5_controller_art_init();             /* controller pictures and button icons */
         nfl2k5_save_library_menu_init();          /* F1 > System: save backups, saves folder */
     }
     xbox_kernel_bridge_init();

@@ -161,14 +161,14 @@ static WORD file_press(BYTE analog[8])
         else if (!strcmp(name, "b")) analog[1] = 255;
         else if (!strcmp(name, "x")) analog[2] = 255;
         else if (!strcmp(name, "y")) analog[3] = 255;
-        else if (!strcmp(name, "black") || !strcmp(name, "lb")) analog[4] = 255;
-        else if (!strcmp(name, "white") || !strcmp(name, "rb")) analog[5] = 255;
+        else if (!strcmp(name, "black") || !strcmp(name, "rb")) analog[4] = 255;
+        else if (!strcmp(name, "white") || !strcmp(name, "lb")) analog[5] = 255;
         else if (!strcmp(name, "lt")) analog[6] = 255;
         else if (!strcmp(name, "rt")) analog[7] = 255;
         else if (!strcmp(name, "l3")) buttons |= 0x40;
         else if (!strcmp(name, "r3")) buttons |= 0x80;
-        else if (!strcmp(name, "black") || !strcmp(name, "lb")) analog[4] = 255;
-        else if (!strcmp(name, "white") || !strcmp(name, "rb")) analog[5] = 255;
+        else if (!strcmp(name, "black") || !strcmp(name, "rb")) analog[4] = 255;
+        else if (!strcmp(name, "white") || !strcmp(name, "lb")) analog[5] = 255;
         else if (!strcmp(name, "lt")) analog[6] = 255;
         else if (!strcmp(name, "rt")) analog[7] = 255;
         else if (!strcmp(name, "l3")) buttons |= 0x40;
@@ -259,10 +259,17 @@ static void host_gamepad_port(int port, XBOX_GAMEPAD *g)
         return;
     if (no_host_pad < 0) no_host_pad = getenv("NFL2K5_NO_HOST_PAD") != NULL;
     nfl2k5_controls_get(port, g, !(no_host_pad && g_last_script_press && GetTickCount() - g_last_script_press < 15000));
+    if (port == 0) {
+        g->wButtons |= auto_press(g->bAnalogButtons);
+        g->wButtons |= file_press(g->bAnalogButtons);
+    }
+    {
+        /* the Controller Setup screen's Custom layout editor may take the port */
+        extern void nfl2k5_cs_input(int port, XBOX_GAMEPAD *g);
+        nfl2k5_cs_input(port, g);
+    }
     if (port != 0)
         return;
-    g->wButtons |= auto_press(g->bAnalogButtons);
-    g->wButtons |= file_press(g->bAnalogButtons);
     {   /* L3: show what is playing; R3: next song (local music library). */
         extern void nfl2k5_local_music_buttons(int l3, int r3);
         nfl2k5_local_music_buttons((g->wButtons & 0x40) != 0, (g->wButtons & 0x80) != 0);

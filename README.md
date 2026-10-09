@@ -61,6 +61,26 @@ Settings, shader caches and logs are kept in `%LOCALAPPDATA%\NFL2K5-PC`, so the
 game never needs administrator rights, even under Program Files. To keep
 everything in the game folder instead, put an empty `portable.txt` there.
 
+### Controller Setup and button remapping
+
+**Options > Controller Setup** shows the controller you are using (Xbox
+Series, DualShock 4 or DualSense) instead of the original Xbox controller, with
+matching button icons everywhere in the game. LT / RT page through the
+layouts; after Default, Alternate A and Alternate B comes **Custom Control**:
+
+- Press **X** (Square) to customize. Each button's row lights up, and so does
+  the button on the controller picture.
+- **D-pad**: choose a button. **A** (Cross), then press the new button: the two
+  swap actions, on offense and defense.
+- **Y** (Triangle): back to the Default layout. **B** (Circle): done.
+
+Leaving the screen on Custom Control makes that controller play with it; the
+choice and the layout are kept for each controller port.
+
+Button icons follow the controller you last used, or are set in F1 > Controls >
+Button prompts: Xbox, PlayStation, Keyboard (the keys you bound) or the
+Original Xbox icons. Icons: "Input Prompts" by Kenney (CC0).
+
 ### Controllers
 
 Xbox controllers and PlayStation controllers (DualShock 4, DualSense, and
@@ -70,6 +90,8 @@ DualSense Edge, over USB or Bluetooth) work without extra software.
   the Xbox.
 - The keyboard and mouse always control player 1.
 - Vibration is sent to Xbox controllers, and to PlayStation controllers over USB.
+- LB / L1 is the original controller's White button and RB / R1 its Black one,
+  so Stiff Arm L is on the left bumper.
 - Button prompts follow the controller you last used. With a PlayStation
   controller, the game's button icons show Cross, Circle, Square and Triangle,
   plus Options, Share and L1/R1/L2/R2/L3/R3. To fix the prompts to one style, use

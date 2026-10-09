@@ -42,7 +42,7 @@ extern char *xbox_user_path(const char *rel, char *out, size_t n);
 enum { C_A, C_B, C_X, C_Y, C_LB, C_RB, C_LT, C_RT, C_START, C_BACK, C_LS, C_RS,
        C_DUP, C_DDOWN, C_DLEFT, C_DRIGHT, C_COUNT };
 static const char *const k_ctl_names[C_COUNT] = {
-    "A", "B", "X", "Y", "LB (Black)", "RB (White)", "LT", "RT", "Start", "Back",
+    "A", "B", "X", "Y", "LB (White)", "RB (Black)", "LT", "RT", "Start", "Back",
     "Left stick click", "Right stick click", "D-pad up", "D-pad down", "D-pad left", "D-pad right" };
 static const char *const k_ctl_keys[C_COUNT] = {     /* controls.ini names */
     "a", "b", "x", "y", "lb", "rb", "lt", "rt", "start", "back", "ls", "rs", "dup", "ddown", "dleft", "dright" };
@@ -53,7 +53,7 @@ static const char *const k_ps_names[C_COUNT] = {
 /* Keyboard: the game buttons plus the left stick's four directions. */
 enum { K_LUP = C_COUNT, K_LDOWN, K_LLEFT, K_LRIGHT, K_COUNT };
 static const char *const k_key_names[K_COUNT] = {
-    "A", "B", "X", "Y", "LB (Black)", "RB (White)", "LT", "RT", "Start", "Back",
+    "A", "B", "X", "Y", "LB (White)", "RB (Black)", "LT", "RT", "Start", "Back",
     "Left stick click", "Right stick click", "D-pad up", "D-pad down", "D-pad left", "D-pad right",
     "Left stick up", "Left stick down", "Left stick left", "Left stick right" };
 static const char *const k_key_ini[K_COUNT] = {
@@ -69,7 +69,7 @@ typedef struct {
     int vibration;                  /* 0/1 */
     int dz_left, dz_right, dz_trig; /* percent */
     int mouse;                      /* mouse buttons/stick on port 0 */
-    int prompts;                    /* 0 automatic, 1 Xbox, 2 PlayStation */
+    int prompts;                    /* 0 automatic, 1 Xbox, 2 PlayStation, 3 keyboard, 4 original Xbox */
     int map[C_COUNT];               /* game button <- controller button */
     int keys[K_COUNT];              /* virtual-key codes, 0 = unbound */
 } Controls;
@@ -96,7 +96,7 @@ static void cfg_save(void)
     if (!f) return;
     fprintf(f, "; NFL 2K5 controls (F1 > Controls pages edit these)\n"
                "vibration = %d\ndeadzone_left = %d\ndeadzone_right = %d\ndeadzone_trigger = %d\nmouse = %d\n"
-               "; prompts: 0 automatic (the last controller used), 1 Xbox, 2 PlayStation\nprompts = %d\n"
+               "; prompts: 0 automatic (the last controller used), 1 Xbox, 2 PlayStation, 3 keyboard, 4 original Xbox\nprompts = %d\n"
                "; map_<game button> = <controller button>: a b x y lb rb lt rt start back ls rs dup ddown dleft dright\n",
             s_cfg.vibration, s_cfg.dz_left, s_cfg.dz_right, s_cfg.dz_trig, s_cfg.mouse, s_cfg.prompts);
     for (i = 0; i < C_COUNT; i++) fprintf(f, "map_%s = %s\n", k_ctl_keys[i], k_ctl_keys[s_cfg.map[i]]);
@@ -122,7 +122,7 @@ static void cfg_load(void)
         else if (!strcmp(k, "deadzone_right")) s_cfg.dz_right = n;
         else if (!strcmp(k, "deadzone_trigger")) s_cfg.dz_trig = n;
         else if (!strcmp(k, "mouse")) s_cfg.mouse = n != 0;
-        else if (!strcmp(k, "prompts")) s_cfg.prompts = n >= 0 && n <= 2 ? n : 0;
+        else if (!strcmp(k, "prompts")) s_cfg.prompts = n >= 0 && n <= 4 ? n : 0;
         else if (!strncmp(k, "map_", 4)) {
             for (i = 0; i < C_COUNT; i++) if (!strcmp(k + 4, k_ctl_keys[i])) break;
             if (i < C_COUNT) { int j; for (j = 0; j < C_COUNT; j++) if (!strcmp(v, k_ctl_keys[j])) s_cfg.map[i] = j; }
@@ -142,6 +142,7 @@ typedef struct {
     int connected;
     char kind[32];                  /* "Xbox controller", "DualSense", ... */
     int ps;                         /* PlayStation layout (for labels) */
+    int dev;                        /* 0 Xbox, 1 DualShock 4, 2 DualSense (pictures, prompts) */
     unsigned char btn[C_COUNT];     /* 0..255 per control (sticks clicks and d-pad digital) */
     short lx, ly, rx, ry;
 } RawPad;
@@ -169,6 +170,7 @@ static void ps_parse(PsPad *d, const unsigned char *r, DWORD n)
     memset(&s, 0, sizeof s);
     s.connected = 1;
     s.ps = 1;
+    s.dev = d->dualsense ? 2 : 1;
     snprintf(s.kind, sizeof s.kind, "%s%s", d->dualsense ? (d->edge ? "DualSense Edge" : "DualSense") : "DualShock 4",
              d->bt ? " (Bluetooth)" : "");
     if (n < 10) return;
@@ -402,21 +404,50 @@ static void deadzone(short *x, short *y, int pct)
     *x = (short)(fx * k); *y = (short)(fy * k);
 }
 
-/* Which kind of controller was used last (automatic button prompts). */
-static volatile LONG s_last_ps;
+/* Which kind of controller was used last (automatic button prompts):
+ * 0 Xbox, 1 DualShock 4, 2 DualSense, 3 keyboard. */
+static volatile LONG s_last_ps, s_last_dev;
 static void note_use(const RawPad *s)
 {
     int i;
     for (i = 0; i < C_COUNT; i++)
-        if (s->btn[i] > 128) { InterlockedExchange(&s_last_ps, s->ps); return; }
+        if (s->btn[i] > 128) { InterlockedExchange(&s_last_ps, s->ps); InterlockedExchange(&s_last_dev, s->dev); return; }
 }
 
-/* For the renderer's button sheet (nv2a_gpu_prompts.inc.c): 1 = PlayStation. */
+/* Button prompt style now: 0 Xbox, 1 PlayStation, 2 keyboard, 3 the original
+ * Xbox icons (src/nfl2k5_controller_art.cpp). */
+int nfl2k5_controls_style(void)
+{
+    switch (s_cfg.prompts) {
+    case 1: return 0;
+    case 2: return 1;
+    case 3: return 2;
+    case 4: return 3;
+    }
+    return s_last_dev == 3 ? 2 : s_last_ps ? 1 : 0;
+}
+
+/* Which PlayStation controller the prompts are for: 1 DualShock 4, 2 DualSense. */
+int nfl2k5_controls_ps_kind(void)
+{
+    int i, k = s_last_dev == 1 || s_last_dev == 2 ? (int)s_last_dev : 0;
+    if (k) return k;
+    EnterCriticalSection(&s_lock);
+    for (i = 0; i < MAX_PS; i++) if (s_ps[i].used && s_ps[i].state.connected) { k = s_ps[i].dualsense ? 2 : 1; break; }
+    LeaveCriticalSection(&s_lock);
+    return k ? k : 2;
+}
+
+/* For the renderer's old button-sheet repaint (nv2a_gpu_prompts.inc.c): 1 = PlayStation. */
 static int prompt_style(void)
 {
-    if (s_cfg.prompts == 1) return 0;
-    if (s_cfg.prompts == 2) return 1;
-    return s_last_ps != 0;
+    return nfl2k5_controls_style() == 1;
+}
+
+/* The key bound to a game button (see k_key_ini), 0 = none. */
+int nfl2k5_controls_key(int game_button)
+{
+    return game_button >= 0 && game_button < K_COUNT ? s_cfg.keys[game_button] : 0;
 }
 
 static void to_gamepad(const RawPad *s, XBOX_GAMEPAD *g)
@@ -429,7 +460,9 @@ static void to_gamepad(const RawPad *s, XBOX_GAMEPAD *g)
     if (v[C_RT] <= trig) v[C_RT] = 0;
     g->bAnalogButtons[0] = v[C_A]; g->bAnalogButtons[1] = v[C_B];
     g->bAnalogButtons[2] = v[C_X]; g->bAnalogButtons[3] = v[C_Y];
-    g->bAnalogButtons[4] = v[C_LB]; g->bAnalogButtons[5] = v[C_RB];
+    /* LB is the Duke's White button and RB its Black one: the game's left
+     * actions (Stiff Arm L) are on White, so they land on the left bumper. */
+    g->bAnalogButtons[4] = v[C_RB]; g->bAnalogButtons[5] = v[C_LB];
     g->bAnalogButtons[6] = v[C_LT]; g->bAnalogButtons[7] = v[C_RT];
     if (v[C_DUP] > 128) g->wButtons |= 0x01;
     if (v[C_DDOWN] > 128) g->wButtons |= 0x02;
@@ -456,9 +489,10 @@ static int window_focused(void)
 static void keyboard_into(XBOX_GAMEPAD *g)
 {
 #define KEY(i) (s_cfg.keys[i] && (GetAsyncKeyState(s_cfg.keys[i]) & 0x8000))
-    static const int analog[8] = { C_A, C_B, C_X, C_Y, C_LB, C_RB, C_LT, C_RT };
+    static const int analog[8] = { C_A, C_B, C_X, C_Y, C_RB, C_LB, C_LT, C_RT };   /* Black, White: see to_gamepad */
     int i;
     for (i = 0; i < 8; i++) if (KEY(analog[i])) g->bAnalogButtons[i] = 255;
+    for (i = 0; i < K_COUNT; i++) if (KEY(i)) { InterlockedExchange(&s_last_dev, 3); InterlockedExchange(&s_last_ps, 0); break; }
     if (KEY(C_DUP)) g->wButtons |= 0x01;
     if (KEY(C_DDOWN)) g->wButtons |= 0x02;
     if (KEY(C_DLEFT)) g->wButtons |= 0x04;
@@ -539,6 +573,17 @@ int nfl2k5_controls_get(int port, XBOX_GAMEPAD *g, int use_pads)
         mouse_into(g);
     }
     return port == 0 || p[port & 3].src != 0;
+}
+
+/* The controller on a game port: 0 Xbox, 1 DualShock 4, 2 DualSense, -1 none. */
+int nfl2k5_controls_port_dev(int port)
+{
+    PortSrc p[4];
+    controls_init();
+    port_map(p);
+    if (port < 0 || port > 3 || !p[port].src) return -1;
+    if (p[port].src == 1) return 0;
+    return s_ps[p[port].index].dualsense ? 2 : 1;
 }
 
 /* XInputSetState from the game: motor speeds 0..65535. */
@@ -686,10 +731,11 @@ static void p1_label(int r, char *name, char *val, size_t n)
     case R_DZR:     strcpy(name, "Right stick dead zone"); snprintf(val, n, "%d%%", s_cfg.dz_right); break;
     case R_DZT:     strcpy(name, "Trigger dead zone"); snprintf(val, n, "%d%%", s_cfg.dz_trig); break;
     case R_MOUSE:   strcpy(name, "Mouse as controller"); snprintf(val, n, "%s", s_cfg.mouse ? "On" : "Off"); break;
-    case R_PROMPTS: { static const char *m[3] = { "Automatic", "Xbox", "PlayStation" };
+    case R_PROMPTS: { static const char *m[5] = { "Automatic", "Xbox", "PlayStation", "Keyboard", "Original Xbox" };
+                      static const char *now[4] = { "  (Xbox now)", "  (PlayStation now)", "  (keyboard now)", "" };
                       strcpy(name, "Button prompts");
-                      snprintf(val, n, "%s%s", m[s_cfg.prompts % 3],
-                               s_cfg.prompts == 0 ? (s_last_ps ? "  (PlayStation now)" : "  (Xbox now)") : ""); } break;
+                      snprintf(val, n, "%s%s", m[s_cfg.prompts % 5],
+                               s_cfg.prompts == 0 ? now[nfl2k5_controls_style() & 3] : ""); } break;
     case R_RESET:   strcpy(name, "Reset controls to defaults"); break;
     }
 }
@@ -701,7 +747,7 @@ static void p1_change(int r, int dir)
     case R_DZR:   s_cfg.dz_right += 2 * dir; break;
     case R_DZT:   s_cfg.dz_trig += 2 * dir; break;
     case R_MOUSE: s_cfg.mouse = !s_cfg.mouse; break;
-    case R_PROMPTS: s_cfg.prompts = (s_cfg.prompts + 3 + dir) % 3; break;
+    case R_PROMPTS: s_cfg.prompts = (s_cfg.prompts + 5 + dir) % 5; break;
     default: return;
     }
     if (s_cfg.dz_left < 0) s_cfg.dz_left = 0;
