@@ -643,6 +643,11 @@ PATCHES = [
     ("ARCHIVE_EXTRA_PACK", "sub_00042450", "loc_000425DD: ;", "after", """\
     { extern void nfl2k5_archive_extend(void); RECOMP_REGS_OUT(); nfl2k5_archive_extend(); RECOMP_REGS_IN(); }
 """),
+    # Added teams (codes Z?/Q?) also count as created teams, so Roster Manager and the
+    # other lists of created teams show them while they are loaded (src/nfl2k5_teams.c).
+    ("TEAM_FILTER_ADDED", "sub_000E2E50", "loc_000E2E50: ;", "after", """\
+    { extern int nfl2k5_team_filter(uint32_t, uint32_t, uint32_t); int _tf = nfl2k5_team_filter(ecx, edx, MEM32(esp)); if (_tf >= 0) { eax = (uint32_t)_tf; esp += 4; return; } }
+"""),
 ]
 
 

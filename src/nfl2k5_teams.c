@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Every team in Team Select (2026-10-09).
  *
  * The roster keeps 52 resident teams (the 32 clubs, two Create a Team slots,
@@ -389,4 +389,23 @@ publish_next:
 out:
     g_ebx = save_ebx; g_esi = save_esi; g_edi = save_edi;
     return 1;
+}
+
+
+/* The game's team filter (0xE2E50: category -> list bit, tested against a
+ * list's mask): an added team (asset code Z?/Q?, category 4 in its slot) also
+ * counts as a created team (bit 4), so Roster Manager and the other lists of
+ * created teams show it while it is loaded. -1: not an added team. */
+int nfl2k5_team_filter(uint32_t team, uint32_t mask, uint32_t ret)
+{
+    uint32_t code;
+    uint16_t c0;
+    if (MEM32(team + T_CAT) != 4 || !(code = MEM32(team + T_CODE))) return -1;
+    c0 = (uint16_t)(MEM16(code) & 0xFFDF);
+    if (c0 != 'Z' && c0 != 'Q') return -1;
+    if (s_log > 0) {
+        static int n;
+        if (n++ < 60) fprintf(stderr, "[TEAMS] filter: added team %08X, list mask %08X (from %08X)\n", team, mask, ret);
+    }
+    return (mask & 0x1Cu) ? 1 : 0;          /* created (4), historic (0x10), and lists with free agents (8): Roster Manager */
 }
