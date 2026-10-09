@@ -111,6 +111,20 @@ Two limits of the original game are lifted (F1 > System, on by default):
 See [docs/XBOX-LIMITATION-AUDIT.md](docs/XBOX-LIMITATION-AUDIT.md) for every
 limit that was examined.
 
+### Texture packs
+
+Any texture in the game can be replaced with an image of any resolution, with
+no rebuild: put it in `mods	extures` (sub-folders allowed), named after the
+texture's hash. Turn on `texture_dump = 1` in `nfl2k5_game.ini` to have the
+game save every texture it uses with its hash. See `mods	extures\README.txt`.
+
+### Texture packs
+
+Any texture in the game can be replaced with an image of any resolution, with
+no rebuild: put it in `mods\textures` (sub-folders allowed), named after the
+texture's hash. Turn on `texture_dump = 1` in `nfl2k5_game.ini` to have the
+game save every texture it uses with its hash. See `mods\textures\README.txt`.
+
 ### Broadcast presentations
 
 Before a Quick Game, open:

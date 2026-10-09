@@ -49,6 +49,8 @@ Source: "nfl2k5_video.default.ini"; DestName: "nfl2k5_video.ini"; DestDir: "{app
 ; allow-list. This cannot accidentally capture local packs, Xbox executables,
 ; debug symbols, saves, or user-supplied audio/video.
 Source: "..\mods\README.md"; DestDir: "{app}\mods"; Flags: ignoreversion
+Source: "..\mods\textures\README.txt"; DestDir: "{app}\mods\textures"; Flags: ignoreversion
+Source: "..\mods	extures\README.txt"; DestDir: "{app}\mods	extures"; Flags: ignoreversion
 Source: "..\mods\presentation.ini"; DestDir: "{app}\mods"; Flags: ignoreversion
 Source: "..\mods\discord.ini"; DestDir: "{app}\mods"; Flags: onlyifdoesntexist
 Source: "..\mods\presentations\*.html"; DestDir: "{app}\mods\presentations"; Flags: ignoreversion recursesubdirs createallsubdirs

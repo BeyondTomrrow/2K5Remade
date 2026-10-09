@@ -57,7 +57,7 @@ CRITICAL_SECTION g_lock;
 std::string g_dir;
 std::map<std::string, Img> g_files;
 std::map<std::string, Img> g_made;          // composed results, by key
-bool g_log;
+bool g_log, g_have_art;
 
 uint32_t fnv(const uint32_t *p, size_t n)
 {
@@ -341,9 +341,16 @@ bool looks_like_small_sheet(const uint32_t *p)
 
 // --- renderer hooks ---------------------------------------------------------
 
+// The shapes of the textures replaced here (bit 1: they follow gen()); any
+// other texture may come from a texture pack (nfl2k5_texture_packs.cpp).
+extern "C" int nfl2k5_texpack_active(void);
+extern "C" const uint32_t *nfl2k5_texpack_find(uint32_t fmt, uint32_t w, uint32_t h, uint32_t content,
+                                               const uint32_t *orig, uint32_t *ow, uint32_t *oh);
 int wants(uint32_t fmt, uint32_t w, uint32_t h)
 {
-    return (fmt == 0x0C && w == 256 && h == 256) || (fmt == 0x0B && ((w == 128 && h == 128) || (w == 64 && h == 64)));
+    if ((fmt == 0x0C && w == 256 && h == 256) || (fmt == 0x0B && ((w == 128 && h == 128) || (w == 64 && h == 64))))
+        return 3;
+    return nfl2k5_texpack_active() ? 1 : 0;
 }
 
 uint32_t gen()
@@ -368,11 +375,13 @@ uint32_t gen()
 const uint32_t *override(uint32_t fmt, uint32_t w, uint32_t h, uint32_t content, const uint32_t *orig,
                          uint32_t *ow, uint32_t *oh)
 {
-    const uint32_t *r = nullptr;
+    const uint32_t *r = nfl2k5_texpack_find(fmt, w, h, content, orig, ow, oh);   // a texture pack first
+    if (r) return r;
     int style = nfl2k5_controls_style();
     EnterCriticalSection(&g_lock);
     if (g_made.size() > 64) g_made.clear();
-    if (fmt == 0x0C && content == kDukeHash) r = pad_picture(ow, oh);
+    if (!g_have_art) ;
+    else if (fmt == 0x0C && content == kDukeHash) r = pad_picture(ow, oh);
     else if (fmt == 0x0B && orig && style != 3) {
         uint32_t dh = fnv(orig, (size_t)w * h);
         if (w == 128 && dh == kSheetHash) r = button_sheet(orig, style, ow, oh);
@@ -396,10 +405,9 @@ extern "C" void nfl2k5_controller_art_init(void)
     InitializeCriticalSection(&g_lock);
     g_log = getenv("NFL2K5_ART_LOG") != nullptr;
     g_dir = find_dir();
-    if (GetFileAttributesA((g_dir + "sheet-xbox.png").c_str()) == INVALID_FILE_ATTRIBUTES) {
+    g_have_art = GetFileAttributesA((g_dir + "sheet-xbox.png").c_str()) != INVALID_FILE_ATTRIBUTES;
+    if (!g_have_art)
         fprintf(stderr, "[ART] %s not found; the game's own controller pictures and icons stay\n", g_dir.c_str());
-        return;
-    }
     g_xbox_tex_override_wants = wants;
     g_xbox_tex_override_gen = gen;
     g_xbox_tex_override = override;

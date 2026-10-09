@@ -3134,6 +3134,8 @@ int main(int argc, char **argv)
         extern void nfl2k5_save_library_menu_init(void);
         extern void nfl2k5_controller_art_init(void);
         nfl2k5_controls_start();
+        extern void nfl2k5_texture_packs_init(void);
+        nfl2k5_texture_packs_init();              /* mods\textures: replace any texture, any size */
         nfl2k5_controller_art_init();             /* controller pictures and button icons */
         nfl2k5_save_library_menu_init();          /* F1 > System: save backups, saves folder */
     }
