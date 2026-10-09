@@ -614,6 +614,25 @@ PATCHES = [
     ("CONTROLLER_SETUP_ROW_COLOR", "sub_00357530", "edx = 0xFFE0E0E0u;", "after", """\
     { extern uint32_t nfl2k5_cs_row_color(uint32_t, uint32_t); edx = nfl2k5_cs_row_color(esi, edx); }
 """),
+    # Team Select steps into every team: historic and added ones (src/nfl2k5_teams.c).
+    ("TEAM_SELECT_HOME_NEXT", "sub_002C2240", "PUSH32(esp, 0x002C22D5u); RECOMP_ABI_CALL(0x002C18D0u, sub_002C18D0); /* call 0x002C18D0 */", "before", """\
+    { extern int nfl2k5_ts_step(int, int, int); int _ts; RECOMP_REGS_OUT(); _ts = nfl2k5_ts_step(0, 1, 0); RECOMP_REGS_IN(); if (_ts) goto loc_002C22D5; }
+"""),
+    ("TEAM_SELECT_AWAY_NEXT", "sub_002C2240", "PUSH32(esp, 0x002C2285u); RECOMP_ABI_CALL(0x002C1910u, sub_002C1910); /* call 0x002C1910 */", "before", """\
+    { extern int nfl2k5_ts_step(int, int, int); int _ts; RECOMP_REGS_OUT(); _ts = nfl2k5_ts_step(1, 1, 0); RECOMP_REGS_IN(); if (_ts) goto loc_002C2285; }
+"""),
+    ("TEAM_SELECT_HOME_PREV", "sub_002C2310", "PUSH32(esp, 0x002C2397u); RECOMP_ABI_CALL(0x002C18F0u, sub_002C18F0); /* call 0x002C18F0 */", "before", """\
+    { extern int nfl2k5_ts_step(int, int, int); int _ts; RECOMP_REGS_OUT(); _ts = nfl2k5_ts_step(0, -1, 0); RECOMP_REGS_IN(); if (_ts) goto loc_002C2397; }
+"""),
+    ("TEAM_SELECT_AWAY_PREV", "sub_002C2310", "PUSH32(esp, 0x002C234Eu); RECOMP_ABI_CALL(0x002C1930u, sub_002C1930); /* call 0x002C1930 */", "before", """\
+    { extern int nfl2k5_ts_step(int, int, int); int _ts; RECOMP_REGS_OUT(); _ts = nfl2k5_ts_step(1, -1, 0); RECOMP_REGS_IN(); if (_ts) goto loc_002C234E; }
+"""),
+    ("TEAM_SELECT_HOME_RANDOM", "sub_002C1AC0", "PUSH32(esp, 0x002C1B07u); RECOMP_ABI_CALL(0x002C18D0u, sub_002C18D0); /* call 0x002C18D0 */", "before", """\
+    { extern int nfl2k5_ts_step(int, int, int); int _ts; RECOMP_REGS_OUT(); _ts = nfl2k5_ts_step(0, 1, 1); RECOMP_REGS_IN(); if (_ts) goto loc_002C1B07; }
+"""),
+    ("TEAM_SELECT_AWAY_RANDOM", "sub_002C1B10", "PUSH32(esp, 0x002C1B57u); RECOMP_ABI_CALL(0x002C1910u, sub_002C1910); /* call 0x002C1910 */", "before", """\
+    { extern int nfl2k5_ts_step(int, int, int); int _ts; RECOMP_REGS_OUT(); _ts = nfl2k5_ts_step(1, 1, 1); RECOMP_REGS_IN(); if (_ts) goto loc_002C1B57; }
+"""),
 ]
 
 
