@@ -633,6 +633,16 @@ PATCHES = [
     ("TEAM_SELECT_AWAY_RANDOM", "sub_002C1B10", "PUSH32(esp, 0x002C1B57u); RECOMP_ABI_CALL(0x002C1910u, sub_002C1910); /* call 0x002C1910 */", "before", """\
     { extern int nfl2k5_ts_step(int, int, int); int _ts; RECOMP_REGS_OUT(); _ts = nfl2k5_ts_step(1, 1, 1); RECOMP_REGS_IN(); if (_ts) goto loc_002C1B57; }
 """),
+    # Asset file names: log them, and serve added teams' files (src/nfl2k5_team_files.c).
+    ("ASSET_NAME_HOOK", "sub_00049090", "loc_00049090: ;", "after", """\
+    { extern uint32_t nfl2k5_asset_name(uint32_t); ecx = nfl2k5_asset_name(ecx); }
+"""),
+    ("ASSET_HASH_HOOK", "sub_00038650", "loc_00038650: ;", "after", """\
+    { extern uint32_t nfl2k5_asset_hash_name(uint32_t); ecx = nfl2k5_asset_hash_name(ecx); }
+"""),
+    ("ARCHIVE_EXTRA_PACK", "sub_00042450", "loc_000425DD: ;", "after", """\
+    { extern void nfl2k5_archive_extend(void); RECOMP_REGS_OUT(); nfl2k5_archive_extend(); RECOMP_REGS_IN(); }
+"""),
 ]
 
 

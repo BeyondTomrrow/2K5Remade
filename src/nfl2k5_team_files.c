@@ -1,0 +1,335 @@
+/*
+ * Added teams' own asset files (2026-10-09).
+ *
+ * Every file the game opens by name goes through 0x49090 (name -> device via
+ * 0x3A530, then the device's open); a name without a device prefix comes from
+ * the disc archive. A team's art is a family of files named after its asset
+ * code (team record +0x10C): uniforms "<code>h0.iff" / "<code>a0.iff",
+ * helmet sets "<code>hdn.iff", the team file "c<code>.iff", cut-scenes
+ * "cgfair<code>.iff", intro "ih<code>.iff", Team Select cards "unif_<code>..."
+ * and more.
+ *
+ * An added team (mods\teams\<folder>\, team.json) has an asset code of its own
+ * ("code": "Z1"; codes start with Z, which no game file name has before a
+ * digit or letter pair). When the game asks for one of its files:
+ *   - mods\teams\<folder>\files\<name> exists: it is opened from there, through
+ *     the game's loose-file device "dvd:" -- the kernel maps the disc folder
+ *     D:\NFL2K5-TEAMS\ to the game's mods\teams (xbox_path_map_disc_dir);
+ *   - otherwise the same file of the team's base code ("base": "22") is
+ *     loaded, so a team with no art of its own yet still plays.
+ * No other team's files are touched: the new team is its own entry.
+ *
+ * NFL2K5_ASSET_LOG=1 logs every name the game asks for and what it got.
+ */
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
+#include <windows.h>
+#include "xbox_memory_layout.h"
+#include "recomp_funcs.h"
+
+extern uint32_t xbox_HeapAlloc(uint32_t size, uint32_t alignment);
+extern void xbox_path_map_disc_dir(const char *name, const char *host_dir);
+
+#define MAX_TEAMS 512
+typedef struct { char folder[96], code[8], base[8]; } TeamFiles;
+static TeamFiles s_teams[MAX_TEAMS];
+static int s_n = -1, s_log = -1;
+static uint32_t s_names;                         /* guest buffers for rewritten names */
+static unsigned s_next;
+
+/* "key": "value" from a small JSON file (team.json); enough for flat string fields. */
+static int json_str(const char *text, const char *key, char *out, size_t n)
+{
+    char pat[48];
+    const char *p, *q;
+    snprintf(pat, sizeof pat, "\"%s\"", key);
+    p = strstr(text, pat);
+    if (!p) return 0;
+    p = strchr(p + strlen(pat), ':');
+    if (!p) return 0;
+    p = strchr(p, '"');
+    if (!p) return 0;
+    q = strchr(++p, '"');
+    if (!q || (size_t)(q - p) >= n) return 0;
+    memcpy(out, p, (size_t)(q - p));
+    out[q - p] = 0;
+    return 1;
+}
+
+static void scan(void)
+{
+    WIN32_FIND_DATAA fd;
+    HANDLE h;
+    char cwd[MAX_PATH], dir[MAX_PATH];
+    s_n = 0;
+    GetCurrentDirectoryA(sizeof cwd, cwd);
+    snprintf(dir, sizeof dir, "%s\\mods\\teams", cwd);
+    xbox_path_map_disc_dir("NFL2K5-TEAMS", dir);
+    h = FindFirstFileA("mods\\teams\\*", &fd);
+    if (h == INVALID_HANDLE_VALUE) return;
+    do {
+        char p[MAX_PATH], text[8192];
+        FILE *f;
+        size_t n;
+        TeamFiles t;
+        if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) || fd.cFileName[0] == '.' || s_n >= MAX_TEAMS) continue;
+        snprintf(p, sizeof p, "mods\\teams\\%s\\team.json", fd.cFileName);
+        if (!(f = fopen(p, "rb"))) continue;
+        n = fread(text, 1, sizeof text - 1, f);
+        fclose(f);
+        text[n] = 0;
+        memset(&t, 0, sizeof t);
+        snprintf(t.folder, sizeof t.folder, "%s", fd.cFileName);
+        if (!json_str(text, "code", t.code, sizeof t.code) || toupper((unsigned char)t.code[0]) != 'Z') continue;
+        if (!json_str(text, "base", t.base, sizeof t.base)) strcpy(t.base, "22");
+        s_teams[s_n++] = t;
+    } while (FindNextFileA(h, &fd));
+    FindClose(h);
+    if (s_n) fprintf(stderr, "[TEAMFILES] %d added teams with their own asset codes\n", s_n);
+}
+
+static uint32_t guest_wstr(const char *s)
+{
+    uint32_t at;
+    size_t i, n = strlen(s);
+    if (!s_names) s_names = xbox_HeapAlloc(64 * 512, 16);
+    if (!s_names || n > 250) return 0;
+    at = s_names + (s_next++ % 64) * 512;          /* a ring: the loader copies the name at once */
+    for (i = 0; i <= n; i++) MEM16(at + 2 * (uint32_t)i) = (uint16_t)(unsigned char)s[i];
+    return at;
+}
+
+/* Called at 0x38650 -- the CRC32 of an upper-cased UTF-16 file name, which
+ * the archive's open and the game's resource bookkeeping both key files by --
+ * with the name; returns the name to hash. A name of an added team with no
+ * file of its own hashes as its base team's file, everywhere at once, so the
+ * game keeps calling it by the added team's name and still finds the data. */
+static int own_file(int k, const char *a);
+static int team_of(const char *low, char **hit);
+uint32_t nfl2k5_asset_hash_name(uint32_t name)
+{
+    char a[256], low[256], other[256], *hit;
+    int i, k;
+    if (s_n < 0) scan();
+    if (!name || !s_n) return name;
+    for (i = 0; i < 255 && MEM16(name + 2u * (uint32_t)i); i++) {
+        uint16_t c = MEM16(name + 2u * (uint32_t)i);
+        a[i] = c < 128 ? (char)c : '?';
+        low[i] = (char)tolower((unsigned char)a[i]);
+    }
+    a[i] = low[i] = 0;
+    if (strchr(a, ':') || (k = team_of(low, &hit)) < 0 || own_file(k, a)) return name;
+    snprintf(other, sizeof other, "%.*s%s%s", (int)(hit - low), a, s_teams[k].base, a + (hit - low) + strlen(s_teams[k].code));
+    {
+        uint32_t g = guest_wstr(other);
+        return g ? g : name;
+    }
+}
+
+static int team_of(const char *low, char **hit)
+{
+    int k;
+    for (k = 0; k < s_n; k++) {
+        char code[8];
+        size_t cl;
+        snprintf(code, sizeof code, "%s", s_teams[k].code);
+        for (cl = 0; code[cl]; cl++) code[cl] = (char)tolower((unsigned char)code[cl]);
+        if ((*hit = strstr((char *)low, code)) != NULL) return k;
+    }
+    return -1;
+}
+
+static int own_file(int k, const char *a)
+{
+    char host[MAX_PATH];
+    snprintf(host, sizeof host, "mods\\teams\\%s\\files\\%s", s_teams[k].folder, a);
+    return GetFileAttributesA(host) != INVALID_FILE_ATTRIBUTES;
+}
+
+/* NFL2K5_ASSET_DESC=1: once, the default device's entry for a known file (study). */
+static void desc_debug(void)
+{
+    static int done;
+    uint32_t dev, out, save_esp = g_esp, save_ebx = g_ebx, save_esi = g_esi, save_edi = g_edi, i;
+    if (done++ || !getenv("NFL2K5_ASSET_DESC")) return;
+    g_esp -= 0x100;
+    out = g_esp + 0x40;
+    PUSH32(g_esp, 0x0BADC0DEu);
+    sub_0003A520();
+    dev = g_eax;
+    fprintf(stderr, "[DESC] default device %08X: +38 %08X +188 %08X (+44 %08X) +19C %08X +1A0 %08X\n", dev,
+            MEM32(dev + 0x38), MEM32(dev + 0x188), MEM32(dev + 0x188) ? MEM32(MEM32(dev + 0x188) + 0x44) : 0,
+            MEM32(dev + 0x19C), MEM32(dev + 0x1A0));
+    {
+        static const char nm[] = "25A2.IFF";
+        uint32_t w = out + 0x60;
+        for (i = 0; i <= sizeof nm - 1; i++) MEM16(w + 2 * i) = (uint16_t)(i < sizeof nm - 1 ? nm[i] : 0);
+        PUSH32(g_esp, out);
+        g_ecx = dev; g_edx = w;
+        PUSH32(g_esp, 0x0BADC0DEu);
+        sub_0003AAB0();
+        fprintf(stderr, "[DESC] open 25A2.IFF -> %u:", g_eax);
+        for (i = 0; i < 0x30; i += 4) fprintf(stderr, " %08X", MEM32(out + i));
+        fprintf(stderr, "\n");
+    }
+    g_esp = save_esp; g_ebx = save_ebx; g_esi = save_esi; g_edi = save_edi;
+}
+
+/* Called at 0x49090 with the requested name (UTF-16, guest); returns the name to use. */
+uint32_t nfl2k5_asset_name(uint32_t name)
+{
+    desc_debug();
+    char a[256], low[256];
+    int i, k;
+    if (s_log < 0) s_log = getenv("NFL2K5_ASSET_LOG") != NULL;
+    if (s_n < 0) scan();
+    if (!name) return name;
+    for (i = 0; i < 255 && MEM16(name + 2u * (uint32_t)i); i++) {
+        uint16_t c = MEM16(name + 2u * (uint32_t)i);
+        a[i] = c < 128 ? (char)c : '?';
+        low[i] = (char)tolower((unsigned char)a[i]);
+    }
+    a[i] = low[i] = 0;
+    for (k = 0; k < s_n; k++) {
+        char code[8], *hit, path[400], host[MAX_PATH], other[256];
+        size_t cl;
+        snprintf(code, sizeof code, "%s", s_teams[k].code);
+        for (cl = 0; code[cl]; cl++) code[cl] = (char)tolower((unsigned char)code[cl]);
+        if (strchr(a, ':') || !(hit = strstr(low, code))) continue;
+        if (own_file(k, a)) {
+            if (s_log) fprintf(stderr, "[ASSET] %s (the added team's own file)\n", a);
+            return name;
+        }
+        if (s_log) fprintf(stderr, "[ASSET] %s (an added team's name; its base team's data)\n", a);
+        return name;
+    }
+    if (s_log) fprintf(stderr, "[ASSET] %s\n", a);
+    return name;
+}
+
+/* After an added team is imported into `slot` (nfl2k5_teams.c): its identity
+ * from team.json beside its team.rost -- asset code, nickname, city,
+ * abbreviation -- as new strings, so nothing of the team the roster file
+ * started from shows. */
+void nfl2k5_team_identity(const char *rost_path, uint32_t slot)
+{
+    static const struct { const char *key; uint32_t field; } k_fields[] = {
+        { "code", 0x10C }, { "nickname", 0x104 }, { "abbreviation", 0x108 }, { "city", 0x138 },
+    };
+    char p[MAX_PATH], text[8192], v[96];
+    const char *slash = strrchr(rost_path, '\\');
+    FILE *f;
+    size_t n, i;
+    if (!slash) return;
+    snprintf(p, sizeof p, "%.*s\\team.json", (int)(slash - rost_path), rost_path);
+    if (!(f = fopen(p, "rb"))) return;
+    n = fread(text, 1, sizeof text - 1, f);
+    fclose(f);
+    text[n] = 0;
+    for (i = 0; i < sizeof k_fields / sizeof k_fields[0]; i++) {
+        uint32_t g, j, len;
+        if (!json_str(text, k_fields[i].key, v, sizeof v)) continue;
+        len = (uint32_t)strlen(v);
+        g = xbox_HeapAlloc(2 * (len + 1), 4);        /* kept: the team record points at it */
+        if (!g) continue;
+        for (j = 0; j <= len; j++) MEM16(g + 2 * j) = (uint16_t)(unsigned char)v[j];
+        MEM32(slot + k_fields[i].field) = g;
+    }
+}
+
+
+/* ---- the archive's extra pack (2026-10-09) --------------------------------
+ *
+ * The game mounts its archive at 0x42450: the index header (0x9C bytes) goes
+ * to 0xA764F8 -- entry count, reserved, pack count (0xA76500), 36 pack sizes
+ * in 2 KB blocks (0xA76504) -- and the 12-byte entries {CRC32 of the upper-case
+ * UTF-16 name, size, offset in blocks} to a table at [0xA76594]; files are
+ * found by a linear search (0x41FC0) and read from pack files
+ * "VC_53450030\<0..F>". Before the packs are opened (gen patch
+ * ARCHIVE_EXTRA_PACK), every added team's files go into one more pack, G,
+ * written to the disc folder, and their entries are appended to a copy of the
+ * table: the game then opens them by name like its own files. */
+extern BOOL xbox_translate_path(const char *xbox_path, WCHAR *host, DWORD n);
+
+static uint32_t name_crc(const char *name)
+{
+    uint32_t c = 0xFFFFFFFFu;
+    const unsigned char *p;
+    for (p = (const unsigned char *)name; *p; p++) {
+        unsigned v = (unsigned)toupper(*p), b, k;
+        for (b = 0; b < 2; b++) {                        /* UTF-16LE: the char, then 0 */
+            c ^= b ? 0u : v;
+            for (k = 0; k < 8; k++) c = (c >> 1) ^ (0xEDB88320u & (0u - (c & 1u)));
+        }
+    }
+    return ~c;
+}
+
+void nfl2k5_archive_extend(void)
+{
+    typedef struct { char host[MAX_PATH]; char name[96]; uint32_t size, block; } F;
+    static F files[4096];
+    int nf = 0, k;
+    uint32_t blocks = 0, count = MEM32(0xA764F8), packs = MEM32(0xA76500), table = MEM32(0xA76594);
+    uint32_t start = 0, i, nt;
+    WCHAR packw[MAX_PATH];
+    if (s_n < 0) scan();
+    if (packs >= 36 || !table) return;
+    for (k = 0; k < s_n; k++) {
+        WIN32_FIND_DATAA fd;
+        char pat[MAX_PATH];
+        HANDLE h;
+        snprintf(pat, sizeof pat, "mods\\teams\\%s\\files\\*", s_teams[k].folder);
+        h = FindFirstFileA(pat, &fd);
+        if (h == INVALID_HANDLE_VALUE) continue;
+        do {
+            if ((fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) || nf >= 4096 || strlen(fd.cFileName) >= 96) continue;
+            snprintf(files[nf].host, sizeof files[nf].host, "mods\\teams\\%s\\files\\%s", s_teams[k].folder, fd.cFileName);
+            snprintf(files[nf].name, sizeof files[nf].name, "%s", fd.cFileName);
+            files[nf].size = fd.nFileSizeLow;
+            files[nf].block = blocks;
+            blocks += (fd.nFileSizeLow + 0x7FF) / 0x800;
+            nf++;
+        } while (FindNextFileA(h, &fd));
+        FindClose(h);
+    }
+    if (!nf) return;
+    {
+        char xp[64];
+        snprintf(xp, sizeof xp, "D:\\VC_53450030\\%c", "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"[packs]);
+        if (!xbox_translate_path(xp, packw, MAX_PATH)) return;
+    }
+    {   /* the pack: each file at a 2 KB boundary */
+        FILE *out = _wfopen(packw, L"wb");
+        static char buf[1 << 16];
+        if (!out) { fprintf(stderr, "[TEAMFILES] cannot write the extra pack\n"); return; }
+        for (i = 0; i < (uint32_t)nf; i++) {
+            FILE *in = fopen(files[i].host, "rb");
+            size_t n, tot = 0;
+            _fseeki64(out, (long long)files[i].block * 0x800, SEEK_SET);
+            if (in) { while ((n = fread(buf, 1, sizeof buf, in)) > 0) { fwrite(buf, 1, n, out); tot += n; } fclose(in); }
+            if (tot != files[i].size) fprintf(stderr, "[TEAMFILES] %s: read %zu of %u bytes\n", files[i].host, tot, files[i].size);
+        }
+        _fseeki64(out, (long long)blocks * 0x800 - 1, SEEK_SET);
+        fputc(0, out);
+        fclose(out);
+    }
+    for (i = 0; i < packs; i++) start += MEM32(0xA76504 + 4 * i);
+    nt = xbox_HeapAlloc((count + (uint32_t)nf) * 12, 16);
+    if (!nt) return;
+    memcpy((uint8_t *)xbox_GetMemoryOffset() + nt, (uint8_t *)xbox_GetMemoryOffset() + table, count * 12);
+    for (i = 0; i < (uint32_t)nf; i++) {
+        uint32_t e = nt + (count + i) * 12;
+        MEM32(e) = name_crc(files[i].name);
+        MEM32(e + 4) = files[i].size;
+        MEM32(e + 8) = start + files[i].block;
+    }
+    MEM32(0xA76594) = nt;
+    MEM32(0xA764F8) = count + (uint32_t)nf;
+    MEM32(0xA76504 + 4 * packs) = blocks;
+    MEM32(0xA76500) = packs + 1;
+    fprintf(stderr, "[TEAMFILES] %d added-team files in an extra archive pack (%u KB)\n", nf, blocks * 2);
+}

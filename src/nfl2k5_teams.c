@@ -281,8 +281,10 @@ static int load_custom(uint32_t slot, int idx, int side)
     gcall(sub_000C2300, slot, 0);                    /* the slot's players back to the spare pool */
     ok = gcall(sub_000C1030, buf + 0x40, slot) != 0;
     if (ok) {
+        extern void nfl2k5_team_identity(const char *rost_path, uint32_t slot);
         MEM32(slot + T_CAT) = 4;
         copy_label(slot);
+        nfl2k5_team_identity(s_custom[idx], slot);   /* code, names from team.json */
     } else {
         MEM8(slot + T_ACTIVE) = 0;
         MEM32(slot + T_CAT) = 2;
