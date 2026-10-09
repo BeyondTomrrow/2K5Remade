@@ -2467,3 +2467,4 @@ Reached natively (user-verified): intro movies, legal/SEGA screens, title, main 
 ### Open
 - NBC_SNF HTML package renders unstyled (its files have another session's uncommitted edits).
 - C: was full (0 bytes; NVIDIA DXCache 24 GB) — the user should clear it.
+- Later (08:30): texture object pool (creation was ~2/3 of camera-cut spikes; <3% of uploads repeat contents, so pooling objects rather than caching contents). [HITCH] count per 150 s game 70 → 51–54; worst frame 2x 103 → 75 ms, 8x 92 → 64 ms; 1% lows within run-to-run noise (docs/BENCHMARKS.md "after texture pool"). Interpreted functions (expanded limits) are never entered during boot/gameplay: zero cost.

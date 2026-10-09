@@ -29,3 +29,13 @@ GPU: NVIDIA GeForce RTX 2060 SUPER. CPU-vs-CPU quick game; the last 9 10-second 
 | 2x (1440x960) | 59.8 | 33.1 | 22.5 | 16.72 / 103.2 | 4.22 (26%) | 33.65 | 627 / 839 / 325 |
 | 8x (5760x3840) | 59.9 | 33.8 | 14.1 | 16.70 / 91.7 | 7.27 (45%) | 32.53 | 581 / 1631 / 950 |
 | 12x (8640x5760) | 58.3 | 30.4 | 26.0 | 17.20 / 45.9 | 14.77 (85%) | 36.13 | 612 / 2786 / 1823 |
+
+### 2026-10-09 08:30 -- after texture pool + VRR + PlayStation prompts
+
+GPU: NVIDIA GeForce RTX 2060 SUPER. CPU-vs-CPU quick game; the last 9 10-second windows of play per scale.
+
+| Scale | Avg FPS | 1% low (worst window) | 0.1% low (worst window) | Frame ms avg / worst | GPU ms/frame (util) | CPU ms/frame (process) | Working set / private / VRAM MB |
+|---|---|---|---|---|---|---|---|
+| 2x (1440x960) | 59.9 | 38.7 | 29.6 | 16.69 / 75.0 | 4.05 (26%) | 32.36 | 618 / 818 / 331 |
+| 8x (5760x3840) | 59.9 | 31.3 | 25.6 | 16.71 / 64.1 | 7.59 (43%) | 33.37 | 603 / 1651 / 944 |
+| 12x (8640x5760) | 57.8 | 27.5 | 17.1 | 17.35 / 59.6 | 15.32 (87%) | 37.35 | 645 / 2960 / 1938 |
