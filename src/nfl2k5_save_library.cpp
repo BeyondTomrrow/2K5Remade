@@ -1,5 +1,6 @@
 #include <windows.h>
 #include <bcrypt.h>
+#include <shellapi.h>   /* ShellExecuteA: F1 > System > Open the saves folder */
 
 #include <algorithm>
 #include <cctype>
@@ -88,9 +89,14 @@ static bool valid_container_id(const std::string &s)
 
 static std::vector<unsigned char> read_bytes(const std::string &path)
 {
-    std::ifstream f(path, std::ios::binary);
+    std::ifstream f(path, std::ios::binary | std::ios::ate);
     if (!f) return {};
-    return std::vector<unsigned char>((std::istreambuf_iterator<char>(f)), {});
+    std::streamoff n = f.tellg();
+    if (n <= 0) return {};
+    std::vector<unsigned char> v((size_t)n);
+    f.seekg(0);
+    if (!f.read((char *)v.data(), n)) return {};
+    return v;
 }
 
 static bool hmac_sha1(const std::vector<unsigned char> &data,
@@ -229,6 +235,12 @@ static std::map<std::string, std::string> read_manifest(const std::string &dir)
 static bool write_manifest(const std::string &dir, const std::string &id,
                            const std::string &type, const std::string &name)
 {
+    {   /* unchanged: leave the file alone (this ran every 2.5 s for every
+         * save, each time a write-through replace -- disk traffic during play) */
+        auto m = read_manifest(dir);
+        if (m["format"] == "1" && m["container"] == id && m["type"] == trim(type) && m["name"] == trim(name))
+            return true;
+    }
     std::string tmp = join(dir, ".nfl2k5-save.ini.tmp");
     std::ofstream f(tmp, std::ios::trunc);
     if (!f) return false;
@@ -511,6 +523,113 @@ static std::string library_dir_for(const std::string &base, const SaveKind &kind
     return wanted + " [" + id + "]";
 }
 
+/* ---- save backups and game options (2026-10-09) --------------------------
+ * nfl2k5_game.ini (per-user folder): save_backups = how many earlier versions
+ * of each save to keep (0 = none; default 3). Before the library copy of a
+ * save is replaced by a newer one the game wrote, the old one goes to
+ * saves\backups\<kind>\<name>\<date-time>\, and the oldest beyond the limit
+ * are deleted. */
+extern "C" char *xbox_user_path(const char *rel, char *out, size_t n);
+
+static int game_ini_get(const char *key, int def)
+{
+    char p[MAX_PATH], line[256];
+    FILE *f = fopen(xbox_user_path("nfl2k5_game.ini", p, sizeof p), "r");
+    int v = def;
+    if (!f) return def;
+    while (fgets(line, sizeof line, f)) {
+        char k[64]; int n;
+        if (line[0] != ';' && sscanf(line, " %63[a-z_] = %d", k, &n) == 2 && !strcmp(k, key)) v = n;
+    }
+    fclose(f);
+    return v;
+}
+
+static void game_ini_set(const char *key, int value)
+{
+    char p[MAX_PATH], line[256];
+    std::vector<std::string> lines;
+    bool found = false;
+    FILE *f = fopen(xbox_user_path("nfl2k5_game.ini", p, sizeof p), "r");
+    if (f) {
+        while (fgets(line, sizeof line, f)) {
+            char k[64]; int n;
+            if (line[0] != ';' && sscanf(line, " %63[a-z_] = %d", k, &n) == 2 && !strcmp(k, key)) {
+                snprintf(line, sizeof line, "%s = %d\n", key, value);
+                found = true;
+            }
+            lines.push_back(line);
+        }
+        fclose(f);
+    }
+    if (!found) { snprintf(line, sizeof line, "%s = %d\n", key, value); lines.push_back(line); }
+    if ((f = fopen(p, "w")) != NULL) {
+        for (auto &l : lines) fputs(l.c_str(), f);
+        fclose(f);
+    }
+}
+
+static void remove_tree(const std::string &dir)
+{
+    WIN32_FIND_DATAA fd;
+    HANDLE h = FindFirstFileA(join(dir, "*").c_str(), &fd);
+    if (h != INVALID_HANDLE_VALUE) {
+        do {
+            if (!strcmp(fd.cFileName, ".") || !strcmp(fd.cFileName, "..")) continue;
+            std::string p = join(dir, fd.cFileName);
+            if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) remove_tree(p);
+            else DeleteFileA(p.c_str());
+        } while (FindNextFileA(h, &fd));
+        FindClose(h);
+    }
+    RemoveDirectoryA(dir.c_str());
+}
+
+static void backup_previous(const std::string &lib_dir, const char *kind_folder, const std::string &name)
+{
+    int keep = game_ini_get("save_backups", 3);
+    std::string dat = join(lib_dir, "SAVEGAME.DAT");
+    if (keep <= 0 || !is_file(dat)) return;
+    std::string root = join(join(join(g_save_root, "backups"), kind_folder), safe_name(name, "Save"));
+    WIN32_FILE_ATTRIBUTE_DATA d{};
+    SYSTEMTIME st{};
+    FILETIME local{};
+    char stamp[32];
+    if (!GetFileAttributesExA(dat.c_str(), GetFileExInfoStandard, &d)) return;
+    FileTimeToLocalFileTime(&d.ftLastWriteTime, &local);
+    FileTimeToSystemTime(&local, &st);
+    snprintf(stamp, sizeof stamp, "%04u-%02u-%02u %02u.%02u.%02u", st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
+    std::string dst = join(root, stamp);
+    if (is_dir(dst)) return;                         /* this version is already kept */
+    make_dirs(dst);
+    for (const char *file : {"SAVEGAME.DAT", "EXTRA", "TYPE", "SaveMeta.xbx", ".nfl2k5-save.ini"})
+        if (is_file(join(lib_dir, file))) CopyFileA(join(lib_dir, file).c_str(), join(dst, file).c_str(), FALSE);
+    fprintf(stderr, "[SAVE-LIBRARY] backed up %s (%s)\n", name.c_str(), stamp);
+    std::vector<std::string> versions = dirs(root);  /* names sort by date */
+    std::sort(versions.begin(), versions.end());
+    while ((int)versions.size() > keep) { remove_tree(join(root, versions.front())); versions.erase(versions.begin()); }
+}
+
+/* Before anything is copied (import_library copies whichever side is newer,
+ * in both directions): every save the game rewrote keeps the library version
+ * it is about to replace. */
+static void backup_changed(const std::string &base, const std::string &udata)
+{
+    for (const std::string &id : dirs(udata)) {
+        if (!valid_container_id(id)) continue;
+        std::string src = join(udata, id);
+        if (!is_file(join(src, "SAVEGAME.DAT"))) continue;
+        const SaveKind *kind = kind_for_code(trim(read_utf16_value(join(src, "TYPE"), nullptr)));
+        if (!kind) continue;
+        std::string name = read_utf16_value(join(src, "SaveMeta.xbx"), "Name=");
+        if (name.empty()) name = std::string(kind->fallback) + " " + id;
+        std::string dst = library_dir_for(base, *kind, name, id);
+        if (is_file(join(dst, "SAVEGAME.DAT")) &&
+            mtime(join(src, "SAVEGAME.DAT")) > mtime(join(dst, "SAVEGAME.DAT")))
+            backup_previous(dst, kind->folder, name);
+    }
+}
+
 static void mirror_udata(const std::string &base, const std::string &udata)
 {
     for (const std::string &id : dirs(udata)) {
@@ -524,6 +643,10 @@ static void mirror_udata(const std::string &base, const std::string &udata)
         if (name.empty()) name = std::string(kind->fallback) + " " + id;
         std::string dst = library_dir_for(base, *kind, name, id);
         make_dirs(dst);
+        /* The game saved over it: keep the version being replaced. */
+        if (is_file(join(dst, "SAVEGAME.DAT")) &&
+            mtime(join(src, "SAVEGAME.DAT")) > mtime(join(dst, "SAVEGAME.DAT")))
+            backup_previous(dst, kind->folder, name);
         sync_files(src, dst);
         write_manifest(dst, id, type, name);
     }
@@ -570,16 +693,51 @@ static void sync_once()
     for (const auto &k : kKinds) make_dirs(join(g_save_root, k.folder));
     make_dirs(join(g_save_root, "import"));
     process_import_inbox(g_save_root);
+    backup_changed(g_save_root, title);
     import_library(g_save_root, title);
     migrate_udata_signatures(title);
     mirror_udata(g_save_root, title);
 }
 
+/* Names, sizes and modification times of everything the sync looks at --
+ * metadata only, no file is opened. The sync runs again only when this
+ * changes (it used to re-read and re-sign every save every 2.5 s, which kept
+ * a core and the disk busy during play: 2026-10-09 profile, [HITCH] reads). */
+static unsigned long long fingerprint_dir(const std::string &dir, int depth)
+{
+    unsigned long long h = 1469598103934665603ULL;
+    WIN32_FIND_DATAA fd;
+    HANDLE f = FindFirstFileA(join(dir, "*").c_str(), &fd);
+    if (f == INVALID_HANDLE_VALUE) return h;
+    do {
+        if (fd.cFileName[0] == '.' && (!fd.cFileName[1] || (fd.cFileName[1] == '.' && !fd.cFileName[2]))) continue;
+        for (const char *p = fd.cFileName; *p; ++p) h = (h ^ (unsigned char)*p) * 1099511628211ULL;
+        h = (h ^ fd.nFileSizeLow) * 1099511628211ULL;
+        h = (h ^ fd.ftLastWriteTime.dwLowDateTime) * 1099511628211ULL;
+        h = (h ^ fd.ftLastWriteTime.dwHighDateTime) * 1099511628211ULL;
+        if ((fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) && depth > 0)
+            h ^= fingerprint_dir(join(dir, fd.cFileName), depth - 1) * 31;
+    } while (FindNextFileA(f, &fd));
+    FindClose(f);
+    return h;
+}
+
+static unsigned long long fingerprint()
+{
+    unsigned long long h = fingerprint_dir(join(join(g_save_root, "UDATA"), "53450030"), 1);
+    for (const auto &k : kKinds) h = h * 31 + fingerprint_dir(join(g_save_root, k.folder), 1);
+    return h * 31 + fingerprint_dir(join(g_save_root, "import"), 1);
+}
+
 static DWORD WINAPI worker(void *)
 {
+    unsigned long long seen = fingerprint();
     for (;;) {
         Sleep(2500);
+        unsigned long long now = fingerprint();
+        if (now == seen) continue;
         sync_once();
+        seen = fingerprint();             /* including what the sync itself wrote */
     }
 }
 
@@ -593,3 +751,59 @@ extern "C" void nfl2k5_save_library_start(const char *save_root)
     g_worker = CreateThread(NULL, 0, worker, NULL, 0, NULL);
     if (g_worker) CloseHandle(g_worker);
 }
+
+/* ---- F1 > System page ------------------------------------------------------ */
+extern "C" void xbox_MenuInvalidate(void);
+namespace {
+struct XboxMenuPage {
+    const char *title;
+    int (*count)(void);
+    void (*label)(int row, char *name, char *val, size_t n);
+    void (*change)(int row, int dir);
+    void (*activate)(int row);
+    int (*busy)(void);
+};
+enum { S_BACKUPS, S_OPEN, S_AUTOSAVE, S_LIMITS, S_COUNT };
+const int kBackupChoices[] = { 0, 1, 3, 5, 10 };
+
+int sys_count() { return S_COUNT; }
+void sys_label(int r, char *name, char *val, size_t n)
+{
+    switch (r) {
+    case S_BACKUPS: {
+        int k = game_ini_get("save_backups", 3);
+        strcpy(name, "Save backups");
+        if (k) snprintf(val, n, "keep %d per save", k); else snprintf(val, n, "Off");
+        break;
+    }
+    case S_OPEN:     strcpy(name, "Open the saves folder"); val[0] = 0; break;
+    case S_AUTOSAVE: strcpy(name, "Franchise autosave"); snprintf(val, n, "Unavailable"); break;
+    case S_LIMITS:   strcpy(name, "Expanded limits (next start)");
+                     snprintf(val, n, "%s", game_ini_get("expanded_limits", 1) ? "On" : "Off"); break;
+    }
+}
+void sys_change(int r, int dir)
+{
+    if (r == S_BACKUPS) {
+        int k = game_ini_get("save_backups", 3), i = 0;
+        for (; i < 5 && kBackupChoices[i] != k; i++) {}
+        i = i >= 5 ? 2 : (i + 5 + dir) % 5;
+        game_ini_set("save_backups", kBackupChoices[i]);
+    } else if (r == S_LIMITS) {
+        game_ini_set("expanded_limits", !game_ini_get("expanded_limits", 1));
+    } else return;
+    xbox_MenuInvalidate();
+}
+void sys_activate(int r)
+{
+    if (r == S_OPEN) {
+        char full[MAX_PATH];
+        if (GetFullPathNameA(g_save_root.c_str(), MAX_PATH, full, nullptr))
+            ShellExecuteA(nullptr, "open", full, nullptr, nullptr, SW_SHOWNORMAL);
+    } else if (r >= 0) sys_change(r, 1);
+}
+const XboxMenuPage kSystemPage = { "SYSTEM", sys_count, sys_label, sys_change, sys_activate, nullptr };
+} // namespace
+
+extern "C" void xbox_MenuAddPage(const void *p);
+extern "C" void nfl2k5_save_library_menu_init(void) { xbox_MenuAddPage(&kSystemPage); }

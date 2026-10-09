@@ -51,6 +51,10 @@ CHECKS = [
     ("stadium picker wrap bound 2", 0x31934C, "83f843", "cmp eax,67"),
     ("stadium picker controller init", 0x31A9CE, "c705f0f7c80042000000", "mov [C8F7F0h],66 (last index)"),
     ("stadium picker controller wrap", 0x31A9FD, "83f843", "cmp eax,67"),
+    # Created teams. ASTRA_STORAGE_GROWTH_REPORT.md: the created-team predicate only
+    # recognises team IDs 90 and 91 -- the two Team Create slots seen in game.
+    ("created-team predicate", 0x319370, "668b8018010000663d5a00740c663d5b00",
+     "mov ax,[eax+118h]; cmp ax,90; je; cmp ax,91: two created-team IDs"),
 ]
 
 

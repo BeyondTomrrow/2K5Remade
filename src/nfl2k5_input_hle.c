@@ -244,11 +244,40 @@ static void host_mouse_gamepad(XBOX_GAMEPAD *g)
         g->sThumbLY = (SHORT)((dy * 32767L) / cy);
 }
 
+/* src/nfl2k5_controls.c: which controller is on each port, remapped, with
+ * dead zones; the keyboard and mouse add to port 0. */
+extern unsigned nfl2k5_controls_ports(void);
+extern int nfl2k5_controls_get(int port, XBOX_GAMEPAD *g, int use_pads);
+extern void nfl2k5_controls_rumble(int port, unsigned left, unsigned right);
+
+static void host_gamepad_port(int port, XBOX_GAMEPAD *g)
+{
+    extern volatile long g_xbox_input_blocked;
+    static int no_host_pad = -1;
+    memset(g, 0, sizeof *g);
+    if (g_xbox_input_blocked)
+        return;
+    if (no_host_pad < 0) no_host_pad = getenv("NFL2K5_NO_HOST_PAD") != NULL;
+    nfl2k5_controls_get(port, g, !(no_host_pad && g_last_script_press && GetTickCount() - g_last_script_press < 15000));
+    if (port != 0)
+        return;
+    g->wButtons |= auto_press(g->bAnalogButtons);
+    g->wButtons |= file_press(g->bAnalogButtons);
+    {   /* L3: show what is playing; R3: next song (local music library). */
+        extern void nfl2k5_local_music_buttons(int l3, int r3);
+        nfl2k5_local_music_buttons((g->wButtons & 0x40) != 0, (g->wButtons & 0x80) != 0);
+    }
+    if (GetTickCount() < s_inject_a_until) g->bAnalogButtons[0] = 255;
+}
+
 static void host_gamepad(XBOX_GAMEPAD *g)
 {
     XBOX_INPUT_STATE pad;
     /* The video settings page (F1) has the controller while it is open. */
     extern volatile long g_xbox_input_blocked;
+    static int legacy = -1;
+    if (legacy < 0) legacy = getenv("NFL2K5_LEGACY_INPUT") != NULL;   /* the pre-2026-10-09 path */
+    if (!legacy) { host_gamepad_port(0, g); return; }
     memset(g, 0, sizeof *g);
     if (g_xbox_input_blocked)
         return;
@@ -308,11 +337,16 @@ static void put_gamepad(uint32_t va, const XBOX_GAMEPAD *g)
 }
 
 /* Each returns 1 when it handled the call (eax set, stdcall args popped). */
+/* Ports with a controller (bit per port; port 0 always: the keyboard).
+ * Up to four, so local multiplayer works like four pads on an Xbox. */
+static unsigned s_reported_ports;
+
 int nfl2k5_hle_XGetDevices(void)
 {
     if (!input_hle_on() || MEM32(g_esp + 4u) != NFL2K5_XPP_GAMEPAD_TYPE)
         return 0;
-    g_eax = 1u;                                     /* port 0 */
+    g_eax = getenv("NFL2K5_LEGACY_INPUT") ? 1u : nfl2k5_controls_ports();
+    s_reported_ports = g_eax;
     g_esp += 8u;                                    /* ret 4 */
     return 1;
 }
@@ -325,9 +359,20 @@ int nfl2k5_hle_XGetDeviceChanges(void)
         return 0;
     ins_va = MEM32(g_esp + 8u);
     rem_va = MEM32(g_esp + 12u);
-    MEM32(ins_va) = InterlockedExchange(&reported, 1) ? 0u : 1u;
-    MEM32(rem_va) = 0u;
-    g_eax = MEM32(ins_va) ? 1u : 0u;
+    if (getenv("NFL2K5_LEGACY_INPUT")) {
+        MEM32(ins_va) = InterlockedExchange(&reported, 1) ? 0u : 1u;
+        MEM32(rem_va) = 0u;
+    } else {
+        /* Controllers plugged in or out since the game last asked. */
+        unsigned now = nfl2k5_controls_ports();
+        if (!InterlockedExchange(&reported, 1)) s_reported_ports = 0;
+        MEM32(ins_va) = now & ~s_reported_ports;
+        MEM32(rem_va) = s_reported_ports & ~now;
+        if (now != s_reported_ports)
+            fprintf(stderr, "  [XINPUT] ports %X -> %X\n", s_reported_ports, now);
+        s_reported_ports = now;
+    }
+    g_eax = (MEM32(ins_va) || MEM32(rem_va)) ? 1u : 0u;
     g_esp += 16u;                                   /* ret 0xC */
     return 1;
 }
@@ -338,7 +383,7 @@ int nfl2k5_hle_XInputOpen(void)
     if (!input_hle_on() || MEM32(g_esp + 4u) != NFL2K5_XPP_GAMEPAD_TYPE)
         return 0;
     port = MEM32(g_esp + 8u);
-    g_eax = port == 0 ? (NFL2K5_XINPUT_HANDLE | port) : 0u;
+    g_eax = (port == 0 || (port < 4 && (nfl2k5_controls_ports() >> port) & 1u)) ? (NFL2K5_XINPUT_HANDLE | port) : 0u;
     if (!s_first_poll_ms)
         s_first_poll_ms = GetTickCount();
     fprintf(stderr, "  [XINPUT] XInputOpen(port %u) -> 0x%08X\n", port, g_eax);
@@ -388,6 +433,20 @@ int nfl2k5_hle_XInputGetState(void)
     state = MEM32(g_esp + 8u);
     if (!s_first_poll_ms)
         s_first_poll_ms = GetTickCount();
+    {
+        uint32_t port = MEM32(g_esp + 4u) & 3u;
+        static uint32_t packets[4];
+        static XBOX_GAMEPAD lasts[4];
+        if (port != 0) {                            /* players 2-4 */
+            host_gamepad_port((int)port, &g);
+            if (memcmp(&g, &lasts[port], sizeof g)) { packets[port]++; lasts[port] = g; }
+            MEM32(state) = packets[port];
+            put_gamepad(state + 4u, &g);
+            g_eax = 0;
+            g_esp += 12u;                           /* ret 8 */
+            return 1;
+        }
+    }
     host_gamepad(&g);
     if (memcmp(&g, &last, sizeof g)) {
         packet++;
@@ -409,6 +468,9 @@ int nfl2k5_hle_XInputSetState(void)
     if (!is_our_handle(MEM32(g_esp + 4u)))
         return 0;
     fb = MEM32(g_esp + 8u);
+    /* XINPUT_FEEDBACK: header (dwStatus, hEvent, Reserved[58]) then
+     * XINPUT_RUMBLE { wLeftMotorSpeed, wRightMotorSpeed } at +66. */
+    nfl2k5_controls_rumble((int)(MEM32(g_esp + 4u) & 3u), MEM16(fb + 66u), MEM16(fb + 68u));
     MEM32(fb) = 0;                                  /* XINPUT_FEEDBACK_HEADER.dwStatus */
     g_eax = 0;
     g_esp += 12u;                                   /* ret 8 */

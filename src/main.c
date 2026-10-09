@@ -3125,6 +3125,12 @@ int main(int argc, char **argv)
         extern void nfl2k5_local_music_start(const char *root, const char *save_dir);
         nfl2k5_local_music_start(root, save_dir);
     }
+    {   /* controllers (Xbox, PlayStation), keyboard, mouse; F1 Controls pages */
+        extern void nfl2k5_controls_start(void);
+        extern void nfl2k5_save_library_menu_init(void);
+        nfl2k5_controls_start();
+        nfl2k5_save_library_menu_init();          /* F1 > System: save backups, saves folder */
+    }
     xbox_kernel_bridge_init();
     if (!validate_only && getenv("RECOMP_AC97_READY")) {
         g_apu_state = mcpx_apu_init_standalone((uint8_t *)(uintptr_t)xbox_GetMemoryOffset());
