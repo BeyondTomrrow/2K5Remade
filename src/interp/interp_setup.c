@@ -102,3 +102,32 @@ unsigned nfl2k5_interp_force(uint32_t lo, uint32_t hi)
     g_interp_active = 1;
     return marked;
 }
+
+/* Mark the converted function whose range contains `va` for the interpreter
+ * (any build): a byte patch inside it then takes effect, because the
+ * interpreter reads the patched guest bytes while the native code still has
+ * the original ones compiled in. Returns the function's start, or 0. */
+uint32_t nfl2k5_interp_mark_va(uint32_t va)
+{
+    unsigned i;
+    if (!g_interp_dirty_bits) {
+        uint32_t limit = 0;
+        for (i = 0; i < g_nfl2k5_func_range_count; i++)
+            if (g_nfl2k5_func_ranges[i][1] > limit) limit = g_nfl2k5_func_ranges[i][1];
+        g_interp_dirty_limit = limit;
+        g_interp_dirty_bits = (uint8_t *)calloc(limit / 8 + 1, 1);
+        if (!g_interp_dirty_bits) return 0;
+    }
+    {   /* every range holding it: split functions overlap their parents */
+        uint32_t found = 0;
+        for (i = 0; i < g_nfl2k5_func_range_count; i++) {
+            uint32_t start = g_nfl2k5_func_ranges[i][0], end = g_nfl2k5_func_ranges[i][1];
+            if (va >= start && va < end) {
+                g_interp_dirty_bits[start >> 3] |= (uint8_t)(1u << (start & 7));
+                g_interp_active = 1;
+                found = start;
+            }
+        }
+        return found;
+    }
+}

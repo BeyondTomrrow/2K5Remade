@@ -26,6 +26,15 @@ constexpr uint32_t kSlots = 4937;
 constexpr uint64_t kBaseInPack3 = 244084736;
 constexpr uint64_t kPack3Span = 71424000;          /* the aggregate's bytes in pack 3 */
 constexpr char kCacheDir[] = "cache/portraits";
+extern "C" const char *xbox_user_dir(void);   /* per-user folder (kernel_path.c); "" = portable */
+
+/* The decoded portraits' folder: the per-user cache, or cache/portraits
+ * beside the game in the portable layout. */
+std::string portraits_cache_dir()
+{
+    const char *ud = xbox_user_dir();
+    return ud && *ud ? std::string(ud) + "\\cache\\portraits" : std::string(kCacheDir);
+}
 
 std::mutex g_lock;
 std::unordered_map<int, uint32_t> g_slot;          /* photo id -> slot */
@@ -137,6 +146,8 @@ bool write_png(const std::string &path, const uint8_t *rgba, int w, int h)
 
 } // namespace
 
+std::string nfl2k5_portraits_dir() { return portraits_cache_dir(); }
+
 /* Start indexing early so the first lineup does not wait for it. */
 extern "C" void nfl2k5_portraits_warm(void)
 {
@@ -158,8 +169,9 @@ std::string nfl2k5_portrait_url(int photo_id)
     if (!g_indexed) { build_index(); g_indexed = true; }
     auto it = g_slot.find(photo_id);
     if (it == g_slot.end()) return "";
-    char name[64];
-    snprintf(name, sizeof name, "%s/%04d.png", kCacheDir, photo_id);
+    char name[MAX_PATH];
+    const std::string dir = nfl2k5_portraits_dir();
+    snprintf(name, sizeof name, "%s/%04d.png", dir.c_str(), photo_id);
     if (GetFileAttributesA(name) == INVALID_FILE_ATTRIBUTES) {
         std::vector<uint8_t> s(16384 + 1024), rgba(128 * 128 * 4);
         if (!read_agg((uint64_t)it->second * kSlotSize + 160, s.data(), s.size())) return "";
@@ -172,8 +184,11 @@ std::string nfl2k5_portrait_url(int photo_id)
                 uint8_t *d = &rgba[(y * 128 + x) * 4];
                 d[0] = c[2]; d[1] = c[1]; d[2] = c[0]; d[3] = c[3];
             }
-        CreateDirectoryA("cache", nullptr);
-        CreateDirectoryA(kCacheDir, nullptr);
+        {   /* the folder and its parents */
+            std::string d = dir;
+            for (size_t i = 3; i <= d.size(); i++)
+                if (i == d.size() || d[i] == '/' || d[i] == '\\') CreateDirectoryA(d.substr(0, i).c_str(), nullptr);
+        }
         if (!write_png(name, rgba.data(), 128, 128)) return "";
     }
     snprintf(name, sizeof name, "https://portraits.local/%04d.png", photo_id);

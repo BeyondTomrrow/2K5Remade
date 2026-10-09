@@ -554,10 +554,12 @@ static void load_packages()
 }
 
 static const char *k_ini = "mods\\presentation.ini";
+extern "C" char *xbox_user_path(const char *rel, char *out, size_t n);   /* per-user folder (kernel_path.c) */
 
 static void save_settings()
 {
-    FILE *f = fopen(k_ini, "w");
+    char ipath[MAX_PATH];
+    FILE *f = fopen(xbox_user_path(k_ini, ipath, sizeof ipath), "w");
     if (!f) return;
     int pk = s_sel_pkg;
     fprintf(f, "; Broadcast presentation (Coach Match Up > Presentation edits this)\n");
@@ -570,7 +572,8 @@ static void save_settings()
 
 static void load_settings()
 {
-    FILE *f = fopen(k_ini, "r");
+    char ipath[MAX_PATH];
+    FILE *f = fopen(xbox_user_path(k_ini, ipath, sizeof ipath), "r");
     char line[512];
     if (!f) return;
     while (fgets(line, sizeof line, f)) {
@@ -1244,6 +1247,7 @@ struct PlayerIdentity {
     int number = 0;
 };
 std::string nfl2k5_portrait_url(int photo_id);   /* src/presentation/portraits.cpp */
+std::string nfl2k5_portraits_dir();              /* src/presentation/portraits.cpp */
 struct Event {
     std::string name;
     int team = HOME;
@@ -2860,7 +2864,7 @@ static int html_hud(const XboxHudFrame *f, XboxHudImage *img, const GameState &g
         c.entry = pkg.entry;
         c.root_dir = "mods/presentations";
         c.teams_dir = "mods/teams";
-        c.portraits_dir = "cache/portraits";
+        c.portraits_dir = nfl2k5_portraits_dir();
         nfl2k5_portraits_warm();
         c.canvas_width = cw;
         s_html.canvas_w = cw;

@@ -2607,6 +2607,81 @@ int nfl2k5_pack_build;
 static int g_interp_pack;
 unsigned nfl2k5_interp_setup(const uint8_t *base, size_t base_len);
 unsigned nfl2k5_interp_force(uint32_t lo, uint32_t hi);
+uint32_t nfl2k5_interp_mark_va(uint32_t va);
+
+/* Expanded limits (2026-10-09; docs/XBOX-LIMITATION-AUDIT.md). Two Xbox-era
+ * caps of the retail game, lifted the way SOFTDRINK 2K28 lifts them in its
+ * own executable, on the retail build at run time:
+ *
+ *   - Create a Team's stadium picker lists 67 of the game's stadiums; the
+ *     list (0x531B70) is copied to guest memory with the 15 missing IDs
+ *     appended (the same 15 SOFTDRINK adds) and every bound becomes 82.
+ *   - A franchise ends after season index 30 (cmp eax,1Eh at 0x2480CB). It
+ *     becomes 95: the last season is 2099, the last year the game's dates
+ *     and ages handle (the mod tools' season-cap report).
+ *
+ * Every site is checked byte for byte first; any difference (a modified
+ * executable) leaves all of them alone. The patched bytes are guest code
+ * that the native build has compiled in, so the functions holding them are
+ * marked for the interpreter (src/interp), which reads the patched bytes.
+ * nfl2k5_game.ini (per-user folder) expanded_limits = 0 turns it off;
+ * NFL2K5_EXPANDED_LIMITS=0/1 overrides for one run. */
+static void nfl2k5_expand_limits(void)
+{
+    static const struct { uint32_t va; const char *retail; } sites[] = {
+        { 0x3191C2, "\x8a\x90\x70\x1b\x53\x00" }, { 0x3192C9, "\x3a\x90\x70\x1b\x53\x00" },
+        { 0x319340, "\x0f\xb6\x88\x70\x1b\x53\x00" }, { 0x31926D, "\xb9\x43\x00\x00\x00" },
+        { 0x319289, "\x83\xc0\x42" }, { 0x31928D, "\xb9\x43\x00\x00\x00" }, { 0x3192D7, "\x83\xf8\x43" },
+        { 0x31934C, "\x83\xf8\x43" }, { 0x31A9CE, "\xc7\x05\xf0\xf7\xc8\x00\x42\x00\x00\x00" },
+        { 0x31A9FD, "\x83\xf8\x43" }, { 0x2480CB, "\x83\xf8\x1e" },
+    };
+    static const uint8_t more_stadiums[15] = { 32, 36, 39, 40, 41, 42, 43, 44, 45, 48, 95, 96, 97, 98, 99 };
+    static const size_t lens[] = { 6, 6, 7, 5, 3, 5, 3, 3, 10, 3, 3 };
+    uint8_t *m = (uint8_t *)xbox_GetMemoryOffset();
+    int on = 1;
+    unsigned i;
+    {
+        extern char *xbox_user_path(const char *rel, char *out, size_t n);
+        char ip[MAX_PATH], line[128];
+        FILE *f = fopen(xbox_user_path("nfl2k5_game.ini", ip, sizeof ip), "r");
+        if (f) {
+            while (fgets(line, sizeof line, f)) { int v; if (sscanf(line, " expanded_limits = %d", &v) == 1) on = v != 0; }
+            fclose(f);
+        } else if ((f = fopen(ip, "w")) != NULL) {
+            fprintf(f, "; NFL 2K5 game options\n"
+                       "; expanded_limits: 1 lifts two Xbox-era caps (Create a Team: all 82 stadiums;\n"
+                       "; franchise: up to 95 seasons, through 2099). 0 = the original limits.\n"
+                       "expanded_limits = 1\n");
+            fclose(f);
+        }
+        if (getenv("NFL2K5_EXPANDED_LIMITS")) on = atoi(getenv("NFL2K5_EXPANDED_LIMITS")) != 0;
+    }
+    if (!on) { printf("[LIMITS] expanded limits off\n"); return; }
+    for (i = 0; i < sizeof sites / sizeof sites[0]; i++)
+        if (memcmp(m + sites[i].va, sites[i].retail, lens[i])) {
+            fprintf(stderr, "[LIMITS] %08X is not the retail instruction; limits left as they are\n", sites[i].va);
+            return;
+        }
+    {
+        extern uint32_t xbox_HeapAlloc(uint32_t size, uint32_t alignment);
+        uint32_t list = xbox_HeapAlloc(96, 16);
+        if (!list) { fprintf(stderr, "[LIMITS] no guest memory for the stadium list\n"); return; }
+        memcpy(m + list, m + 0x531B70, 67);
+        memcpy(m + list + 67, more_stadiums, sizeof more_stadiums);
+        /* the three readers' disp32 -> the new list */
+        memcpy(m + 0x3191C2 + 2, &list, 4);
+        memcpy(m + 0x3192C9 + 2, &list, 4);
+        memcpy(m + 0x319340 + 3, &list, 4);
+        m[0x31926D + 1] = 82; m[0x31928D + 1] = 82;           /* mov ecx,82 */
+        m[0x319289 + 2] = 81;                                 /* add eax,81 */
+        m[0x3192D7 + 2] = 82; m[0x31934C + 2] = 82; m[0x31A9FD + 2] = 82;   /* cmp eax,82 */
+        m[0x31A9CE + 6] = 81;                                 /* mov [C8F7F0h],81 */
+        m[0x2480CB + 2] = 95;                                 /* cmp eax,95: seasons through 2099 */
+        for (i = 0; i < sizeof sites / sizeof sites[0]; i++)
+            nfl2k5_interp_mark_va(sites[i].va);
+        printf("[LIMITS] expanded: Create a Team stadiums 67 -> 82 (list at %08X), franchise seasons 30 -> 95\n", list);
+    }
+}
 #ifndef NFL2K5_XBE_SHA256
 #define NFL2K5_XBE_SHA256 NFL2K5_WIDESCREEN_XBE_SHA256   /* converted from retail + built-in widescreen */
 #endif
@@ -2657,14 +2732,40 @@ int main(int argc, char **argv)
                 root, (unsigned long)GetLastError());
     }
     {
+        /* Settings, shader caches and logs go to the user's profile
+         * (%LOCALAPPDATA%\NFL2K5-PC), so an install under Program Files never
+         * needs administrator rights to save them. Portable layout -- all of
+         * it beside the executable, as before -- for the development checkout,
+         * or when portable.txt is in the install folder, or NFL2K5_PORTABLE=1.
+         * Existing files are copied over on first use (xbox_user_path).
+         * Saves and mods stay in the install folder (the installer makes them
+         * user-writable) so existing saves keep working. */
+        extern void xbox_set_user_dir(const char *dir);
+        char marker[MAX_PATH];
+        const char *port = getenv("NFL2K5_PORTABLE");
+        snprintf(marker, sizeof marker, "%s\\portable.txt", root);
+        if ((port && *port == '0') ||          /* NFL2K5_PORTABLE=0: per-user even here (testing) */
+            (!(port && *port == '1') && GetFileAttributesA(marker) == INVALID_FILE_ATTRIBUTES &&
+             _stricmp(root, NFL2K5_PROJECT_ROOT) != 0)) {
+            const char *la = getenv("LOCALAPPDATA");
+            if (la && *la) {
+                char ud[MAX_PATH];
+                snprintf(ud, sizeof ud, "%s\\NFL2K5-PC", la);
+                xbox_set_user_dir(ud);
+            }
+        }
+    }
+    {
         /* Launched by double-click (stderr goes nowhere): keep the session's
          * output in logs/session.log, so a crash or freeze in normal play
          * still leaves its report behind. Scripts that redirect stderr keep
          * their own file. */
+        extern char *xbox_user_path(const char *rel, char *out, size_t n);
         DWORD type = GetFileType(GetStdHandle(STD_ERROR_HANDLE));
         if (type != FILE_TYPE_DISK && type != FILE_TYPE_PIPE) {
+            char lp[MAX_PATH];
             CreateDirectoryA("logs", NULL);
-            if (freopen("logs/session.log", "w", stderr))
+            if (freopen(xbox_user_path("logs\\session.log", lp, sizeof lp), "w", stderr))
                 setvbuf(stderr, NULL, _IOLBF, 1 << 16);
         }
     }
@@ -2911,6 +3012,8 @@ int main(int argc, char **argv)
         nfl2k5_interp_setup(base_data, (size_t)base_len);
         free(base_data);
     }
+    if (!g_interp_pack && NFL2K5_BASE_CMP(NFL2K5_XBE_SHA256) == 0)   /* retail only: packs bring their own */
+        nfl2k5_expand_limits();
     {
         /* NFL2K5_INTERP_FORCE=lo-hi[,lo-hi...] (hex VAs, diagnostics): run the
          * converted functions starting in those ranges in the interpreter --
