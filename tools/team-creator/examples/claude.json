@@ -1,0 +1,38 @@
+{
+ "city": "San Francisco",
+ "nickname": "Claude",
+ "abbreviation": "CLD",
+ "folder": "Claude",
+ "base": "08",
+ "base_colors": [
+  [
+   251,
+   79,
+   20
+  ],
+  [
+   0,
+   34,
+   68
+  ]
+ ],
+ "colors": [
+  [
+   217,
+   119,
+   87
+  ],
+  [
+   31,
+   30,
+   29
+  ],
+  [
+   245,
+   240,
+   232
+  ]
+ ],
+ "logo": "build/claude/logo.png  (make it with examples/claude_logo.py)",
+ "roster_note": "generated: rosters.pick_53(rosters.generate(88, seed=2026))"
+}

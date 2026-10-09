@@ -140,6 +140,11 @@ EMPHASIS = {
     5: ("coverage", "speed", "tackle"), 6: ("tackle", "coverage", "run_coverage"),
     1: ("kick_power", "kick_accuracy"), 2: ("kick_power", "kick_accuracy"),
 }
+# NFL number ranges by position (2004-era rules)
+NUMBERS = {0: [(1, 19)], 1: [(1, 19)], 2: [(1, 19)], 7: [(20, 49)], 8: [(20, 49)], 3: [(10, 19), (80, 89)],
+           9: [(80, 89)], 12: [(50, 79)], 13: [(60, 79)], 14: [(60, 79)], 15: [(90, 99), (70, 79)],
+           16: [(90, 99), (70, 79)], 10: [(50, 59), (90, 99)], 11: [(50, 59)], 4: [(20, 39)],
+           5: [(20, 49)], 6: [(20, 49)]}
 SIZE = {0: (75, 220), 7: (71, 210), 8: (72, 245), 3: (73, 200), 9: (77, 255), 12: (76, 300),
         13: (76, 315), 14: (78, 315), 15: (75, 305), 16: (76, 270), 10: (75, 245), 11: (74, 240),
         4: (71, 190), 5: (72, 205), 6: (72, 210), 1: (72, 195), 2: (74, 210)}
@@ -160,10 +165,8 @@ def generate(strength: int = 75, seed: int | None = None) -> list[dict]:
             r["durability"] = max(55, r["durability"])
             r["kicking_style"], r["power_run_style"], r["scramble"] = 50, 50, 50
             h, w = SIZE[pos]
-            while True:
-                num = rnd.randint(1, 99)
-                if num not in used:
-                    break
+            choices = [n for lo, hi in NUMBERS[pos] for n in range(lo, hi + 1) if n not in used] or                 [n for n in range(1, 100) if n not in used]
+            num = rnd.choice(choices)
             used.add(num)
             out.append({"first": rnd.choice(FIRST), "last": rnd.choice(LAST), "pos": pos, "number": num,
                         "height": h + rnd.randint(-2, 2), "weight": w + rnd.randint(-12, 12),

@@ -113,9 +113,30 @@ class Creator(tk.Tk):
             self.swatches.append(b)
         self.paint_swatches()
         row += 1
+        ttk.Label(f, text="Logo").grid(row=row, column=0, sticky="nw", pady=6)
+        lf = ttk.Frame(f)
+        lf.grid(row=row, column=1, sticky="w", pady=6)
+        self.v_logo = tk.StringVar(value="")
+        ttk.Button(lf, text="Choose logo image...", command=self.pick_logo).pack(side="left")
+        ttk.Label(lf, textvariable=self.v_logo, foreground="#555").pack(side="left", padx=8)
+        self.logo_lbl = ttk.Label(f)
+        self.logo_lbl.grid(row=row, column=2, rowspan=3, padx=20, sticky="n")
+        row += 1
         ttk.Label(f, text="The primary colour replaces the base team's first colour, the secondary its second.\n"
                           "Whites, greys and blacks keep their shading. Import a roster to take its colours.",
                   foreground="#555").grid(row=row, column=1, sticky="w")
+
+    def pick_logo(self):
+        p = filedialog.askopenfilename(title="Team logo (PNG with transparency works best)",
+                                       filetypes=[("Images", "*.png *.jpg *.jpeg *.bmp *.gif"), ("All", "*.*")])
+        if not p:
+            return
+        self.v_logo.set(p)
+        if Image is not None:
+            im = Image.open(p).convert("RGBA")
+            im.thumbnail((160, 160))
+            self.logo_tk = ImageTk.PhotoImage(im)
+            self.logo_lbl.configure(image=self.logo_tk)
 
     def pick_color(self, i):
         c = colorchooser.askcolor(color="#%02x%02x%02x" % tuple(self.colors[i]), title="Team colour")
@@ -168,7 +189,7 @@ class Creator(tk.Tk):
                 self.canvas.create_image(x, 30, image=tkim, anchor="nw")
                 self.canvas.create_text(x + 110, 15, text="Home" if side == "h" else "Away", fill="#ddd")
                 x += 232
-        self.v_prev.set(f"Built on the {base[2]} {base[3]} cut. Logos are recoloured too; your own logo comes next.")
+        self.v_prev.set(f"Built on the {base[2]} {base[3]} cut. Your logo goes on the helmet when the team is built.")
 
     # ---- Roster ------------------------------------------------------------------
     def tab_roster(self, nb):
@@ -285,7 +306,7 @@ class Creator(tk.Tk):
         spec = {"city": self.v_city.get().strip()[:15], "nickname": self.v_nick.get().strip()[:15],
                 "abbreviation": (self.v_abbr.get().strip() or self.v_nick.get()[:3]).upper()[:4],
                 "base": base[0], "base_colors": base_colors(base[1]), "colors": self.colors,
-                "roster": self.roster}
+                "roster": self.roster, "logo": self.v_logo.get()}
         self.log.delete("1.0", "end")
         threading.Thread(target=self.run_build, args=(spec,), daemon=True).start()
 

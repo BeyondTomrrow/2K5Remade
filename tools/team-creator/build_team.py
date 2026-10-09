@@ -28,6 +28,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import game_assets as G  # noqa: E402
+import logos  # noqa: E402
 import rosters  # noqa: E402
 
 
@@ -68,6 +69,17 @@ def build(spec: dict, game_root: str | Path, progress=print) -> Path:
     progress(f"Roster: {len(spec['roster'])} players")
 
     mapper = G.make_mapper([tuple(c) for c in spec["base_colors"]], [tuple(c) for c in spec["colors"]])
+    from PIL import Image
+    if spec.get("logo") and Path(spec["logo"]).exists():
+        logo = Image.open(spec["logo"]).convert("RGBA")
+    else:
+        logo = logos.text_logo(spec["nickname"][:1] or spec["city"][:1], spec["colors"][0],
+                               spec["colors"][1] if len(spec["colors"]) > 1 else (255, 255, 255))
+    (out / "logos").mkdir(exist_ok=True)
+    logo.save(out / "logos" / "logo.png")
+    sb = logo.copy()
+    sb.thumbnail((128, 128))
+    sb.save(out / "logos" / "scorebug.png")
     files = arc.team_files(spec["base"])
     for f in (out / "files").glob("*.iff"):
         f.unlink()
@@ -75,6 +87,8 @@ def build(spec: dict, game_root: str | Path, progress=print) -> Path:
         progress(f"Uniforms and crowd {i + 1}/{len(files)}: {name}")
         data = arc.read(name)
         new = G.recolor_iff(data, mapper)
+        if re.fullmatch(r"[ha]\d\.iff", name[len(spec["base"]):]):
+            new = logos.apply_logo(new, logo, spec["nickname"], spec["colors"], mapper, data)
         (out / "files" / (code + name[len(spec["base"]):])).write_bytes(new)
 
     info = {

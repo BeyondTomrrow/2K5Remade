@@ -38,3 +38,6 @@ mods/presentations/NBC_SNF/assets/
 # Local music library (user-supplied audio; FOLDER = PLAYLIST)
 /Music/*
 !/Music/README.txt
+mods/teams/*/files/
+mods/teams/*/team.rost
+mods/teams/*/creator.json
