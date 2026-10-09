@@ -2426,3 +2426,44 @@ Reached natively (user-verified): intro movies, legal/SEGA screens, title, main 
 - Diagnostics added: NFL2K5_INTERP_FORCE=lo-hi (interpret ranges), RECOMP_FACE_TRACE, RECOMP_SKIP_DRAW, RECOMP_NO_ATEST, RECOMP_TEX_FULLHASH, RECOMP_IDX_DUMP.
 - Machine: C: was full (0 bytes; NVIDIA DXCache 24 GB) -- builds/tools fail randomly when it is.
 - Known open: NBC_SNF HTML package renders unstyled (giant peacocks, grey box) -- its files have uncommitted edits from another session.
+
+## 2026-10-09 (overnight) — performance tooling, Xbox limits, PC settings
+
+### Performance (Project 1)
+- Measurement built in (external/xboxrecomp nv2a_gpu_perf.inc.c): `[BENCH]` every 10 s (avg FPS, 1%/0.1% lows per window, frame time avg/worst, GPU ms = process 3D-engine utilisation x frame time via the PDH GPU Engine counter, process CPU ms/frame, working set / private / VRAM), `NFL2K5_FRAMETIME_CSV`, Show FPS overlay with the same numbers, `[HITCH]` attribution for frames > 25 ms. D3D11 timestamp pairs were tried first and dropped: they measure flush spans, not GPU work.
+- tools/bench.ps1 + tools/bench-report.py → docs/BENCHMARKS.md. RTX 2060 SUPER, CPU-vs-CPU game:
+  - baseline: 2x 59.7 / 4x 59.4 / 8x 59.9 / 12x 57.5 FPS avg;
+  - after: 2x 59.8 / 8x 59.9 / 12x 58.3; GPU 26% at 2x, 45% at 8x, 85% at 12x; process CPU ~33 ms/frame (all threads); VRAM 0.3 / 0.95 / 1.8 GB.
+  - Averages unchanged within noise: the game was already locked at 60.
+- 12x internal resolution (8640x5760) added; targets over 16384 step down (gpu_fit_scale).
+- Variable refresh: ALLOW_TEARING swap chain + Present flag when VSync off (G-Sync/FreeSync smooth 60 on high-refresh panels). No interpolation: the game simulates 60 frames/s and the clock is never sped up.
+- Fixed:
+  - save-library worker re-read/re-signed every save and rewrote manifests write-through every 2.5 s during play (10.7% of a core in the profile, disk contention); it now syncs only when a metadata fingerprint changes;
+  - interpreter gate inlined (out-of-line recomp_interp_dirty was 2.7% of the game thread).
+- Diagnosed, not fixed:
+  - Remaining hitches (1% lows ~30–54) are game-thread work spikes (render thread idle, no reads/uploads), render-thread spikes of 25–54 ms on scene changes with ~100 texture uploads, and occasional guest-lock waits.
+  - Game thread is ~48% asleep in its vblank wait on average.
+  - timeBeginPeriod(1) tried: no gain, reverted.
+  - GGL log: audio-side threads wait 10–18 ms for the game thread around guest 0x37A5B3 (possible link to the voice/audio glitch report).
+
+### Xbox limits (Project 2) — docs/XBOX-LIMITATION-AUDIT.md
+- tools/audit-xbox-limits.py byte-checks 12 limit sites in the retail XBE (all VERIFIED; SOFTDRINK 2K28 has them all patched).
+- Removed on retail (src/main.c nfl2k5_expand_limits, nfl2k5_game.ini expanded_limits, default on):
+  - Create a Team stadium picker 67 → 82, verified in game (15 extra stadiums; stock wraps after Aloha Stadium);
+  - franchise season gate 30 → 95 (through 2099; bytes and interpreter path verified, 31st season not played).
+  - Patched functions run in the interpreter (nfl2k5_interp_mark_va); the new list lives in guest heap.
+- Port runtime caps raised: NV_MAX_INLINE 4096 → 0x20000; paletted decode no longer capped at 1024x1024.
+
+### PC settings (Project 3)
+- F1 page API (LB/RB): Video, Controls, Controller Buttons, Keyboard, System.
+- src/nfl2k5_controls.c:
+  - 4 game ports (local multiplayer); Xbox via XInput; DualShock 4/DualSense/Edge via HID (USB+BT); hot-plug;
+  - radial dead zones, trigger dead zone, full remap, keyboard rebinding (tested), rumble (XInput, PS over USB);
+  - button prompts Automatic/Xbox/PlayStation: the game's 128x128 button sheet is repainted with PlayStation glyphs (tested in game).
+  - Tested with one Xbox pad; multi-pad and PlayStation pads untested on hardware.
+- Per-user data: %LOCALAPPDATA%\NFL2K5-PC for settings, shader caches, logs (xbox_user_path, one-time migration; portable for the dev checkout/portable.txt). No admin rights needed.
+- Save backups (keep 0/1/3/5/10 per save, saves\backups; tested), F1 > System; franchise autosave shown as Unavailable (the retail game has none).
+
+### Open
+- NBC_SNF HTML package renders unstyled (its files have another session's uncommitted edits).
+- C: was full (0 bytes; NVIDIA DXCache 24 GB) — the user should clear it.
