@@ -285,6 +285,10 @@ static int load_custom(uint32_t slot, int idx, int side)
         MEM32(slot + T_CAT) = 4;
         copy_label(slot);
         nfl2k5_team_identity(s_custom[idx], slot);   /* code, names from team.json */
+        {
+            extern void nfl2k5_team_roster(const char *rost_path, uint32_t slot);
+            nfl2k5_team_roster(s_custom[idx], slot); /* players from roster.csv */
+        }
     } else {
         MEM8(slot + T_ACTIVE) = 0;
         MEM32(slot + T_CAT) = 2;

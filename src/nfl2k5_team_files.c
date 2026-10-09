@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Added teams' own asset files (2026-10-09).
  *
  * Every file the game opens by name goes through 0x49090 (name -> device via
@@ -83,7 +83,7 @@ static void scan(void)
         text[n] = 0;
         memset(&t, 0, sizeof t);
         snprintf(t.folder, sizeof t.folder, "%s", fd.cFileName);
-        if (!json_str(text, "code", t.code, sizeof t.code) || toupper((unsigned char)t.code[0]) != 'Z') continue;
+        if (!json_str(text, "code", t.code, sizeof t.code) || (toupper((unsigned char)t.code[0]) != 'Z' && toupper((unsigned char)t.code[0]) != 'Q')) continue;
         if (!json_str(text, "base", t.base, sizeof t.base)) strcpy(t.base, "22");
         s_teams[s_n++] = t;
     } while (FindNextFileA(h, &fd));
@@ -229,6 +229,8 @@ void nfl2k5_team_identity(const char *rost_path, uint32_t slot)
     n = fread(text, 1, sizeof text - 1, f);
     fclose(f);
     text[n] = 0;
+    if (json_str(text, "base", v, sizeof v) && isdigit((unsigned char)v[0]))
+        MEM16(slot + 0x118) = (uint16_t)atoi(v);   /* the team number: the base team's (crowd, colour tables) */
     for (i = 0; i < sizeof k_fields / sizeof k_fields[0]; i++) {
         uint32_t g, j, len;
         if (!json_str(text, k_fields[i].key, v, sizeof v)) continue;
@@ -332,4 +334,101 @@ void nfl2k5_archive_extend(void)
     MEM32(0xA76504 + 4 * packs) = blocks;
     MEM32(0xA76500) = packs + 1;
     fprintf(stderr, "[TEAMFILES] %d added-team files in an extra archive pack (%u KB)\n", nf, blocks * 2);
+}
+
+
+/* ---- roster.csv: an added team's players (2026-10-09) --------------------
+ *
+ * Written by the Team Creator (tools/team-creator), from its roster generator
+ * or from an imported Madden / NCAA roster. After the team is imported, each
+ * of its players (team record: 65 player pointers, count at +0x11C) gets the
+ * row of the same index:
+ *
+ *   first,last,pos,number,height,weight,years_pro,skin,face,hand,<28 ratings>
+ *
+ * pos is the game's position code (0 QB .. 16 DE); ratings in the record's own
+ * order (+0x36: speed, agility, arm, stamina, kick power, durability, strength,
+ * jumping, coverage, route running, tackle, break tackle, accuracy, reading
+ * coverage, catch, run block, pass block, ball security, pass rush, run
+ * coverage, kick accuracy, kicking style, leadership, power run style,
+ * composure, scramble, consistency, aggressiveness). Rows are in depth order
+ * within each position; names are new strings. */
+static uint32_t new_wstr(const char *s)
+{
+    uint32_t n = (uint32_t)strlen(s), g = xbox_HeapAlloc(2 * (n + 1), 4), j;
+    if (!g) return 0;
+    for (j = 0; j <= n; j++) MEM16(g + 2 * j) = (uint16_t)(unsigned char)s[j];
+    return g;
+}
+
+static int csv_fields(char *line, char **out, int max)
+{
+    int n = 0;
+    char *p = line;
+    while (n < max) {
+        out[n++] = p;
+        p = strchr(p, ',');
+        if (!p) break;
+        *p++ = 0;
+    }
+    for (int i = 0; i < n; i++) {
+        char *e = out[i] + strlen(out[i]);
+        while (e > out[i] && (e[-1] == '\r' || e[-1] == '\n' || e[-1] == ' ')) *--e = 0;
+    }
+    return n;
+}
+
+void nfl2k5_team_roster(const char *rost_path, uint32_t slot)
+{
+    char p[MAX_PATH], line[1024];
+    const char *slash = strrchr(rost_path, '\\');
+    FILE *f;
+    int row = 0, count = MEM8(slot + 0x11C), depth[17];
+    if (!slash) return;
+    snprintf(p, sizeof p, "%.*s\\roster.csv", (int)(slash - rost_path), rost_path);
+    if (!(f = fopen(p, "r"))) return;
+    memset(depth, 0, sizeof depth);
+    while (fgets(line, sizeof line, f) && row < count) {
+        char *v[40];
+        uint32_t pl, w;
+        int n, i, pos;
+        if (!isdigit((unsigned char)line[0]) && strchr(line, ',') && strncmp(line, "first,", 6) == 0) continue;
+        n = csv_fields(line, v, 40);
+        if (n < 10 + 28) continue;
+        pl = MEM32(slot + 4u * (uint32_t)row);
+        if (!pl) break;
+        pos = atoi(v[2]);
+        if (pos < 0 || pos > 16) pos = 0;
+        MEM32(pl + 0x10) = new_wstr(v[0]);
+        MEM32(pl + 0x14) = new_wstr(v[1]);
+        MEM8(pl + 0x35) = (uint8_t)pos;
+        w = MEM32(pl + 0x20);
+        w = (w & ~(0x7Fu << 3)) | ((uint32_t)(atoi(v[3]) & 0x7F) << 3);          /* jersey */
+        w = (w & ~(0xFu << 17)) | ((uint32_t)(atoi(v[8]) & 0xF) << 17);           /* face */
+        MEM32(pl + 0x20) = w;
+        MEM8(pl + 0x2B) = (uint8_t)atoi(v[4]);                                    /* height, inches */
+        MEM8(pl + 0x2A) = (uint8_t)(atoi(v[5]) > 150 ? atoi(v[5]) - 150 : 0);     /* weight - 150 */
+        MEM8(pl + 0x25) = (uint8_t)((MEM8(pl + 0x25) & 0xE0) | (atoi(v[6]) & 0x1F));
+        {   /* skin: +0x18 bit 7 and +0x19 bits 0-3; hand: +0x18 bit 1 */
+            int skin = atoi(v[7]) & 0x1F;
+            MEM8(pl + 0x18) = (uint8_t)((MEM8(pl + 0x18) & 0x7D) | ((skin & 1) << 7) | ((atoi(v[9]) & 1) << 1));
+            MEM8(pl + 0x19) = (uint8_t)((MEM8(pl + 0x19) & 0xF0) | (skin >> 1));
+        }
+        for (i = 0; i < 28; i++) {
+            int r = atoi(v[10 + i]);
+            MEM8(pl + 0x36 + (uint32_t)i) = (uint8_t)(r < 0 ? 0 : r > 99 ? 99 : r);
+        }
+        {   /* depth chart: rank in this position by row order (the auto depth chart's rule) */
+            int rank = depth[pos] < 7 ? depth[pos] : 7, side = rank == 0 ? 2 : rank == 1 ? 0 : rank == 2 ? 1 : rank;
+            uint16_t d = MEM16(pl + 0x28);
+            depth[pos]++;
+            d = (uint16_t)((d & 0x03FF) | (rank << 10) | (side << 13));
+            MEM16(pl + 0x28) = d;
+            MEM8(pl + 0x52) &= 0xE0;
+        }
+        MEM16(pl + 0x04) = 0;                        /* no recorded play-by-play name */
+        row++;
+    }
+    fclose(f);
+    fprintf(stderr, "[TEAMFILES] %s: %d players from roster.csv\n", p, row);
 }
