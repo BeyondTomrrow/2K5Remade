@@ -430,6 +430,10 @@ int nfl2k5_hle_XInputGetState(void)
      * hidden.  This is a stable guest-thread service point for the read-only
      * two-team FOX passer sampler. */
     nfl2k5_live_qb_guest_tick();
+    {   /* the game loop's thread, for the frame-statistics hitch log */
+        extern volatile DWORD g_xbox_game_tid;
+        g_xbox_game_tid = GetCurrentThreadId();
+    }
     state = MEM32(g_esp + 8u);
     if (!s_first_poll_ms)
         s_first_poll_ms = GetTickCount();

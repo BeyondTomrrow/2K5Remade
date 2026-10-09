@@ -19,3 +19,13 @@ GPU: NVIDIA GeForce RTX 2060 SUPER. CPU-vs-CPU quick game; the last 9 10-second 
 | 4x (2880x1920) | 59.4 | 36.2 | 18.1 | 16.84 / 89.4 | n/a | 33.06 | 619 / 991 / 456 |
 | 8x (5760x3840) | 59.9 | 51.7 | 23.9 | 16.69 / 65.4 | n/a | 32.19 | 632 / 1667 / 946 |
 | 12x (8640x5760) | 57.5 | 33.0 | 20.8 | 17.44 / 82.5 | n/a | 37.12 | 607 / 2784 / 1815 |
+
+### 2026-10-09 06:27 -- after: save-library scan fix, inline interpreter gate, NV_MAX_INLINE, controls layer
+
+GPU: NVIDIA GeForce RTX 2060 SUPER. CPU-vs-CPU quick game; the last 9 10-second windows of play per scale.
+
+| Scale | Avg FPS | 1% low (worst window) | 0.1% low (worst window) | Frame ms avg / worst | GPU ms/frame (util) | CPU ms/frame (process) | Working set / private / VRAM MB |
+|---|---|---|---|---|---|---|---|
+| 2x (1440x960) | 59.8 | 33.1 | 22.5 | 16.72 / 103.2 | 4.22 (26%) | 33.65 | 627 / 839 / 325 |
+| 8x (5760x3840) | 59.9 | 33.8 | 14.1 | 16.70 / 91.7 | 7.27 (45%) | 32.53 | 581 / 1631 / 950 |
+| 12x (8640x5760) | 58.3 | 30.4 | 26.0 | 17.20 / 45.9 | 14.77 (85%) | 36.13 | 612 / 2786 / 1823 |

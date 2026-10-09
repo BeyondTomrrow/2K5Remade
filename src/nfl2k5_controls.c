@@ -16,9 +16,9 @@
  * and keyboard bindings. They are edited on the F1 page (Controls,
  * Controller Buttons, Keyboard pages) or in the file.
  *
- * Button prompt glyphs: the game draws Xbox button icons from its own
- * textures; replacing them for PlayStation controllers is not implemented,
- * and the Controls page says so ("Unavailable") rather than offering it.
+ * Button prompts: the game draws its button icons from one texture sheet;
+ * with PlayStation prompts (automatic: the last controller used) the
+ * renderer repaints it with PlayStation glyphs (nv2a_gpu_prompts.inc.c).
  */
 #include <windows.h>
 #include <setupapi.h>
@@ -69,6 +69,7 @@ typedef struct {
     int vibration;                  /* 0/1 */
     int dz_left, dz_right, dz_trig; /* percent */
     int mouse;                      /* mouse buttons/stick on port 0 */
+    int prompts;                    /* 0 automatic, 1 Xbox, 2 PlayStation */
     int map[C_COUNT];               /* game button <- controller button */
     int keys[K_COUNT];              /* virtual-key codes, 0 = unbound */
 } Controls;
@@ -82,6 +83,7 @@ static void cfg_defaults(Controls *c)
     c->vibration = 1;
     c->dz_left = 12; c->dz_right = 12; c->dz_trig = 5;
     c->mouse = 1;
+    c->prompts = 0;
     for (i = 0; i < C_COUNT; i++) c->map[i] = i;
     for (i = 0; i < K_COUNT; i++) c->keys[i] = k_key_default[i];
 }
@@ -94,8 +96,9 @@ static void cfg_save(void)
     if (!f) return;
     fprintf(f, "; NFL 2K5 controls (F1 > Controls pages edit these)\n"
                "vibration = %d\ndeadzone_left = %d\ndeadzone_right = %d\ndeadzone_trigger = %d\nmouse = %d\n"
+               "; prompts: 0 automatic (the last controller used), 1 Xbox, 2 PlayStation\nprompts = %d\n"
                "; map_<game button> = <controller button>: a b x y lb rb lt rt start back ls rs dup ddown dleft dright\n",
-            s_cfg.vibration, s_cfg.dz_left, s_cfg.dz_right, s_cfg.dz_trig, s_cfg.mouse);
+            s_cfg.vibration, s_cfg.dz_left, s_cfg.dz_right, s_cfg.dz_trig, s_cfg.mouse, s_cfg.prompts);
     for (i = 0; i < C_COUNT; i++) fprintf(f, "map_%s = %s\n", k_ctl_keys[i], k_ctl_keys[s_cfg.map[i]]);
     fprintf(f, "; key_<game button> = Windows virtual-key code (decimal), 0 = none\n");
     for (i = 0; i < K_COUNT; i++) fprintf(f, "%s = %d\n", k_key_ini[i], s_cfg.keys[i]);
@@ -119,6 +122,7 @@ static void cfg_load(void)
         else if (!strcmp(k, "deadzone_right")) s_cfg.dz_right = n;
         else if (!strcmp(k, "deadzone_trigger")) s_cfg.dz_trig = n;
         else if (!strcmp(k, "mouse")) s_cfg.mouse = n != 0;
+        else if (!strcmp(k, "prompts")) s_cfg.prompts = n >= 0 && n <= 2 ? n : 0;
         else if (!strncmp(k, "map_", 4)) {
             for (i = 0; i < C_COUNT; i++) if (!strcmp(k + 4, k_ctl_keys[i])) break;
             if (i < C_COUNT) { int j; for (j = 0; j < C_COUNT; j++) if (!strcmp(v, k_ctl_keys[j])) s_cfg.map[i] = j; }
@@ -398,6 +402,23 @@ static void deadzone(short *x, short *y, int pct)
     *x = (short)(fx * k); *y = (short)(fy * k);
 }
 
+/* Which kind of controller was used last (automatic button prompts). */
+static volatile LONG s_last_ps;
+static void note_use(const RawPad *s)
+{
+    int i;
+    for (i = 0; i < C_COUNT; i++)
+        if (s->btn[i] > 128) { InterlockedExchange(&s_last_ps, s->ps); return; }
+}
+
+/* For the renderer's button sheet (nv2a_gpu_prompts.inc.c): 1 = PlayStation. */
+static int prompt_style(void)
+{
+    if (s_cfg.prompts == 1) return 0;
+    if (s_cfg.prompts == 2) return 1;
+    return s_last_ps != 0;
+}
+
 static void to_gamepad(const RawPad *s, XBOX_GAMEPAD *g)
 {
     int i, trig = s_cfg.dz_trig * 255 / 100;
@@ -511,7 +532,7 @@ int nfl2k5_controls_get(int port, XBOX_GAMEPAD *g, int use_pads)
     port_map(p);
     if (use_pads && port >= 0 && port < 4 && p[port].src) {
         raw_for(&p[port], &s);
-        if (s.connected) to_gamepad(&s, g);
+        if (s.connected) { note_use(&s); to_gamepad(&s, g); }
     }
     if (port == 0 && window_focused()) {
         keyboard_into(g);
@@ -665,7 +686,10 @@ static void p1_label(int r, char *name, char *val, size_t n)
     case R_DZR:     strcpy(name, "Right stick dead zone"); snprintf(val, n, "%d%%", s_cfg.dz_right); break;
     case R_DZT:     strcpy(name, "Trigger dead zone"); snprintf(val, n, "%d%%", s_cfg.dz_trig); break;
     case R_MOUSE:   strcpy(name, "Mouse as controller"); snprintf(val, n, "%s", s_cfg.mouse ? "On" : "Off"); break;
-    case R_PROMPTS: strcpy(name, "PlayStation button prompts"); snprintf(val, n, "Unavailable"); break;
+    case R_PROMPTS: { static const char *m[3] = { "Automatic", "Xbox", "PlayStation" };
+                      strcpy(name, "Button prompts");
+                      snprintf(val, n, "%s%s", m[s_cfg.prompts % 3],
+                               s_cfg.prompts == 0 ? (s_last_ps ? "  (PlayStation now)" : "  (Xbox now)") : ""); } break;
     case R_RESET:   strcpy(name, "Reset controls to defaults"); break;
     }
 }
@@ -677,6 +701,7 @@ static void p1_change(int r, int dir)
     case R_DZR:   s_cfg.dz_right += 2 * dir; break;
     case R_DZT:   s_cfg.dz_trig += 2 * dir; break;
     case R_MOUSE: s_cfg.mouse = !s_cfg.mouse; break;
+    case R_PROMPTS: s_cfg.prompts = (s_cfg.prompts + 3 + dir) % 3; break;
     default: return;
     }
     if (s_cfg.dz_left < 0) s_cfg.dz_left = 0;
@@ -752,6 +777,10 @@ void nfl2k5_controls_menu_init(void)
     xbox_MenuAddPage(&k_p2);
     xbox_MenuAddPage(&k_p3);
     g_xbox_menu_pad = menu_pad;
+    {
+        extern int (*g_xbox_prompt_style)(void);
+        g_xbox_prompt_style = prompt_style;
+    }
     t = CreateThread(NULL, 0, capture_thread, NULL, 0, NULL);
     if (t) CloseHandle(t);
 }

@@ -31,14 +31,63 @@ An extracted disc folder must contain `default.xbe` and `vc_53450030`.
 
 ## New features
 
-### Video settings
+### Settings (F1)
 
-Open Options and go down to Video Settings It includes:
+Press **F1** while the game is running (or **Back + Start** on a controller) to
+open the settings. **LB / RB** (Page Up / Page Down) switch pages:
 
-- Windowed, borderless, and fullscreen modes
-- Resolution and aspect-ratio controls, including ultrawide
-- Internal resolution scaling and filtering
-- VSync, brightness, gamma, crop, anisotropic filtering, and FPS display
+- **Video**:
+  - display mode, resolution and aspect ratio (including ultrawide);
+  - widescreen;
+  - internal resolution up to 12x (8640x5760) and upscaling filter;
+  - VSync, brightness, gamma, crop and anisotropic filtering;
+  - frame rate cap, and Show FPS.
+- **Controls**:
+  - connected controllers, vibration, button prompts (Automatic / Xbox / PlayStation);
+  - left/right stick and trigger dead zones;
+  - mouse as controller.
+- **Controller Buttons**: map any game button to any controller button (select
+  a row and press the button to use), or step through with Left/Right.
+- **Keyboard**: rebind every game button and the left stick (select a row and
+  press the key).
+- **System**:
+  - how many backups to keep of each save, and a shortcut to open the saves folder;
+  - expanded limits.
+
+With Show FPS on, the counter also shows frame time, the 1% low, GPU and CPU
+time per frame, and video memory in use.
+
+Settings, shader caches and logs are kept in `%LOCALAPPDATA%\NFL2K5-PC`, so the
+game never needs administrator rights, even under Program Files. To keep
+everything in the game folder instead, put an empty `portable.txt` there.
+
+### Controllers
+
+Xbox controllers and PlayStation controllers (DualShock 4, DualSense, and
+DualSense Edge, over USB or Bluetooth) work without extra software.
+
+- Up to four controllers are connected to the game's four controller ports, as on
+  the Xbox.
+- The keyboard and mouse always control player 1.
+- Vibration is sent to Xbox controllers, and to PlayStation controllers over USB.
+- Button prompts follow the controller you last used. With a PlayStation
+  controller, the game's button icons show Cross, Circle, Square and Triangle,
+  plus Options, Share and L1/R1/L2/R2/L3/R3. To fix the prompts to one style, use
+  F1 > Controls > Button prompts.
+
+So far this has been tested with one Xbox controller. Two or more controllers,
+and PlayStation controllers, are implemented but not yet tested on real hardware.
+Please report how they behave.
+
+### Expanded limits
+
+Two limits of the original game are lifted (F1 > System, on by default):
+
+- Create a Team offers all 82 stadiums, up from 67.
+- A franchise can run 95 seasons, through 2099, up from 30.
+
+See [docs/XBOX-LIMITATION-AUDIT.md](docs/XBOX-LIMITATION-AUDIT.md) for every
+limit that was examined.
 
 ### Broadcast presentations
 
@@ -87,6 +136,10 @@ saves are installed automatically. PS2 roster and franchise conversion uses
 the optional save converter described in [docs/SAVE-LIBRARY.md](docs/SAVE-LIBRARY.md).
 Always keep the original save as a backup.
 
+Each time the game saves over a save, the previous version is kept in
+`saves/backups/<type>/<name>/<date and time>/`. By default the last three are
+kept; F1 > System changes the number or turns backups off.
+
 ### Native mod packages
 
 Supported `.2k5patch` files install beside the original game. Setup checks the
@@ -104,19 +157,20 @@ on from **Options > Mod Packs**. Turning it off returns to Original ESPN NFL
 2K5. A file that could not be installed gets a `.failed` marker next to it
 and a log in `logs`.
 
-Packs built with Mod Studio's widescreen option (SOFTDRINK 2K28 has it) fill
-the whole window at any aspect ratio, including 21:9 and 32:9. Setup also
-prepares a **Widescreen** pack from your own game: the original ESPN NFL 2K5
-with that same widescreen patch (2K5 Mod Studio, cruuz and contributors).
-Switch it on under **Options > Mod Packs** for a full-screen picture with no
-black bars; the HUD keeps its normal size.
+A pack does not need its own build. The game runs the pack's changed code
+through a built-in interpreter, and everything else at full native speed.
+
+Widescreen is built in (F1 > Video > Widescreen, on by default). It uses the
+Mod Studio widescreen patch (2K5 Mod Studio, cruuz and contributors) and fills
+the whole window at any aspect ratio, including 21:9 and 32:9, with no black
+bars. The HUD keeps its normal size.
 
 ## Known issues
 
 - Some crowd, sound-effect, music, or player-voice audio can distort or stall.
-- Certain cameras can show field, lighting, texture, face, or player-model
-  artifacts.
-- Gameplay performance may fall below 60 FPS on some systems and scenes.
+- Certain cameras can show field, lighting, or texture artifacts.
+- Gameplay holds 60 FPS on the test system, but brief hitches remain in some
+  scenes (see [docs/BENCHMARKS.md](docs/BENCHMARKS.md)).
 - Some custom scorebug animations and contextual player-stat graphics remain
   incomplete or may appear at the wrong time.
 - Save importing is still experimental, especially cross-platform PS2 saves.
