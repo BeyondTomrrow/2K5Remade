@@ -41,6 +41,7 @@ Source: "..\build\Release\NFL2K5.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "assets\nfl2k5.ico"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\tools\extract-xiso.exe"; DestDir: "{app}\tools"; Flags: ignoreversion
 Source: "..\build\tools\NFL2K5-ModPack-Installer.exe"; DestDir: "{app}\tools"; Flags: ignoreversion
+Source: "..\build\tools\NFL2K5-TeamBuilder.exe"; DestDir: "{app}\tools"; Flags: ignoreversion
 ; PS2/Xbox save import (saves\import) converts through this tool
 Source: "..\tools\nfl2k5-save-converter.exe"; DestDir: "{app}\tools"; Flags: ignoreversion
 Source: "..\release\code-packs\*"; DestDir: "{app}\mods\code-packs"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
@@ -308,6 +309,19 @@ begin
     RaiseException('Could not link the selected game folder. Setup has not changed your game files.');
 end;
 
+{ Teams that ship as recipes (mods\teams\<team>\creator.json) are built from the
+  player's own disc: uniforms, logos and roster block. A failure only leaves
+  those teams out of the game; details in logs\team-builder.log. }
+procedure BuildTeams;
+var
+  ResultCode: Integer;
+begin
+  WizardForm.StatusLabel.Caption := 'Building teams from your disc...';
+  if (not Exec(ExpandConstant('{app}\tools\NFL2K5-TeamBuilder.exe'), '"' + ExpandConstant('{app}') + '"',
+               ExpandConstant('{app}'), SW_HIDE, ewWaitUntilTerminated, ResultCode)) or (ResultCode <> 0) then
+    Log('Team builder failed; see logs\team-builder.log');
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
   if CurStep = ssPostInstall then begin
@@ -317,6 +331,7 @@ begin
     if not FileExists(DiscXbe(GameSourceDir)) then
       RaiseException('Setup needs a complete extracted game folder. Restart setup and select it, or use /GAMEPATH="C:\\Your\\Extracted\\Disc".');
     CreateDiscLink;
+    BuildTeams;
     if InstallingModPack then InstallModPack;
   end;
 end;

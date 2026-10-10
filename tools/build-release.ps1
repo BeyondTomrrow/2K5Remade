@@ -17,6 +17,8 @@ if (-not $SkipGameBuild) {
 & (Join-Path $PSScriptRoot 'build-pack-installer.ps1')
 if ($LASTEXITCODE -ne 0) { throw 'Standalone mod-pack installer build failed.' }
 
+& (Join-Path $PSScriptRoot 'build-team-builder.ps1')
+
 # SOFTDRINK 2K28 v0.4 disc image (Mod Studio output) and the retail+widescreen executable.
 $softDrinkV04Hash = '2b0fbbbb89b5c72aaed7c454bf6e78dd2c97f1e417e2d761e515907ed81471ab'
 $widescreenHash = '81d6e16c25ca7ea1014d0ced915f910f5d354eaeabeb9adfcbb6956e2a0b54f8'
@@ -24,6 +26,7 @@ $widescreenHash = '81d6e16c25ca7ea1014d0ced915f910f5d354eaeabeb9adfcbb6956e2a0b5
 $required = @(
     (Join-Path $root 'build\Release\NFL2K5.exe'),
     (Join-Path $root 'build\tools\NFL2K5-ModPack-Installer.exe'),
+    (Join-Path $root 'build\tools\NFL2K5-TeamBuilder.exe'),
     (Join-Path $root 'tools\extract-xiso.exe'),
     (Join-Path $root 'tools\nfl2k5-save-converter.exe'),
     (Join-Path $root 'installer\nfl2k5_video.default.ini'),
@@ -38,8 +41,9 @@ foreach ($path in $required) {
 
 # Teams that ship (installer: release\teams -> mods\teams): every tracked file
 # under mods\teams (the clubs' presentation files) and each release team's own
-# files. Never the files built from the player's disc (files\, cache\,
-# team.rost), and never a team that is not listed here (test teams).
+# files, its recipe (creator.json) included: the installer's team builder makes
+# the rest from the player's disc. Never the files built from a disc (files\,
+# cache\, team.rost), and never a team that is not listed here (test teams).
 $releaseTeams = @('Claude')
 $teamStage = Join-Path $root 'release\teams'
 if (Test-Path -LiteralPath $teamStage) { Remove-Item -LiteralPath $teamStage -Recurse -Force }
@@ -49,7 +53,7 @@ foreach ($rel in (& git -C $root ls-files mods/teams)) {
     Copy-Item -LiteralPath (Join-Path $root $rel) -Destination $dst
 }
 foreach ($team in $releaseTeams) {
-    foreach ($rel in @('team.json', 'roster.csv', 'logos\logo.png', 'logos\scorebug.png')) {
+    foreach ($rel in @('team.json', 'creator.json', 'roster.csv', 'logos\logo.png', 'logos\scorebug.png')) {
         $src = Join-Path $root "mods\teams\$team\$rel"
         if (-not (Test-Path -LiteralPath $src -PathType Leaf)) { throw "Release team file is missing: $src" }
         $dst = Join-Path $teamStage "$team\$rel"

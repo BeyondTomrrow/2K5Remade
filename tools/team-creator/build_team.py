@@ -123,7 +123,25 @@ def build(spec: dict, game_root: str | Path, progress=print) -> Path:
         "created_with": "NFL2K5-PC Team Creator",
     }
     (out / "team.json").write_text(json.dumps(info, indent=2), encoding="utf-8")
-    (out / "creator.json").write_text(json.dumps(spec, indent=1), encoding="utf-8")
+    # the recipe, with its pictures inside the team folder and paths relative to
+    # it, so the folder can be shared and rebuilt anywhere (team_builder.py)
+    recipe = json.loads(json.dumps(spec))
+    recipe["logo"] = "logos/logo.png"
+    if helmet_logo is not None:
+        helmet_logo.save(out / "logos" / "helmet_logo.png")
+        recipe["helmet_logo"] = "logos/helmet_logo.png"
+    for p in recipe["roster"]:
+        if p.get("photo_image"):
+            img = Path(p["photo_image"])
+            try:
+                p["photo_image"] = img.resolve().relative_to(out.resolve()).as_posix()
+            except ValueError:
+                dst = out / "photos" / img.name
+                dst.parent.mkdir(exist_ok=True)
+                if img.resolve() != dst.resolve():
+                    dst.write_bytes(img.read_bytes())
+                p["photo_image"] = dst.relative_to(out).as_posix()
+    (out / "creator.json").write_text(json.dumps(recipe, indent=1), encoding="utf-8")
     progress(f"Done: {spec['city']} {spec['nickname']} ({code})")
     return out
 
