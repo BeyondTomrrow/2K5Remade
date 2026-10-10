@@ -450,6 +450,10 @@ void nfl2k5_team_roster(const char *rost_path, uint32_t slot)
             MEM8(pl + 0x52) &= 0xE0;
         }
         MEM16(pl + 0x04) = 0;                        /* no recorded play-by-play name */
+        /* photo: the portrait.cdf name (a number); the Team Creator's own photos have
+         * numbers from 40000 (served from cache\<n>.bin). None: 39999, which no
+         * portrait has ("No photo"), never the template player's face. */
+        MEM16(pl + 0x06) = (uint16_t)(n > 38 && atoi(v[38]) > 0 ? atoi(v[38]) : 39999);
         row++;
     }
     fclose(f);
@@ -543,7 +547,7 @@ static void cache_scan(void)
             }
             c = &s_slots[s_nslots++];
             c->crc = ~crc;
-            c->flip = strstr(name, "flipchip") != NULL;
+            c->flip = strstr(name, "flipchip") ? 1 : isdigit((unsigned char)name[0]) ? 2 : 0;   /* the cache: portraits are numbers */
             snprintf(c->path, sizeof c->path, "mods\\teams\\%s\\cache\\%s", s_teams[k].folder, fd.cFileName);
         } while (FindNextFileA(h, &fd));
         FindClose(h);
@@ -551,12 +555,13 @@ static void cache_scan(void)
     fprintf(stderr, "[TEAMFILES] %d front-end logo slots of %d added teams\n", s_nslots, s_n);
 }
 
-/* Which cache an index is (its file name first): 0 logos.cdf, 1 flipchip.cdf, -1 another. */
+/* Which cache an index is (its file name first): 0 logos.cdf, 1 flipchip.cdf,
+ * 2 portrait.cdf (player photos, named by number), -1 another. */
 static int cache_is_flip(uint32_t cacr)
 {
-    static const char *const names[2] = { "logos.cdf", "flipchip.cdf" };
+    static const char *const names[3] = { "logos.cdf", "flipchip.cdf", "portrait.cdf" };
     int k, i;
-    for (k = 0; k < 2; k++) {
+    for (k = 0; k < 3; k++) {
         for (i = 0; names[k][i] && (MEM16(cacr + 2u * (uint32_t)i) | 0x20) == (unsigned)names[k][i]; i++) {}
         if (!names[k][i] && !MEM16(cacr + 2u * (uint32_t)i)) return k;
     }

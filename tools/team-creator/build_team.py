@@ -66,6 +66,21 @@ def build(spec: dict, game_root: str | Path, progress=print) -> Path:
 
     arc = G.Archive(root / "original" / "disc")
     (out / "team.rost").write_bytes(arc.roster_template())
+    # player photos ("photo_image": an image file per player) -> portrait slots
+    from PIL import Image
+    (out / "cache").mkdir(exist_ok=True)
+    for f in (out / "cache").glob("*.bin"):
+        f.unlink()
+    photos = {}
+    for row, p in enumerate(spec["roster"]):
+        p.pop("photo", None)
+        if p.get("photo_image") and Path(p["photo_image"]).exists() and row < 100:
+            p["photo"] = logos.photo_base(code) + row
+            photos[p["photo"]] = Image.open(p["photo_image"])
+    for name, slot in logos.portrait_slots(arc, photos).items():
+        (out / "cache" / (name + ".bin")).write_bytes(slot)
+    if photos:
+        progress(f"Player photos: {len(photos)}")
     (out / "roster.csv").write_text(rosters.to_csv(spec["roster"]), encoding="utf-8")
     progress(f"Roster: {len(spec['roster'])} players")
 
@@ -92,9 +107,6 @@ def build(spec: dict, game_root: str | Path, progress=print) -> Path:
         if re.fullmatch(r"[ha]\d\.iff", name[len(spec["base"]):]):
             new = logos.apply_logo(new, logo, spec["nickname"], spec["colors"], mapper, data, helmet_logo)
         (out / "files" / (code + name[len(spec["base"]):])).write_bytes(new)
-    (out / "cache").mkdir(exist_ok=True)
-    for f in (out / "cache").glob("*.bin"):
-        f.unlink()
     progress("Front-end logos (roster backdrop, roster card chip)")
     for name, slot in logos.cache_art(arc, spec["base"], code, logo).items():
         (out / "cache" / (name + ".bin")).write_bytes(slot)

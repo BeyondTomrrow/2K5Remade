@@ -193,8 +193,9 @@ def pick_53(players: list[dict]) -> list[dict]:
 def to_csv(players: list[dict]) -> str:
     buf = io.StringIO()
     w = csv.writer(buf, lineterminator="\n")
-    w.writerow(["first", "last", "pos", "number", "height", "weight", "years_pro", "skin", "face", "hand", *RATINGS])
+    w.writerow(["first", "last", "pos", "number", "height", "weight", "years_pro", "skin", "face", "hand", *RATINGS, "photo"])
     for p in players:
         w.writerow([p["first"][:15].replace(",", ""), p["last"][:15].replace(",", ""), p["pos"], p["number"] % 100,
-                    p["height"], p["weight"], p["years_pro"], p["skin"], p["face"], p["hand"], *p["ratings"]])
+                    p["height"], p["weight"], p["years_pro"], p["skin"], p["face"], p["hand"], *p["ratings"],
+                    p.get("photo") or ""])
     return buf.getvalue()

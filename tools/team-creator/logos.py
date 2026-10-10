@@ -241,3 +241,39 @@ def cache_art(arc, base: str, code: str, logo: Image.Image) -> dict[str, bytes]:
             body[info.name_offset:info.name_offset + 2 * len(new_name)] = new_name.encode("utf-16le")
             out[new_name] = bytes(s[:c.body_offset] + body + s[c.end_offset:])
     return out
+
+
+# Player photos: portrait.cdf slots (128x128 P8) named by the player record's
+# photo number. An added team's photos get numbers from 40000 by team code
+# (photo_base) and are served from cache\<number>.bin like the logos.
+CODE_CHARS = "123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+
+def photo_base(code: str) -> int:
+    """40000 + 100 per team code (Z1 = 40000 ... Q? after Z?): 100 photos a team."""
+    code = code.upper()
+    return 40000 + ("ZQ".index(code[0]) * len(CODE_CHARS) + CODE_CHARS.index(code[1])) * 100
+
+
+def portrait_slots(arc, photos: dict[int, Image.Image]) -> dict[str, bytes]:
+    """{"<number>": slot bytes} for {photo number: image}; the image is cropped
+    to a square from the top (a head shot) and scaled to 128x128."""
+    ix = arc.read("Portrait.iff")
+    count, slot = struct.unpack_from("<II", ix, 0x60)
+    data = arc.read("portrait.cdf")
+    tpl = data[:slot]                                   # any portrait: the layout to fill
+    c = T.parse_chunks(tpl, allow_trailing=True)[0]
+    base_body = tpl[c.body_offset:c.end_offset]
+    info = T.parse_texture(base_body, c)
+    room = info.descriptor_offset - info.name_offset
+    out = {}
+    for number, img in photos.items():
+        img = img.convert("RGBA")
+        side = min(img.width, img.height)
+        img = img.crop(((img.width - side) // 2, 0, (img.width - side) // 2 + side, side)).resize((info.width, info.height), Image.LANCZOS)
+        body = bytearray(base_body)
+        _encode_p8(body, c, info, img)
+        name = str(number).encode("utf-16le") + b"\0\0"
+        body[info.name_offset:info.name_offset + room] = name + bytes(room - len(name))
+        out[str(number)] = bytes(tpl[:c.body_offset] + body + tpl[c.end_offset:])
+    return out
