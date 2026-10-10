@@ -15,7 +15,8 @@ spec = {
 Writes team.json (identity, code, base, colours for the presentation layer),
 team.rost (a one-team roster block from the player's own disc), roster.csv,
 and files\\<code><side><style>.iff -- every uniform and crowd file of the base
-team, recoloured, under the new team's own asset code.
+team, recoloured, under the new team's own asset code -- and cache\\<name>.bin,
+its front-end logos (logos.cdf / flipchip.cdf slots).
 """
 from __future__ import annotations
 
@@ -75,6 +76,7 @@ def build(spec: dict, game_root: str | Path, progress=print) -> Path:
     else:
         logo = logos.text_logo(spec["nickname"][:1] or spec["city"][:1], spec["colors"][0],
                                spec["colors"][1] if len(spec["colors"]) > 1 else (255, 255, 255))
+    helmet_logo = Image.open(spec["helmet_logo"]).convert("RGBA") if spec.get("helmet_logo") and Path(spec["helmet_logo"]).exists() else None
     (out / "logos").mkdir(exist_ok=True)
     logo.save(out / "logos" / "logo.png")
     sb = logo.copy()
@@ -88,8 +90,14 @@ def build(spec: dict, game_root: str | Path, progress=print) -> Path:
         data = arc.read(name)
         new = G.recolor_iff(data, mapper)
         if re.fullmatch(r"[ha]\d\.iff", name[len(spec["base"]):]):
-            new = logos.apply_logo(new, logo, spec["nickname"], spec["colors"], mapper, data)
+            new = logos.apply_logo(new, logo, spec["nickname"], spec["colors"], mapper, data, helmet_logo)
         (out / "files" / (code + name[len(spec["base"]):])).write_bytes(new)
+    (out / "cache").mkdir(exist_ok=True)
+    for f in (out / "cache").glob("*.bin"):
+        f.unlink()
+    progress("Front-end logos (roster backdrop, roster card chip)")
+    for name, slot in logos.cache_art(arc, spec["base"], code, logo).items():
+        (out / "cache" / (name + ".bin")).write_bytes(slot)
 
     info = {
         "code": code, "base": spec["base"],

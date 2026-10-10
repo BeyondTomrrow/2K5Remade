@@ -124,7 +124,8 @@ def helmet(img: Image.Image, logo: Image.Image, name: str, color) -> Image.Image
     return img
 
 
-def apply_logo(data: bytes, logo: Image.Image, name: str, colors, mapper=None, original: bytes | None = None) -> bytes:
+def apply_logo(data: bytes, logo: Image.Image, name: str, colors, mapper=None, original: bytes | None = None,
+               helmet_logo: Image.Image | None = None) -> bytes:
     """A uniform file with the new logo on its helmets, logo and flip chip.
     With the base file (original) and the colour mapper, helmets are
     recoloured from the original pixels, keeping the flag and maker marks."""
@@ -154,7 +155,7 @@ def apply_logo(data: bytes, logo: Image.Image, name: str, colors, mapper=None, o
                 if info.name.startswith("helmet"):
                     src = orig_tex.get(info.name)
                     src = recolor_image(src, mapper, HELMET_KEEP) if src is not None else _decode_p8(dec, c, info)
-                    new = helmet(src, logo, name, colors[0])
+                    new = helmet(src, helmet_logo or logo, name, colors[0])
                 elif info.name == "chiclet":
                     new = Image.new("RGBA", (info.width, info.height), tuple(colors[0]) + (255,))
                 else:
@@ -183,3 +184,60 @@ def text_logo(text: str, primary, secondary, size: int = 256) -> Image.Image:
     l, tp, r, b = d.textbbox((0, 0), t, font=f)
     d.text(((size - (r - l)) // 2 - l, (size - (b - tp)) // 2 - tp), t, font=f, fill=tuple(secondary) + (255,))
     return img
+
+
+# logos.cdf / flipchip.cdf: the front end's per-team logos (Team Rosters
+# backdrop "logo_<code>_<style>", 256x256; the roster card's chip
+# "<code>_flipchip_00_<side><style>", 64x64), each in a fixed-size slot of an
+# uncompressed P8 TXTR. The game finds them by name CRC in a sorted index
+# (logos.iff / flipchip.iff); the PC port serves an added team's slots from
+# mods\teams\<folder>\cache\<name>.bin (src/nfl2k5_team_files.c).
+CACHE_FILES = (("logos.cdf", "logos.iff"), ("flipchip.cdf", "flipchip.iff"))
+
+
+def outlined(logo: Image.Image, width: int = 6, color=(255, 255, 255)) -> Image.Image:
+    """The logo with an outline around its shape, so it reads on any background."""
+    from PIL import ImageFilter
+    pad = width * 2
+    src = Image.new("RGBA", (logo.width + 2 * pad, logo.height + 2 * pad), (0, 0, 0, 0))
+    src.alpha_composite(logo.convert("RGBA"), (pad, pad))
+    a = src.getchannel("A").point(lambda v: 255 if v > 96 else 0).filter(ImageFilter.MaxFilter(2 * width + 1))
+    out = Image.new("RGBA", src.size, tuple(color) + (0,))
+    out.putalpha(a)
+    out.alpha_composite(src)
+    return out
+
+
+def cache_art(arc, base: str, code: str, logo: Image.Image) -> dict[str, bytes]:
+    """{slot name: slot bytes}: every logos.cdf / flipchip.cdf picture of the
+    base team, with the new team's logo and under its code."""
+    out = {}
+    art = outlined(logo)
+    for cdf, iff in CACHE_FILES:
+        ix = arc.read(iff)
+        count, slot = struct.unpack_from("<II", ix, 0x60)
+        data = arc.read(cdf)
+        for i in range(count):
+            s = data[i * slot:(i + 1) * slot]
+            if s[:4] != b"TXTR":
+                continue
+            c = T.parse_chunks(s, allow_trailing=True)[0]
+            if c.compressed:
+                continue
+            body = bytearray(s[c.body_offset:c.end_offset])
+            try:
+                info = T.parse_texture(bytes(body), c)
+            except Exception:
+                continue
+            n = info.name
+            if not (n.startswith("logo_" + base + "_") or n.startswith(base + "_flipchip_")) or info.format_code != 0x0B:
+                continue
+            new_name = n.replace(base, code, 1)
+            img = Image.new("RGBA", (info.width, info.height), (0, 0, 0, 0))
+            m = max(1, info.width // 32)
+            lg, at = _fit(art, (m, m, info.width - m, info.height - m))
+            img.alpha_composite(lg, at)
+            _encode_p8(body, c, info, img)
+            body[info.name_offset:info.name_offset + 2 * len(new_name)] = new_name.encode("utf-16le")
+            out[new_name] = bytes(s[:c.body_offset] + body + s[c.end_offset:])
+    return out

@@ -167,6 +167,8 @@ static int own_file(int k, const char *a)
 {
     char host[MAX_PATH];
     snprintf(host, sizeof host, "mods\\teams\\%s\\files\\%s", s_teams[k].folder, a);
+    if (GetFileAttributesA(host) != INVALID_FILE_ATTRIBUTES) return 1;
+    snprintf(host, sizeof host, "mods\\teams\\%s\\cache\\%s.bin", s_teams[k].folder, a);   /* a front-end logo slot */
     return GetFileAttributesA(host) != INVALID_FILE_ATTRIBUTES;
 }
 
@@ -493,4 +495,130 @@ uint32_t nfl2k5_team_color_entry(uint32_t code)
         return t->entry;
     }
     return 0;
+}
+
+
+/* ---- front-end logos: extra slots of the streamed caches (2026-10-09) -------
+ *
+ * logos.cdf (Team Rosters backdrops "logo_<code>_<style>") and flipchip.cdf
+ * (roster card chips "<code>_flipchip_00_<side><style>") are caches of
+ * fixed-size slots; their index (CACR chunk of logos.iff / flipchip.iff:
+ * name, count +0x40, slot size +0x44, sorted name CRCs +0x48) is
+ * binary-searched at 0x42D50 and slot i is read from offset i * size
+ * (0x442F0, completion 0x44280). An added team's slots
+ * (mods\teams\<folder>\cache\<name>.bin, made by the Team Creator) get indices
+ * past the end (gen patch CACHE_EXTRA_INDEX), and those reads are served from
+ * the files at once (CACHE_EXTRA_READ). */
+extern void sub_00044280(void);
+
+typedef struct { uint32_t crc; int flip; char path[MAX_PATH]; } CacheSlot;
+static CacheSlot s_slots[2048];
+static int s_nslots = -1;
+
+static void cache_scan(void)
+{
+    int k;
+    s_nslots = 0;
+    if (s_n < 0) scan();
+    for (k = 0; k < s_n; k++) {
+        WIN32_FIND_DATAA fd;
+        HANDLE h;
+        char pat[MAX_PATH];
+        snprintf(pat, sizeof pat, "mods\\teams\\%s\\cache\\*.bin", s_teams[k].folder);
+        if ((h = FindFirstFileA(pat, &fd)) == INVALID_HANDLE_VALUE) continue;
+        do {
+            CacheSlot *c;
+            char name[MAX_PATH];
+            const unsigned char *p;
+            uint32_t crc = 0xFFFFFFFFu;
+            size_t n = strlen(fd.cFileName);
+            if (s_nslots >= (int)(sizeof s_slots / sizeof s_slots[0]) || n < 5) continue;
+            snprintf(name, sizeof name, "%.*s", (int)(n - 4), fd.cFileName);
+            for (p = (const unsigned char *)name; *p; p++) {    /* CRC32 of the UTF-16LE name (0x38600) */
+                unsigned b, j;
+                for (b = 0; b < 2; b++) {
+                    crc ^= b ? 0u : *p;
+                    for (j = 0; j < 8; j++) crc = (crc >> 1) ^ (0xEDB88320u & (0u - (crc & 1u)));
+                }
+            }
+            c = &s_slots[s_nslots++];
+            c->crc = ~crc;
+            c->flip = strstr(name, "flipchip") != NULL;
+            snprintf(c->path, sizeof c->path, "mods\\teams\\%s\\cache\\%s", s_teams[k].folder, fd.cFileName);
+        } while (FindNextFileA(h, &fd));
+        FindClose(h);
+    }
+    fprintf(stderr, "[TEAMFILES] %d front-end logo slots of %d added teams\n", s_nslots, s_n);
+}
+
+/* Which cache an index is (its file name first): 0 logos.cdf, 1 flipchip.cdf, -1 another. */
+static int cache_is_flip(uint32_t cacr)
+{
+    static const char *const names[2] = { "logos.cdf", "flipchip.cdf" };
+    int k, i;
+    for (k = 0; k < 2; k++) {
+        for (i = 0; names[k][i] && (MEM16(cacr + 2u * (uint32_t)i) | 0x20) == (unsigned)names[k][i]; i++) {}
+        if (!names[k][i] && !MEM16(cacr + 2u * (uint32_t)i)) return k;
+    }
+    return -1;
+}
+
+/* 0x42D50 found nothing: cacr = the index (its name first), crc = the name's.
+ * Returns 1 and the extra index when an added team has that slot. */
+int nfl2k5_cache_extra_index(uint32_t cacr, uint32_t crc, uint32_t out)
+{
+    int i, j = 0, flip;
+    if (s_nslots < 0) cache_scan();
+    if (!s_nslots || !cacr) return 0;
+    if ((flip = cache_is_flip(cacr)) < 0) return 0;
+    for (i = 0; i < s_nslots; i++) {
+        if (s_slots[i].flip != flip) continue;
+        if (s_slots[i].crc == crc) {
+            if (out) MEM32(out) = MEM32(cacr + 0x40) + (uint32_t)j;
+            return 1;
+        }
+        j++;
+    }
+    return 0;
+}
+
+/* 0x442F0 about to read slot [cache+0x90] into buf: an extra slot is read from
+ * its file and completed through the game's own callback. Returns 1 if done. */
+int nfl2k5_cache_extra_read(uint32_t cache, uint32_t buf)
+{
+    static uint32_t req;
+    uint32_t cacr = MEM32(cache), idx = MEM32(cache + 0x90), count, size, save_esp, save_ebx, save_esi, save_edi, save_ebp;
+    int i, j, flip;
+    FILE *f;
+    if (s_nslots <= 0 || !cacr) return 0;
+    count = MEM32(cacr + 0x40);
+    size = MEM32(cacr + 0x44);
+    if (idx < count) return 0;
+    if ((flip = cache_is_flip(cacr)) < 0) return 0;
+    for (i = 0, j = 0; i < s_nslots; i++) {
+        if (s_slots[i].flip != flip) continue;
+        if ((uint32_t)j++ == idx - count) break;
+    }
+    if (i == s_nslots) return 0;
+    {
+        unsigned char tmp[0x20000];
+        size_t n = 0;
+        if (size > sizeof tmp) return 0;
+        memset(tmp, 0, size);
+        if ((f = fopen(s_slots[i].path, "rb")) != NULL) { n = fread(tmp, 1, size, f); fclose(f); }
+        memcpy((void *)XBOX_PTR(buf), tmp, size);
+        { static int ln; if (ln++ < 16) fprintf(stderr, "[TEAMFILES] logo slot %s (%u bytes) -> %08X\n", s_slots[i].path, (unsigned)n, buf); }
+    }
+    if (!req) req = xbox_HeapAlloc(0x40, 16);
+    if (!req) return 0;
+    MEM32(req + 0x18) = size;
+    MEM32(req + 0x1C) = buf;
+    MEM32(req + 0x20) = 0;
+    save_esp = g_esp; save_ebx = g_ebx; save_esi = g_esi; save_edi = g_edi; save_ebp = g_ebp;
+    PUSH32(g_esp, cache);
+    g_edx = req;
+    PUSH32(g_esp, 0x0BADC0DEu);
+    sub_00044280();
+    g_esp = save_esp; g_ebx = save_ebx; g_esi = save_esi; g_edi = save_edi; g_ebp = save_ebp;
+    return 1;
 }

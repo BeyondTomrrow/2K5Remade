@@ -677,6 +677,15 @@ PATCHES = [
     ("TEAM_COLOR_ENTRY_7", "sub_0006B5B0", "esi = 0x4E7FE0;", "after", """\
     { extern uint32_t nfl2k5_team_color_entry(uint32_t); uint32_t _e = nfl2k5_team_color_entry(ebx); if (_e) { esi = _e; edi = (_e - 0x4E7FE0u) / 0x1Cu; } }
 """),
+    # Front-end logos of added teams: extra slots of the logos.cdf / flipchip.cdf
+    # caches -- an index past the end when the sorted CRC search misses, and the read
+    # of such a slot served from mods\\teams\\<folder>\\cache (src/nfl2k5_team_files.c).
+    ("CACHE_EXTRA_INDEX", "sub_00042D50", "loc_00042DDC: ;", "after", """\
+    { extern int nfl2k5_cache_extra_index(uint32_t, uint32_t, uint32_t); if (nfl2k5_cache_extra_index(esi, edi, MEM32(esp + 0xC))) { POP32(esp, esi); POP32(esp, ebx); eax = 1; esp += 8; return; } }
+"""),
+    ("CACHE_EXTRA_READ", "sub_000442F0", "PUSH32(esp, 0x000443A3u); RECOMP_ABI_CALL(0x00048FF0u, sub_00048FF0); /* call 0x00048FF0 */", "before", """\
+    { extern int nfl2k5_cache_extra_read(uint32_t, uint32_t); int _r; RECOMP_REGS_OUT(); _r = nfl2k5_cache_extra_read(esi, edx); RECOMP_REGS_IN(); if (_r) { esp += 20; eax = 1; goto loc_000443A3; } }
+"""),
 ]
 
 
