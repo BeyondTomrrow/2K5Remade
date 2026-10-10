@@ -2477,3 +2477,33 @@ static void sub_004952F8(void)
     g_esp += 28; // Adjust stack pointer to account for all arguments
     return;
 }
+
+
+/* ---- scorebug hooks for packs that change its functions --------------------
+ *
+ * SOFTDRINK 2K28 moves its bug (constants in 0xFC200 / 0xFCE70), so those
+ * functions run in the interpreter, where the gen patches SCOREBUG_* and
+ * LIVE_QB_SAMPLE never run and the pack's bug stayed on screen under an HTML
+ * package. The interpreter calls the same hooks at the patches' anchors. */
+#include "interp/x86_interp.h"
+extern void nfl2k5_scorebug_hide(void);
+extern void nfl2k5_scorebug_native_hook(void);
+extern void nfl2k5_scorebug_native_place(uint32_t matrix);
+
+static uint32_t ih_hide(void) { nfl2k5_scorebug_hide(); return 0; }
+static uint32_t ih_qb(void) { nfl2k5_live_qb_guest_tick(); return 0; }
+static uint32_t ih_native(void) { nfl2k5_scorebug_native_hook(); return 0; }
+static uint32_t ih_place(void) { nfl2k5_scorebug_native_place(g_esi); return 0; }
+
+void nfl2k5_scorebug_interp_hooks(void)
+{
+    /* NFL2K5_INTERP_HOOKS=<hex mask>: which hooks (diagnostics; 0 = none) */
+    const char *e = getenv("NFL2K5_INTERP_HOOKS");
+    unsigned mask = e ? (unsigned)strtoul(e, NULL, 16) : 0xFFu;
+    if (mask & 1) recomp_interp_add_hook(0x000FC2A6u, 0, ih_hide);            /* SCOREBUG_HIDE_LAYOUT1 */
+    if (mask & 1) recomp_interp_add_hook(0x000FC329u, 0, ih_hide);            /* SCOREBUG_HIDE_LAYOUT2 */
+    if (mask & 2) recomp_interp_add_hook(0x000FCE70u, 0, ih_hide);            /* SCOREBUG_HIDE_UPDATE */
+    if (mask & 4) recomp_interp_add_hook(0x000FCE70u, 0, ih_qb);              /* LIVE_QB_SAMPLE */
+    if (mask & 8) recomp_interp_add_hook(0x000FCFA7u, 0, ih_native);          /* SCOREBUG_NATIVE_HOOK */
+    if (mask & 16) recomp_interp_add_hook(0x000FD178u, 0x000FD175u, ih_place); /* SCOREBUG_NATIVE_HIDE2, before the loop label */
+}

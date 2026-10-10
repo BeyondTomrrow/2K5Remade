@@ -16,6 +16,15 @@ void recomp_interp_call(uint32_t va);
 /* Nonzero when the guest function at `va` must be interpreted. */
 int recomp_interp_dirty(uint32_t va);
 
+/* A native hook at a guest instruction, for functions a pack changed: the
+ * generated code's patches (tools/apply-gen-patches.py) never run there, so
+ * the interpreter calls the same C hook when it reaches `va` -- only when
+ * falling through from the instruction at `from` if `from` is nonzero (a
+ * patch placed before a loop label). The hook sees and may change the g_
+ * registers; it returns 0, or the address to continue at instead of `va`. */
+typedef uint32_t (*recomp_interp_hook_t)(void);
+void recomp_interp_add_hook(uint32_t va, uint32_t from, recomp_interp_hook_t fn);
+
 /* Built by nfl2k5_interp_setup(): one bit per guest code byte, set at the
  * start address of every function that differs from the converted image. */
 extern uint8_t *g_interp_dirty_bits;

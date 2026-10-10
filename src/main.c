@@ -3012,6 +3012,10 @@ int main(int argc, char **argv)
         nfl2k5_interp_setup(base_data, (size_t)base_len);
         free(base_data);
     }
+    {   /* the scorebug's gen-patch hooks, for packs that change those functions */
+        extern void nfl2k5_scorebug_interp_hooks(void);
+        nfl2k5_scorebug_interp_hooks();
+    }
     if (!g_interp_pack && NFL2K5_BASE_CMP(NFL2K5_XBE_SHA256) == 0)   /* retail only: packs bring their own */
         nfl2k5_expand_limits();
     {   /* Options > Controller Setup: the Custom Control layout */

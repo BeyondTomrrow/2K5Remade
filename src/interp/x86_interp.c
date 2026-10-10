@@ -295,6 +295,39 @@ static inline void sync_in(Cpu *c)
     c->r[ESP] = g_esp; c->r[ESI] = g_esi; c->r[EDI] = g_edi;
 }
 
+/* ---- native hooks at guest instructions (x86_interp.h) ------------------------ */
+
+static struct { uint32_t va, from; recomp_interp_hook_t fn; } s_hooks[32];
+static int s_nhooks;
+static uint32_t s_hook_lo = 0xFFFFFFFFu, s_hook_hi;
+
+void recomp_interp_add_hook(uint32_t va, uint32_t from, recomp_interp_hook_t fn)
+{
+    if (s_nhooks >= (int)(sizeof s_hooks / sizeof s_hooks[0]) || !fn) return;
+    s_hooks[s_nhooks].va = va;
+    s_hooks[s_nhooks].from = from;
+    s_hooks[s_nhooks].fn = fn;
+    s_nhooks++;
+    if (va < s_hook_lo) s_hook_lo = va;
+    if (va > s_hook_hi) s_hook_hi = va;
+}
+
+/* Runs the hooks for the instruction at c->start (prev: the one before).
+ * Returns the address to continue at, or 0 to execute c->start. */
+static uint32_t run_hooks(Cpu *c, uint32_t prev)
+{
+    uint32_t next = 0;
+    for (int i = 0; i < s_nhooks; i++) {
+        uint32_t r;
+        if (s_hooks[i].va != c->start || (s_hooks[i].from && s_hooks[i].from != prev)) continue;
+        sync_out(c);
+        r = s_hooks[i].fn();
+        sync_in(c);
+        if (r && !next) next = r;
+    }
+    return next;
+}
+
 int recomp_interp_dirty(uint32_t va)
 {
     if (!g_interp_dirty_bits) return 0;
@@ -432,8 +465,12 @@ void recomp_interp_call(uint32_t va)
     for (;;) {
         uint8_t op;
         int size;
-        uint32_t target = 0;
+        uint32_t target = 0, prev = c->start;
         c->start = c->eip;
+        if (s_nhooks && c->start >= s_hook_lo && c->start <= s_hook_hi) {
+            uint32_t to = run_hooks(c, prev);
+            if (to) { c->eip = to; continue; }
+        }
         t_cur = c;
         {   /* record control transfers only: from -> to */
             static __declspec(thread) uint32_t last;
