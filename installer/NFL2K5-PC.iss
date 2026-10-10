@@ -179,6 +179,8 @@ procedure ExtractIso;
 var
   ResultCode: Integer;
   OutputDir, Params: String;
+  OriginalQuickEdit: Cardinal;
+  HasQuickEdit: Boolean;
 begin
   IsoPath := IsoFilePage.Values[0];
   if IsoPath = '' then IsoPath := ExpandConstant('{param:ISO|}');
@@ -190,8 +192,23 @@ begin
   if not ForceDirectories(OutputDir) then
     RaiseException('Could not create the ESPN NFL 2K5 extraction folder.');
   Params := '-x -d "' + OutputDir + '" "' + IsoPath + '"';
-  if (not Exec(ExpandConstant('{app}\\tools\\extract-xiso.exe'), Params, '', SW_SHOW, ewWaitUntilTerminated, ResultCode)) or (ResultCode <> 0) then
-    RaiseException('ISO extraction failed. Your ISO was not changed.');
+
+  // 1. Back up and disable QuickEdit mode in the registry
+  HasQuickEdit := RegQueryDWordValue(HKEY_CURRENT_USER, 'Console', 'QuickEdit', OriginalQuickEdit);
+  RegWriteDWordValue(HKEY_CURRENT_USER, 'Console', 'QuickEdit', 0);
+
+  try
+    // 2. Launch extract-xiso (inherits disabled QuickEdit mode)
+    if (not Exec(ExpandConstant('{app}\tools\extract-xiso.exe'), Params, '', SW_SHOW, ewWaitUntilTerminated, ResultCode)) or (ResultCode <> 0) then
+      RaiseException('ISO extraction failed. Your ISO was not changed.');
+  finally
+    // 3. Restore original setting even if extraction aborts or errors
+    if HasQuickEdit then
+      RegWriteDWordValue(HKEY_CURRENT_USER, 'Console', 'QuickEdit', OriginalQuickEdit)
+    else
+      RegDeleteValue(HKEY_CURRENT_USER, 'Console', 'QuickEdit');
+  end;
+
   if not FileExists(DiscXbe(OutputDir)) then
     RaiseException('Extraction finished but default.xbe was not found. Choose a valid NFL 2K5 Xbox ISO.');
   GameSourceDir := OutputDir;
