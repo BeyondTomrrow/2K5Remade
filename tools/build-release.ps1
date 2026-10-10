@@ -36,6 +36,28 @@ foreach ($path in $required) {
     }
 }
 
+# Teams that ship (installer: release\teams -> mods\teams): every tracked file
+# under mods\teams (the clubs' presentation files) and each release team's own
+# files. Never the files built from the player's disc (files\, cache\,
+# team.rost), and never a team that is not listed here (test teams).
+$releaseTeams = @('Claude')
+$teamStage = Join-Path $root 'release\teams'
+if (Test-Path -LiteralPath $teamStage) { Remove-Item -LiteralPath $teamStage -Recurse -Force }
+foreach ($rel in (& git -C $root ls-files mods/teams)) {
+    $dst = Join-Path $teamStage ($rel.Substring('mods/teams/'.Length))
+    New-Item -ItemType Directory -Path (Split-Path $dst -Parent) -Force | Out-Null
+    Copy-Item -LiteralPath (Join-Path $root $rel) -Destination $dst
+}
+foreach ($team in $releaseTeams) {
+    foreach ($rel in @('team.json', 'roster.csv', 'logos\logo.png', 'logos\scorebug.png')) {
+        $src = Join-Path $root "mods\teams\$team\$rel"
+        if (-not (Test-Path -LiteralPath $src -PathType Leaf)) { throw "Release team file is missing: $src" }
+        $dst = Join-Path $teamStage "$team\$rel"
+        New-Item -ItemType Directory -Path (Split-Path $dst -Parent) -Force | Out-Null
+        Copy-Item -LiteralPath $src -Destination $dst
+    }
+}
+
 New-Item -ItemType Directory -Path $dist -Force | Out-Null
 & $iscc (Join-Path $root 'installer\NFL2K5-PC.iss')
 if ($LASTEXITCODE -ne 0) { throw 'Inno Setup compilation failed.' }

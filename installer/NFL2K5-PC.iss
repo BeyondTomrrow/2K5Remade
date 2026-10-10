@@ -50,7 +50,7 @@ Source: "nfl2k5_video.default.ini"; DestName: "nfl2k5_video.ini"; DestDir: "{app
 ; debug symbols, saves, or user-supplied audio/video.
 Source: "..\mods\README.md"; DestDir: "{app}\mods"; Flags: ignoreversion
 Source: "..\mods\textures\README.txt"; DestDir: "{app}\mods\textures"; Flags: ignoreversion
-Source: "..\mods	extures\README.txt"; DestDir: "{app}\mods	extures"; Flags: ignoreversion
+Source: "..\mods\textures\README.txt"; DestDir: "{app}\mods\textures"; Flags: ignoreversion
 Source: "..\mods\presentation.ini"; DestDir: "{app}\mods"; Flags: ignoreversion
 Source: "..\mods\discord.ini"; DestDir: "{app}\mods"; Flags: onlyifdoesntexist
 Source: "..\mods\presentations\*.html"; DestDir: "{app}\mods\presentations"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -61,11 +61,12 @@ Source: "..\mods\presentations\*.png"; DestDir: "{app}\mods\presentations"; Flag
 Source: "..\mods\presentations\*.ttf"; DestDir: "{app}\mods\presentations"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\mods\presentations\*.md"; DestDir: "{app}\mods\presentations"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\mods\presentations\*.txt"; DestDir: "{app}\mods\presentations"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "..\mods\teams\*.json"; DestDir: "{app}\mods\teams"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "..\mods\teams\*.png"; DestDir: "{app}\mods\teams"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "..ssets\controls\*.png"; DestDir: "{app}ssets\controls"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "..ssets\controls\*.json"; DestDir: "{app}ssets\controls"; Flags: ignoreversion
-Source: "..\docs	hird-party\kenney-input-prompts-LICENSE.txt"; DestDir: "{app}\docs	hird-party"; Flags: ignoreversion
+; Teams: staged by tools\build-release.ps1 (the clubs' presentation files and the
+; release teams it lists); test teams in mods\teams never ship.
+Source: "..\release\teams\*"; DestDir: "{app}\mods\teams"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\assets\controls\*.png"; DestDir: "{app}\assets\controls"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\assets\controls\*.json"; DestDir: "{app}\assets\controls"; Flags: ignoreversion
+Source: "..\docs\third-party\kenney-input-prompts-LICENSE.txt"; DestDir: "{app}\docs\third-party"; Flags: ignoreversion
 Source: "..\Music\README.txt"; DestDir: "{app}\Music"; Flags: ignoreversion
 Source: "..\original\README.md"; DestDir: "{app}\original"; Flags: ignoreversion
 Source: "..\README.md"; DestDir: "{app}"; Flags: ignoreversion
