@@ -75,8 +75,8 @@ typedef struct Nfl2k5PlayerStat {
     /* Optional roster identity carried with a live stat sample.  These are
      * copied by the presentation layer before the guest callback returns. */
     const char *full_name;
-    int photo_id;
-    int jersey_number;
+    int photo_id;               /* -1 unknown; zero is a valid photo ID */
+    int jersey_number;          /* -1 unknown; zero is a valid jersey */
 } Nfl2k5PlayerStat;
 
 void nfl2k5_broadcast_event(Nfl2k5BroadcastEvent event, int team);

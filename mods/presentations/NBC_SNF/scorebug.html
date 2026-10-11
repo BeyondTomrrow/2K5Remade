@@ -4,15 +4,39 @@
 <meta charset="utf-8">
 <title>NBC Sunday Night Football</title>
 <link rel="stylesheet" href="scorebug.css">
+<link rel="stylesheet" href="extra-inserts.css">
+<link rel="stylesheet" href="broadcast-scenes.css">
+<link rel="stylesheet" href="pregame-inserts.css">
 <link rel="stylesheet" href="layout.css">
+<script src="preview-clock.js"></script>
 </head>
 <body>
+<svg width="0" height="0" aria-hidden="true" style="position:absolute">
+  <defs><filter id="nbc-white-key" color-interpolation-filters="sRGB">
+    <!-- Composite the exact Paint pixels: white becomes alpha, saturated
+         feather colours remain opaque. The source PNG is unchanged. -->
+    <feColorMatrix in="SourceGraphic" type="matrix" result="key" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  -1 -1 -1 0 3"/>
+    <feComposite in="SourceGraphic" in2="key" operator="in"/>
+  </filter>
+  <filter id="nbc-silver-key" color-interpolation-filters="sRGB">
+    <feColorMatrix in="SourceGraphic" type="matrix" result="silhouette" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  -1 -1 -1 0 3"/>
+    <!-- Restrict the keyed mask to the source image: the matrix's constant
+         alpha must not turn transparent filter margins into a silver box. -->
+    <feComposite in="silhouette" in2="SourceAlpha" operator="in" result="feathers"/>
+    <feFlood flood-color="#bfc8d1" result="silver"/>
+    <feComposite in="silver" in2="feathers" operator="in"/>
+  </filter>
+  <filter id="reference-logo-alpha" color-interpolation-filters="sRGB">
+    <!-- The old plate RGB already includes the reference edge's coverage. -->
+    <feComponentTransfer><feFuncA type="linear" slope="0" intercept="1"/></feComponentTransfer>
+  </filter></defs>
+</svg>
 <div id="canvas">
   <!-- Pure HTML/CSS/SVG. Inside #bug, units are design pixels: the bug is
        576x94 (reference/reference.png); the down & distance tab hangs below
        it and the scoring-drive layout reaches past both sides. The whole
        bug is scaled with --bug-scale. -->
-  <div id="bug" data-element="bug">
+  <div id="bug" class="off-air" data-element="bug">
     <div class="half away" data-element="away-half">
       <div class="panel"></div>
       <div class="logo-window" data-element="away-logo"><img class="logo" alt=""></div>
@@ -48,6 +72,7 @@
     </div>
     <div class="drive-bar" data-element="drive-bar">
       <div class="drive-logo"><img class="logo" alt=""></div>
+      <div class="drive-player"><img class="portrait" alt=""><div class="position"></div><div class="name"></div></div>
       <div class="drive-title">SCORING DRIVE</div>
       <div class="stat plays"><span class="lbl">PLAYS</span><span class="val"></span></div>
       <div class="stat yds"><span class="lbl">YDS</span><span class="val"></span></div>
@@ -57,7 +82,8 @@
 
     <div class="pod" data-element="pod">
       <div class="pulse"></div><div class="pulse p2"></div>
-      <svg class="peacock" viewBox="-23 -23 46 24" aria-hidden="true">
+      <img class="peacock-user" src="assets/branding/nbc-peacock-user.png" alt="NBC">
+      <svg class="peacock peacock-fallback" viewBox="-23 -23 46 24" aria-hidden="true">
         <defs><linearGradient id="feather" x1="0" y1="-1" x2="0" y2="0.2" gradientUnits="objectBoundingBox"><stop offset="0" stop-color="#eef3f8"/><stop offset="1" stop-color="#a9b4c1"/></linearGradient></defs>
         <g fill="url(#feather)" stroke="#1a2129" stroke-width="0.9" stroke-linejoin="round"><path d="M0 0 C -5.2 -3.5, -6.4 -15.5, 0 -20.5 C 6.4 -15.5, 5.2 -3.5, 0 0 Z" transform="rotate(-75)"/><path d="M0 0 C -5.2 -3.5, -6.4 -15.5, 0 -20.5 C 6.4 -15.5, 5.2 -3.5, 0 0 Z" transform="rotate(-45)"/><path d="M0 0 C -5.2 -3.5, -6.4 -15.5, 0 -20.5 C 6.4 -15.5, 5.2 -3.5, 0 0 Z" transform="rotate(-15)"/><path d="M0 0 C -5.2 -3.5, -6.4 -15.5, 0 -20.5 C 6.4 -15.5, 5.2 -3.5, 0 0 Z" transform="rotate(15)"/><path d="M0 0 C -5.2 -3.5, -6.4 -15.5, 0 -20.5 C 6.4 -15.5, 5.2 -3.5, 0 0 Z" transform="rotate(45)"/><path d="M0 0 C -5.2 -3.5, -6.4 -15.5, 0 -20.5 C 6.4 -15.5, 5.2 -3.5, 0 0 Z" transform="rotate(75)"/></g>
         <path d="M0 -7 L -3 0.6 L 3 0.6 Z" fill="#eef3f8" stroke="#1a2129" stroke-width="0.7"/>
@@ -76,15 +102,18 @@
       <div class="big-word"></div>
     </div>
   </div>
-  <!-- Live SNF quarterback insert.  The portrait is decoded from NFL 2K5's
-       own roster asset; the numbers come from the live GameCast passing row. -->
+  <!-- Native player-stat insert. All families share the SNF glass/curve
+       geometry; columns and portraits are supplied by the event. -->
   <div id="qb-stat" data-element="quarterback-stat">
     <div class="qs-sheen"></div>
+    <img class="qs-team-logo logo" alt="">
     <img class="qs-portrait" alt="">
     <div class="qs-position">QB</div>
     <div class="qs-name"></div>
     <div class="qs-season">THIS SEASON</div>
     <div class="qs-rule"></div>
+    <div class="qs-topic"></div>
+    <svg class="qs-curve" viewBox="0 0 60 100" preserveAspectRatio="none" aria-hidden="true"><path d="M12 0 C50 22 50 78 8 100 L29 100 C66 70 67 25 42 0Z" fill="#cfd4d9"/><path d="M42 0 C65 25 67 70 29 100 L42 100 C68 63 68 31 52 0Z" fill="#7f8993"/></svg>
     <div class="qs-fields">
       <span><b>COMP PCT</b><strong class="pct">0.0</strong></span>
       <span><b>YDS</b><strong class="yds">0</strong></span>
@@ -92,6 +121,7 @@
       <span><b>INT</b><strong class="int">0</strong></span>
     </div>
     <div class="qs-brand"><i></i><em>SNF</em></div>
+    <div class="qs-note"></div>
   </div>
   <div id="player-feature" data-element="player-feature">
     <div class="pf-backdrop"></div>
@@ -99,7 +129,7 @@
     <div class="pf-wedge"></div>
     <img class="pf-logo logo" alt="">
     <img class="pf-portrait" alt="">
-    <div class="pf-kicker">OVER THE LAST TWO SEASONS</div>
+    <div class="pf-kicker"></div>
     <div class="pf-title"></div>
     <div class="pf-name"></div>
     <div class="pf-position"></div>
@@ -111,8 +141,10 @@
       <div><span>INTERCEPTIONS</span><b class="pf-int"></b><em>—</em></div>
       <div><span>QB RATING</span><b class="pf-rate"></b><em>—</em></div>
     </div>
-    <div class="pf-brand"><i></i><strong>SNF</strong></div>
+    <div class="pf-brand"><img class="nbc-brand" src="assets/branding/nbc-peacock-user.png" alt="NBC"><strong>SNF</strong></div>
   </div>
+  <div id="snf-notice" aria-hidden="true"><div class="notice-glass"></div><img class="nbc-brand" src="assets/branding/nbc-peacock-user.png" alt="NBC"><div class="notice-title"></div><div class="notice-detail"></div><div class="notice-curve"></div></div>
+  <div id="snf-wipe" aria-hidden="true"><div class="wipe-plane back"></div><div class="wipe-plane front"></div><div class="wipe-light"></div><div class="wipe-lockup"><img class="nbc-brand" src="assets/branding/nbc-peacock-user.png" alt="NBC"><span>SUNDAY NIGHT</span><strong>FOOTBALL</strong></div></div>
 </div>
 <!-- Starting lineup (LINEUP event): one player at a time, laid out from the
      2025 SNF player introductions (1920x1080 reference frames). Canvas px. -->
@@ -141,5 +173,9 @@
 </div>
 <script src="../_runtime/nfl2k5-presentation.js"></script>
 <script src="scorebug.js"></script>
+<script src="extra-inserts.js"></script>
+<script src="broadcast-scenes.js"></script>
+<script src="pregame-inserts.js"></script>
+<script src="preview-scenes.js"></script>
 </body>
 </html>

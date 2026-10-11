@@ -19,8 +19,10 @@ if ($LASTEXITCODE -ne 0) { throw 'Standalone mod-pack installer build failed.' }
 
 & (Join-Path $PSScriptRoot 'build-team-builder.ps1')
 
-# SOFTDRINK 2K28 v0.4 disc image (Mod Studio output) and the retail+widescreen executable.
+# Native code packs published with the installer.  A patch is only offered when
+# this catalog contains an executable built from its exact patched default.xbe.
 $softDrinkV04Hash = '2b0fbbbb89b5c72aaed7c454bf6e78dd2c97f1e417e2d761e515907ed81471ab'
+$softDrinkV06Hash = 'f67e6fc1cb76c9ea1f1ad504e4a6491ff126483d66a9da8ddb92950bbaf740ba'
 $widescreenHash = '81d6e16c25ca7ea1014d0ced915f910f5d354eaeabeb9adfcbb6956e2a0b54f8'
 
 $required = @(
@@ -31,6 +33,7 @@ $required = @(
     (Join-Path $root 'tools\nfl2k5-save-converter.exe'),
     (Join-Path $root 'installer\nfl2k5_video.default.ini'),
     (Join-Path $root "release\code-packs\$softDrinkV04Hash\NFL2K5.exe"),
+    (Join-Path $root "release\code-packs\$softDrinkV06Hash\NFL2K5.exe"),
     $iscc
 )
 foreach ($path in $required) {

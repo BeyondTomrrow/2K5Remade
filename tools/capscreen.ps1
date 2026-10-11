@@ -34,5 +34,12 @@ $w = $r.R - $r.L; $hh = $r.B - $r.T
 $b = New-Object System.Drawing.Bitmap $w, $hh
 $g = [System.Drawing.Graphics]::FromImage($b)
 $g.CopyFromScreen($r.L, $r.T, 0, 0, $b.Size)
-$b.Save((Join-Path (Get-Location) $Out), [System.Drawing.Imaging.ImageFormat]::Png)
-"$w x $hh -> $Out"
+# Join-Path rejects an already-qualified child on recent PowerShell versions.
+# Drivers pass both the normal relative logs\ name and absolute names while
+# keeping captures beside a test root, so resolve the destination once rather
+# than prefixing the working directory unconditionally.
+$dest = if ([IO.Path]::IsPathRooted($Out)) { $Out } else { Join-Path (Get-Location) $Out }
+$parent = Split-Path -Parent $dest
+if ($parent) { New-Item -ItemType Directory -Force -Path $parent | Out-Null }
+$b.Save($dest, [System.Drawing.Imaging.ImageFormat]::Png)
+"$w x $hh -> $dest"

@@ -2,12 +2,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 #include <windows.h>
 #include "xbox_memory_layout.h"
 /* Host yields in guest context must give up the guest CPU (RECOMP_GGL). */
 #include "xbox_ggl.h"
 #include "recomp_funcs.h"
 #include "nfl2k5_broadcast.h"
+#include "nfl2k5_presentation.h"
 
 /* FOX samples the same current-match player accessor as Gamecast, but from
  * normal guest execution rather than the Gamecast renderer. The scope-zero
@@ -164,6 +166,203 @@ static int nfl2k5_guest_player_identity(uint32_t player, char *short_name, size_
     _snprintf_s(short_name, short_capacity, _TRUNCATE, "%c. %s", first[0], last);
     _snprintf_s(full_name, full_capacity, _TRUNCATE, "%s %s", first, last);
     return 1;
+}
+
+/* Match records are normally fixed up, but added roster names can retain
+ * the disc's field-relative representation. Resolve only bounded readable
+ * text, preferring the actual fixed-up pointer used by the live QB path. */
+static int nfl2k5_guest_record_text(uint32_t field, char *out, size_t capacity)
+{
+    uint32_t value;
+    int64_t relative;
+    if (!nfl2k5_qb_read(field, &value, sizeof value) || !value) return 0;
+    if (nfl2k5_guest_text(value, out, capacity)) return 1;
+    relative = (int64_t)field + (int32_t)value - 1;
+    if (relative >= 0 && relative <= UINT32_MAX &&
+        nfl2k5_guest_text((uint32_t)relative, out, capacity)) return 1;
+    relative++;
+    if (relative >= 0 && relative <= UINT32_MAX &&
+        nfl2k5_guest_text((uint32_t)relative, out, capacity)) return 1;
+    out[0] = 0;
+    return 0;
+}
+
+/* Validate the original position descriptor and every nested attribute
+ * callback before entering it. Owned default.xbe has 17 positions and15
+ * attribute groups. Bounds allow expanded weights, but unknown callbacks
+ * do not run. All known 246060..246A70 accessors read record attributes;
+ * EDX=0 skips their status/13E2B0 live-stat branches and record+0x30 chain. */
+static int nfl2k5_overall_dependencies(unsigned position)
+{
+    uint32_t descriptor, components, entries, i;
+    float offset, spread;
+    if (position > 16 ||
+        !nfl2k5_qb_read(0x00AC4948u + position * 4u, &descriptor, sizeof descriptor) ||
+        !nfl2k5_qb_read(descriptor, &offset, sizeof offset) ||
+        !nfl2k5_qb_read(descriptor + 4u, &spread, sizeof spread) ||
+        !isfinite(offset) || !isfinite(spread) || spread == 0.0f ||
+        !nfl2k5_qb_read(descriptor + 8u, &components, sizeof components) ||
+        !components || components > 24u ||
+        !nfl2k5_qb_read(descriptor + 12u, &entries, sizeof entries)) return 0;
+    for (i = 0; i < components; ++i) {
+        unsigned char component[4];
+        uint32_t count, table, weights[128], k;
+        if (!nfl2k5_qb_read(entries + i * 4u, component, sizeof component) ||
+            !component[0] || component[1] >= component[2] || component[3] >= 15u ||
+            !nfl2k5_qb_read(0x00AC47C0u + component[3] * 8u, &count, sizeof count) ||
+            count < 4u || count > 64u ||
+            !nfl2k5_qb_read(0x00AC47C4u + component[3] * 8u, &table, sizeof table) ||
+            !nfl2k5_qb_read(table, weights, count * 8u)) return 0;
+        for (k = 0; k < count; ++k) {
+            float weight;
+            uint32_t callback;
+            memcpy(&weight, &weights[k * 2u], sizeof weight);
+            if (!isfinite(weight)) return 0;
+            if (k != 1u && k < 4u) continue; /* Auxiliary height/weight constants. */
+            callback = weights[k * 2u + 1u];
+            if (callback < 0x00246060u || callback > 0x00246A70u || !recomp_lookup(callback)) return 0;
+        }
+    }
+    return 1;
+}
+
+/* sub_0025F8D0 ranks native pregame players with ECX=record, EDX=0 and
+ * sub_00246D80. It returns one normalized x87 value; sub_00246D90 is the
+ * title's own integer display conversion of that same calculation. Neither
+ * accessor mutates the roster. Preserve the entire caller CPU state, also
+ * the lazy return flags that an interrupted guest call may still need. */
+static int nfl2k5_guest_player_overall(uint32_t player, int display, double *out)
+{
+    uint32_t save_eax = g_eax, save_ebx = g_ebx, save_ecx = g_ecx, save_edx = g_edx;
+    uint32_t save_esi = g_esi, save_edi = g_edi, save_ebp = g_ebp, save_esp = g_esp;
+    uint32_t save_seh_ebp = g_seh_ebp;
+    uint32_t save_rf_kind = g_rf_kind, save_rf_a = g_rf_a, save_rf_b = g_rf_b, save_rf_cf = g_rf_cf;
+    int32_t save_rf_as = g_rf_as, save_rf_bs = g_rf_bs;
+    int save_fp_top = g_fp_top, save_fp_cmp = g_fp_cmp, save_df = g_df;
+    uint16_t save_fp_cc = g_fp_cc, save_fp_control = g_fp_control_word;
+    double save_fp_stack[8], value;
+    RecompXmm save_xmm[8] = { g_xmm0, g_xmm1, g_xmm2, g_xmm3,
+                            g_xmm4, g_xmm5, g_xmm6, g_xmm7 };
+    int valid;
+    static unsigned abi_errors;
+
+    memcpy(save_fp_stack, g_fp_stack, sizeof save_fp_stack);
+    g_ecx = player;
+    g_edx = 0u; /* Original pregame selector requests unmodified ratings. */
+    PUSH32(g_esp, 0x0025F917u); /* Synthetic return frame, no stack arguments. */
+    if (display) {
+        RECOMP_ABI_CALL(0x00246D90u, sub_00246D90);
+        value = (double)(int32_t)g_eax;
+    } else {
+        RECOMP_ABI_CALL(0x00246D80u, sub_00246D80);
+        value = g_fp_stack[g_fp_top & 7];
+    }
+    valid = g_esp == save_esp &&
+            g_fp_top == (display ? save_fp_top : ((save_fp_top + 7) & 7)) &&
+            isfinite(value) && value >= 0.0 && value <= (display ? 100.0 : 1.0);
+    if (!valid && abi_errors++ < 4)
+        fprintf(stderr, "[PREGAME-OVR-ABI] display=%d esp=%08X expected=%08X fp=%d expected=%d value=%.3f\n",
+                display, g_esp, save_esp, g_fp_top,
+                display ? save_fp_top : ((save_fp_top + 7) & 7), value);
+    g_eax = save_eax; g_ebx = save_ebx; g_ecx = save_ecx; g_edx = save_edx;
+    g_esi = save_esi; g_edi = save_edi; g_ebp = save_ebp; g_esp = save_esp;
+    g_seh_ebp = save_seh_ebp; g_df = save_df;
+    g_rf_kind = save_rf_kind; g_rf_a = save_rf_a; g_rf_b = save_rf_b; g_rf_cf = save_rf_cf;
+    g_rf_as = save_rf_as; g_rf_bs = save_rf_bs;
+    memcpy(g_fp_stack, save_fp_stack, sizeof save_fp_stack);
+    g_fp_top = save_fp_top; g_fp_cmp = save_fp_cmp; g_fp_cc = save_fp_cc;
+    g_fp_control_word = save_fp_control;
+    g_xmm0 = save_xmm[0]; g_xmm1 = save_xmm[1]; g_xmm2 = save_xmm[2]; g_xmm3 = save_xmm[3];
+    g_xmm4 = save_xmm[4]; g_xmm5 = save_xmm[5]; g_xmm6 = save_xmm[6]; g_xmm7 = save_xmm[7];
+    if (valid) *out = value;
+    return valid;
+}
+
+/* Called by the existing popup/script path while it owns the guest CPU.
+ * Period zero alone is not a warmup cue: this only supplies owned metadata
+ * and does not open a graphic or invent a camera stage. */
+void nfl2k5_pregame_guest_roster_snapshot(void)
+{
+    static volatile LONG sampling;
+    const uint32_t teams[2] = { 0x00E5FC60u, 0x00E5FC20u }; /* away, home */
+    const uint32_t expected[2] = { 0x00B30A58u, 0x00B30864u };
+    uint32_t clock_object, rosters[2] = { 0, 0 };
+    unsigned counts[2] = { 0, 0 };
+    uint32_t stack_probe;
+    float clock = -1.0f, length = -1.0f;
+    Nfl2k5FeaturedPlayer players[2];
+    unsigned char checked_positions[17] = { 0 };
+    int side;
+    static unsigned diagnostics;
+
+    if (!nfl2k5_presentation_pregame_metadata_needed()) return;
+    if (nfl2k5_qb_rd32(0x00E602C4u) != 0u || nfl2k5_qb_rd32(0x00E602B4u) != 0u)
+        return;
+    /* A presenter has no current guest stack. An accidental host-thread
+     * call must fail before constructing any synthetic guest call frame. */
+    if (g_esp < 256u || !nfl2k5_qb_read(g_esp - 256u, &stack_probe, sizeof stack_probe)) return;
+    clock_object = nfl2k5_qb_rd32(0x00E6028Cu);
+    if (!clock_object || !nfl2k5_qb_read(clock_object + 0x10u, &clock, sizeof clock) ||
+        !nfl2k5_qb_read(0x00E602B0u, &length, sizeof length) ||
+        !isfinite(clock) || !isfinite(length) || length <= 0.0f || length >= 4000.0f ||
+        fabsf(clock - length) > 0.1f || InterlockedCompareExchange(&sampling, 1, 0))
+        return;
+    memset(players, 0, sizeof players);
+    for (side = 0; side < 2; ++side) {
+        unsigned char count = 0;
+        uint32_t score = nfl2k5_qb_rd32(teams[side] + 8u), best = 0;
+        double best_rating = -1.0, displayed = 0.0;
+        unsigned i;
+        int complete = 1;
+        players[side].number = players[side].photo_id = players[side].overall = -1;
+        rosters[side] = nfl2k5_qb_rd32(teams[side] + 0x1Cu);
+        /* sub_00087160 binds these exact roster tables to the team objects.
+         * A partially loaded or unknown layout supplies no best-player claim. */
+        if (!score || nfl2k5_qb_rd32(score) != 0u || rosters[side] != expected[side] ||
+            !nfl2k5_qb_read(rosters[side] + 0x11Cu, &count, sizeof count) ||
+            count == 0u || count > 71u) continue;
+        counts[side] = count;
+        for (i = 0; i < count; ++i) {
+            uint32_t player = nfl2k5_qb_rd32(rosters[side] + i * 4u);
+            unsigned char record[0x54];
+            double rating;
+            /* Evaluate all owned roster positions. Unlike the old native
+             * spotlight selector, a role/status flag is not a rating filter. */
+            if (!player || !nfl2k5_qb_read(player, record, sizeof record) ||
+                record[0x35] > 16u) { complete = 0; break; }
+            if (!checked_positions[record[0x35]]) {
+                if (!nfl2k5_overall_dependencies(record[0x35])) { complete = 0; break; }
+                checked_positions[record[0x35]] = 1;
+            }
+            if (!nfl2k5_guest_player_overall(player, 0, &rating)) { complete = 0; break; }
+            if (rating > best_rating) { best_rating = rating; best = player; }
+        }
+        if (!complete || !best || !nfl2k5_guest_player_overall(best, 1, &displayed)) continue;
+        {
+            char first[32], last[40];
+            unsigned char position;
+            uint16_t photo;
+            uint32_t jersey;
+            Nfl2k5FeaturedPlayer *p = &players[side];
+            if (!nfl2k5_guest_record_text(best + 0x10u, first, sizeof first) ||
+                !nfl2k5_guest_record_text(best + 0x14u, last, sizeof last)) continue;
+            _snprintf_s(p->full_name, sizeof p->full_name, _TRUNCATE, "%s %s", first, last);
+            if (nfl2k5_qb_read(best + 0x35u, &position, sizeof position))
+                if (!nfl2k5_guest_text(nfl2k5_qb_rd32(0x004F2688u + position * 4u),
+                        p->position, sizeof p->position)) p->position[0] = 0;
+            if (nfl2k5_qb_read(best + 0x20u, &jersey, sizeof jersey)) {
+                int number = (int)((jersey >> 3) & 0x7Fu);
+                if (number <= 99) p->number = number;
+            }
+            if (nfl2k5_qb_read(best + 6u, &photo, sizeof photo)) p->photo_id = photo;
+            p->overall = (int)displayed;
+        }
+    }
+    nfl2k5_presentation_featured_players(clock_object, rosters, counts, players);
+    if (diagnostics++ < 4)
+        fprintf(stderr, "[PREGAME-BEST] away=%s OVR=%d home=%s OVR=%d source=native\n",
+                players[0].full_name, players[0].overall, players[1].full_name, players[1].overall);
+    InterlockedExchange(&sampling, 0);
 }
 
 void nfl2k5_live_qb_guest_tick(void)

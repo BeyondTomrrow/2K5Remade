@@ -14,6 +14,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <string>
 
@@ -47,6 +48,10 @@ struct PresentationHostConfig {
     int canvas_width = 1920;          /* logical CSS pixels */
     int canvas_height = 1080;
     float raster_scale = 1.0f;        /* device pixels per CSS pixel */
+    /* Optional bounded string messages from this package's entry page.
+     * Runs on the host thread; consumers must copy data and synchronize it.
+     * Used for acknowledging a native-card replacement after it renders. */
+    std::function<void(const std::string &)> on_page_message;
 };
 
 class PresentationHost {

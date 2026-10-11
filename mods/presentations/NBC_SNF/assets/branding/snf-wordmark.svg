@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 460 120">
+  <title>SNF short wordmark</title>
+  <!-- Code-native contours reconstructed from J. Collins' 2022 logo sheet.
+       Block widths and the peacock-beak counters follow the inspected art;
+       this is a trace, not the designer's original vector file. -->
+  <g fill="#fff">
+    <path d="M13 0H130Q142 0 142 14V41H104V28H30L36 33V39L130 55Q142 58 142 71V107Q142 120 129 120H13Q0 120 0 107V79H38V93H104V77L12 63Q0 61 0 49V14Q0 0 13 0Z"/>
+    <path d="M158 0H211L265 78L271 77L263 73V0H301V120H249L195 42L188 41L196 47V120H158Z"/>
+    <path d="M317 0H460V28H347L353 33V47H452V76H355V120H317Z"/>
+  </g>
+</svg>

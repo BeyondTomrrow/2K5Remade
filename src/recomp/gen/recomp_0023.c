@@ -204181,6 +204181,8 @@ void sub_00357350(void)
     (void)_fa; (void)_fb; (void)_fas; (void)_fbs;
 
 loc_00357350: ;
+    /* NFL2K5-GENPATCH:CONTROLLER_SETUP_LABELS */
+    if (eax == 3u) { extern uint32_t nfl2k5_cs_labels(void); uint32_t _cs = nfl2k5_cs_labels(); if (_cs) { eax = _cs; esp += 4; return; } }
     eax = (uint32_t)((int32_t)eax * (int32_t)0x98);
     _fb = (uint32_t)(0x580E30) & 0xFFFFFFFFu; _fbs = (int32_t)(int32_t)(_fb); /* add source, before the write */
     eax = eax + 0x580E30;
@@ -204200,6 +204202,8 @@ void sub_00357360(void)
     RECOMP_INTERP_GATE(0x00357360u);
 
 loc_00357360: ;
+    /* NFL2K5-GENPATCH:CONTROLLER_SETUP_NAME */
+    if (eax == 3u) { extern uint32_t nfl2k5_cs_name(void); uint32_t _cs = nfl2k5_cs_name(); if (_cs) { eax = _cs; esp += 4; return; } }
     eax = MEM32(eax * 4 + 0x580FF8);
     esp += 4; return; /* ret */
 
@@ -204222,6 +204226,8 @@ void sub_00357370(void)
     ebp = g_seh_ebp; /* fpo_leaf: inherit caller's frame */
 
 loc_00357370: ;
+    /* NFL2K5-GENPATCH:CONTROLLER_SETUP_APPLY */
+    { extern void nfl2k5_cs_applied(uint32_t, uint32_t); nfl2k5_cs_applied(MEM32(0xAEA030), MEM32(0xAEA034)); }
     edx = MEM32(0xAEA034);
     ecx = MEM32(0xAEA030);
     PUSH32(esp, 0x00357381u); RECOMP_ABI_CALL(0x00077240u, sub_00077240); /* call 0x00077240 */
@@ -204517,6 +204523,8 @@ loc_00357413: ;
     PUSH32(esp, 0x0035741Du); RECOMP_ABI_CALL(0x0014D390u, sub_0014D390); /* call 0x0014D390 */
 
 loc_0035741D: ;
+    /* NFL2K5-GENPATCH:CONTROLLER_SETUP_NEXT */
+    { extern int nfl2k5_cs_pages(void); if (nfl2k5_cs_pages() == 4) { MEM32(0xAEA034) = MEM32(0xAEA034) >= 3u ? 0u : MEM32(0xAEA034) + 1u; g_seh_ebp = ebp; sub_00357370(); return; } }
     _fa = (uint32_t)(MEM32(0xAEA034)) & 0xFFFFFFFFu; _fb = (uint32_t)(2) & 0xFFFFFFFFu;
     _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp MEM32(0xAEA034), 2 (32-bit) */
     if (CMP_NE(_fa, _fb)) goto loc_00357435; /* jne: not equal / not zero */
@@ -204631,6 +204639,8 @@ loc_00357463: ;
     PUSH32(esp, 0x0035746Du); RECOMP_ABI_CALL(0x0014D390u, sub_0014D390); /* call 0x0014D390 */
 
 loc_0035746D: ;
+    /* NFL2K5-GENPATCH:CONTROLLER_SETUP_PREV */
+    { extern int nfl2k5_cs_pages(void); if (nfl2k5_cs_pages() == 4) { MEM32(0xAEA034) = MEM32(0xAEA034) == 0u ? 3u : MEM32(0xAEA034) - 1u; g_seh_ebp = ebp; sub_00357370(); return; } }
     eax = MEM32(0xAEA034);
     _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;
     _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test eax, eax (32-bit) */
@@ -205133,6 +205143,8 @@ loc_003576C8: ;
 
 loc_003576D3: ;
     edx = 0xFFE0E0E0u;
+    /* NFL2K5-GENPATCH:CONTROLLER_SETUP_ROW_COLOR */
+    { extern uint32_t nfl2k5_cs_row_color(uint32_t, uint32_t); edx = nfl2k5_cs_row_color(esi, edx); }
     ecx = esp + 0x10;
     g_ebp = ebp; /* frame stays current across calls */
     g_seh_ebp = ebp;

@@ -2093,6 +2093,8 @@ void sub_000E2E50(void)
     ebp = g_seh_ebp; /* fpo_leaf: inherit caller's frame */
 
 loc_000E2E50: ;
+    /* NFL2K5-GENPATCH:TEAM_FILTER_ADDED */
+    { extern int nfl2k5_team_filter(uint32_t, uint32_t, uint32_t); int _tf = nfl2k5_team_filter(ecx, edx, MEM32(esp)); if (_tf >= 0) { eax = (uint32_t)_tf; esp += 4; return; } }
     eax = MEM32(ecx + 0x128);
     _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(5) & 0xFFFFFFFFu;
     _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp eax, 5 (32-bit) */

@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SNF animation previews</title>
+<style>
+:root{color-scheme:dark;font-family:Arial,Helvetica,sans-serif;background:#101318;color:#f1f3f6}
+*{box-sizing:border-box}body{margin:0}button,a{font:inherit}button{cursor:pointer}header{padding:24px 28px 18px;border-bottom:1px solid #303742;background:#151a22}
+h1{font-size:25px;margin:0 0 8px;letter-spacing:.02em}header p{margin:0;color:#b9c2cf;font-size:14px;line-height:1.5;max-width:900px}
+.layout{display:grid;grid-template-columns:242px minmax(0,1fr);max-width:1760px;margin:auto;min-height:calc(100vh - 111px)}
+nav{padding:20px 16px;border-right:1px solid #303742}nav h2{font-size:11px;color:#97a6ba;text-transform:uppercase;letter-spacing:.12em;margin:0 0 13px}
+.choice{display:block;width:100%;border:1px solid transparent;background:transparent;color:#bfc7d4;text-align:left;padding:10px 12px;margin:3px 0;border-radius:7px;font-size:13px}
+.choice:hover{background:#202834;color:#fff}.choice[aria-pressed="true"]{background:#27364b;color:#fff;border-color:#586e8c}
+main{padding:22px 24px 28px;min-width:0}.bar{display:flex;justify-content:space-between;gap:18px;align-items:center;margin-bottom:15px}.bar h2{font-size:19px;margin:0 0 6px}.sample{color:#98a8bc;font-size:12px}
+.controls{display:flex;gap:8px;flex-wrap:wrap}.controls button{background:#242c38;border:1px solid #455166;color:#fff;border-radius:6px;padding:9px 13px;font-size:13px}.controls button:hover{background:#354157}.controls button:focus-visible,.choice:focus-visible,a:focus-visible{outline:2px solid #b6d5ff;outline-offset:3px}
+.stage{position:relative;width:100%;aspect-ratio:16/9;overflow:hidden;border:1px solid #495263;background:radial-gradient(ellipse at 52% 38%,#33494a 0%,#1a2d29 40%,#0a1417 100%);box-shadow:0 18px 55px #0006}
+.stage iframe{position:absolute;left:0;top:0;width:1920px;height:1080px;border:0;transform:scale(var(--scale,.5));transform-origin:top left;pointer-events:none;background:transparent}
+.note{padding:16px 0 0;color:#b9c2cf;font-size:14px;line-height:1.6;max-width:880px}.note p{margin:0 0 12px}.note a{color:#bdcee7;text-decoration-color:#71839e;text-underline-offset:3px}.disclosure{font-size:12px;color:#91a0b4;border-top:1px solid #303742;padding-top:13px}
+@media(max-width:900px){header{padding:20px}.layout{grid-template-columns:1fr}nav{border-right:0;border-bottom:1px solid #303742;display:flex;gap:5px;overflow-x:auto;padding:12px}nav h2{display:none}.choice{width:auto;white-space:nowrap;margin:0;padding:9px 11px}main{padding:18px 14px}.bar{align-items:flex-start;flex-direction:column;gap:12px}h1{font-size:22px}}
+</style>
+</head>
+<body>
+<header><h1>SNF animation previews</h1><p>Choose a graphic to watch its entrance and exit. These previews use the presentation package with sample game data.</p></header>
+<div class="layout">
+<nav aria-label="Graphic previews"><h2>Graphics</h2><div id="choices"></div></nav>
+<main>
+  <div class="bar"><div><h2 id="title">Player stats</h2><div class="sample">SAMPLE DATA · PRESENTATION PREVIEW</div></div><div class="controls"><button id="replay" type="button">Replay animation</button><button id="cycle" type="button" aria-pressed="false">Play all</button></div></div>
+  <div class="stage" id="stage"><iframe id="preview" title="Selected SNF presentation animation" src="scorebug.html?preview=qb-stat&gallery=1"></iframe></div>
+  <div class="note"><p id="description"></p><p class="disclosure">This is a browser preview, not a game recording. Sample names and statistics are for reviewing layout and motion. A browser preview does not verify that a graphic appears at the right moment in the game.</p><p><a href="https://www.behance.net/gallery/154057369/2022-SNF-Insert-and-Scorebug-System" target="_blank" rel="noopener">View the original 2022 SNF reference</a></p></div>
+</main>
+</div>
+<script>
+(function(){
+  'use strict';
+  var entries=[
+    ['intro','Pregame player matchup','Transparent matchup with one top-rated player per team. It waits through the crowd stage, appears during warmups, and clears before coin toss or kickoff. Original game portraits and illustrative historical data are used in this preview.'],
+    ['career-fact','Pregame career fact','The compact SNF replacement for the supplied Jessie Bates career fact. A missing portrait falls back to the owned team logo.'],
+    ['coin-toss','Coin toss','The SNF banner preserves the native message and remains until the native card closes or play begins. This preview shows a supplied decision update and clears before kickoff.'],
+    ['watermark','NBC/SNF corner logo','The persistent top-right peacock and SNF mark. It belongs to an active match and clears for menus and pauses.'],
+    ['player-profile','Single-player profile','A distinct biography / player feature with supplied portrait, jersey number, college and metadata. Extra supplied fields advance to another page.'],
+    ['profile-receiver','Single-player profile — receiver','The same supplied-data player profile for a receiver, with receiving stats and identity.'],
+    ['qb-stat','Player stats — QB','The compact player-stat insert: player identity, team color, translucent dark plate and stat columns.'],
+    ['receiver-stat','Player stats — receiver','The player-stat insert with receiving statistics.'],
+    ['player-context','Player stats — topic and note','The separate context variant adds a team-color topic rail and pale footer note when the event supplies that information.'],
+    ['drive-stat','Player stats — scorebug foldout','A separate scorebug-attached player insert: scores stack at the left, the clock pod moves beside them, and a portrait/stat rail expands to the right.'],
+    ['player-feature','Player feature','The larger player feature, with its portrait and table reveal.'],
+    ['player-comparison','Two-player comparison','Separate curved center table, paired player portraits and two team-color vapor rails. The displayed comparison is sample data.'],
+    ['team-stats','Team-stat table','A separate small table with a team heading and supplied player rows. Sample pass-distribution numbers are for layout review.'],
+    ['lineup-motion','Starting lineup','The starting-lineup presentation and player reveals.'],
+    ['touchdown','Touchdown','The scoring announcement and return to the scorebug.'],
+    ['field-goal','Field goal','The field-goal scoring announcement.'],
+    ['safety','Safety','The safety scoring announcement.'],
+    ['extra-point','Extra point','The extra-point announcement.'],
+    ['flag','Flag','The penalty state of the scorebug.'],
+    ['timeout','Timeout','The timeout state and its reveal.'],
+    ['quarter','End of quarter','The quarter-ending presentation.'],
+    ['halftime','Halftime','The halftime presentation.'],
+    ['final','Final','The final-score presentation.'],
+    ['replay-wipe','Replay transition','The replay transition recreation. Its motion needs comparison with a viewable broadcast reference before an exact match can be claimed.'],
+    ['reference','2022 designer layout','The measured designer layout, including the play clock under the circular pod. The inline play clock visible in some later broadcasts is a distinct variant.'],
+    ['showcase','Full sequence','A sequence of the package\'s preview events.']
+  ];
+  var chosen=0,serial=0,cycleTimer=0;
+  var stage=document.getElementById('stage'),frame=document.getElementById('preview'),title=document.getElementById('title'),desc=document.getElementById('description'),choices=document.getElementById('choices'),cycle=document.getElementById('cycle');
+  var requested=new URLSearchParams(location.search).get('preview');
+  entries.forEach(function(entry,index){var button=document.createElement('button');button.type='button';button.className='choice';button.textContent=entry[1];button.setAttribute('aria-pressed','false');button.addEventListener('click',function(){stopCycle();select(index);});choices.appendChild(button);if(entry[0]===requested)chosen=index;});
+  function size(){stage.style.setProperty('--scale',String(stage.clientWidth/1920));}
+  function select(index){chosen=index;var entry=entries[chosen];title.textContent=entry[1];desc.textContent=entry[2];Array.prototype.forEach.call(choices.children,function(button,i){button.setAttribute('aria-pressed',String(i===chosen));});frame.src='scorebug.html?preview='+encodeURIComponent(entry[0])+'&gallery=1&replay='+(++serial);size();}
+  function stopCycle(){clearTimeout(cycleTimer);cycleTimer=0;cycle.textContent='Play all';cycle.setAttribute('aria-pressed','false');}
+  function nextScene(){var name=entries[chosen][0],wait=name==='showcase'?72000:(name==='touchdown'||name==='field-goal')?13000:name==='lineup-motion'?10500:name==='replay-wipe'?3000:9000;cycleTimer=setTimeout(function(){select((chosen+1)%entries.length);nextScene();},wait);}
+  document.getElementById('replay').addEventListener('click',function(){select(chosen);});
+  cycle.addEventListener('click',function(){if(cycleTimer){stopCycle();return;}cycle.textContent='Stop sequence';cycle.setAttribute('aria-pressed','true');select(chosen);nextScene();});
+  window.addEventListener('resize',size);frame.addEventListener('load',size);
+  select(chosen);
+})();
+</script>
+</body>
+</html>

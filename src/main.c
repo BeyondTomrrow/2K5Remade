@@ -11,6 +11,7 @@
 #include "xbox_memory_layout.h"
 #include "apu.h"
 #include "recomp_icall_feedback.h"
+#include "nfl2k5_presentation.h"
 #include <stdbool.h>
 extern MCPXAPUState *g_apu_state;
 extern bool apu_hook_handle_mmio(PCONTEXT, uintptr_t, uint32_t, int);
@@ -927,12 +928,60 @@ void nfl2k5_diag_res(uint32_t res, int load, uint32_t ret, uint32_t r2, uint32_t
             blk, blk ? *(const int32_t *)(m + blk + 8u) : -1, *(const uint32_t *)(m + 0xB12124u), ret, r2, r3, *(const uint32_t *)(m + 0xB09590u));
 }
 
+/* Optional source-only pregame audit. The existing command-start hook is
+ * after 5A6F0, so ctx's cursor points at the next operands. Record them and
+ * the actual camera-state identities without classifying a warmup stage. */
+static int snf_pregame_read(uint32_t address, void *out, size_t size)
+{
+    uint64_t end = (uint64_t)address + size;
+    if (address < 0x10000u || end > 0x10000000u) return 0;
+    __try {
+        memcpy(out, (const uint8_t *)xbox_GetMemoryOffset() + address, size);
+        return 1;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return 0;
+    }
+}
+
+static void snf_pregame_script_trace(uint32_t ctx, uint32_t op, uint32_t start)
+{
+    static int enabled = -1;
+    static volatile LONG printed;
+    uint32_t period, phase, clock_object, cursor, frame = 0, type = 0;
+    uint32_t state_c8 = 0, state_cc = 0, camera_c4 = 0, camera_c8 = 0;
+    float clock, length;
+    uint8_t args[8];
+    if (enabled < 0) enabled = getenv("NFL2K5_DIAG_SNF_PREGAME") != NULL;
+    if (!enabled || !start || op > 255u ||
+        !snf_pregame_read(0x00E602C4u, &period, sizeof period) || period != 0 ||
+        !snf_pregame_read(0x00E602B4u, &phase, sizeof phase) || phase != 0 ||
+        !snf_pregame_read(0x00E6028Cu, &clock_object, sizeof clock_object) || !clock_object ||
+        !snf_pregame_read(clock_object + 0x10u, &clock, sizeof clock) ||
+        !snf_pregame_read(0x00E602B0u, &length, sizeof length) ||
+        !(clock >= 0.0f && clock < 4000.0f && length > 0.0f && length < 4000.0f) ||
+        clock - length > 0.1f || length - clock > 0.1f ||
+        !snf_pregame_read(ctx, &cursor, sizeof cursor) ||
+        !snf_pregame_read(cursor, args, sizeof args) ||
+        InterlockedIncrement(&printed) > 2000) return;
+    snf_pregame_read(0x00A6A9B4u, &frame, sizeof frame);
+    snf_pregame_read(0x00A8F7B8u + op * 12u, &type, sizeof type);
+    snf_pregame_read(0x00E602C8u, &state_c8, sizeof state_c8);
+    snf_pregame_read(0x00E602CCu, &state_cc, sizeof state_cc);
+    snf_pregame_read(0x00B616C4u, &camera_c4, sizeof camera_c4);
+    snf_pregame_read(0x00B616C8u, &camera_c8, sizeof camera_c8);
+    fprintf(stderr, "[SNF-PREGAME] t=%llu frame=%u ctx=%08X op=%u type=%u cursor=%08X args=%02X%02X%02X%02X %02X%02X%02X%02X state=%08X/%08X camera=%08X/%08X\n",
+            (unsigned long long)GetTickCount64(), frame, ctx, op, type, cursor,
+            args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7],
+            state_c8, state_cc, camera_c4, camera_c8);
+}
+
 /* 2026-09-25: presentation script commands (DIAG_SCRIPTOP). Prints each
  * command a script context starts, and the first poll of a command, with the
  * {type, start, poll} entry at 0xA8F7B8 + op*12. */
 void nfl2k5_diag_script(uint32_t ctx, uint32_t op, uint32_t start)
 {
     extern int xbox_verbose(void);
+    snf_pregame_script_trace(ctx, op, start);
     static int presentation_trace = -1;
     if (presentation_trace < 0)
         presentation_trace = getenv("NFL2K5_PRESENTATION_TRACE") != NULL;
@@ -1146,6 +1195,7 @@ void nfl2k5_diag_popup(uint32_t obj, int what)
     if (what == 0) {
         char title[64], msg[128];
         int i;
+        if (obj < 0x10000u || obj > 0x4000000u - 0xF20u) return;
         {
             /* A presentation package is playing its lineup intro: the
              * game's player card (slot 1) closes at once instead of
@@ -1162,6 +1212,16 @@ void nfl2k5_diag_popup(uint32_t obj, int what)
         for (i = 0; i < 127 && *(const uint16_t *)(m + obj + 0xCCu + i * 2u); i++)
             msg[i] = (char)*(const uint16_t *)(m + obj + 0xCCu + i * 2u);
         msg[i] = 0;
+        nfl2k5_presentation_coin_toss(title, msg,
+                *(const float *)(m + obj + 8u), *(const int32_t *)(m + obj), 0, obj);
+        if (*(const int32_t *)(m + obj) == 1 &&
+            *(const uint32_t *)(m + obj + 0x10u) == 1 &&
+            *(const uint32_t *)(m + obj + 0x48u) == 1 &&
+            *(const uint32_t *)(m + obj + 0x228u) == 1) {
+            if (nfl2k5_presentation_pregame_metadata_needed())
+                nfl2k5_pregame_guest_roster_snapshot();
+            nfl2k5_presentation_player_fact(obj);
+        }
         fprintf(stderr, "  [POPUPOP] show obj=%08X slot=%d t=%g '%s' '%s' ret=%08X\n", obj,
                 (int)*(const uint32_t *)(m + obj), *(const float *)(m + obj + 8u), title, msg,
                 *(const uint32_t *)(m + g_esp));
@@ -1198,6 +1258,14 @@ void nfl2k5_diag_popup(uint32_t obj, int what)
         }
     } else if (what == 1) {
         uint32_t sl = 0xB61B50u + obj * 0xF20u;
+        if (obj < 2 && *(const uint32_t *)(m + sl + 4u)) {
+            char title[64], msg[128];
+            pc_inline_utf16(m, sl + 0x4Cu, title, sizeof title);
+            pc_inline_utf16(m, sl + 0xCCu, msg, sizeof msg);
+            nfl2k5_presentation_coin_toss(title, msg,
+                    *(const float *)(m + sl + 8u), (int)obj, 1, sl);
+            nfl2k5_presentation_player_fact_hide((int)obj);
+        }
         fprintf(stderr, "  [POPUPOP] close slot=%d active=%u closing=%u cb=%08X ret=%08X\n", (int)obj,
                 obj < 2 ? *(const uint32_t *)(m + sl + 4u) : 0, obj < 2 ? *(const uint32_t *)(m + sl + 0xCu) : 0,
                 obj < 2 ? *(const uint32_t *)(m + sl + 0xF14u) : 0, *(const uint32_t *)(m + g_esp));
@@ -3036,6 +3104,15 @@ int main(int argc, char **argv)
             if (*e != ',') break;
             fr = e + 1;
         }
+    }
+    /* SOFTDRINK 2K28 v0.6 faults in sub_0006E4E5, the virtual-dispatch body
+     * entered by its injected menu objects.  Do not interpret the whole
+     * 0x6E000 block: it also contains the frontend's per-frame dispatcher,
+     * which leaves the title screen unable to advance after START. */
+    if (!strcmp(NFL2K5_XBE_SHA256,
+                "f67e6fc1cb76c9ea1f1ad504e4a6491ff126483d66a9da8ddb92950bbaf740ba")) {
+        printf("[BOOT] SOFTDRINK v0.6 dispatcher compatibility: %u function\n",
+               nfl2k5_interp_force(0x0006E4E5u, 0x0006E5F5u));
     }
     /* SoftDrink's MyCareer row stores its injected UTF-16 label at
      * 0x014E8698.  The native menu path accepts the row and action but the

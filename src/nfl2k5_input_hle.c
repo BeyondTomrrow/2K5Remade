@@ -244,6 +244,34 @@ static void host_mouse_gamepad(XBOX_GAMEPAD *g)
         g->sThumbLY = (SHORT)((dy * 32767L) / cy);
 }
 
+/* Keep the documented keyboard controls on the normal per-port path too.
+ * The controller-settings work introduced host_gamepad_port(), but left this
+ * mapping behind in the legacy branch below. That made Enter and the menu
+ * keys work only when NFL2K5_LEGACY_INPUT was set, while the active default
+ * silently ignored them. */
+static void host_keyboard_gamepad(XBOX_GAMEPAD *g)
+{
+    if (!window_focused()) return;
+#define KEY(vk) (GetAsyncKeyState(vk) & 0x8000)
+    if (KEY(VK_RETURN)) g->wButtons |= 0x10;
+    if (KEY(VK_BACK))   g->wButtons |= 0x20;
+    if (KEY(VK_UP))     g->wButtons |= 0x01;
+    if (KEY(VK_DOWN))   g->wButtons |= 0x02;
+    if (KEY(VK_LEFT))   g->wButtons |= 0x04;
+    if (KEY(VK_RIGHT))  g->wButtons |= 0x08;
+    if (KEY('Z') || KEY(VK_SPACE)) g->bAnalogButtons[0] = 255;
+    if (KEY('X')) g->bAnalogButtons[1] = 255;
+    if (KEY('C')) g->bAnalogButtons[2] = 255;
+    if (KEY('V')) g->bAnalogButtons[3] = 255;
+    if (KEY('Q')) g->bAnalogButtons[6] = 255;
+    if (KEY('E')) g->bAnalogButtons[7] = 255;
+    if (KEY('A')) g->sThumbLX = -32767;
+    if (KEY('D')) g->sThumbLX = 32767;
+    if (KEY('W')) g->sThumbLY = 32767;
+    if (KEY('S')) g->sThumbLY = -32767;
+#undef KEY
+}
+
 /* src/nfl2k5_controls.c: which controller is on each port, remapped, with
  * dead zones; the keyboard and mouse add to port 0. */
 extern unsigned nfl2k5_controls_ports(void);
@@ -260,6 +288,8 @@ static void host_gamepad_port(int port, XBOX_GAMEPAD *g)
     if (no_host_pad < 0) no_host_pad = getenv("NFL2K5_NO_HOST_PAD") != NULL;
     nfl2k5_controls_get(port, g, !(no_host_pad && g_last_script_press && GetTickCount() - g_last_script_press < 15000));
     if (port == 0) {
+        host_keyboard_gamepad(g);
+        host_mouse_gamepad(g);
         g->wButtons |= auto_press(g->bAnalogButtons);
         g->wButtons |= file_press(g->bAnalogButtons);
     }
@@ -300,27 +330,8 @@ static void host_gamepad(XBOX_GAMEPAD *g)
           GetTickCount() - g_last_script_press < 15000) &&
         xbox_InputGetState(0, &pad) == 0)
         *g = pad.Gamepad;
-    if (window_focused()) {
-#define KEY(vk) (GetAsyncKeyState(vk) & 0x8000)
-        if (KEY(VK_RETURN)) g->wButtons |= 0x10;
-        if (KEY(VK_BACK))   g->wButtons |= 0x20;
-        if (KEY(VK_UP))     g->wButtons |= 0x01;
-        if (KEY(VK_DOWN))   g->wButtons |= 0x02;
-        if (KEY(VK_LEFT))   g->wButtons |= 0x04;
-        if (KEY(VK_RIGHT))  g->wButtons |= 0x08;
-        if (KEY('Z') || KEY(VK_SPACE)) g->bAnalogButtons[0] = 255;
-        if (KEY('X')) g->bAnalogButtons[1] = 255;
-        if (KEY('C')) g->bAnalogButtons[2] = 255;
-        if (KEY('V')) g->bAnalogButtons[3] = 255;
-        if (KEY('Q')) g->bAnalogButtons[6] = 255;
-        if (KEY('E')) g->bAnalogButtons[7] = 255;
-        if (KEY('A')) g->sThumbLX = -32767;
-        if (KEY('D')) g->sThumbLX = 32767;
-        if (KEY('W')) g->sThumbLY = 32767;
-        if (KEY('S')) g->sThumbLY = -32767;
-#undef KEY
-        host_mouse_gamepad(g);
-    }
+    host_keyboard_gamepad(g);
+    host_mouse_gamepad(g);
     g->wButtons |= auto_press(g->bAnalogButtons);
     g->wButtons |= file_press(g->bAnalogButtons);
     {   /* L3: show what is playing; R3: next song (local music library). */

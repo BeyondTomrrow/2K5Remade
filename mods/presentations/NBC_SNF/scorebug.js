@@ -12,15 +12,15 @@
 
   var SPEC = [
     { el: '.away .abbr',   anchor: 'right',  x: 143,   top: 32,   cap: 21,   ref: ['LAR', 75] },
-    { el: '.away .record', anchor: 'right',  x: 142.5, top: 57,   cap: 10,   ref: ['10-6', 37] },
+    { el: '.away .record', anchor: 'right',  x: 143,   top: 57,   cap: 10,   ref: ['10-6', 37] },
     { el: '.away .score',  anchor: 'center', x: 193,   top: 31.5, cap: 35,   ref: ['42', 62.5] },
     { el: '.home .score',  anchor: 'center', x: 379,   top: 31.5, cap: 35,   ref: ['27', 58.5] },
-    { el: '.home .abbr',   anchor: 'left',   x: 431,   top: 31.5, cap: 21.5, ref: ['CIN', 65] },
+    { el: '.home .abbr',   anchor: 'left',   x: 430,   top: 30.5, cap: 21.5, ref: ['CIN', 65] },
     { el: '.home .record', anchor: 'left',   x: 432,   top: 57,   cap: 10,   ref: ['9-7', 29] },
     /* inside the pod (its box starts at 240, 2.5) */
-    { el: '.pod .clock',         anchor: 'center', x: 48.5, top: 36.5, cap: 17,  ref: ['15:00', 76] },
-    { el: '.pod .quarter .num',  anchor: 'right',  x: 46.5, top: 62,   cap: 16,  ref: ['2', 16] },
-    { el: '.pod .quarter .ord',  anchor: 'left',   x: 46,   top: 62.8, cap: 8.7, ref: ['ND', 19.5], underline: true }
+    { el: '.pod .clock',         anchor: 'center', x: 48, top: 36.5, cap: 17,  ref: ['15:00', 76] },
+    { el: '.pod .quarter .num',  anchor: 'right',  x: 43, top: 63,   cap: 15,  ref: ['2', 12.5] },
+    { el: '.pod .quarter .ord',  anchor: 'left',   x: 43,   top: 63.8, cap: 8.7, ref: ['ND', 23], underline: true, underlineOffset: 0 }
   ];
 
   var ctx = document.createElement('canvas').getContext('2d');
@@ -46,9 +46,53 @@
     el.style.left = (left + m.actualBoundingBoxLeft * sx) + 'px';
     el.style.transformOrigin = '0 0';
     el.style.transform = 'scaleX(' + sx + ')';
-    if (spec.underline) el.style.setProperty('--ul-top', (baseline + 1) + 'px');
+    if (spec.el.indexOf('.score') >= 0) {
+      el.style.backgroundPosition = '0 ' + (baseline - spec.cap) + 'px';
+      el.style.backgroundSize = '100% ' + spec.cap + 'px';
+    }
+    if (spec.underline) el.style.setProperty('--ul-top', (baseline + (spec.underlineOffset == null ? 1 : spec.underlineOffset)) + 'px');
   }
-  function layout() { SPEC.forEach(fit); }
+  /* The reference has proportional numeric advances. Stretching the whole
+     string to its total width made 1 too broad, pushed the following 5/0
+     right, and drew the colon too low. Keep the measured cap height and
+     anchor, then fit each glyph to that role's observed advances. */
+  var CLOCK_WIDTH={ '0':20, '1':11, '5':18, ':':5 };
+  var CLOCK_ADVANCE={ '0':19, '1':12, '5':20, ':':7 };
+  var RECORD_WIDTH={ '0':11.5, '1':5.5, '5':10.5, '6':11.5, '7':7, '9':10.5, '-':5.5 };
+  var RECORD_ADVANCE={ '0':13, '1':7, '5':12, '6':13, '7':9, '9':13, '-':7 };
+  function fitNumeric(spec,widths,advances,defaultWidth,defaultAdvance,maxWidth) {
+    var el=q(spec.el), text=el.textContent, size=parseFloat(el.style.fontSize);
+    if (!text) { el.textContent=''; return; }
+    var fm=measure(el,size,'H'), baseline=(size-(fm.fontBoundingBoxAscent+fm.fontBoundingBoxDescent))/2+fm.fontBoundingBoxAscent;
+    var cursor=0, glyphs=[];
+    Array.from(text).forEach(function(ch) {
+      var m=measure(el,size,ch), width=widths[ch]==null?defaultWidth:widths[ch];
+      glyphs.push({ch:ch,x:cursor,m:m,width:width});
+      cursor+=advances[ch]==null?defaultAdvance:advances[ch];
+    });
+    var last=glyphs[glyphs.length-1], ink=last.x+last.width, scale=Math.min(1,maxWidth/ink);
+    el.style.left=(spec.anchor==='right'?spec.x-ink*scale:spec.anchor==='center'?spec.x-ink*scale/2:spec.x)+'px';
+    el.style.width=ink+'px'; el.style.transform='scaleX('+scale+')'; el.textContent='';
+    glyphs.forEach(function(g) {
+      var span=document.createElement('span'); span.className='numeric-glyph'; span.textContent=g.ch;
+      if (spec.el==='.pod .clock' && g.ch===':') {
+        span.classList.add('clock-colon');span.style.left=g.x+'px';span.style.top=(baseline-spec.cap)+'px';
+      } else {
+        var sx=g.width/Math.max(.01,g.m.actualBoundingBoxLeft+g.m.actualBoundingBoxRight);
+        span.style.left=(g.x+g.m.actualBoundingBoxLeft*sx)+'px';span.style.transform='scaleX('+sx+')';
+        if(spec.el==='.pod .clock') {
+          span.style.backgroundPosition='0 '+(baseline-spec.cap)+'px';
+          span.style.backgroundSize='100% '+spec.cap+'px';
+        }
+      }
+      el.appendChild(span);
+    });
+  }
+  function layout() {
+    SPEC.forEach(fit);
+    fitNumeric(SPEC[6],CLOCK_WIDTH,CLOCK_ADVANCE,19,20,77);
+    fitNumeric(SPEC[1],RECORD_WIDTH,RECORD_ADVANCE,10.5,13,76);
+  }
 
   /* ---- teams ---- */
   var ALIAS = { STL: 'LAR', SD: 'LAC', OAK: 'LV', JAC: 'JAX', WSH: 'WAS' };
@@ -59,14 +103,48 @@
     NE: '#0c2f5e', NO: '#9f8958', NYG: '#0b2265', NYJ: '#125740', PHI: '#004c54', PIT: '#d9a300', SF: '#aa0000',
     SEA: '#1d4f91', TB: '#d50a0a', TEN: '#4b92db', WAS: '#7a1a1a'
   };
-  var missing = {};
+  var missing = {}, missingPlates = {};
+  var latestState = null, matchKey = '', noticeTimer = 0, wipeTimer = 0, flagTimer = 0;
+  var notice = document.getElementById('snf-notice'), wipe = document.getElementById('snf-wipe');
+  function escapeText(t) { return String(t == null ? '' : t).replace(/[&<>"']/g, function (c) { return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]; }); }
+  function teamFor(e) { return e.teamData || (latestState && latestState[e.team]) || null; }
+  function rgbaTeam(t) {
+    var c = color(t).replace('#', '');
+    return /^[0-9a-f]{6}$/i.test(c) ? [parseInt(c.slice(0,2),16),parseInt(c.slice(2,4),16),parseInt(c.slice(4,6),16)].join(',') : '70,78,88';
+  }
+  function duration(e, fallback) { var n = Number(e.duration || e.displaySeconds || (e.player && e.player.displaySeconds)); return n > 0 ? Math.min(n * 1000, 30000) : fallback; }
+  function surname(t) { return String(t || '').trim().split(/\s+/).pop().replace(/[^a-z]/gi,'').toLowerCase(); }
+  function cleanPlayer(raw) {
+    var p = Object.assign({}, raw);
+    /* Earlier native paths sometimes appended the cached QB identity to a
+       receiver event. Do not show that QB's face/number under another name. */
+    if (p.name && p.fullName && surname(p.name) !== surname(p.fullName)) {
+      p.fullName = ''; p.portrait = ''; p.number = null; p.position = '';
+    }
+    return p;
+  }
   function code(t) { var a = (t && t.abbreviation || '').toUpperCase(); return ALIAS[a] || a; }
-  function color(t) { return COLORS[code(t)] || (t && t.primaryColor) || '#444a55'; }
+  function color(t) { return (t && t.primaryColor) || COLORS[code(t)] || '#444a55'; }
   function logoSrc(t) { var c = code(t); return (!c || missing[c]) ? ((t && t.logo) || '') : 'assets/logos/' + c + '.png'; }
   function setLogo(img, t) {
     var src = logoSrc(t), c = code(t);
+    img.onerror = function () { if (!missing[c]) { missing[c] = true; img.setAttribute('src', (t && t.logo) || ''); } else img.removeAttribute('src'); };
     if (img.getAttribute('src') !== src) img.setAttribute('src', src);
-    img.onerror = function () { if (!missing[c]) { missing[c] = true; img.setAttribute('src', (t && t.logo) || ''); } };
+  }
+  function setScorebugLogo(side, t) {
+    var win=q('.half.'+side+' .logo-window'), img=win.querySelector('.logo'), c=code(t);
+    var plate=side==='away' && c==='LAR' ? 'logo_LAR_away' : side==='home' && c==='CIN' ? 'logo_CIN_home' : '';
+    if(missingPlates[plate])plate='';
+    win.classList.toggle('reference-logo',!!plate);
+    win.classList.toggle('reference-cin',plate==='logo_CIN_home');
+    if (!plate) { setLogo(img,t); return; }
+    img.onerror=function () {
+      missingPlates[plate]=true;
+      win.classList.remove('reference-logo','reference-cin');
+      setLogo(img,t);
+    };
+    var src='assets/plates/'+plate+'.png';
+    if(img.getAttribute('src')!==src)img.setAttribute('src',src);
   }
 
   var dirty = false;
@@ -80,7 +158,7 @@
     setText('.' + side + ' .record', t.record || '');
     setText('.' + side + ' .score', t.score == null ? '' : String(t.score));
     if (prev && prev.score !== t.score && !busy) pop(side);
-    setLogo(q('.half.' + side + ' .logo'), t);
+    setScorebugLogo(side, t);
     var bars = bug.querySelectorAll('.' + side + ' .timeouts i');
     for (var i = 0; i < bars.length; i++) bars[i].classList.toggle('used', i >= (t.timeouts == null ? 3 : t.timeouts));
   }
@@ -126,69 +204,186 @@
   var pod = q('.pod'), flagUntil = 0;
   function updateFlag(on) { pod.classList.toggle('flag', on || Date.now() < flagUntil); }
 
-  /* ---- live quarterback stats ---- */
-  var qbStat = document.getElementById('qb-stat'), qbStatData = null, qbTimer = 0, broadcastLive = false;
+  /* ---- 2022 SNF player-stat insert ----------------------------------
+   * The player/stat trigger is a compact lower third.  It is not the large
+   * editorial feature page below: that remains PLAYER_FEATURE. */
+  var qbStat = document.getElementById('qb-stat'), qbStatData = null, qbTimer = 0, qbVisible = false, broadcastLive = false;
   function qsq(s) { return qbStat.querySelector(s); }
-  function setQbStat(e) {
-    var p = e && e.player;
-    if (!p) return;
+  /* Unknown values are not zero-stat performances. Keep explicitly supplied
+     zeroes, and derive rates only when every input is available. */
+  function statNumber(v) {
+    if (typeof v !== 'number' && typeof v !== 'string') return null;
+    if (typeof v === 'string' && !v.trim()) return null;
+    var n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  }
+  function statValue(v) {
+    if (typeof v === 'number') return Number.isFinite(v) ? String(v) : '—';
+    return typeof v === 'string' && v.trim() ? v : '—';
+  }
+  function statNumeric(v) { var n = statNumber(v); return n == null ? '—' : String(n); }
+  function statPair(a, b, separator) { return statNumeric(a) + (separator || '/') + statNumeric(b); }
+  function statAverage(total, count, supplied) {
+    var explicit = statNumber(supplied), t = statNumber(total), c = statNumber(count);
+    if (explicit != null) return explicit.toFixed(1);
+    if (t == null || c == null || c < 0) return '—';
+    var average = c > 0 ? t / c : t === 0 ? 0 : null;
+    return average != null && Number.isFinite(average) ? average.toFixed(1) : '—';
+  }
+  function suppliedFields(fields, limit) {
+    return fields.filter(function (f) { return f && typeof f.label === 'string' && f.label.trim(); })
+      .slice(0, limit).map(function (f) { return [f.label, statValue(f.value)]; });
+  }
+  function isDefensivePosition(pos) { return /^(DEF|CB|SS|FS|S|DB|LB|ILB|OLB|MLB|DE|DT|NT|DL)$/.test(pos); }
+  function statCells(p) {
+    var pos = playerCardPosition(p), n = statNumeric;
+    if (Array.isArray(p.fields)) return suppliedFields(p.fields, 6);
+    if (pos === 'QB') return [['COMP', n(p.completions)], ['ATT', n(p.attempts)], ['YDS', n(p.passingYards)], ['TD/INT', statPair(p.passingTouchdowns, p.interceptions)], ['RATING', passerRating(p)]];
+    if (pos === 'RB' || pos === 'FB') return [['CAR', n(p.carries)], ['YDS', n(p.rushingYards)], ['TD', n(p.rushingTouchdowns)], ['AVG', statAverage(p.rushingYards, p.carries, p.yardsPerCarry)]];
+    if (pos === 'WR' || pos === 'TE') return [['REC', n(p.receptions)], ['YDS', n(p.receivingYards)], ['TD', n(p.receivingTouchdowns)], ['AVG', statAverage(p.receivingYards, p.receptions, p.yardsPerCatch)]];
+    if (pos === 'P') return [['PUNTS', n(p.punts)], ['AVG', n(p.puntAverage)], ['LONG', n(p.longestPunt)], ['IN 20', n(p.puntsInside20)]];
+    if (pos === 'K') return [['FG', statPair(p.fieldGoalsMade, p.fieldGoalsAttempted)], ['LONG', n(p.longestFieldGoal)], ['PTS', n(p.points)], ['XP', n(p.extraPoints)]];
+    if (isDefensivePosition(pos)) return [['TKL', n(p.tackles)], ['SACK', n(p.sacks)], ['INT', n(p.defensiveInterceptions)], ['FF', n(p.forcedFumbles)]];
+    return [['STATS', '—']];
+  }
+  function setPlayerStat(e) {
+    if (!e || !e.player || !(e.player.name || e.player.fullName)) return false;
+    var p = cleanPlayer(e.player);
     qbStatData = p;
-    qsq('.qs-name').textContent = p.name || p.fullName || '';
-    qsq('.qs-position').textContent = p.position || 'QB';
+    qsq('.qs-name').textContent = (p.fullName || p.name || '').toUpperCase();
+    qsq('.qs-position').textContent = playerCardPosition(p) + (p.number != null ? '\n' + p.number : '');
+    qsq('.qs-season').textContent = e.caption || p.caption || p.season || (p.scope === 'season' ? 'THIS SEASON' : 'TODAY');
+    var rawTopic = e.topic || p.topic, rawNote = e.note || p.note;
+    var topic = typeof rawTopic === 'string' ? rawTopic.trim() : '', note = typeof rawNote === 'string' ? rawNote.trim() : '';
+    qsq('.qs-topic').textContent = topic;
+    qsq('.qs-note').textContent = note;
+    qbStat.classList.toggle('with-topic', !!topic);
+    qbStat.classList.toggle('with-note', !!note);
+    qsq('.qs-fields').innerHTML = statCells(p).map(function (data) { return '<span><b>' + escapeText(data[0]) + '</b><strong>' + escapeText(data[1]) + '</strong></span>'; }).join('');
     var portrait = qsq('.qs-portrait');
-    portrait.src = p.portrait || '';
+    portrait.onerror = function () { qbStat.classList.add('no-photo'); portrait.removeAttribute('src'); };
+    if (p.portrait) portrait.src = p.portrait; else portrait.removeAttribute('src');
     qbStat.classList.toggle('no-photo', !p.portrait);
-    var att = Number(p.attempts) || 0, cmp = Number(p.completions) || 0;
-    qsq('.pct').textContent = att ? (100 * cmp / att).toFixed(1) : '0.0';
-    qsq('.yds').textContent = String(Number(p.passingYards) || 0);
-    qsq('.td').textContent = String(Number(p.passingTouchdowns) || 0);
-    qsq('.int').textContent = String(Number(p.interceptions) || 0);
-    var s = NFL2K5.state, team = s && e.team && s[e.team];
+    var team = teamFor(e);
+    var teamLogo = qsq('.qs-team-logo');
+    setLogo(teamLogo, team);
+    qbStat.style.setProperty('--qs-team', color(team));
+    qbStat.style.setProperty('--qs-rgb', rgbaTeam(team));
+    return true;
   }
 
   var playerFeature = document.getElementById('player-feature'), featureTimer = 0;
   function passerRating(p) {
-    var a = Number(p.attempts) || 0, c = Number(p.completions) || 0;
-    if (!a) return '0.0';
+    var supplied = statNumber(p.passerRating != null ? p.passerRating : p.rating);
+    if (supplied != null) return supplied.toFixed(1);
+    var a = statNumber(p.attempts), c = statNumber(p.completions), yards = statNumber(p.passingYards);
+    var td = statNumber(p.passingTouchdowns), interceptions = statNumber(p.interceptions);
+    if (a == null || c == null || yards == null || td == null || interceptions == null ||
+        a < 0 || c < 0 || c > a || td < 0 || interceptions < 0) return '—';
+    if (!a) return c === 0 && yards === 0 && td === 0 && interceptions === 0 ? '0.0' : '—';
     var x = Math.max(0, Math.min(2.375, (c / a - .3) * 5));
-    var y = Math.max(0, Math.min(2.375, ((Number(p.passingYards) || 0) / a - 3) * .25));
-    var z = Math.max(0, Math.min(2.375, (Number(p.passingTouchdowns) || 0) / a * 20));
-    var w = Math.max(0, Math.min(2.375, 2.375 - (Number(p.interceptions) || 0) / a * 25));
+    var y = Math.max(0, Math.min(2.375, (yards / a - 3) * .25));
+    var z = Math.max(0, Math.min(2.375, (td / a) * 20));
+    var w = Math.max(0, Math.min(2.375, 2.375 - (interceptions / a) * 25));
     return (((x + y + z + w) / 6) * 100).toFixed(1);
   }
+  function playerCardRows(p) {
+    var pos = playerCardPosition(p), n = statNumeric;
+    if (Array.isArray(p.fields)) return suppliedFields(p.fields, 5);
+    if (pos === 'QB') return [
+      ['COMPLETIONS / ATTEMPTS', statPair(p.completions, p.attempts, ' / ')],
+      ['PASSING YARDS', n(p.passingYards)], ['TOUCHDOWNS', n(p.passingTouchdowns)],
+      ['INTERCEPTIONS', n(p.interceptions)], ['QB RATING', passerRating(p)]
+    ];
+    if (pos === 'RB' || pos === 'FB') return [
+      ['CARRIES', n(p.carries)], ['RUSHING YARDS', n(p.rushingYards)],
+      ['RUSHING TOUCHDOWNS', n(p.rushingTouchdowns)], ['YARDS PER CARRY', statAverage(p.rushingYards, p.carries, p.yardsPerCarry)],
+      ['LONGEST RUN', n(p.longestRun)]
+    ];
+    if (pos === 'WR' || pos === 'TE') return [
+      ['RECEPTIONS', n(p.receptions)], ['RECEIVING YARDS', n(p.receivingYards)],
+      ['RECEIVING TOUCHDOWNS', n(p.receivingTouchdowns)], ['YARDS PER CATCH', statAverage(p.receivingYards, p.receptions, p.yardsPerCatch)],
+      ['LONGEST RECEPTION', n(p.longestReception)]
+    ];
+    if (pos === 'P') return statCells(p);
+    if (pos === 'K') return [
+      ['FIELD GOALS', statPair(p.fieldGoalsMade, p.fieldGoalsAttempted, ' / ')],
+      ['LONGEST FIELD GOAL', n(p.longestFieldGoal)], ['POINTS', n(p.points)], ['EXTRA POINTS', n(p.extraPoints)], ['KICKOFFS', n(p.kickoffs)]
+    ];
+    if (isDefensivePosition(pos)) return [
+      ['TACKLES', n(p.tackles)], ['SACKS', n(p.sacks)], ['INTERCEPTIONS', n(p.defensiveInterceptions)],
+      ['FORCED FUMBLES', n(p.forcedFumbles)], ['DEFENSIVE TOUCHDOWNS', n(p.defensiveTouchdowns)]
+    ];
+    return [];
+  }
+  function playerCardPosition(p) {
+    var pos = String(p.position || '').toUpperCase();
+    if (/^(C|G|T|OG|OT|LG|RG|LT|RT|OL|LS)$/.test(pos)) return pos;
+    var kinds = ['QB','RB','WR','DEF','K'], kind = statNumber(p.kind);
+    if (kind != null && Number.isInteger(kind) && kinds[kind]) {
+      var kindPos = kinds[kind];
+      var family = pos === 'FB' ? 'RB' : pos === 'TE' ? 'WR' : /^(CB|SS|FS|DB|LB|ILB|OLB|DE|DT|NT)$/.test(pos) ? 'DEF' : pos;
+      if (family !== kindPos && pos !== 'P') return kindPos;
+    }
+    if (pos) return pos;
+    function hasAny(keys) { return keys.some(function (k) { return statNumber(p[k]) != null; }); }
+    if (hasAny(['attempts','completions','passingYards'])) return 'QB';
+    if (hasAny(['carries','rushingYards'])) return 'RB';
+    if (hasAny(['receptions','receivingYards'])) return 'WR';
+    if (hasAny(['fieldGoalsMade','fieldGoalsAttempted'])) return 'K';
+    if (hasAny(['tackles','sacks','defensiveInterceptions'])) return 'DEF';
+    return '';
+  }
   function showPlayerFeature(e) {
-    var p = e && e.player, s = NFL2K5.state, team = s && e.team && s[e.team];
-    if (!p) return;
+    if (!e || !e.player || !(e.player.name || e.player.fullName)) return;
+    var p = cleanPlayer(e.player), team = teamFor(e);
     clearTimeout(featureTimer);
     playerFeature.querySelector('.pf-name').textContent = p.fullName || p.name || '';
     var surname = (p.fullName || p.name || '').trim().split(/\s+/).pop().toUpperCase();
-    playerFeature.querySelector('.pf-title').textContent = surname + ' PLAYOFF MAGIC';
-    playerFeature.querySelector('.pf-position').textContent = (p.position || 'QB') + (p.number ? '  |  #' + p.number : '');
-    playerFeature.querySelector('.pf-ca').textContent = (Number(p.completions) || 0) + ' / ' + (Number(p.attempts) || 0);
-    playerFeature.querySelector('.pf-yds').textContent = String(Number(p.passingYards) || 0);
-    playerFeature.querySelector('.pf-td').textContent = String(Number(p.passingTouchdowns) || 0);
-    playerFeature.querySelector('.pf-int').textContent = String(Number(p.interceptions) || 0);
-    playerFeature.querySelector('.pf-rate').textContent = passerRating(p);
-    var portrait = playerFeature.querySelector('.pf-portrait'); portrait.src = p.portrait || '';
+    playerFeature.querySelector('.pf-title').textContent = e.title || p.title || surname + ' GAME STATS';
+    playerFeature.querySelector('.pf-kicker').textContent = e.subtitle || p.subtitle || 'TODAY';
+    playerFeature.querySelector('.pf-position').textContent = playerCardPosition(p) + (p.number != null ? '  |  #' + p.number : '');
+    playerFeature.style.setProperty('--pf-team', color(team));
+    playerFeature.style.setProperty('--pf-rgb', rgbaTeam(team));
+    var suppliedRows = Array.isArray(e.rows);
+    var compare = suppliedRows && Array.isArray(e.columns) && e.columns.length === 2 &&
+      e.columns.every(function (column) { return typeof column === 'string' && column.trim(); });
+    playerFeature.classList.toggle('single-column', !compare);
+    var headers = playerFeature.querySelector('.pf-head');
+    headers.querySelector('b').textContent = compare ? e.columns[0] : (e.valueCaption || 'GAME');
+    headers.querySelector('em').textContent = compare ? e.columns[1] : '';
+    var rows = playerCardRows(p), cells = playerFeature.querySelectorAll('.pf-table > div:not(.pf-head)');
+    cells.forEach(function (row, i) {
+      var custom = suppliedRows && e.rows[i], values;
+      if (custom && typeof custom.label === 'string' && custom.label.trim()) {
+        values = Array.isArray(custom.values) ? custom.values : [custom.value];
+      } else custom = null;
+      /* Supplied rows may contain meaningful single-column, historical or
+         non-QB data. A malformed row stays unavailable; never replace it
+         with unrelated current-game statistics. */
+      var data = suppliedRows ? custom ? [custom.label, statValue(values[0])] : ['—', '—'] : rows[i] || ['—', '—'];
+      row.querySelector('span').textContent = data[0];
+      row.querySelector('b').textContent = data[1];
+      row.querySelector('em').textContent = compare ? custom ? statValue(values[1]) : '—' : '';
+    });
+    var portrait = playerFeature.querySelector('.pf-portrait');
+    portrait.onerror = function () { playerFeature.classList.add('no-photo'); portrait.removeAttribute('src'); };
+    if (p.portrait) portrait.src = p.portrait; else portrait.removeAttribute('src');
     playerFeature.classList.toggle('no-photo', !p.portrait);
     var logo = playerFeature.querySelector('.pf-logo'); if (team) setLogo(logo, team); else logo.removeAttribute('src');
-    playerFeature.classList.add('on');
-    bug.classList.add('off-air');
-    qbStat.classList.remove('on');
+    playerFeature.classList.remove('on'); void playerFeature.offsetWidth; playerFeature.classList.add('on');
+    refreshVisibility();
     featureTimer = setTimeout(function () {
       playerFeature.classList.remove('on');
-      if (broadcastLive && !luOn) {
-        bug.classList.remove('off-air');
-        if (qbStatData) qbStat.classList.add('on');
-      }
-    }, 6500);
+      refreshVisibility();
+    }, duration(e, 6500));
   }
 
   /* ---- scoring sequence (touchdown / field goal / safety) ----
    * split -> neon word -> chrome word -> collapse into the pod -> scoring
    * drive bar (score ticks up) -> back to the scorebug. ~10.5 s; the
    * scorebug stays on screen for all of it. */
-  var busy = false, timers = [], recentPoints = { away: 0, home: 0 }, lastDrive = null;
+  var busy = false, timers = [], scoreQueue = [], recentPoints = { away: 0, home: 0 }, lastDrive = null;
   var takeoverEl = q('.takeover');
   function at(ms, fn) { timers.push(setTimeout(fn, ms)); }
   function fmtTop(s) { if (s == null) return '–'; s = Math.round(s); return Math.floor(s / 60) + ':' + ('0' + (s % 60)).slice(-2); }
@@ -199,9 +394,17 @@
   }
   function scoring(word, side, drive) {
     var s = NFL2K5.state;
-    if (busy || !s || !s[side]) return;
+    if (!broadcastLive || !s || !s[side]) return;
+    if (busy) { if (scoreQueue.length < 3) scoreQueue.push([word,side,drive]); return; }
+    if (luOn) luEnd();
+    clearTimeout(featureTimer); playerFeature.classList.remove('on');
+    clearTimeout(qbTimer); qbVisible = false;
     busy = true;
-    var t = s[side], other = side === 'away' ? 'home' : 'away';
+    refreshVisibility();
+    var t = s[side], other = side === 'away' ? 'home' : 'away', finalScore = t.score;
+    bug.classList.remove('player-drive');
+    q('.drive-bar .drive-title').textContent = 'SCORING DRIVE';
+    q('.drive-bar .plays .lbl').textContent = 'PLAYS';q('.drive-bar .yds .lbl').textContent = 'YDS';q('.drive-bar .top .lbl').textContent = 'T.O.P';
     bug.style.setProperty('--g', color(t));
     q('.takeover .big-word').textContent = word;
     q('.takeover .neon-logo').style.setProperty('--logo', 'url("' + logoSrc(t) + '")');
@@ -211,9 +414,10 @@
       var pts = s[k].score - (k === side ? recentPoints[side] : 0);
       q('.drive-stack .row.' + k + ' .pts').textContent = String(pts);
     });
+    recentPoints[side] = 0;
     setLogo(q('.drive-bar .drive-logo .logo'), t);
     showDrive(drive);
-    var withDrive = word !== 'SAFETY';
+    var withDrive = word === 'TOUCHDOWN' || word === 'FIELD GOAL';
 
     pod.classList.add('glow');
     bug.classList.add('split');
@@ -225,16 +429,38 @@
       at(4300, function () { bug.classList.add('stats'); });
       at(5400, function () {
         var el = q('.drive-stack .row.' + side + ' .pts');
-        el.textContent = String(NFL2K5.state[side].score);
+        el.textContent = String(finalScore);
         el.classList.remove('tick'); void el.offsetWidth; el.classList.add('tick');
       });
       at(9000, function () { bug.classList.add('closing'); });
       at(9900, function () { bug.classList.remove('compact', 'stats', 'closing'); pod.classList.remove('glow'); bug.classList.remove('split'); });
-      at(10600, function () { busy = false; recentPoints[side] = 0; });
+      at(10600, function () { finishScoring(side); });
     } else {
       at(3700, function () { takeoverEl.className = 'takeover'; bug.classList.remove('wordphase', 'split'); pod.classList.remove('glow'); });
-      at(4300, function () { busy = false; recentPoints[side] = 0; });
+      at(4300, function () { finishScoring(side); });
     }
+  }
+  function finishScoring(side) {
+    busy = false; timers = []; refreshVisibility();
+    var next = scoreQueue.shift(); if (next && broadcastLive) scoring(next[0],next[1],next[2]);
+  }
+  function drivePlayer(e) {
+    if (!broadcastLive || busy || luOn || !e.player) return;
+    var p = cleanPlayer(e.player), team = teamFor(e), s = latestState;
+    if (!(p.name || p.fullName) || !team) return;
+    clearTimeout(qbTimer);qbVisible=false;clearTimeout(featureTimer);playerFeature.classList.remove('on');
+    busy=true;bug.classList.add('player-drive','split');bug.style.setProperty('--g',color(team));
+    ['away','home'].forEach(function (side) { setLogo(q('.drive-stack .row.'+side+' .logo'),s[side]);q('.drive-stack .row.'+side+' .pts').textContent=String(s[side].score); });
+    var image=q('.drive-player .portrait');image.onerror=function(){image.style.visibility='hidden';};image.style.visibility=p.portrait?'':'hidden';if(p.portrait)image.src=p.portrait;else image.removeAttribute('src');
+    q('.drive-player .position').textContent=playerCardPosition(p)+(p.number!=null?'\n'+p.number:'');
+    var nameParts=(p.fullName||p.name).trim().toUpperCase().split(/\s+/);
+    q('.drive-player .name').innerHTML=escapeText(nameParts.shift())+'<br>'+escapeText(nameParts.join(' '));
+    q('.drive-bar .drive-title').textContent=e.caption||'THIS DRIVE';
+    var fields=statCells(p);if(playerCardPosition(p)==='QB')fields=[['COMP/ATT',p.completions+'/'+p.attempts],['YDS',p.passingYards],['TD',p.passingTouchdowns]];
+    ['plays','yds','top'].forEach(function (key,i){var f=fields[i]||['',''];q('.drive-bar .'+key+' .lbl').textContent=f[0];q('.drive-bar .'+key+' .val').textContent=f[1];});
+    refreshVisibility();at(420,function(){bug.classList.add('compact');});at(1000,function(){bug.classList.add('stats');});
+    at(duration(e,6000),function(){bug.classList.add('closing');});
+    at(duration(e,6000)+900,function(){bug.classList.remove('compact','stats','closing','player-drive','split');finishScoring(e.team);});
   }
 
   /* ---- starting lineup ----
@@ -273,11 +499,12 @@
   function luEnd() {
     luClear();
     lu.classList.remove('on', 'swap');
-    luTimers.push(setTimeout(function () { luOn = false; bug.classList.toggle('off-air', false); }, 450));
+    luTimers.push(setTimeout(function () { luOn = false; refreshVisibility(); }, 450));
   }
   function luPlayer(p, first) {
     var show = function () {
       var img = luq('.lu-portrait');
+      img.onerror = function () { img.style.visibility = 'hidden'; img.removeAttribute('src'); };
       if (p.portrait) { img.style.visibility = ''; img.setAttribute('src', p.portrait); }
       else { img.style.visibility = 'hidden'; img.removeAttribute('src'); }
       luq('.lu-tab .pos').textContent = p.position || '';
@@ -293,7 +520,7 @@
   function lineup(e) {
     var s = NFL2K5.state, t = s && e.team && s[e.team];
     var players = (e.players || []).filter(function (p) { return p && (p.name || p.last); });
-    if (!broadcastLive || !t || !players.length || busy) return;
+    if (!broadcastLive || !t || !players.length || busy || playerFeature.classList.contains('on')) return;
     luClear();
     luColors(t);
     setLogo(luq('.lu-logo .logo'), t);
@@ -306,11 +533,69 @@
     bug.classList.add('off-air');
     luPlayer(players[0], true);
     lu.classList.add('on');
+    refreshVisibility();
     players.forEach(function (p, i) { if (i) luTimers.push(setTimeout(function () { luPlayer(p, false); }, i * PER_PLAYER)); });
     luTimers.push(setTimeout(luEnd, players.length * PER_PLAYER));
   }
 
+  function matchActive() {
+    var s = latestState, cx = s && s.context || {};
+    return !!(s && s.valid === true && s.away && s.home && !cx.playSelection && !cx.paused);
+  }
+  function refreshVisibility() {
+    var s = latestState, cx = s && s.context || {};
+    broadcastLive = !!(s && s.valid === true && s.away && s.home && cx.scorebugVisible === true && !cx.playSelection && !cx.paused);
+    var featureOn = playerFeature.classList.contains('on');
+    var extra = window.SNFExtraInserts && window.SNFExtraInserts.active();
+    var scene = window.SNFBroadcastScenes && window.SNFBroadcastScenes.active();
+    var pregame = window.SNFPregameInserts && window.SNFPregameInserts.active();
+    bug.classList.toggle('off-air', !broadcastLive || featureOn || luOn || extra === 'comparison' || !!scene || !!pregame);
+    qbStat.classList.toggle('on', broadcastLive && qbVisible && !featureOn && !luOn && !busy && !extra && !scene && !pregame);
+    if (!broadcastLive) notice.classList.remove('on');
+    if (!matchActive()) wipe.classList.remove('on');
+  }
+  document.addEventListener('snf-extra-change', refreshVisibility);
+  document.addEventListener('snf-pregame-change', function () {
+    if(window.SNFPregameInserts&&window.SNFPregameInserts.active())resetBroadcast();else refreshVisibility();
+  });
+  document.addEventListener('snf-broadcast-change', function () {
+    /* Automatic GAME_STARTED opens also take ownership. Cancel previous
+       cards and their callbacks before the open, not only explicit events. */
+    if (window.SNFBroadcastScenes && window.SNFBroadcastScenes.active()) resetBroadcast();
+    else refreshVisibility();
+  });
+  function resetBroadcast(preserveWipe) {
+    timers.forEach(clearTimeout); timers = []; scoreQueue = []; busy = false;
+    recentPoints = { away:0, home:0 }; lastDrive = null;
+    bug.classList.remove('split','wordphase','compact','stats','closing','player-drive');
+    takeoverEl.className = 'takeover'; pod.classList.remove('glow','flag'); flagUntil = 0;
+    clearTimeout(flagTimer); clearTimeout(qbTimer); qbVisible = false; qbStatData = null;
+    clearTimeout(featureTimer); playerFeature.classList.remove('on');
+    luClear(); luOn = false; lu.classList.remove('on','swap');
+    clearTimeout(noticeTimer); notice.classList.remove('on');
+    if (!preserveWipe) { clearTimeout(wipeTimer); wipe.classList.remove('on'); }
+    refreshVisibility();
+  }
+  function showNotice(title, detail, ms) {
+    if (!broadcastLive || busy || luOn || playerFeature.classList.contains('on')) return;
+    notice.querySelector('.notice-title').textContent = title;
+    notice.querySelector('.notice-detail').textContent = detail || '';
+    clearTimeout(qbTimer);qbVisible=false;refreshVisibility();
+    clearTimeout(noticeTimer); notice.classList.remove('on'); void notice.offsetWidth; notice.classList.add('on');
+    noticeTimer = setTimeout(function () { notice.classList.remove('on'); }, ms || 4200);
+  }
+  function replayWipe() {
+    if (!matchActive()) return;
+    clearTimeout(wipeTimer); wipe.classList.remove('on'); void wipe.offsetWidth; wipe.classList.add('on');
+    wipeTimer = setTimeout(function () { wipe.classList.remove('on'); }, 1100);
+  }
   NFL2K5.onState(function (s, prev) {
+    latestState = s;
+    var key = s.away && s.home ? code(s.away) + '|' + code(s.home) : '';
+    var changedMatch = key && matchKey && key !== matchKey || prev && s.quarter > 0 && s.quarter < prev.quarter;
+    refreshVisibility();
+    if (!broadcastLive || changedMatch) resetBroadcast(!changedMatch && matchActive());
+    if (key) matchKey = key;
     if (!s.away || !s.home) return;
     setTeam('away', s.away, prev && prev.away);
     setTeam('home', s.home, prev && prev.home);
@@ -320,110 +605,63 @@
     setText('.pod .quarter .ord', n >= 1 && n <= 4 ? ORD[n] : '');
     if (dirty) { layout(); dirty = false; }
 
-    /* The bug stays up; it steps aside only for the play-calling screen
-     * (it would cover the play art) and the pause menu, never during a
-     * scoring sequence. */
     var cx = s.context || {};
-    var scorebugVisible = cx.scorebugVisible === true;
-    broadcastLive = s.valid !== false && scorebugVisible;
-    var featureOn = playerFeature.classList.contains('on');
-    bug.classList.toggle('off-air', featureOn || luOn || (!busy && (!scorebugVisible || !!(cx.playSelection || cx.paused))) || s.valid === false);
-    qbStat.classList.toggle('on', !!qbStatData && scorebugVisible && !featureOn && !luOn && !cx.playSelection && !cx.paused);
-    if (!broadcastLive) {
-      if (luOn) luEnd();
-      qbStat.classList.remove('on');
-      playerFeature.classList.remove('on');
-      clearTimeout(featureTimer);
-    } else if (luOn && cx.paused) luEnd();
+    refreshVisibility();
     var down = niceDown(s.downDistanceText);
     setTab(s.possession, down, !!s.possession && !!down);
     var pc = s.playClock;
     clockBox.textContent = pc >= 0 ? String(pc) : '';
     clockBox.classList.toggle('on', pc >= 0 && !!s.possession);
     clockBox.classList.toggle('low', pc >= 0 && pc <= 5);
-    updateFlag(!!cx.flag);
+    updateFlag(broadcastLive && !!cx.flag);
   });
 
   NFL2K5.onEvent(function (e) {
+    if (!e) return;
+    /* A replay transition can begin while the native scorebug is hidden.
+       It still belongs to a valid match; menus and inactive games cannot
+       start it. Normal inserts continue to require the live camera. */
+    if (e.name === 'REPLAY_STARTED' || e.name === 'REPLAY_ENDED') { replayWipe(); return; }
+    if (e.name === 'MATCHUP_INTRO' || e.name === 'BROADCAST_INTRO' || e.name === 'PLAYER_PROFILE' || e.name === 'PLAYER_BIO' || e.name === 'TIMEOUT') {
+      if (matchActive()) resetBroadcast();
+      return;
+    }
+    if (!broadcastLive) return;
     switch (e.name) {
+    case 'PLAYER_COMPARISON': case 'TEAM_STATS': resetBroadcast(); break;
     case 'SCORE_CHANGED': if (e.team) recentPoints[e.team] = (busy ? recentPoints[e.team] : 0) + (e.points || 0); break;
     case 'TOUCHDOWN': scoring('TOUCHDOWN', e.team, e.drive); break;
     case 'FIELD_GOAL': scoring('FIELD GOAL', e.team, e.drive); break;
     case 'SAFETY': scoring('SAFETY', e.team, null); break;
+    case 'EXTRA_POINT': scoring('EXTRA POINT', e.team, null); break;
+    case 'TWO_POINT_CONVERSION': scoring('TWO POINTS', e.team, null); break;
     case 'DRIVE_SUMMARY': lastDrive = e.drive; if (busy && e.drive) showDrive(e.drive); break;
     case 'LINEUP': if (broadcastLive) lineup(e); break;
     case 'PLAYER_STAT':
-      setQbStat(e);
+      if(e.placement==='scorebug' || e.scope==='drive'){drivePlayer(e);break;}
+      if (!setPlayerStat(e)) break;
       clearTimeout(qbTimer);
-      if (broadcastLive) qbStat.classList.add('on');
-      qbTimer = setTimeout(function () { qbStat.classList.remove('on'); }, 5500);
+      qbVisible = true;
+      if (broadcastLive && !busy && !luOn && !playerFeature.classList.contains('on')) {
+        /* Restart the staged insert every time a different player is shown. */
+        qbStat.classList.remove('on');
+        void qbStat.offsetWidth;
+        qbStat.classList.add('on');
+      }
+      refreshVisibility();
+      qbTimer = setTimeout(function () { qbVisible = false; refreshVisibility(); }, duration(e,5500));
       break;
-    case 'PLAYER_STAT_HIDE': clearTimeout(qbTimer); qbStat.classList.remove('on'); break;
+    case 'PLAYER_STAT_HIDE': clearTimeout(qbTimer); qbVisible = false; qbStat.classList.remove('on'); break;
     case 'PLAYER_FEATURE': if (broadcastLive) showPlayerFeature(e); break;
-    case 'PENALTY': flagUntil = Date.now() + 8000; updateFlag(true); setTimeout(function () { updateFlag(false); }, 8100); break;
+    case 'PENALTY': clearTimeout(flagTimer); flagUntil = Date.now() + 8000; updateFlag(true); flagTimer = setTimeout(function () { updateFlag(false); }, 8100); break;
+    case 'TWO_MINUTE_WARNING': showNotice('TWO-MINUTE WARNING', '', 4200); break;
+    case 'QUARTER_ENDED': showNotice('END OF ' + (e.quarter || latestState.quarter) + ({1:'ST',2:'ND',3:'RD',4:'TH'}[e.quarter || latestState.quarter] || '') + ' QUARTER', '', 4800); break;
+    case 'HALFTIME': showNotice('HALFTIME', '', 4800); break;
+    case 'OVERTIME': showNotice('OVERTIME', '', 4800); break;
+    case 'GAME_ENDED': showNotice('FINAL', '', 6500); break;
+    case 'GAME_STARTED': case 'QUARTER_STARTED': notice.classList.remove('on'); break;
     }
   });
-
-  /* ---- previews: scorebug.html?preview=<state>[&t=ms] ----
-   * home-ball / away-ball / flag / touchdown (the scoring sequence; with
-   * t=ms it is frozen that far in, for screenshots) / reference. */
-  var pv = (/[?&]preview=([\w-]+)/.exec(location.search) || [])[1];
-  if (pv) {
-    var st = { valid: true, quarter: 2, gameClock: 900, playClock: 39, possession: 'home', downDistanceText: '3RD & 8',
-               context: { scorebugVisible: true, flag: false },
-               away: { abbreviation: 'LAR', record: '10-6', score: 42, timeouts: 3 },
-               home: { abbreviation: 'CIN', record: '9-7', score: 27, timeouts: 2 } };
-    if (pv === 'reference') {
-      document.documentElement.style.background = document.body.style.background = '#212121';
-      bug.style.setProperty('--bug-scale', '1'); bug.style.setProperty('--bug-x', '413px'); bug.style.setProperty('--bug-y', '90px');
-      st.possession = null; st.playClock = -1;
-    } else {
-      document.documentElement.style.background = document.body.style.background = '#2d4a2f';
-    }
-    if (pv === 'away-ball') { st.possession = 'away'; st.downDistanceText = '4TH & INCHES'; st.playClock = 35; }
-    if (pv === 'flag') st.context.flag = true;
-    if (pv === 'lineup') {
-      PER_PLAYER = 1e9;            /* hold the first player for screenshots */
-      var tm = ((/[?&]team=(\w+)/.exec(location.search) || [])[1] || 'DAL').toUpperCase();
-      var NAMES = { DAL: ['Dallas', 'Cowboys'], ATL: ['Atlanta', 'Falcons'], PIT: ['Pittsburgh', 'Steelers'], CLE: ['Cleveland', 'Browns'],
-                    GB: ['Green Bay', 'Packers'], KC: ['Kansas City', 'Chiefs'] };
-      st.home = { abbreviation: tm, city: (NAMES[tm] || ['', tm])[0], name: (NAMES[tm] || ['', tm])[1], record: '10-6', score: 0, timeouts: 3 };
-      setTimeout(function () {
-        NFL2K5.dispatch({ type: 'event', event: { name: 'LINEUP', team: 'home', unit: 'offense', players: [
-          { position: 'RT', number: 78, name: 'Terence Steele', college: 'Texas Tech', portrait: '' },
-          { position: 'QB', number: 4, name: 'Dak Prescott', college: 'Mississippi State', portrait: '' }] } });
-        var freeze = (/[?&]t=(\d+)/.exec(location.search) || [])[1];
-        if (freeze) setTimeout(function () { document.getAnimations().forEach(function (a) { a.pause(); }); }, +freeze);
-      }, 200);
-    }
-    if (pv === 'qb-stat') {
-      setTimeout(function () {
-        NFL2K5.dispatch({ type: 'event', event: { name: 'PLAYER_STAT', team: 'home', player: {
-          name: 'J. HURTS', fullName: 'Jalen Hurts', position: 'QB', number: 1, portrait: '',
-          completions: 24, attempts: 31, passingYards: 286, passingTouchdowns: 3, interceptions: 1
-        } } });
-      }, 200);
-    }
-    if (pv === 'player-feature') {
-      setTimeout(function () {
-        NFL2K5.dispatch({ type: 'event', event: { name: 'PLAYER_FEATURE', team: 'home', player: {
-          name: 'P. MAHOMES', fullName: 'Patrick Mahomes', position: 'QB', number: 15, portrait: '',
-          completions: 27, attempts: 38, passingYards: 3278, passingTouchdowns: 29, interceptions: 10
-        } } });
-      }, 200);
-    }
-    if (pv === 'touchdown') { st.away.score = 48; st.possession = 'away'; st.downDistanceText = 'PAT'; }
-    NFL2K5.dispatch({ type: 'state', state: st });
-    if (pv === 'touchdown') {
-      setTimeout(function () {
-        NFL2K5.dispatch({ type: 'event', event: { name: 'SCORE_CHANGED', team: 'away', points: 6, score: 48 } });
-        NFL2K5.dispatch({ type: 'event', event: { name: 'TOUCHDOWN', team: 'away',
-          drive: { plays: 11, yards: 37, timeOfPossession: 373, source: 'preview' } } });
-      }, 200);
-      var freeze = (/[?&]t=(\d+)/.exec(location.search) || [])[1];
-      if (freeze) setTimeout(function () { document.getAnimations().forEach(function (a) { a.pause(); }); }, 200 + +freeze);
-    }
-  }
 
   /* Extra width beyond the 1920 design, per side (fill_width pages). */
   function pad() {

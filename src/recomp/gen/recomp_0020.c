@@ -79105,6 +79105,8 @@ loc_002C1AFB: ;
 
 loc_002C1B00: ;
     edx = esi;
+    /* NFL2K5-GENPATCH:TEAM_SELECT_HOME_RANDOM */
+    { extern int nfl2k5_ts_step(int, int, int); int _ts; RECOMP_REGS_OUT(); _ts = nfl2k5_ts_step(0, 1, 1); RECOMP_REGS_IN(); if (_ts) goto loc_002C1B07; }
     PUSH32(esp, 0x002C1B07u); RECOMP_ABI_CALL(0x002C18D0u, sub_002C18D0); /* call 0x002C18D0 */
 
 loc_002C1B07: ;
@@ -79185,6 +79187,8 @@ loc_002C1B4B: ;
 
 loc_002C1B50: ;
     edx = esi;
+    /* NFL2K5-GENPATCH:TEAM_SELECT_AWAY_RANDOM */
+    { extern int nfl2k5_ts_step(int, int, int); int _ts; RECOMP_REGS_OUT(); _ts = nfl2k5_ts_step(1, 1, 1); RECOMP_REGS_IN(); if (_ts) goto loc_002C1B57; }
     PUSH32(esp, 0x002C1B57u); RECOMP_ABI_CALL(0x002C1910u, sub_002C1910); /* call 0x002C1910 */
 
 loc_002C1B57: ;
@@ -80918,6 +80922,8 @@ loc_002C227E: ;
     edx = eax;
     g_ebp = ebp; /* frame stays current across calls */
     g_seh_ebp = ebp;
+    /* NFL2K5-GENPATCH:TEAM_SELECT_AWAY_NEXT */
+    { extern int nfl2k5_ts_step(int, int, int); int _ts; RECOMP_REGS_OUT(); _ts = nfl2k5_ts_step(1, 1, 0); RECOMP_REGS_IN(); if (_ts) goto loc_002C2285; }
     PUSH32(esp, 0x002C2285u); RECOMP_ABI_CALL(0x002C1910u, sub_002C1910); /* call 0x002C1910 */
 
 loc_002C2285: ;
@@ -80971,6 +80977,8 @@ loc_002C22CE: ;
     edx = eax;
     g_ebp = ebp; /* frame stays current across calls */
     g_seh_ebp = ebp;
+    /* NFL2K5-GENPATCH:TEAM_SELECT_HOME_NEXT */
+    { extern int nfl2k5_ts_step(int, int, int); int _ts; RECOMP_REGS_OUT(); _ts = nfl2k5_ts_step(0, 1, 0); RECOMP_REGS_IN(); if (_ts) goto loc_002C22D5; }
     PUSH32(esp, 0x002C22D5u); RECOMP_ABI_CALL(0x002C18D0u, sub_002C18D0); /* call 0x002C18D0 */
 
 loc_002C22D5: ;
@@ -81083,6 +81091,8 @@ loc_002C233C: ;
 loc_002C2349: ;
     g_ebp = ebp; /* frame stays current across calls */
     g_seh_ebp = ebp;
+    /* NFL2K5-GENPATCH:TEAM_SELECT_AWAY_PREV */
+    { extern int nfl2k5_ts_step(int, int, int); int _ts; RECOMP_REGS_OUT(); _ts = nfl2k5_ts_step(1, -1, 0); RECOMP_REGS_IN(); if (_ts) goto loc_002C234E; }
     PUSH32(esp, 0x002C234Eu); RECOMP_ABI_CALL(0x002C1930u, sub_002C1930); /* call 0x002C1930 */
 
 loc_002C234E: ;
@@ -81130,6 +81140,8 @@ loc_002C2389: ;
 loc_002C2392: ;
     g_ebp = ebp; /* frame stays current across calls */
     g_seh_ebp = ebp;
+    /* NFL2K5-GENPATCH:TEAM_SELECT_HOME_PREV */
+    { extern int nfl2k5_ts_step(int, int, int); int _ts; RECOMP_REGS_OUT(); _ts = nfl2k5_ts_step(0, -1, 0); RECOMP_REGS_IN(); if (_ts) goto loc_002C2397; }
     PUSH32(esp, 0x002C2397u); RECOMP_ABI_CALL(0x002C18F0u, sub_002C18F0); /* call 0x002C18F0 */
 
 loc_002C2397: ;

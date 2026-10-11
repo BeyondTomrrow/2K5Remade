@@ -28,6 +28,7 @@
 #include <dwrite.h>
 #include <wincodec.h>
 #include "nfl2k5_broadcast.h"
+#include "nfl2k5_presentation.h"
 #include "presentation/presentation_host.h"
 #include <mfapi.h>
 #include <mfidl.h>
@@ -469,6 +470,7 @@ struct Package {
      * the game then leaves out (e.g. "lineup": the after-kickoff starters). */
     bool replaces_lineup = false;
     bool replaces_player_cards = false;
+    bool replaces_pregame_cards = false;
     /* mod.json "canvas": { "fit": "fill_width" }: the page is as wide as the
      * game picture (e.g. 2580x1080 on 21:9) instead of a centred 16:9
      * canvas, so full-width graphics reach the screen edges. */
@@ -477,6 +479,7 @@ struct Package {
 
 static std::vector<Package> s_pkgs;           /* [0] is the game's own ESPN presentation */
 static std::atomic<int> s_sel_pkg{ 0 }, s_sel_intro{ 1 }, s_sel_outro{ 1 }, s_sel_anim{ 1 }, s_sel_vol{ 8 };
+static void pregame_replacement_reset();
 static std::atomic<int> s_sel_commentary{ 0 };
 static std::string s_commentary_dir = "E:\\cfbsound";
 
@@ -524,6 +527,7 @@ static void load_packages()
                     if (v.t == JVal::Str) {
                         if (v.s == "lineup") p.replaces_lineup = true;
                         if (v.s == "player_cards") p.replaces_player_cards = true;
+                        if (v.s == "pregame_cards") p.replaces_pregame_cards = true;
                     }
             if (const JVal *c = p.root.get("canvas")) {
                 p.canvas_w = (int)c->num("width", 1920);
@@ -664,6 +668,7 @@ extern "C" void nfl2k5_pres_set(int what, int v)
     if (v >= n) v = n - 1;
     switch (what) {
     case 0:
+        pregame_replacement_reset();
         s_sel_pkg = v;
         s_sel_intro = std::min(1, nfl2k5_pres_values(1) - 1);    /* first theme of the new package */
         s_sel_outro = std::min(1, nfl2k5_pres_values(2) - 1);
@@ -1244,7 +1249,7 @@ struct PlayerStat {
 };
 struct PlayerIdentity {
     std::string name, position, college, portrait;
-    int number = 0;
+    int number = -1;
 };
 std::string nfl2k5_portrait_url(int photo_id);   /* src/presentation/portraits.cpp */
 std::string nfl2k5_portraits_dir();              /* src/presentation/portraits.cpp */
@@ -1254,6 +1259,8 @@ struct Event {
     std::string ended_quarter;
     PlayerStat player;
     double requested_duration = 0;
+    PlayerIdentity player_identity;
+    int photo_id = -1;
 };
 struct ActiveAnim { Event ev; const JVal *def = nullptr; double t0 = 0, duration = 0; };
 
@@ -1398,6 +1405,11 @@ extern "C" void nfl2k5_broadcast_player_stat(const Nfl2k5PlayerStat *s, int team
     ev.team = team == AWAY ? AWAY : HOME;
     ev.requested_duration = s->display_seconds > 0 ? s->display_seconds : 5.0;
     ev.player = copy_player_stat(*s);
+    ev.player_identity.name = s->full_name ? s->full_name : "";
+    if (s->kind == NFL2K5_STAT_QB) ev.player_identity.position = "QB";
+    ev.player_identity.number = s->jersey_number;
+    ev.photo_id = s->photo_id;
+    if (s->photo_id >= 0) ev.player_identity.portrait = nfl2k5_portrait_url(s->photo_id);
     queue_event(std::move(ev));
 }
 
@@ -1412,10 +1424,11 @@ extern "C" void nfl2k5_broadcast_live_qb_sample(const Nfl2k5PlayerStat *s, int t
         std::lock_guard<std::mutex> lock(s_live_qb_lock);
         LiveQbSample &sample = s_live_qb[team];
         PlayerIdentity &identity = s_live_qb_identity[team];
+        if (sample.revision && sample.player.name != next.name) identity = PlayerIdentity();
         if (s->full_name && *s->full_name) identity.name = s->full_name;
         if (identity.position.empty()) identity.position = "QB";
-        if (s->jersey_number > 0) identity.number = s->jersey_number;
-        if (s->photo_id > 0) identity.portrait = nfl2k5_portrait_url(s->photo_id);
+        if (s->jersey_number >= 0) identity.number = s->jersey_number;
+        if (s->photo_id >= 0) identity.portrait = nfl2k5_portrait_url(s->photo_id);
         const PlayerStat &old = sample.player;
         if (sample.revision && old.name == next.name && next.attempts > old.attempts) {
             pass_attempt = true;
@@ -1456,10 +1469,10 @@ extern "C" void nfl2k5_broadcast_live_qb_reset(void)
     s_live_qb_identity[HOME] = PlayerIdentity();
 }
 
-/* Script opcode 133 asks the selected package whether it can replace one
- * of the game's ESPN player-stat cards.  Only card families that carry a
- * player feature are claimed, and only after a roster identity or live QB
- * sample exists; otherwise the native card remains as the safe fallback. */
+/* Opcode 133 supplies a title/kind, but no selected player or historical
+ * dataset. Only the specifically QB-related title below can use the live
+ * QB sample. Generic, receiving and career cards retain their native card
+ * until the actual card player/scope is extracted. */
 extern "C" int nfl2k5_presentation_playercard(uint32_t kind, const char *native_title)
 {
     int k = s_sel_pkg.load();
@@ -1470,16 +1483,7 @@ extern "C" int nfl2k5_presentation_playercard(uint32_t kind, const char *native_
     std::string folded = title;
     std::transform(folded.begin(), folded.end(), folded.begin(),
                    [](unsigned char c) { return (char)tolower(c); });
-    bool full = folded.find("career stats") != std::string::npos ||
-                folded.find("last season") != std::string::npos ||
-                folded.find("last year") != std::string::npos;
-    bool compact = folded == "performance" || folded == "today stats" ||
-                   folded == "receiving" || folded == "consecutive incompletions";
-    /* Kind 22 is confirmed by the trigger audit as the career/last-season
-     * family even when a localized build leaves its title blank. Unknown
-     * kinds remain native until their trigger is identified. */
-    if (kind == 22) full = true;
-    if (!full && !compact) return 0;
+    if (folded != "consecutive incompletions") return 0;
     GameState g;
     if (!read_state(g) || g.poss < 1 || g.poss > 2) return 0;
     int side = g.poss - 1;
@@ -1490,16 +1494,16 @@ extern "C" int nfl2k5_presentation_playercard(uint32_t kind, const char *native_
         sample = s_live_qb[side];
         identity = s_live_qb_identity[side];
     }
-    if (sample.player.name.empty() && identity.name.empty()) return 0;
+    if (!g.valid || !sample.revision || sample.player.name.empty()) return 0;
     Event ev;
-    ev.name = full ? "player_feature" : "player_stat";
+    ev.name = "player_stat";
     ev.team = side;
     ev.player = sample.player;
-    if (ev.player.name.empty()) ev.player.name = broadcast_player_name(identity.name.c_str());
+    ev.player_identity = identity;
     ev.requested_duration = 6.0;
     queue_event(std::move(ev));
     fprintf(stderr, "[PRES] replaces ESPN player card kind %u title '%s' as %s for side %d\n",
-            kind, title.c_str(), full ? "PLAYER_FEATURE" : "PLAYER_STAT", side);
+            kind, title.c_str(), "PLAYER_STAT", side);
     return 1;
 }
 
@@ -2268,6 +2272,9 @@ extern "C" int nfl2k5_scorebug_native_hidden(void)
 
 /* Popups the game shows (src/main.c): the intro theme ends at the coin toss. */
 static std::atomic<int> s_coin_toss{ 0 };
+/* Presentation-only ownership: unlike the intro-theme flag above, this
+ * follows native show/close and does not remain set for the whole match. */
+static std::atomic<int> s_coin_toss_native_active{ 0 };
 extern "C" void nfl2k5_presentation_popup(const char *title)
 {
     if (!title) return;
@@ -2431,6 +2438,76 @@ static const char *side_name(int side) { return side == AWAY ? "away" : "home"; 
 
 struct HtmlContext { bool scorebug_visible, play_selection, paused, native_scorebug; };
 
+/* The original overall accessor is sampled on the guest popup/script path.
+ * The presenter only consumes these owned strings and roster identities. */
+struct FeaturedRosterSnapshot {
+    uint32_t clock_object = 0, roster[2] = { 0, 0 };
+    unsigned count[2] = { 0, 0 };
+    std::string abbr[2], player[2];
+};
+static std::mutex s_featured_lock;
+static FeaturedRosterSnapshot s_featured;
+
+static bool fresh_pregame(const GameState &g)
+{
+    return g.valid && g.period == 0 && g.phase == 0 &&
+           g.t[AWAY].score == 0 && g.t[HOME].score == 0 &&
+           std::isfinite(g.period_len) && g.period_len > 0.0f && g.period_len < 4000.0f &&
+           std::isfinite(g.clock) && std::fabs(g.clock - g.period_len) <= 0.1f;
+}
+
+extern "C" void nfl2k5_presentation_featured_players(uint32_t clock_object,
+        const uint32_t rosters[2], const unsigned counts[2],
+        const Nfl2k5FeaturedPlayer players[2])
+{
+    GameState g;
+    if (!rosters || !counts || !players || !read_state(g) || !fresh_pregame(g) ||
+        clock_object != rd32(0x00E6028Cu)) return;
+    FeaturedRosterSnapshot out;
+    out.clock_object = clock_object;
+    for (int side = AWAY; side <= HOME; ++side) {
+        const Nfl2k5FeaturedPlayer &p = players[side];
+        uint8_t count = 0;
+        out.abbr[side] = upper(team_info(g.t[side].abbr).abbr);
+        if (!rosters[side] || rosters[side] != rd32(k_team_obj[side] + 0x1Cu) ||
+            !gread(rosters[side] + 0x11Cu, &count, sizeof count) ||
+            count != counts[side] || !count || count > 71 ||
+            !memchr(p.full_name, 0, sizeof p.full_name) || !p.full_name[0] ||
+            !memchr(p.position, 0, sizeof p.position) ||
+            p.overall < 0 || p.overall > 100 || g.t[side].abbr.empty()) continue;
+        out.roster[side] = rosters[side]; out.count[side] = count;
+        out.player[side] = "{\"fullName\":" + json_str(p.full_name) +
+            ",\"name\":" + json_str(p.full_name) + ",\"position\":" + json_str(p.position) +
+            ",\"overall\":" + std::to_string(p.overall);
+        if (p.number >= 0 && p.number <= 99)
+            out.player[side] += ",\"number\":" + std::to_string(p.number);
+        if (p.photo_id >= 0 && p.photo_id <= 65535) {
+            std::string portrait = nfl2k5_portrait_url(p.photo_id);
+            out.player[side] += ",\"photoId\":" + std::to_string(p.photo_id);
+            if (!portrait.empty()) out.player[side] += ",\"portrait\":" + json_str(portrait);
+        }
+        out.player[side] += ",\"source\":\"native\"}";
+    }
+    std::lock_guard<std::mutex> lock(s_featured_lock);
+    s_featured = std::move(out);
+}
+
+static std::string featured_players_json(const GameState &g, int side)
+{
+    if (!fresh_pregame(g)) return "[]";
+    std::lock_guard<std::mutex> lock(s_featured_lock);
+    if (!s_featured.clock_object || s_featured.clock_object != rd32(0x00E6028Cu) ||
+        s_featured.player[side].empty()) return "[]";
+    for (int s = AWAY; s <= HOME; ++s) {
+        if (s_featured.abbr[s] != upper(team_info(g.t[s].abbr).abbr)) return "[]";
+    }
+    uint8_t count = 0;
+    if (s_featured.roster[side] != rd32(k_team_obj[side] + 0x1Cu) ||
+        !gread(s_featured.roster[side] + 0x11Cu, &count, sizeof count) ||
+        count != s_featured.count[side]) return "[]";
+    return "[" + s_featured.player[side] + "]";
+}
+
 static std::string html_state_json(const GameState &g, const HtmlContext &cx)
 {
     std::string j = "{\"apiVersion\":1";
@@ -2465,12 +2542,16 @@ static std::string html_state_json(const GameState &g, const HtmlContext &cx)
         j += ",\"score\":" + std::to_string(g.t[side].score);
         j += ",\"timeouts\":" + std::to_string(g.t[side].timeouts);
         j += ",\"primaryColor\":" + json_color(t.primary) + ",\"secondaryColor\":" + json_color(t.secondary);
+        j += ",\"featuredPlayers\":" + featured_players_json(g, side);
         j += "}";
     }
     j += ",\"context\":{\"scorebugVisible\":" + std::string(cx.scorebug_visible ? "true" : "false");
     j += ",\"playSelection\":" + std::string(cx.play_selection ? "true" : "false");
     j += ",\"paused\":" + std::string(cx.paused ? "true" : "false");
     j += ",\"nativeScorebug\":" + std::string(cx.native_scorebug ? "true" : "false");
+    const char *pregame_stage = !g.valid ? nullptr : g.period >= 1 && g.phase == 2 ? "kickoff" :
+                                s_coin_toss_native_active.load() ? "coin_toss" : nullptr;
+    j += ",\"pregameStage\":" + (pregame_stage ? json_str(pregame_stage) : std::string("null"));
     j += ",\"flag\":" + std::string(GetTickCount64() < s_flag_until ? "true" : "false") + "}";
     return j + "}";
 }
@@ -2485,7 +2566,7 @@ static std::string html_event_json(const char *name, int side, const std::string
     return j + "}";
 }
 
-static std::string html_player_extra(const PlayerStat &p, const PlayerIdentity &id)
+static std::string html_player_extra(const PlayerStat &p, const PlayerIdentity &id, int photo_id)
 {
     std::string j = ",\"player\":{";
     j += "\"name\":" + json_str(p.name.empty() ? broadcast_player_name(id.name.c_str()) : p.name);
@@ -2494,9 +2575,10 @@ static std::string html_player_extra(const PlayerStat &p, const PlayerIdentity &
      * as empty so the package can choose its family from populated stats
      * instead of incorrectly labelling every player a quarterback. */
     j += ",\"position\":" + json_str(id.position);
-    j += ",\"number\":" + std::to_string(id.number);
+    j += ",\"number\":" + (id.number >= 0 ? std::to_string(id.number) : std::string("null"));
     j += ",\"college\":" + json_str(id.college);
     j += ",\"portrait\":" + json_str(id.portrait);
+    if (photo_id >= 0) j += ",\"photoId\":" + std::to_string(photo_id);
     j += ",\"completions\":" + std::to_string(p.completions);
     j += ",\"attempts\":" + std::to_string(p.attempts);
     j += ",\"passingYards\":" + std::to_string(p.passing_yards);
@@ -2618,7 +2700,180 @@ static void drive_update(const GameState &p, const GameState &g)
 /* Popup text from src/main.c. Drive Summary: labels and values in order,
  * e.g. "Drive Summary|Plays|4|Yards|49|Time|0:52". */
 static std::mutex s_popup_lock;
-static std::vector<std::string> s_popup_events;
+struct PendingPopupEvent {
+    std::string name, extra, message;
+    bool drive = false;
+    int side = -1;
+    uint32_t clock_object = 0, roster[2] = { 0, 0 };
+    std::string abbr[2];
+};
+static std::vector<PendingPopupEvent> s_popup_events;
+
+enum { PREGAME_COIN = 0, PREGAME_FACT = 1 };
+/* Sole enable point: leave false until the post-crowd camera cue and a
+ * verified visual-only native hook are proved, retaining layout/update/choice callbacks.
+ * Draft source must not draw SNF cards over still-visible native artwork. */
+static constexpr bool k_native_pregame_draw_hook_ready = false;
+struct NativePregameOwner {
+    bool active = false, acknowledged = false;
+    uint32_t token = 0, generation = 0, clock_object = 0, layout = 0, player = 0;
+    uint32_t roster[2] = { 0, 0 }, rows = 0, columns = 0;
+    int package = -1, slot = -1, side = -1;
+    std::string abbr[2], title, message, full_name;
+    std::vector<std::string> cells;
+};
+static std::mutex s_pregame_owner_lock;
+static NativePregameOwner s_pregame_owner[2];
+static std::atomic<uint32_t> s_pregame_token{ 0 }, s_pregame_host_generation{ 1 };
+static std::atomic<int> s_pregame_host_package{ -1 }, s_pregame_page_permitted{ 0 };
+
+extern "C" int nfl2k5_presentation_pregame_metadata_needed(void)
+{
+    if (!k_native_pregame_draw_hook_ready || !s_pregame_page_permitted.load()) return 0;
+    int pk = s_sel_pkg.load();
+    if (pk != s_pregame_host_package.load() || pk <= 0 || pk >= (int)s_pkgs.size() ||
+        !s_pkgs[pk].html || !s_pkgs[pk].replaces_pregame_cards) return 0;
+    GameState g;
+    return read_state(g) && fresh_pregame(g) ? 1 : 0;
+}
+
+static void pregame_clear_owners()
+{
+    std::lock_guard<std::mutex> lock(s_pregame_owner_lock);
+    s_pregame_owner[PREGAME_COIN] = NativePregameOwner();
+    s_pregame_owner[PREGAME_FACT] = NativePregameOwner();
+}
+
+static void pregame_replacement_reset()
+{
+    s_pregame_page_permitted = 0;
+    s_pregame_host_package = -1;
+    ++s_pregame_host_generation;
+    pregame_clear_owners();
+}
+
+static uint32_t pregame_begin_owner(int kind, uint32_t ctx, int slot,
+        const GameState &g, int side, const std::string &title, const std::string &message,
+        uint32_t player = 0, const std::string &full_name = "",
+        const std::vector<std::string> &cells = {})
+{
+    NativePregameOwner owner;
+    owner.active = true; owner.slot = slot; owner.side = side;
+    owner.title = title; owner.message = message; owner.player = player;
+    owner.full_name = full_name; owner.cells = cells;
+    owner.layout = rd32(ctx + 0x48u);
+    if (kind == PREGAME_FACT) {
+        owner.rows = rd32(ctx + 0x22Cu); owner.columns = rd32(ctx + 0x230u);
+    }
+    owner.clock_object = rd32(0x00E6028Cu);
+    for (int s = AWAY; s <= HOME; ++s) {
+        owner.roster[s] = rd32(k_team_obj[s] + 0x1Cu);
+        owner.abbr[s] = upper(team_info(g.t[s].abbr).abbr);
+    }
+    owner.package = s_sel_pkg.load(); owner.generation = s_pregame_host_generation.load();
+    int pk = owner.package;
+    if (k_native_pregame_draw_hook_ready && side >= AWAY && side <= HOME && fresh_pregame(g) && owner.layout &&
+        s_pregame_page_permitted.load() && s_pregame_host_package.load() == pk &&
+        pk > 0 && pk < (int)s_pkgs.size() && s_pkgs[pk].html && s_pkgs[pk].replaces_pregame_cards) {
+        do { owner.token = ++s_pregame_token; } while (!owner.token);
+    }
+    uint32_t token = owner.token;
+    std::lock_guard<std::mutex> lock(s_pregame_owner_lock);
+    s_pregame_owner[PREGAME_COIN] = NativePregameOwner();
+    s_pregame_owner[PREGAME_FACT] = NativePregameOwner();
+    s_pregame_owner[kind] = std::move(owner);
+    return token;
+}
+
+/* This callback runs on the page's host thread and never calls guest code.
+ * Exact protocol, positive uint32 tokens and host generations prevent a
+ * delayed acknowledgment from another page from hiding a native card. */
+static void pregame_page_message(int package, uint32_t generation, const std::string &message)
+{
+    if (package != s_sel_pkg.load() || package != s_pregame_host_package.load() ||
+        generation != s_pregame_host_generation.load()) return;
+    const char *show = "SNF_PREGAME_SHOW:", *hide = "SNF_PREGAME_HIDE:";
+    bool visible;
+    size_t prefix;
+    if (message.compare(0, strlen(show), show) == 0) { visible = true; prefix = strlen(show); }
+    else if (message.compare(0, strlen(hide), hide) == 0) { visible = false; prefix = strlen(hide); }
+    else return;
+    if (message.size() <= prefix || message.size() - prefix > 10) return;
+    uint64_t value = 0;
+    for (size_t i = prefix; i < message.size(); ++i) {
+        unsigned char ch = (unsigned char)message[i];
+        if (ch < '0' || ch > '9') return;
+        value = value * 10u + ch - '0';
+    }
+    if (!value || value > UINT32_MAX) return;
+    std::lock_guard<std::mutex> lock(s_pregame_owner_lock);
+    for (auto &owner : s_pregame_owner)
+        if (owner.active && owner.token == (uint32_t)value && owner.package == package &&
+            owner.generation == generation)
+            owner.acknowledged = visible && s_pregame_page_permitted.load();
+}
+
+static int coin_toss_team(const GameState &g, const std::string &message);
+
+extern "C" void nfl2k5_presentation_coin_toss(const char *title, const char *message,
+                                             float timeout, int slot, int what, uint32_t ctx)
+{
+    if (!title || upper(title) != "COIN TOSS" || (what != 0 && what != 1)) return;
+    PendingPopupEvent ev;
+    if (what == 1) {
+        {
+            std::lock_guard<std::mutex> lock(s_pregame_owner_lock);
+            auto &owner = s_pregame_owner[PREGAME_COIN];
+            if (owner.active && (owner.title != title || owner.message != (message ? message : "") ||
+                (owner.slot >= 0 && owner.slot != slot))) return;
+            owner = NativePregameOwner();
+        }
+        if (!s_coin_toss_native_active.exchange(0)) return; /* native fade has two close calls */
+        ev.name = "COIN_TOSS_HIDE";
+        ev.extra = ",\"source\":\"native\",\"nativeVisible\":false,\"slot\":" + std::to_string(slot);
+    } else {
+        s_coin_toss_native_active = 1;
+        s_coin_toss = 1;
+        ev.name = "COIN_TOSS";
+        ev.message = message ? message : "";
+        /* FLT_MAX waits for a native choice; -1 lets the title derive its
+         * layout duration after this hook. Neither is a fixed lifetime. */
+        std::string duration = "null";
+        if (std::isfinite(timeout) && timeout >= 0.0f && timeout < 1.0e30f) {
+            char value[32];
+            snprintf(value, sizeof value, "%.3f", timeout);
+            duration = value;
+        }
+        ev.extra = ",\"title\":" + json_str(title) + ",\"text\":" + json_str(ev.message) +
+                   ",\"duration\":" + duration + ",\"source\":\"native\",\"nativeVisible\":true" +
+                   ",\"slot\":" + std::to_string(slot);
+        GameState g;
+        if (ctx && read_state(g) && g.valid) {
+            uint32_t token = pregame_begin_owner(PREGAME_COIN, ctx, slot, g,
+                    coin_toss_team(g, ev.message), title, ev.message);
+            if (token) ev.extra += ",\"replacementToken\":" + std::to_string(token);
+        }
+    }
+    if (!nfl2k5_presentation_pregame_metadata_needed()) return;
+    std::lock_guard<std::mutex> lock(s_popup_lock);
+    s_popup_events.push_back(std::move(ev));
+}
+
+/* A native coin-toss message names its team explicitly. Result-only text
+ * ("It is heads.") supplies no team; possession does not identify it. */
+static int coin_toss_team(const GameState &g, const std::string &message)
+{
+    int found = -1;
+    for (int side = AWAY; side <= HOME; ++side) {
+        const std::string name = team_info(g.t[side].abbr).name;
+        if (!name.empty() && message.size() > name.size() &&
+            message.compare(0, name.size(), name) == 0 && message[name.size()] == ' ') {
+            if (found != -1) return -1;
+            found = side;
+        }
+    }
+    return found;
+}
 extern "C" void nfl2k5_presentation_popup_text(const char *title, const char *text)
 {
     if (!title || !text) return;
@@ -2658,7 +2913,7 @@ extern "C" void nfl2k5_presentation_popup_text(const char *title, const char *te
                     ",\"yards\":" + (yards.empty() ? std::string("null") : yards) +
                     ",\"timeOfPossession\":" + std::to_string(secs) + ",\"source\":\"game\"}";
     std::lock_guard<std::mutex> lock(s_popup_lock);
-    s_popup_events.push_back(j);
+    s_popup_events.push_back({ "DRIVE_SUMMARY", j, "", true });
 }
 
 /* The game's after-kickoff lineup ticker (sub_000FFBA0; gen patch
@@ -2705,6 +2960,156 @@ static std::string grel_text(uint32_t field)
         if (s.size() >= 2) return s;
     }
     return "";
+}
+
+static std::atomic<int> s_player_fact_native_active{ 0 };
+
+extern "C" void nfl2k5_presentation_player_fact_hide(int slot)
+{
+    if (slot != 1 || !s_player_fact_native_active.exchange(0)) return;
+    {
+        std::lock_guard<std::mutex> lock(s_pregame_owner_lock);
+        s_pregame_owner[PREGAME_FACT] = NativePregameOwner();
+    }
+    PendingPopupEvent ev;
+    ev.name = "PLAYER_FACT_HIDE";
+    ev.extra = ",\"source\":\"native\",\"nativeVisible\":false,\"slot\":1";
+    std::lock_guard<std::mutex> lock(s_popup_lock);
+    s_popup_events.push_back(std::move(ev));
+}
+
+extern "C" void nfl2k5_presentation_player_fact(uint32_t ctx)
+{
+    if (!nfl2k5_presentation_pregame_metadata_needed()) return;
+    GameState g;
+    /* sub_001C16B0 identifies a single-player table with these exact fields.
+     * The selected player at +0x14 owns its fact; no cached QB is substituted. */
+    if (!ctx || !read_state(g) || !fresh_pregame(g) ||
+        rd32(ctx) != 1 || rd32(ctx + 0x10u) != 1 || rd32(ctx + 0x48u) != 1 ||
+        rd32(ctx + 0x228u) != 1) return;
+    uint32_t player = rd32(ctx + 0x14u);
+    if (!player) return;
+    int side = -1;
+    uint32_t rosters[2] = { 0, 0 };
+    for (int s = AWAY; s <= HOME; ++s) {
+        uint8_t count = 0;
+        rosters[s] = rd32(k_team_obj[s] + 0x1Cu);
+        if (!rosters[s] || !gread(rosters[s] + 0x11Cu, &count, sizeof count) ||
+            !count || count > 71) return;
+        for (unsigned i = 0; i < count; ++i)
+            if (rd32(rosters[s] + i * 4u) == player) {
+                if (side != -1) return; /* Ambiguous identity is unavailable. */
+                side = s;
+            }
+    }
+    if (side < AWAY || side > HOME || g.t[side].abbr.empty()) return;
+    uint8_t position = 0xFF;
+    uint16_t photo = 0;
+    if (!gread(player + 0x35u, &position, sizeof position) || position > 16 ||
+        !gread(player + 6u, &photo, sizeof photo)) return;
+    std::string first = grel_text(player + 0x10u), last = grel_text(player + 0x14u);
+    std::string full_name = first + (first.empty() ? "" : " ") + last;
+    std::string pos = gtext(rd32(0x004F2688u + position * 4u), 8);
+    int number = (int)((rd32(player + 0x20u) >> 3) & 0x7Fu);
+    if (first.empty() || last.empty() || pos.empty() || number > 99) return;
+    /* sub_0025F8A0 defines the dimensions; sub_0025F8B0 locates each native
+     * UTF-16 cell at +0x23C+i*0x88. sub_001BEF40 initializes at most 24 cells.
+     * Copy the actual formatted strings rather than calculating career totals. */
+    uint32_t rows = rd32(ctx + 0x22Cu), columns = rd32(ctx + 0x230u);
+    uint32_t cells = rd32(ctx + 0xEF4u);
+    if (!rows || !columns || rows > 24 || columns > 24 || !cells || cells > 24 ||
+        (uint64_t)rows * columns != cells) return;
+    std::string caption, text;
+    std::vector<std::string> native_cells;
+    for (uint32_t i = 0; i < cells; ++i) {
+        uint16_t native_cell[64];
+        if (!gread(ctx + 0x23Cu + i * 0x88u, native_cell, sizeof native_cell)) return;
+        if (!native_cell[0]) { native_cells.push_back(""); continue; }
+        std::string cell = gtext(ctx + 0x23Cu + i * 0x88u, 64);
+        if (cell.empty()) return;
+        native_cells.push_back(cell);
+        std::string folded = upper(cell);
+        if (folded == "CAREER" || folded.compare(0, 7, "CAREER ") == 0) {
+            if (!caption.empty()) return;
+            caption = cell.substr(0, 6);
+            if (cell.size() > 7) text += (text.empty() ? "" : " ") + cell.substr(7);
+        } else if (cell != full_name) {
+            if (text.size() + cell.size() + 1 > 1024) return;
+            text += (text.empty() ? "" : " ") + cell;
+        }
+    }
+    if (caption.empty() || text.empty()) return;
+    float timeout = -1.0f;
+    gread(ctx + 8u, &timeout, sizeof timeout);
+    std::string duration = "null";
+    if (std::isfinite(timeout) && timeout >= 0.0f && timeout < 1.0e30f) {
+        char value[32]; snprintf(value, sizeof value, "%.3f", timeout); duration = value;
+    }
+    PendingPopupEvent ev;
+    ev.name = "PLAYER_FACT"; ev.side = side;
+    ev.clock_object = rd32(0x00E6028Cu);
+    for (int s = AWAY; s <= HOME; ++s) {
+        ev.roster[s] = rosters[s]; ev.abbr[s] = upper(team_info(g.t[s].abbr).abbr);
+    }
+    ev.extra = ",\"caption\":" + json_str(caption) + ",\"text\":" + json_str(text) +
+        ",\"duration\":" + duration + ",\"source\":\"native\",\"nativeVisible\":true,\"slot\":1" +
+        ",\"player\":{\"id\":" + std::to_string(player) + ",\"name\":" + json_str(full_name) +
+        ",\"fullName\":" + json_str(full_name) + ",\"position\":" + json_str(pos) +
+        ",\"number\":" + std::to_string(number) + ",\"photoId\":" + std::to_string(photo) +
+        ",\"portrait\":" + json_str(nfl2k5_portrait_url(photo)) + "}";
+    uint32_t token = pregame_begin_owner(PREGAME_FACT, ctx, 1, g, side,
+            caption, text, player, full_name, native_cells);
+    if (token) ev.extra += ",\"replacementToken\":" + std::to_string(token);
+    s_player_fact_native_active = 1;
+    std::lock_guard<std::mutex> lock(s_popup_lock);
+    s_popup_events.push_back(std::move(ev));
+}
+
+extern "C" int nfl2k5_presentation_pregame_draw_replaced(uint32_t ctx)
+{
+    if (!k_native_pregame_draw_hook_ready) return 0;
+    /* Only the two actual native slots can be queried. This read-only
+     * function does not bypass layout readiness or native update callbacks. */
+    int slot = ctx == 0x00B61B50u ? 0 : ctx == 0x00B62A70u ? 1 : -1;
+    GameState g;
+    if (slot < 0 || !s_pregame_page_permitted.load() || !read_state(g) || !fresh_pregame(g) ||
+        rd32(ctx + 4u) != 1 || rd32(ctx + 0xCu) != 0) return 0;
+    int pk = s_sel_pkg.load();
+    uint32_t generation = s_pregame_host_generation.load();
+    if (pk != s_pregame_host_package.load() || pk <= 0 || pk >= (int)s_pkgs.size() ||
+        !s_pkgs[pk].html || !s_pkgs[pk].replaces_pregame_cards) return 0;
+    std::lock_guard<std::mutex> lock(s_pregame_owner_lock);
+    for (int kind = PREGAME_COIN; kind <= PREGAME_FACT; ++kind) {
+        auto &owner = s_pregame_owner[kind];
+        if (!owner.active || !owner.token || !owner.acknowledged || owner.package != pk ||
+            owner.generation != generation || (owner.slot >= 0 && owner.slot != slot) ||
+            !owner.layout || owner.layout != rd32(ctx + 0x48u) ||
+            owner.clock_object != rd32(0x00E6028Cu)) continue;
+        bool owned = owner.side >= AWAY && owner.side <= HOME;
+        for (int s = AWAY; s <= HOME && owned; ++s)
+            owned = owner.roster[s] == rd32(k_team_obj[s] + 0x1Cu) &&
+                    owner.abbr[s] == upper(team_info(g.t[s].abbr).abbr);
+        if (!owned) continue;
+        if (kind == PREGAME_COIN) {
+            if (gtext(ctx + 0x4Cu, 64) != owner.title ||
+                gtext(ctx + 0xCCu, 128) != owner.message) continue;
+        } else {
+            if (slot != 1 || rd32(ctx + 0x10u) != 1 || rd32(ctx + 0x228u) != 1 ||
+                rd32(ctx + 0x14u) != owner.player || rd32(ctx + 0x22Cu) != owner.rows ||
+                rd32(ctx + 0x230u) != owner.columns || rd32(ctx + 0xEF4u) != owner.cells.size() ||
+                grel_text(owner.player + 0x10u) + " " + grel_text(owner.player + 0x14u) != owner.full_name)
+                continue;
+            bool cells_match = true;
+            for (size_t i = 0; i < owner.cells.size(); ++i)
+                if (gtext(ctx + 0x23Cu + (uint32_t)i * 0x88u, 64) != owner.cells[i]) {
+                    cells_match = false; break;
+                }
+            if (!cells_match) continue;
+        }
+        owner.slot = slot; /* Resolve auto-selected coin slot by exact payload. */
+        return 1;
+    }
+    return 0;
 }
 
 extern "C" void nfl2k5_portraits_warm(void);
@@ -2797,10 +3202,30 @@ static void html_state_events(const GameState &p, const GameState &g)
         }
     }
     {
-        std::vector<std::string> pending;
+        std::vector<PendingPopupEvent> pending;
         { std::lock_guard<std::mutex> lock(s_popup_lock); pending.swap(s_popup_events); }
-        for (auto &j : pending)
-            html_post(html_event_json("DRIVE_SUMMARY", s_drive.side >= 0 ? s_drive.side : -1, j));
+        for (auto &ev : pending) {
+            if (ev.name == "PLAYER_FACT") {
+                bool owned = fresh_pregame(g) && ev.clock_object == rd32(0x00E6028Cu);
+                for (int s = AWAY; s <= HOME && owned; ++s)
+                    owned = ev.roster[s] == rd32(k_team_obj[s] + 0x1Cu) &&
+                            ev.abbr[s] == upper(team_info(g.t[s].abbr).abbr);
+                if (!owned) continue;
+            }
+            int side = ev.drive ? (s_drive.side >= 0 ? s_drive.side : -1) :
+                       ev.side >= AWAY && ev.side <= HOME ? ev.side :
+                       g.valid ? coin_toss_team(g, ev.message) : -1;
+            html_post(html_event_json(ev.name.c_str(), side, ev.extra));
+        }
+    }
+    /* Teardown/kickoff invalidates stale ownership without inventing a
+     * native close event. COIN_TOSS_HIDE comes only from the close hook. */
+    if (!g.valid || (g.period >= 1 && g.phase != 0)) {
+        s_coin_toss_native_active = 0;
+        s_player_fact_native_active = 0;
+        pregame_clear_owners();
+        std::lock_guard<std::mutex> lock(s_featured_lock);
+        s_featured = FeaturedRosterSnapshot();
     }
     if (!g.valid) return;
     if (!s_html.started_game && g.period >= 1) {
@@ -2826,6 +3251,7 @@ static void html_state_events(const GameState &p, const GameState &g)
 
 static void html_stop()
 {
+    pregame_replacement_reset();
     if (s_html.host) {
         s_html.host->stop();
         s_html.host.reset();
@@ -2871,6 +3297,13 @@ static int html_hud(const XboxHudFrame *f, XboxHudImage *img, const GameState &g
         c.canvas_height = pkg.canvas_h;
         c.raster_scale = want_scale;
         s_html.scale = want_scale;
+        if (pkg.replaces_pregame_cards) {
+            uint32_t generation = s_pregame_host_generation.load();
+            s_pregame_host_package = pk;
+            c.on_page_message = [pk, generation](const std::string &message) {
+                pregame_page_message(pk, generation, message);
+            };
+        }
         s_html.host = nfl2k5::create_webview2_presentation_host();
         s_html.host->start(c);
         s_html.package = pk;
@@ -2878,6 +3311,10 @@ static int html_hud(const XboxHudFrame *f, XboxHudImage *img, const GameState &g
         s_html.started_game = false;
         fprintf(stderr, "[HTMLPRES] package \"%s\" at raster scale %.2f\n", pkg.name.c_str(), c.raster_scale);
     }
+
+    bool page_permitted = fresh_pregame(g) && !cx.play_selection && !cx.paused;
+    s_pregame_page_permitted = page_permitted ? 1 : 0;
+    if (!page_permitted) pregame_clear_owners();
 
     /* State: whenever it changes, and at least twice a second. */
     std::string st = html_state_json(g, cx);
@@ -2924,9 +3361,9 @@ static int html_hud(const XboxHudFrame *f, XboxHudImage *img, const GameState &g
             if (ev.name == "touchdown") extra = drive_json(g, ev.team, true);
             else if (ev.name == "field_goal") extra = drive_json(g, ev.team, false);
             else if (ev.name == "player_stat" || ev.name == "player_feature") {
-                PlayerIdentity identity;
-                { std::lock_guard<std::mutex> ql(s_live_qb_lock); identity = s_live_qb_identity[ev.team]; }
-                extra = html_player_extra(ev.player, identity);
+                extra = html_player_extra(ev.player, ev.player_identity, ev.photo_id);
+                if (std::isfinite(ev.requested_duration) && ev.requested_duration > 0)
+                    extra += ",\"displaySeconds\":" + std::to_string(ev.requested_duration);
             }
             html_post(html_event_json(name, ev.team, extra));
         }

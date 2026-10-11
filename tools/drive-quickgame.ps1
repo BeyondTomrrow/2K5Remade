@@ -8,6 +8,20 @@
 # the log is logs\$Tag.stderr.log. Prints how it ended.
 $root = Split-Path $PSScriptRoot -Parent
 Set-Location $root
+$defaultRetail = 'build\Release\NFL2K5.exe'
+# The retail executable is a dispatcher: when an active pack has a matching
+# native build it starts that build and exits immediately.  Test the selected
+# native executable directly so the driver watches the actual game process.
+if ($Exe -eq $defaultRetail) {
+    $activePack = Join-Path $root 'mods\active-pack.ini'
+    if (Test-Path $activePack) {
+        $packName = (Get-Content $activePack -Raw).Trim()
+        $candidate = Join-Path $root ("mods\packs\$packName\native\NFL2K5.exe")
+        if ($packName -and (Test-Path $candidate -PathType Leaf)) {
+            $Exe = $candidate
+        }
+    }
+}
 $env:NFL2K5_SKIP_INTRO = '1'
 $env:NFL2K5_PRESS_FILE = "$root\logs\press.txt"
 $env:NFL2K5_NO_HOST_PAD = '1'
@@ -41,10 +55,11 @@ $p = Start-Process $Exe -WorkingDirectory $root -PassThru `
      -RedirectStandardError "logs\$Tag.stderr.log" -RedirectStandardOutput "logs\$Tag.stdout.log"
 $null = $p.Handle
 function Press([string[]]$b, [int]$after) { & "$PSScriptRoot\press.ps1" @b; Start-Sleep $after }
-Start-Sleep 50
-Press start 8       # attract demo (if it started) -> title
-Press start 6       # title -> "Successfully loaded Settings" popup
-Press a 8           # dismiss the popup -> main menu
+Start-Sleep 90
+Press start 8       # title -> "Successfully loaded Settings" popup
+Press a 8           # Settings popup -> "Successfully loaded VIP1" popup
+Press a 8           # dismiss VIP popup -> title
+Press start 8       # title -> main menu
 Press a 12          # Quick Game
 foreach ($h in $HomeTeam) { Press $h 2 }   # e.g. -HomeTeam (,'lt'*11) = 49ers (default home is Cowboys)
 if ($Side) { Press $Side 3 }   # from home: left = middle (CPU vs CPU), left left = away, -Side @() = play home

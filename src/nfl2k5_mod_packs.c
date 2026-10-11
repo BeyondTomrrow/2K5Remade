@@ -238,7 +238,8 @@ static DWORD WINAPI mp_patch_thread(void *arg)
             xbox_PresentToast("MOD PACKS", "Installed - restart the game, then",
                               "Options > Mod Packs to turn it on", 15000);
         else
-            xbox_PresentToast("MOD PACKS", "Could not install", fd.cFileName, 15000);
+            xbox_PresentToast("MOD PACKS", "Install failed — see logs\\patch-install-*.log",
+                              fd.cFileName, 15000);
     } while (FindNextFileA(h, &fd));
     FindClose(h);
     return 0;

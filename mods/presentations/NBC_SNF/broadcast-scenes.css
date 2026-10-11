@@ -1,0 +1,127 @@
+/* Supplemental NBC broadcast scenes. The corner footprint is measured
+ * from the designer's 2022 Eagles insert at 1280x720 (134x33, 43px right).
+ * Font outlines and motion durations remain substitutes, not NBC assets. */
+#snf-watermark { position:absolute; right:64px; top:44px; width:201px; height:50px; display:flex; align-items:center; gap:6px; color:white; opacity:0; pointer-events:none; z-index:80; transition:opacity .22s; filter:drop-shadow(0 1px 2px rgba(0,0,0,.6)); }
+#snf-watermark.on { opacity:1; }
+#snf-watermark .nbc-brand { width:62px; height:38px; flex:none; }
+.snf-wordmark { width:134px; height:35px; object-fit:contain; flex:none; }
+/* The global bug owns corner branding, including large features. */
+#player-feature .pf-brand { display:none; }
+.snf-broadcast-scene { position:absolute; pointer-events:none; opacity:0; color:#fff; font-family:"Bahnschrift","Arial Narrow",Arial,sans-serif; }
+.snf-broadcast-scene.on { opacity:1; }
+
+/* Pregame matchup overlays the real warmup camera. There is no full-screen
+ * backdrop. One actual top-rated player belongs to each team's half. */
+#snf-intro { inset:0; width:1920px; height:1080px; z-index:70; overflow:hidden;
+  background:transparent; transition:opacity .24s; --intro-away:#003594; --intro-home:#d50a0a; }
+.intro-shadow { position:absolute; left:0; right:0; top:895px; height:135px;
+  background:linear-gradient(to bottom,rgba(7,18,24,.28),rgba(6,16,22,.73) 24%,rgba(6,16,22,.60));
+  border-top:1px solid rgba(200,228,232,.50); opacity:0; transition:opacity .25s .2s; }
+.intro-brand { position:absolute; left:655px; top:570px; width:610px; height:340px;
+  display:flex; flex-direction:column; align-items:center; gap:14px; opacity:0;
+  transform:translateY(18px); transition:opacity .25s .22s,transform .6s cubic-bezier(.16,.84,.24,1) .22s; }
+.intro-brand .nbc-brand { width:105px; height:62px; flex:none; }
+.intro-brand .snf-wordmark { width:565px; height:180px; flex:none;
+  filter:drop-shadow(0 2px 0 #b8c1c9) drop-shadow(0 4px 0 #65717c) drop-shadow(0 6px 7px rgba(0,0,0,.65)); }
+.intro-nfl { position:absolute; top:288px; left:269px; width:72px; height:92px; object-fit:contain; }
+.intro-title { position:absolute; left:655px; top:523px; width:610px; text-align:center;
+  font:700 20px/25px Arial,sans-serif; letter-spacing:2px; opacity:0; transition:opacity .25s .3s; }
+.intro-team { position:absolute; top:452px; width:700px; height:572px; opacity:0;
+  transition:opacity .28s .12s,transform .65s cubic-bezier(.16,.84,.24,1) .12s; }
+.intro-team.away { left:50px; transform:translateX(-110px); }
+.intro-team.home { right:50px; transform:translateX(110px); }
+.intro-logo { position:absolute; left:0; top:153px; width:700px; height:430px; object-fit:contain;
+  opacity:.64; filter:drop-shadow(0 2px 4px rgba(0,0,0,.5)); }
+.intro-players { position:absolute; left:0; top:0; width:700px; height:445px; }
+.intro-player { position:absolute; inset:0; }
+.intro-player-portrait { position:absolute; left:100px; bottom:0; width:500px; height:495px;
+  object-fit:contain; object-position:center bottom; filter:drop-shadow(0 3px 5px rgba(0,0,0,.55)); }
+.intro-team.portrait-only .intro-player-portrait { left:195px; bottom:110px; width:310px; height:310px; }
+.intro-player-name { position:absolute; left:70px; top:396px; width:560px; text-align:center;
+  font:700 28px/34px "Bahnschrift",Arial,sans-serif; text-shadow:0 2px 3px #000; }
+.intro-player-position { position:absolute; left:70px; top:428px; width:560px; text-align:center;
+  font:700 17px/21px Arial,sans-serif; color:#e3edf1; text-shadow:0 1px 2px #000; }
+.intro-team.no-player .intro-players { display:none; }
+.intro-team.no-photo .intro-player-portrait { display:none; }
+.intro-team-caption { position:absolute; left:0; top:446px; width:700px; height:67px; display:flex;
+  align-items:center; justify-content:center; gap:10px; border-top:3px solid #c4e0e2;
+  background:linear-gradient(90deg,rgba(5,18,25,.85),color-mix(in srgb,var(--intro-away) 30%,transparent));
+  clip-path:polygon(0 0,94% 0,100% 100%,0 100%); filter:drop-shadow(0 0 4px rgba(136,212,220,.5)); }
+.home .intro-team-caption { background:linear-gradient(90deg,color-mix(in srgb,var(--intro-home) 30%,transparent),rgba(5,18,25,.85));
+  clip-path:polygon(6% 0,100% 0,100% 100%,0 100%); }
+.intro-city,.intro-name { position:static; width:auto; font:italic 700 31px/38px "Bahnschrift",Arial,sans-serif;
+  letter-spacing:0; text-align:center; text-shadow:0 1px 2px #000; }
+.intro-record { position:absolute; left:0; top:526px; width:700px; text-align:center;
+  font:italic 700 27px/33px Arial,sans-serif; color:#e5eef1; }
+.intro-venue { position:absolute; left:480px; top:964px; width:960px; min-height:43px; padding:5px 26px 7px;
+  text-align:center; font:400 28px/33px Arial,sans-serif; color:#08121b;
+  background:linear-gradient(#e0e9ef,#b7cbd9); clip-path:polygon(0 0,100% 0,96% 100%,4% 100%);
+  opacity:0; transform:translateY(12px); transition:opacity .25s .4s,transform .5s .4s; }
+#snf-intro.no-venue .intro-venue { display:none; }
+.intro-silver { position:absolute; top:592px; width:225px; height:260px; opacity:0;
+  transition:opacity .3s .18s,transform .7s cubic-bezier(.16,.84,.24,1) .18s; }
+.intro-silver.left { left:653px; transform:translateX(-75px); }
+.intro-silver.right { right:653px; transform:translateX(75px) scaleX(-1); }
+.intro-silver::before,.intro-silver::after { content:''; position:absolute; left:0; width:225px; height:54px;
+  background:linear-gradient(176deg,#f0f4f6 18%,#8d9ca5 37%,#ebf2f4 44%,#495a65 60%,#cbd8dc 72%);
+  clip-path:polygon(0 55%,90% 24%,100% 0,97% 43%,0 69%); filter:drop-shadow(0 1px 1px rgba(0,0,0,.55)); }
+.intro-silver::before { top:0; }.intro-silver::after { bottom:0; transform:scaleY(-1); }
+#snf-intro.on .intro-shadow,#snf-intro.on .intro-brand,#snf-intro.on .intro-title,#snf-intro.on .intro-team,
+#snf-intro.on .intro-silver,#snf-intro.on .intro-venue { opacity:1; }
+#snf-intro.on .intro-team,#snf-intro.on .intro-brand,#snf-intro.on .intro-venue,#snf-intro.on .intro-silver.left { transform:none; }
+#snf-intro.on .intro-silver.right { transform:scaleX(-1); }
+
+#snf-timeout { left:440px; top:745px; width:1040px; height:250px; z-index:35; transform:translateY(35px); transition:opacity .2s,transform .55s cubic-bezier(.16,.84,.24,1); }
+#snf-timeout.on { transform:none; }
+.timeout-glass { position:absolute; inset:0; background:linear-gradient(100deg,rgba(5,10,17,.95),rgba(15,24,36,.92)); clip-path:polygon(0 0,94% 0,100% 50%,94% 100%,0 100%); border-bottom:3px solid #bbc7d3; transform:scaleX(.02); transform-origin:left; transition:transform .55s cubic-bezier(.16,.84,.24,1); }
+.timeout-curve { position:absolute; right:20px; top:0; width:83px; height:250px; border-right:22px solid #c4cdd5; border-radius:0 85% 85% 0; opacity:0; transform:translateX(35px); transition:opacity .2s .2s,transform .45s .2s; }
+.timeout-brand { position:absolute; left:35px; top:24px; display:flex; align-items:center; gap:5px; }.timeout-brand .nbc-brand { width:47px; height:29px; }.timeout-brand .snf-wordmark { font-size:31px; letter-spacing:-2px; }
+.timeout-title { position:absolute; left:190px; top:27px; width:525px; text-align:center; font:700 32px/35px Arial,sans-serif; letter-spacing:1px; }
+.timeout-clock { position:absolute; right:111px; top:34px; text-align:right; font:700 23px/25px Arial,sans-serif; }
+.timeout-team { position:absolute; top:87px; width:390px; height:95px; background:linear-gradient(90deg,var(--timeout-team),rgba(4,8,14,.3)); border-bottom:2px solid rgba(234,242,250,.45); opacity:0; transform:translateX(-22px); transition:opacity .2s .25s,transform .4s .25s; }
+.timeout-team.away { left:45px; }.timeout-team.home { left:497px; }
+.timeout-logo { position:absolute; left:10px; top:-11px; width:112px; height:103px; object-fit:contain; }.timeout-name { position:absolute; left:145px; top:16px; font:700 37px/42px Arial,sans-serif; }
+.timeout-score { position:absolute; right:25px; top:10px; font:700 52px/58px Arial,sans-serif; }.timeout-marks { position:absolute; left:146px; top:76px; display:flex; gap:11px; }.timeout-marks i { display:block; width:28px; height:4px; background:white; }.timeout-marks i.used { background:#67727d; }
+.timeout-detail { position:absolute; left:45px; top:207px; width:839px; text-align:center; font:400 21px/26px Arial,sans-serif; letter-spacing:1.2px; }
+#snf-timeout.on .timeout-glass { transform:scaleX(1); }#snf-timeout.on .timeout-curve,#snf-timeout.on .timeout-team { opacity:1; transform:none; }
+
+/* Large score bumper: designer's LVI score/halftime reference has two
+ * horizontal team rows, dominant team marks, right-hand scores and a pale
+ * status footer. Regular-season branding replaces the tournament trophy.
+ * Timeout-specific footer/motion is an adaptation, not a verified recording. */
+#snf-timeout { left:0; top:323px; width:1920px; height:460px; transform:none; overflow:hidden; transition:opacity .3s; }
+.timeout-glass { display:none; }
+.timeout-curve { display:none; }
+.timeout-team { left:0; top:0; width:1920px; height:211px; border:0; background:linear-gradient(90deg,rgba(4,10,18,.93),var(--timeout-team) 45%,var(--timeout-team) 100%); transform:translateX(-1920px); opacity:1; transition:transform .65s cubic-bezier(.16,.84,.24,1); overflow:hidden; }
+.timeout-team.away { left:0; top:0; }.timeout-team.home { left:0; top:211px; transform:translateX(1920px); transition-delay:.09s; }
+.timeout-logo { left:585px; top:-42px; width:720px; height:280px; opacity:.95; transform:scale(1.2); transition:transform .8s .22s; }
+.timeout-name { left:940px; top:168px; width:354px; text-align:right; font:italic 700 27px/31px Arial,sans-serif; }
+.timeout-score { left:1390px; right:auto; top:17px; width:375px; text-align:center; font:700 163px/177px Arial,sans-serif; }
+.timeout-marks { left:1464px; top:196px; gap:13px; }.timeout-marks i { width:37px; height:4px; }
+.timeout-brand { left:140px; top:108px; z-index:3; flex-direction:column; gap:12px; opacity:0; transform:scale(.87); transition:opacity .25s .25s,transform .6s .2s; }
+.timeout-brand .nbc-brand { width:176px; height:102px; }.timeout-brand .snf-wordmark { width:284px; height:74px; }
+.timeout-title { left:1310px; top:422px; width:610px; height:38px; background:#e9edf2; color:#18232e; font:italic 700 29px/38px Arial,sans-serif; z-index:4; opacity:0; transition:opacity .25s .65s; }
+.timeout-clock { left:1290px; right:auto; top:0; width:490px; text-align:right; font:400 19px/23px Arial,sans-serif; z-index:4; opacity:0; transition:opacity .25s .6s; }
+.timeout-detail { left:680px; top:429px; width:590px; font:italic 400 21px/26px Arial,sans-serif; text-align:right; opacity:0; transition:opacity .25s .65s; }
+#snf-timeout.on .timeout-team { transform:none; }#snf-timeout.on .timeout-logo { transform:scale(1); }
+#snf-timeout.on .timeout-brand,#snf-timeout.on .timeout-title,#snf-timeout.on .timeout-clock,#snf-timeout.on .timeout-detail { opacity:1; transform:none; }
+
+#snf-player-profile { left:175px; top:235px; width:1570px; height:660px; z-index:40; transition:opacity .22s; --profile-team:#003594; --profile-rgb:0,53,148; }
+.profile-glass { position:absolute; left:385px; top:0; width:1185px; height:660px; background:linear-gradient(110deg,rgba(5,9,15,.94),rgba(var(--profile-rgb),.83)); clip-path:polygon(0 0,91% 0,100% 50%,91% 100%,0 100%); transform:scaleX(.02); transform-origin:left; transition:transform .55s cubic-bezier(.16,.84,.24,1); }
+.profile-flag { position:absolute; left:0; top:0; width:465px; height:660px; background:linear-gradient(125deg,var(--profile-team),rgba(var(--profile-rgb),.82)); opacity:0; transform:translateX(-65px); transition:opacity .2s,transform .55s; }
+.profile-curve { position:absolute; right:26px; top:0; width:115px; height:660px; border-right:36px solid #c6ced6; border-radius:0 90% 90% 0; opacity:0; transform:translateX(40px); transition:opacity .2s .23s,transform .55s .23s; }
+.profile-logo { position:absolute; left:15px; top:100px; width:292px; height:240px; object-fit:contain; opacity:0; transform:translateX(-30px); transition:opacity .25s .12s,transform .5s .12s; }
+.profile-portrait { position:absolute; left:15px; bottom:0; width:440px; height:710px; object-fit:contain; object-position:bottom; opacity:0; transform:translateY(42px); transition:opacity .25s .2s,transform .55s .2s; }
+.profile-name { position:absolute; left:510px; top:46px; width:810px; font:700 47px/54px Arial,sans-serif; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.profile-caption { position:absolute; left:510px; top:108px; width:805px; font:italic 400 24px/29px Arial,sans-serif; color:#e0e6eb; }
+.profile-position { position:absolute; left:40px; bottom:28px; min-width:48px; padding:6px 12px; white-space:pre-line; text-align:center; font:700 26px/28px Arial,sans-serif; background:rgba(3,7,13,.76); }
+.profile-name,.profile-caption,.profile-position { opacity:0; transform:translateX(-20px); transition:opacity .2s .3s,transform .45s .3s; }
+.profile-rows { position:absolute; left:510px; top:170px; width:805px; display:grid; grid-template-columns:1fr 1fr; gap:25px 36px; }
+.profile-rows.swap { opacity:0; }.profile-rows { transition:opacity .18s; }
+.profile-row { height:77px; border-top:1px solid rgba(220,229,237,.28); opacity:0; transform:translateY(20px); transition:opacity .2s,transform .4s; transition-delay:calc(.36s + var(--row,0)*.055s); }
+.profile-row span { display:block; margin-top:9px; font:400 17px/20px Arial,sans-serif; color:#bfc8d1; letter-spacing:1px; }.profile-row strong { display:block; margin-top:7px; font:700 28px/31px Arial,sans-serif; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.profile-brand { position:absolute; right:135px; bottom:32px; display:flex; align-items:center; gap:5px; }.profile-brand .nbc-brand { width:42px; height:25px; }.profile-brand .snf-wordmark { width:85px; height:23px; }
+#snf-player-profile.no-photo .profile-logo { left:75px; top:150px; width:300px; height:300px; }
+#snf-player-profile.on .profile-glass { transform:scaleX(1); }
+#snf-player-profile.on .profile-flag,#snf-player-profile.on .profile-curve,#snf-player-profile.on .profile-portrait,#snf-player-profile.on .profile-position,#snf-player-profile.on .profile-name,#snf-player-profile.on .profile-caption,#snf-player-profile.on .profile-row { opacity:1; transform:none; }
+#snf-player-profile.on .profile-logo { opacity:.72; transform:none; }

@@ -332,6 +332,8 @@ private:
         }
         /* Packages can tell they are inside the game (vs. the editor). */
         webview_->AddScriptToExecuteOnDocumentCreated(L"window.NFL2K5_HOST = 'game';", nullptr);
+        const std::wstring entry_url = L"https://presentation.local/" +
+            relative_url_path(root, full_path(config_.package_dir)) + L"/" + widen(config_.entry);
 
         webview_->add_NavigationCompleted(
             Callback<ICoreWebView2NavigationCompletedEventHandler>(
@@ -349,23 +351,35 @@ private:
                     }
                     return S_OK;
                 }).Get(), nullptr);
-        /* console.log from the package goes to the game log. */
+        /* Only this entry page can acknowledge a card replacement. Other
+         * origins and frames retain logging but cannot acquire native art. */
         webview_->add_WebMessageReceived(
             Callback<ICoreWebView2WebMessageReceivedEventHandler>(
-                [this](ICoreWebView2 *, ICoreWebView2WebMessageReceivedEventArgs *args) -> HRESULT {
+                [this, entry_url](ICoreWebView2 *, ICoreWebView2WebMessageReceivedEventArgs *args) -> HRESULT {
                     LPWSTR text = nullptr;
                     if (SUCCEEDED(args->TryGetWebMessageAsString(&text)) && text) {
                         fprintf(stderr, "[HTMLPRES] page: %ls\n", text);
+                        LPWSTR source = nullptr;
+                        if (config_.on_page_message && wcslen(text) <= 256 &&
+                            SUCCEEDED(args->get_Source(&source)) && source && entry_url == source) {
+                            int bytes = WideCharToMultiByte(CP_UTF8, 0, text, -1, nullptr, 0, nullptr, nullptr);
+                            if (bytes > 0 && bytes <= 1025) {
+                                std::string message((size_t)bytes, '\0');
+                                if (WideCharToMultiByte(CP_UTF8, 0, text, -1, &message[0], bytes, nullptr, nullptr) == bytes) {
+                                    message.resize((size_t)bytes - 1);
+                                    config_.on_page_message(message);
+                                }
+                            }
+                        }
+                        CoTaskMemFree(source);
                         CoTaskMemFree(text);
                     }
                     return S_OK;
                 }).Get(), nullptr);
 
-        std::wstring url = L"https://presentation.local/" +
-                           relative_url_path(root, full_path(config_.package_dir)) + L"/" + widen(config_.entry);
-        fprintf(stderr, "[HTMLPRES] loading %ls\n", url.c_str());
+        fprintf(stderr, "[HTMLPRES] loading %ls\n", entry_url.c_str());
         set_status("loading");
-        webview_->Navigate(url.c_str());
+        webview_->Navigate(entry_url.c_str());
     }
 
     void flush()

@@ -1130,6 +1130,13 @@ static uint32_t recomp_cr3;
 #define ebx g_ebx
 #define esi g_esi
 #define edi g_edi
+/*
+ * Native mod-pack trees compile directly against the shared register file.
+ * Generated pack patches may still use the locals-build boundary macros around
+ * a hand-written helper, but with global registers there is nothing to copy.
+ */
+#define RECOMP_REGS_OUT() ((void)0)
+#define RECOMP_REGS_IN() ((void)0)
 #define RECOMP_CALL(fn) fn()
 #endif
 

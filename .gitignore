@@ -34,6 +34,15 @@ tools/scorebug-studio/library.generated.js
 # team logos) stay local; tools/nbc-snf/build_plates.py rebuilds the plates.
 mods/presentations/NBC_SNF/reference/
 mods/presentations/NBC_SNF/assets/
+# Retain the presentation's three SVG branding sources. User PNGs,
+# reference plates, portraits and other media remain local.
+!mods/presentations/NBC_SNF/assets/
+mods/presentations/NBC_SNF/assets/*
+!mods/presentations/NBC_SNF/assets/branding/
+mods/presentations/NBC_SNF/assets/branding/*
+!mods/presentations/NBC_SNF/assets/branding/snf-wordmark.svg
+!mods/presentations/NBC_SNF/assets/branding/sunday-night-football-wordmark.svg
+!mods/presentations/NBC_SNF/assets/branding/nfl-shield.svg
 
 # Local music library (user-supplied audio; FOLDER = PLAYLIST)
 /Music/*

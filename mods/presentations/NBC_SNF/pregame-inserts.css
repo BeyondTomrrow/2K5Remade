@@ -1,0 +1,131 @@
+/* Compact pregame inserts. The two native families retain their own data
+ * and placement while using the existing SNF glass and chrome curve. */
+.snf-pregame {
+  position:absolute; width:1160px; padding-top:40px; pointer-events:none;
+  color:#f4f6f8; font-family:Arial,sans-serif; z-index:42;
+  opacity:0; transform:translateX(-26px);
+  transition:opacity .16s ease,transform .38s cubic-bezier(.18,.84,.23,1);
+  filter:drop-shadow(0 4px 6px rgba(0,0,0,.38));
+  --pregame-team:#354554; --pregame-rgb:53,69,84;
+}
+.snf-pregame *, .snf-pregame *::before, .snf-pregame *::after { box-sizing:border-box; }
+.snf-pregame.on { opacity:1; transform:none; }
+.snf-pregame .pg-plate { position:relative; margin-left:218px; min-height:116px; padding:10px 78px 15px 76px; }
+.snf-pregame .pg-glass {
+  position:absolute; inset:0; z-index:-1;
+  background:linear-gradient(100deg,rgba(5,8,13,.87),rgba(9,12,17,.79) 46%,rgba(var(--pregame-rgb),.69));
+  clip-path:polygon(0 0,98% 0,100% 50%,98% 100%,0 100%);
+  box-shadow:inset 0 1px 0 rgba(242,247,252,.25),inset 0 -2px 0 rgba(var(--pregame-rgb),.96);
+  transform:scaleX(.015); transform-origin:left center;
+  transition:transform .36s cubic-bezier(.14,.82,.23,1) .10s;
+}
+.snf-pregame .pg-team-wall {
+  position:absolute; left:0; top:40px; bottom:0; width:290px;
+  background:linear-gradient(115deg,rgba(204,211,216,.76),rgba(var(--pregame-rgb),.87) 63%,rgba(9,12,17,.89));
+  clip-path:polygon(0 0,100% 0,76% 100%,0 100%);
+  transform:scaleX(.015); transform-origin:left center;
+  transition:transform .28s cubic-bezier(.14,.82,.23,1);
+}
+.snf-pregame.on .pg-team-wall, .snf-pregame.on .pg-glass { transform:scaleX(1); }
+.snf-pregame .pg-curve {
+  position:absolute; right:10px; top:0; width:51px; height:100%;
+  opacity:0; transform:translateX(14px);
+  transition:opacity .16s .22s,transform .36s .22s;
+}
+.snf-pregame.on .pg-curve { opacity:.94; transform:none; }
+.snf-pregame .pg-sheen { position:absolute; inset:0; overflow:hidden; pointer-events:none; }
+.snf-pregame .pg-sheen::after {
+  content:''; position:absolute; left:-200px; top:0; bottom:0; width:75px;
+  background:linear-gradient(90deg,transparent,rgba(245,249,253,.25),transparent); transform:skewX(-22deg); opacity:0;
+}
+.snf-pregame.on .pg-sheen::after { animation:snfPregameSheen .58s ease-out .17s both; }
+@keyframes snfPregameSheen { from { left:-200px; opacity:0; } 25% { opacity:1; } to { left:1050px; opacity:0; } }
+.snf-pregame .pg-team-logo {
+  position:absolute; left:6px; top:39px; width:166px; height:115px; object-fit:contain;
+  filter:drop-shadow(2px 3px 3px rgba(0,0,0,.4));
+  opacity:0; transform:translateX(-19px) scale(.92);
+  transition:opacity .17s .10s,transform .4s cubic-bezier(.16,.84,.24,1) .10s;
+}
+.snf-pregame.on .pg-team-logo { opacity:1; transform:none; }
+
+#snf-player-fact { left:380px; top:744px; }
+#snf-player-fact .pg-portrait {
+  position:absolute; left:58px; bottom:0; width:188px; height:190px;
+  object-fit:contain; object-position:center bottom;
+  filter:drop-shadow(4px 2px 4px rgba(0,0,0,.45));
+  opacity:0; transform:translateY(22px);
+  transition:opacity .17s .18s,transform .42s cubic-bezier(.16,.84,.24,1) .18s;
+}
+#snf-player-fact.on .pg-portrait { opacity:1; transform:none; }
+#snf-player-fact.no-photo .pg-portrait { display:none; }
+#snf-player-fact.no-photo .pg-team-logo { left:39px; width:177px; }
+#snf-player-fact .pg-position {
+  position:absolute; left:13px; top:12px; min-width:38px; padding:1px 5px;
+  background:rgba(0,0,0,.42); white-space:pre-line; text-align:center; text-transform:uppercase;
+  font:700 21px/22px Arial,sans-serif;
+}
+#snf-player-fact .pg-fact-heading { display:flex; align-items:baseline; gap:18px; min-height:35px; border-bottom:1px solid rgba(230,238,245,.34); }
+#snf-player-fact .pg-player-name {
+  flex:1; min-width:0; font:700 30px/35px Arial,sans-serif;
+  letter-spacing:.25px; text-transform:uppercase; overflow-wrap:anywhere;
+  text-shadow:0 1px 2px rgba(0,0,0,.65);
+}
+#snf-player-fact.long-name .pg-player-name { font-size:26px; }
+#snf-player-fact .pg-caption { flex:none; font:italic 400 18px/24px Arial,sans-serif; color:#e5e9ed; }
+#snf-player-fact .pg-fact-text {
+  margin-top:8px; white-space:pre-wrap; overflow-wrap:anywhere;
+  font:400 25px/30px Arial,sans-serif; color:#e9edf1; text-shadow:0 1px 2px rgba(0,0,0,.65);
+}
+#snf-player-fact .pg-position, #snf-player-fact .pg-fact-heading, #snf-player-fact .pg-fact-text {
+  opacity:0; transform:translateX(-13px); transition:opacity .17s .25s,transform .35s .25s;
+}
+#snf-player-fact .pg-fact-text { transition-delay:.33s; }
+#snf-player-fact.on .pg-position, #snf-player-fact.on .pg-fact-heading, #snf-player-fact.on .pg-fact-text { opacity:1; transform:none; }
+
+#snf-coin-toss { left:430px; top:798px; width:1060px; padding-top:18px; }
+#snf-coin-toss .pg-team-wall { top:18px; width:207px; }
+#snf-coin-toss .pg-plate { margin-left:150px; padding:12px 80px 17px 52px; min-height:112px; }
+#snf-coin-toss .pg-team-logo { left:19px; top:30px; width:148px; height:89px; }
+#snf-coin-toss .pg-toss-heading { display:flex; align-items:center; justify-content:space-between; gap:30px; min-height:39px; border-bottom:1px solid rgba(230,238,245,.34); }
+#snf-coin-toss .pg-toss-title { font:700 30px/36px Arial,sans-serif; letter-spacing:.5px; text-transform:uppercase; }
+#snf-coin-toss .pg-toss-text { margin-top:8px; font:400 27px/32px Arial,sans-serif; white-space:pre-wrap; overflow-wrap:anywhere; color:#e9edf1; text-shadow:0 1px 2px rgba(0,0,0,.65); }
+#snf-coin-toss .pg-brand { display:flex; align-items:center; gap:4px; flex:none; opacity:.91; }
+#snf-coin-toss .pg-peacock { width:35px; height:22px; object-fit:contain; filter:url(#nbc-white-key); }
+#snf-coin-toss .pg-snf { width:69px; height:22px; object-fit:contain; }
+#snf-coin-toss .pg-toss-heading, #snf-coin-toss .pg-toss-text { opacity:0; transform:translateX(-12px); transition:opacity .17s .23s,transform .35s .23s; }
+#snf-coin-toss .pg-toss-text { transition-delay:.31s; }
+#snf-coin-toss.on .pg-toss-heading, #snf-coin-toss.on .pg-toss-text { opacity:1; transform:none; }
+
+/* Explicit entrances also make frame-by-frame reviews sample the same
+ * motion as the live page, without relying on a prior compositor tick. */
+.snf-pregame.on { animation:snfPregameEnter .38s cubic-bezier(.18,.84,.23,1) both; }
+.snf-pregame.on .pg-team-wall { animation:snfPregamePlate .28s cubic-bezier(.14,.82,.23,1) both; }
+.snf-pregame.on .pg-glass { animation:snfPregamePlate .36s cubic-bezier(.14,.82,.23,1) .10s both; }
+.snf-pregame.on .pg-curve { animation:snfPregameCurve .36s ease .22s both; }
+.snf-pregame.on .pg-team-logo { animation:snfPregameLogo .4s cubic-bezier(.16,.84,.24,1) .10s both; }
+#snf-player-fact.on .pg-portrait { animation:snfPregamePortrait .42s cubic-bezier(.16,.84,.24,1) .18s both; }
+#snf-player-fact.on .pg-position, #snf-player-fact.on .pg-fact-heading { animation:snfPregameText .35s ease .25s both; }
+#snf-player-fact.on .pg-fact-text { animation:snfPregameText .35s ease .33s both; }
+#snf-coin-toss.on .pg-toss-heading { animation:snfPregameText .35s ease .23s both; }
+#snf-coin-toss.on .pg-toss-text { animation:snfPregameText .35s ease .31s both; }
+.snf-pregame.out { opacity:1; transform:none; animation:snfPregameExit .35s ease-in both; }
+.snf-pregame.out .pg-glass, .snf-pregame.out .pg-team-wall,
+.snf-pregame.out .pg-curve, .snf-pregame.out .pg-team-logo,
+.snf-pregame.out .pg-portrait, .snf-pregame.out .pg-position,
+.snf-pregame.out .pg-fact-heading, .snf-pregame.out .pg-fact-text,
+.snf-pregame.out .pg-toss-heading, .snf-pregame.out .pg-toss-text {
+  opacity:1 !important; transform:none !important; animation:none !important; transition:none;
+}
+@keyframes snfPregameEnter { from { opacity:0; transform:translateX(-26px); } 42% { opacity:1; } to { opacity:1; transform:none; } }
+@keyframes snfPregamePlate { from { transform:scaleX(.015); } to { transform:scaleX(1); } }
+@keyframes snfPregameCurve { from { opacity:0; transform:translateX(14px); } to { opacity:.94; transform:none; } }
+@keyframes snfPregameLogo { from { opacity:0; transform:translateX(-19px) scale(.92); } to { opacity:1; transform:none; } }
+@keyframes snfPregamePortrait { from { opacity:0; transform:translateY(22px); } to { opacity:1; transform:none; } }
+@keyframes snfPregameText { from { opacity:0; transform:translateX(-13px); } to { opacity:1; transform:none; } }
+@keyframes snfPregameExit { from { opacity:1; transform:none; } to { opacity:0; transform:translateX(-26px); } }
+
+@media (prefers-reduced-motion:reduce) {
+  html:not([data-preview-motion="full"]) .snf-pregame,
+  html:not([data-preview-motion="full"]) .snf-pregame * { transition:none !important; animation:none !important; }
+  html:not([data-preview-motion="full"]) .snf-pregame .pg-sheen::after { animation:none !important; }
+}

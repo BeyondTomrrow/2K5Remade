@@ -1,0 +1,78 @@
+/* 2022 SNF comparison and compact team table: the stadium remains visible.
+ * The panels use supplied team hues behind smoke glass and curved silver rails. */
+.snf-extra { position:absolute; pointer-events:none; color:#fff; font-family:"Bahnschrift","Arial Narrow",Arial,sans-serif; }
+#snf-comparison { inset:0; width:1920px; height:1080px; z-index:24; opacity:0; visibility:hidden; transition:opacity .3s ease,visibility 0s .3s; }
+#snf-comparison.on { opacity:1; visibility:visible; transition-delay:0s; }
+.xc-stage { position:absolute; left:96px; right:96px; bottom:105px; height:475px; }
+.xc-glass { position:absolute; left:475px; right:475px; bottom:0; min-height:350px; padding:25px 66px 24px; z-index:3;
+  background:linear-gradient(110deg,rgba(9,13,19,.85),rgba(12,15,22,.95) 45%,rgba(9,13,19,.85));
+  border-radius:30% 30% 0 0 / 19% 19% 0 0; border-bottom:2px solid rgba(235,240,246,.82);
+  clip-path:polygon(12% 0,88% 0,100% 100%,0 100%); transform:scaleY(.035); transform-origin:center bottom;
+  transition:transform .53s cubic-bezier(.12,.86,.22,1); box-sizing:border-box; }
+#snf-comparison.on .xc-glass { transform:none; }
+.xc-heading { text-align:center; margin:9px -10px 13px; opacity:0; transform:translateY(18px); transition:opacity .16s .28s,transform .3s .28s; }
+#snf-comparison.on .xc-heading { opacity:1; transform:none; }
+.xc-title { font:800 28px/1.04 "Bahnschrift Condensed","Arial Narrow",Arial,sans-serif; text-transform:uppercase; }
+.xc-subtitle { margin-top:4px; font:italic 700 14px/1.1 Arial,sans-serif; color:#e5e6e8; text-transform:uppercase; }
+.xc-rows { display:grid; gap:0; }
+.xc-row { display:grid; grid-template-columns:110px 1fr 110px; align-items:center; min-height:40px; text-align:center;
+  border-top:1px solid rgba(215,224,230,.12); opacity:0; transform:translateY(16px);
+  transition:opacity .15s calc(.36s + var(--extra-row)*.065s),transform .32s calc(.36s + var(--extra-row)*.065s); }
+#snf-comparison.on .xc-row { opacity:1; transform:none; }
+.xc-label { font:500 14px/1.1 Arial,sans-serif; color:#d8dce2; text-transform:uppercase; }
+.xc-value { font:750 28px/1.15 "Bahnschrift",Arial,sans-serif; }
+.xc-side { position:absolute; bottom:0; width:570px; height:470px; z-index:2; --extra-team:#334550; }
+.xc-side.left { left:0; }.xc-side.right { right:0; }
+.xc-vapor { position:absolute; left:0; right:0; bottom:0; height:245px;
+  background:linear-gradient(to top,color-mix(in srgb,var(--extra-team) 88%,transparent),color-mix(in srgb,var(--extra-team) 22%,transparent) 63%,transparent);
+  clip-path:polygon(0 12%,72% 0,100% 100%,0 100%); transform:translateY(75px); opacity:0;
+  filter:drop-shadow(0 -3px 9px color-mix(in srgb,var(--extra-team) 65%,transparent));
+  transition:opacity .35s .05s,transform .56s cubic-bezier(.11,.84,.21,1) .05s; }
+.xc-side.right .xc-vapor { clip-path:polygon(28% 0,100% 12%,100% 100%,0 100%); }
+.xc-silver-curve { position:absolute; left:12px; right:5px; bottom:2px; height:240px; border-top:7px solid #d9e1e7;
+  border-radius:75% 95% 0 0 / 85% 100% 0 0; transform:translateY(85px) rotate(10deg); opacity:0;
+  box-shadow:0 -2px 1px #fafcff,0 -6px 11px color-mix(in srgb,var(--extra-team) 90%,transparent);
+  transition:opacity .25s .09s,transform .6s cubic-bezier(.11,.84,.21,1) .09s; }
+.xc-side.right .xc-silver-curve { border-radius:95% 75% 0 0 / 100% 85% 0 0; transform:translateY(85px) rotate(-10deg); }
+#snf-comparison.on .xc-vapor { opacity:1; transform:none; }
+#snf-comparison.on .xc-side.left .xc-silver-curve { opacity:1; transform:rotate(10deg); }
+#snf-comparison.on .xc-side.right .xc-silver-curve { opacity:1; transform:rotate(-10deg); }
+.xc-logo { position:absolute; left:10px; bottom:80px; width:245px; height:225px; object-fit:contain; opacity:.8; filter:drop-shadow(0 3px 5px rgba(0,0,0,.7)); }
+.xc-side.right .xc-logo { left:auto; right:10px; }
+.xc-portrait { position:absolute; left:80px; bottom:0; width:370px; height:475px; object-fit:contain; object-position:center bottom;
+  filter:drop-shadow(9px 0 13px rgba(0,0,0,.45)); opacity:0; transform:translateY(30px); transition:opacity .23s .12s,transform .5s cubic-bezier(.16,.82,.23,1) .12s; }
+.xc-side.right .xc-portrait { left:auto; right:80px; }
+#snf-comparison.on .xc-portrait { opacity:1; transform:none; }
+.xc-player-meta { position:absolute; left:25px; bottom:10px; width:390px; padding:8px 11px; z-index:4; box-sizing:border-box;
+  background:linear-gradient(90deg,color-mix(in srgb,var(--extra-team) 87%,#10131b),rgba(8,12,17,.86));
+  opacity:0; transform:translateX(-25px); transition:opacity .18s .3s,transform .35s .3s; }
+.xc-side.right .xc-player-meta { left:auto; right:25px; text-align:right; transform:translateX(25px); }
+#snf-comparison.on .xc-player-meta { opacity:1; transform:none; }
+.xc-position { font:700 18px/1 Arial,sans-serif; }
+.xc-name { margin-top:2px; font:800 27px/1.04 "Bahnschrift Condensed","Arial Narrow",Arial,sans-serif; text-transform:uppercase; }
+
+#snf-team-stats { left:112px; bottom:175px; width:660px; z-index:25; opacity:0; visibility:hidden; overflow:hidden;
+  --extra-team:#334550; --extra-columns:2; clip-path:inset(0 100% 0 0); transform:translateX(-35px);
+  background:linear-gradient(110deg,rgba(6,10,15,.92),rgba(13,17,22,.84) 64%,color-mix(in srgb,var(--extra-team) 45%,transparent));
+  border-bottom:2px solid rgba(223,234,240,.8); border-radius:4px 20px 4px 4px;
+  transition:opacity .25s,clip-path .5s cubic-bezier(.12,.86,.22,1),transform .5s cubic-bezier(.12,.86,.22,1),visibility 0s .5s; }
+#snf-team-stats.on { opacity:1; visibility:visible; clip-path:inset(0); transform:none; transition-delay:0s; }
+.xt-heading { display:flex; align-items:center; gap:13px; min-height:60px; padding:3px 50px 0 13px;
+  background:linear-gradient(90deg,color-mix(in srgb,var(--extra-team) 68%,transparent),transparent 80%); }
+.xt-logo { width:68px; height:52px; object-fit:contain; filter:drop-shadow(2px 2px 3px rgba(0,0,0,.6)); }
+.xt-title { font:italic 800 27px/1.03 "Bahnschrift Condensed","Arial Narrow",Arial,sans-serif; text-transform:uppercase; }
+.xt-columns,.xt-row { display:grid; grid-template-columns:minmax(175px,1.4fr) repeat(var(--extra-columns),minmax(0,1fr)); align-items:center; margin:0 31px 0 20px; }
+.xt-columns { min-height:29px; border-bottom:1px solid rgba(240,243,247,.32); font:600 12px/1 Arial,sans-serif; color:#d8dce0; text-transform:uppercase; }
+.xt-column,.xt-value { text-align:center; }
+.xt-rows { padding:0 0 13px; }
+.xt-row { min-height:41px; border-bottom:1px solid rgba(240,243,247,.1); opacity:0; transform:translateY(12px);
+  transition:opacity .17s calc(.21s + var(--extra-row)*.055s),transform .28s calc(.21s + var(--extra-row)*.055s); }
+#snf-team-stats.on .xt-row { opacity:1; transform:none; }
+.xt-label { font:600 17px/1.1 Arial,sans-serif; color:#e1e4e8; }
+.xt-value { font:750 25px/1.15 "Bahnschrift",Arial,sans-serif; }
+.xt-curve { position:absolute; right:-104px; top:0; bottom:-100px; width:158px; border-left:8px solid #cfdbe3;
+  border-radius:100% 0 0 0; transform:rotate(10deg); opacity:.92; box-shadow:-4px 0 10px color-mix(in srgb,var(--extra-team) 70%,transparent); }
+.xt-light { position:absolute; left:-90px; top:0; bottom:0; width:70px; background:linear-gradient(90deg,transparent,rgba(219,237,244,.2),transparent);
+  transform:skewX(-17deg); opacity:0; pointer-events:none; }
+#snf-team-stats.on .xt-light { opacity:1; animation:snfExtraTableLight .6s .14s both; }
+@keyframes snfExtraTableLight { from { left:-90px; } to { left:750px; } }
