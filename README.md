@@ -73,6 +73,15 @@ Performance on the test system (average fps over a benchmark run):
 | 8x (5760x3840) | 59.9 | 944 MB |
 | 12x (8640x5760) | 57.8 | 1,938 MB |
 
+Internal resolution can be set from **1x to 16x**. On a 3440x1440 21:9
+display, 16x is the highest useful target size without exceeding Direct3D 11's
+render-target limits. If a requested target cannot fit in the active GPU
+memory budget, the renderer steps down to the highest size it can allocate
+instead of crashing. The F1 and in-game
+Video Settings menus also expose **Lighting & Materials**: Classic Xbox,
+Enhanced, and Maximum. Enhanced modes preserve the game’s original lighting
+and add a restrained opaque-material finish using its existing specular data.
+
 ### Controller Setup and button remapping
 
 **Options > Controller Setup** shows the controller you are using (Xbox
@@ -241,18 +250,17 @@ kept; F1 > System changes the number or turns backups off.
 
 ### Native mod packages
 
-Supported `.2k5patch` files install beside the original game. Setup checks the
-clean retail hashes, reconstructs and verifies every changed file, and selects
-a native executable by the patched `default.xbe` SHA-256. A mismatched or
-unsupported patch is rejected instead of being launched with incompatible
-code.
+Supported `.2k5patch` files install beside the original game. The installed
+game executable runs the selected patch through its built-in interpreter, so
+players do not need a matching code pack, a compiler, or a developer-path
+executable.
 
 To add one after Setup, drop the file into the game's `mods\patches` folder:
 a `.2k5patch`, or the patched `.iso`/`.xiso` disc image that 2K5 Mod Studio
 built (SOFTDRINK 2K28 v0.4 is distributed as a recipe patch that only Mod
 Studio can apply, so use the disc image it produces). The game installs it in
 the background and shows a message when it is done; restart, then switch it
-on from **Options > Mod Packs**. Turning it off returns to Original ESPN NFL
+on from **Extras > Mods**. Turning it off returns to Original ESPN NFL
 2K5. A file that could not be installed gets a `.failed` marker next to it
 and a log in `logs`.
 

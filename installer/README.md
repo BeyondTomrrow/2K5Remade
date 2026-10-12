@@ -16,10 +16,11 @@ never an uninstall target; if Windows leaves the link behind, it is safe to
 remove that link without touching its target.
 
 Setup can also import a supported 2K5 Mod Studio `.2k5patch`. The standalone
-importer validates the exact clean USA retail source, reconstructs the native
-disc overlay, verifies every changed file, and looks up the native executable
-by the patched `default.xbe` SHA-256. A patch is never paired with code built
-for a different XBE. Original ESPN NFL 2K5 remains installed separately.
+importer validates the clean retail source files required by that patch,
+reconstructs its disc overlay, and verifies every changed file. The installed
+game executable runs the selected patch directly, so no separate code pack or
+developer build path is downloaded. After setup, turn a pack on in
+`Extras > Mods`. Original ESPN NFL 2K5 remains installed separately.
 
 Build after a Release game build:
 

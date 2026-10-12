@@ -76,11 +76,11 @@ def parse_args():
     parser.add_argument("--replace", action="store_true",
                         help="Replace an existing installation of the same pack")
     parser.add_argument("--native-exe", default=None,
-                        help="Matching native NFL2K5.exe to install with the pack")
+                        help="Legacy option; ignored (packs run through the installed game)")
     parser.add_argument("--native-catalog", default=None,
-                        help="Folder containing <XBE SHA-256>/NFL2K5.exe code packs")
+                        help="Legacy option; ignored (packs run through the installed game)")
     parser.add_argument("--require-native", action="store_true",
-                        help="Fail unless a matching native code pack is available")
+                        help="Legacy option; accepted for compatibility and ignored")
     parser.add_argument("--log", default=None,
                         help="Write the install transcript to this file")
     parser.add_argument("--activate", action="store_true",
@@ -249,21 +249,8 @@ def main():
         if bad:
             sys.exit("%d files did not verify" % bad)
 
-    native_exe = os.path.abspath(args.native_exe) if args.native_exe else ""
-    if args.native_catalog and xbe_hash:
-        catalog = os.path.abspath(args.native_catalog)
-        candidates = [os.path.join(catalog, xbe_hash, "NFL2K5.exe"),
-                      os.path.join(catalog, xbe_hash + ".exe")]
-        native_exe = next((p for p in candidates if os.path.isfile(p)), "")
-    if args.require_native and not native_exe:
-        sys.exit("this patch installed correctly, but this release has no matching native code pack "
-                 "for XBE SHA-256 %s" % (xbe_hash or "none"))
-    if native_exe:
-        if not os.path.isfile(native_exe):
-            sys.exit("matching native executable does not exist: %s" % native_exe)
-        native_dir = os.path.join(out, "native")
-        os.makedirs(native_dir, exist_ok=True)
-        shutil.copy2(native_exe, os.path.join(native_dir, "NFL2K5.exe"))
+    if args.native_exe or args.native_catalog or args.require_native:
+        print("[pack] native code-pack options are no longer needed; using the installed game executable")
 
     final_out = os.path.join(packs_dir, folder_name)
     backup = final_out + ".previous"
@@ -290,8 +277,7 @@ def main():
     print("[pack] XBE SHA-256 %s" % (xbe_hash or "none"))
 
 
-# Finished disc images whose executable this release has a native build for.
-# Keyed by the patched default.xbe's SHA-256: (name, version).
+# Friendly labels for known finished disc images, keyed by patched XBE hash.
 KNOWN_IMAGES = {
     "2b0fbbbb89b5c72aaed7c454bf6e78dd2c97f1e417e2d761e515907ed81471ab": ("SOFTDRINK 2K28", "v0.4"),
 }
@@ -328,24 +314,15 @@ def install_xdiff(args, diff_path):
     if xbe_hash != want_out or xbe_hash not in XDIFF_PACKS:
         sys.exit("patched executable did not verify")
     folder, name, desc = XDIFF_PACKS[xbe_hash]
-    native_exe = ""
-    if args.native_catalog:
-        catalog = os.path.abspath(args.native_catalog)
-        native_exe = next((p for p in (os.path.join(catalog, xbe_hash, "NFL2K5.exe"),
-                                       os.path.join(catalog, xbe_hash + ".exe")) if os.path.isfile(p)), "")
-    if args.native_exe:
-        native_exe = os.path.abspath(args.native_exe)
-    if args.require_native and not native_exe:
-        sys.exit("this release has no native code pack for XBE SHA-256 %s" % xbe_hash)
     out = os.path.join(ROOT, "mods", "packs", folder)
-    os.makedirs(os.path.join(out, "native"), exist_ok=True)
+    os.makedirs(out, exist_ok=True)
     with open(os.path.join(out, "default.xbe"), "wb") as fo:
         fo.write(xbe)
     with open(os.path.join(out, "pack.json"), "w", encoding="utf-8") as fo:
         json.dump({"name": name, "display_name": name, "version": "1", "description": desc,
                    "source": os.path.basename(diff_path), "xbe_sha256": xbe_hash}, fo, indent=1)
-    if native_exe:
-        shutil.copy2(native_exe, os.path.join(out, "native", "NFL2K5.exe"))
+    if args.native_exe or args.native_catalog or args.require_native:
+        print("[pack] native code-pack options are no longer needed; using the installed game executable")
     if args.activate:
         active_path = os.path.join(ROOT, "mods", "active-pack.ini")
         with open(active_path, "w", encoding="ascii") as active:
@@ -374,17 +351,8 @@ def install_image(args, image_path):
         with open(os.path.join(stage, "pack.json"), "w", encoding="utf-8") as fo:
             json.dump(info, fo, indent=1)
         folder_name = slug(name + ("-" + version if version else ""))
-        native_exe = os.path.abspath(args.native_exe) if args.native_exe else ""
-        if args.native_catalog:
-            catalog = os.path.abspath(args.native_catalog)
-            candidates = [os.path.join(catalog, xbe_hash, "NFL2K5.exe"), os.path.join(catalog, xbe_hash + ".exe")]
-            native_exe = next((p for p in candidates if os.path.isfile(p)), "")
-        if args.require_native and not native_exe:
-            sys.exit("this image converted correctly, but this release has no matching native code pack "
-                     "for XBE SHA-256 %s" % xbe_hash)
-        if native_exe:
-            os.makedirs(os.path.join(stage, "native"), exist_ok=True)
-            shutil.copy2(native_exe, os.path.join(stage, "native", "NFL2K5.exe"))
+        if args.native_exe or args.native_catalog or args.require_native:
+            print("[pack] native code-pack options are no longer needed; using the installed game executable")
         final_out = os.path.join(packs_dir, folder_name)
         if os.path.exists(final_out):
             if not args.replace:

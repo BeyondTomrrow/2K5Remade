@@ -44,7 +44,6 @@ Source: "..\build\tools\NFL2K5-ModPack-Installer.exe"; DestDir: "{app}\tools"; F
 Source: "..\build\tools\NFL2K5-TeamBuilder.exe"; DestDir: "{app}\tools"; Flags: ignoreversion
 ; PS2/Xbox save import (saves\import) converts through this tool
 Source: "..\tools\nfl2k5-save-converter.exe"; DestDir: "{app}\tools"; Flags: ignoreversion
-Source: "..\release\code-packs\*"; DestDir: "{app}\mods\code-packs"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
 Source: "nfl2k5_video.default.ini"; DestName: "nfl2k5_video.ini"; DestDir: "{app}"; Flags: onlyifdoesntexist
 ; Ship editable presentation definitions and art by an explicit extension
 ; allow-list. This cannot accidentally capture local packs, Xbox executables,
@@ -243,13 +242,14 @@ begin
   if ModPatchPath = '' then ModPatchPath := ExpandConstant('{param:MODPATCH|}');
   ToolPath := ExpandConstant('{app}\tools\NFL2K5-ModPack-Installer.exe');
   WizardForm.StatusLabel.Caption := 'Validating and installing the mod package...';
+  { Installing a pack never replaces the clean retail launch state. The
+    player selects it later in Extras > Mods. }
   Params := '"' + ModPatchPath + '" --root "' + ExpandConstant('{app}') +
             '" --disc "' + InstalledDiscDir + '" --verify --replace' +
-            ' --native-catalog "' + ExpandConstant('{app}\mods\code-packs') + '" --require-native' +
-            ' --activate --log "' + ExpandConstant('{app}\logs\modpack-install.log') + '"';
+            ' --log "' + ExpandConstant('{app}\logs\modpack-install.log') + '"';
   if (not Exec(ToolPath, Params, ExpandConstant('{app}'), SW_HIDE,
                ewWaitUntilTerminated, ResultCode)) or (ResultCode <> 0) then begin
-    MsgBox('The mod package was not installed. It may require a different retail disc or a native code pack that is not included in this release.' + #13#10 + #13#10 +
+    MsgBox('The mod package was not installed. It may require a different clean retail disc.' + #13#10 + #13#10 +
            'Original ESPN NFL 2K5 was installed and remains available. Details were saved to logs\modpack-install.log.', mbError, MB_OK);
   end;
 end;

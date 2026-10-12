@@ -1,8 +1,7 @@
-/* Native mod-pack selection and restart handoff.
+/* Mod-pack selection and restart handoff.
  *
  * Installed packs live in mods\packs\<folder>.  A playable pack contains
- * pack.json, default.xbe, and native\NFL2K5.exe (the native build compiled
- * from that patched XBE).  The in-game Features > Mod Packs screen writes
+ * pack.json and default.xbe.  The in-game Mods screen writes
  * mods\active-pack.ini and restarts into the selected executable.  The same
  * file is also honored at boot, so launching the normal desktop shortcut
  * always resumes the player's selected pack. */
@@ -129,12 +128,15 @@ static int mp_launch(const char *exe)
 {
     STARTUPINFOA si;
     PROCESS_INFORMATION pi;
-    char cmd[MAX_PATH * 2];
+    char cmd[MAX_PATH * 2], work[MAX_PATH], *slash;
     memset(&si, 0, sizeof(si));
     memset(&pi, 0, sizeof(pi));
     si.cb = sizeof(si);
     snprintf(cmd, sizeof(cmd), "\"%s\" --run", exe);
-    if (!CreateProcessA(exe, cmd, NULL, NULL, FALSE, 0, NULL, s_root, &si, &pi)) {
+    snprintf(work, sizeof(work), "%s", exe);
+    slash = strrchr(work, '\\');
+    if (slash) *slash = 0;
+    if (!CreateProcessA(exe, cmd, NULL, NULL, FALSE, 0, NULL, slash ? work : s_root, &si, &pi)) {
         fprintf(stderr, "[MODPACK] Could not launch %s (error %lu)\n", exe, (unsigned long)GetLastError());
         return 0;
     }
@@ -152,24 +154,18 @@ int nfl2k5_modpacks_boot_dispatch(const char *root)
     /* NFL2K5_INTERP_PACK (testing): run that pack interpreted in this process. */
     if (getenv("NFL2K5_INTERP_PACK") && *getenv("NFL2K5_INTERP_PACK")) return 0;
     mp_read_active(folder, sizeof(folder));
-    if (*folder && mp_safe_folder(folder))
-        snprintf(target, sizeof(target), "%s\\mods\\packs\\%s\\native\\NFL2K5.exe", root, folder);
-    else
-        mp_retail_exe(target, sizeof(target));
-    if (!mp_file_exists(target)) {
+    /* Every pack runs on the installed main executable.  Native pack EXEs
+     * were tied to a single patched-XBE hash and could contain the original
+     * developer's build path, causing error 267 on another PC. */
+    if (*folder && mp_safe_folder(folder)) {
         char xbe[MAX_PATH];
         snprintf(xbe, sizeof xbe, "%s\\mods\\packs\\%s\\default.xbe", root, folder);
-        if (*folder && mp_safe_folder(folder) && mp_file_exists(xbe)) {
-            /* No native build of its own: the retail build runs it, with the
-             * pack's changes in the interpreter (src/main.c, src/interp). */
-            fprintf(stderr, "[MODPACK] Pack '%s' runs on the main build (interpreted changes).\n", folder);
-        } else {
-            if (*folder)
-                fprintf(stderr, "[MODPACK] Selected pack '%s' is not installed; using retail.\n", folder);
+        if (!mp_file_exists(xbe)) {
+            fprintf(stderr, "[MODPACK] Selected pack '%s' is not installed; using retail.\n", folder);
             mp_write_active("");
         }
-        mp_retail_exe(target, sizeof(target));
     }
+    mp_retail_exe(target, sizeof(target));
     if (!mp_current_exe(current, sizeof(current)) || mp_same_path(current, target)) return 0;
     fprintf(stderr, "[MODPACK] Handing off to %s\n", target);
     return mp_launch(target);
@@ -208,11 +204,11 @@ static DWORD WINAPI mp_patch_thread(void *arg)
         if (mp_file_exists(done) || mp_file_exists(failed)) continue;
         snprintf(logp, sizeof logp, "%s\\logs\\patch-install-%s.log", s_root, fd.cFileName);
         if (mp_file_exists(tool))
-            snprintf(cmd, sizeof cmd, "\"%s\" \"%s\" --root \"%s\" --native-catalog \"%s\\mods\\code-packs\" --replace --log \"%s\"",
-                     tool, file, s_root, s_root, logp);
+            snprintf(cmd, sizeof cmd, "\"%s\" \"%s\" --root \"%s\" --replace --log \"%s\"",
+                     tool, file, s_root, logp);
         else if (mp_file_exists(py))
-            snprintf(cmd, sizeof cmd, "python \"%s\" \"%s\" --root \"%s\" --native-catalog \"%s\\release\\code-packs\" --replace --log \"%s\"",
-                     py, file, s_root, s_root, logp);
+            snprintf(cmd, sizeof cmd, "python \"%s\" \"%s\" --root \"%s\" --replace --log \"%s\"",
+                     py, file, s_root, logp);
         else
             continue;
         xbox_PresentToast("MOD PACKS", "Installing", fd.cFileName, 8000);
@@ -274,9 +270,10 @@ void nfl2k5_modpacks_init(const char *root)
         snprintf(p->folder, sizeof(p->folder), "%s", fd.cFileName);
         snprintf(json, sizeof(json), "%s\\mods\\packs\\%s\\pack.json", root, p->folder);
         snprintf(xbe, sizeof(xbe), "%s\\mods\\packs\\%s\\default.xbe", root, p->folder);
-        snprintf(p->exe, sizeof(p->exe), "%s\\mods\\packs\\%s\\native\\NFL2K5.exe", root, p->folder);
+        /* Do not launch a hash-specific code pack.  The base executable
+         * interprets the selected patch and remains portable across releases. */
+        mp_retail_exe(p->exe, sizeof(p->exe));
         if (!mp_file_exists(json) || !mp_file_exists(xbe)) continue;
-        if (!mp_file_exists(p->exe)) mp_retail_exe(p->exe, sizeof(p->exe));   /* interpreted on the main build */
         mp_read_json_name(json, p->name, sizeof(p->name));
         if (!p->name[0]) snprintf(p->name, sizeof(p->name), "%s", p->folder);
         if (!_stricmp(active, p->folder)) s_active = s_pack_count;

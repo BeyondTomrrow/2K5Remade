@@ -18,8 +18,12 @@ extern bool apu_hook_handle_mmio(PCONTEXT, uintptr_t, uint32_t, int);
 
 /* A development build still resolves data against NFL2K5_PROJECT_ROOT, but a
  * distributed build must be movable.  Prefer an explicit launcher override;
- * otherwise use the executable's folder when it has an installed original/
- * directory.  This keeps a clean development checkout working unchanged. */
+ * otherwise find the install root from the executable's location.  A retail
+ * EXE lives at <root>\NFL2K5.exe, whereas a native code-pack EXE lives at
+ * <root>\mods\packs\<pack>\native\NFL2K5.exe.  Looking only in the EXE's
+ * own directory made the latter fall back to the developer's build-time path;
+ * on a player's machine that path does not exist, and CreateProcess then
+ * failed with ERROR_DIRECTORY (267). */
 static const char *nfl2k5_project_root(void)
 {
     static char root[MAX_PATH];
@@ -34,11 +38,21 @@ static const char *nfl2k5_project_root(void)
     if (GetModuleFileNameA(NULL, root, (DWORD)sizeof root)) {
         char *slash = strrchr(root, '\\');
         if (slash) {
-            *slash = '\0';
-            char original[MAX_PATH];
-            snprintf(original, sizeof original, "%s\\original", root);
-            if (GetFileAttributesA(original) != INVALID_FILE_ATTRIBUTES)
-                return root;
+            *slash = '\0';                         /* EXE directory */
+            for (;;) {
+                char original[MAX_PATH];
+                DWORD attrs;
+                snprintf(original, sizeof original, "%s\\original", root);
+                attrs = GetFileAttributesA(original);
+                if (attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_DIRECTORY))
+                    return root;
+                /* Stop at a drive root.  This works for C:, D:, external
+                 * drives, and Program Files without ever using a build-time
+                 * path as a working directory. */
+                slash = strrchr(root, '\\');
+                if (!slash || slash == root + 2) break;
+                *slash = '\0';
+            }
         }
     }
     strncpy_s(root, sizeof root, NFL2K5_PROJECT_ROOT, _TRUNCATE);
@@ -2856,49 +2870,13 @@ int main(int argc, char **argv)
     snprintf(save_dir, sizeof save_dir, "%s/saves", root);
     const char *game_dir = GetFileAttributesA(disc_xbe) != INVALID_FILE_ATTRIBUTES ? disc_dir : original_dir;
     const char *xbe_path = GetFileAttributesA(disc_xbe) != INVALID_FILE_ATTRIBUTES ? disc_xbe : original_xbe;
-    /* A mod pack build (tools/build.ps1 -Pack) is compiled from that pack's
-     * patched default.xbe: it runs that XBE, from the pack's installed folder
-     * (tools/pack-install.py), with the pack's disc overlay. The folder is
-     * found by the XBE's hash under mods\packs, or named by NFL2K5_PACK. */
+    /* Mod packs always run on this installed executable.  The selected pack's
+     * patched XBE supplies its game data and overlay; its altered code is
+     * interpreted.  This intentionally avoids a separate executable tied to
+     * one XBE SHA-256 and keeps GitHub installs portable between releases. */
     static char pack_xbe[MAX_PATH], pack_dir[MAX_PATH];
-    if (NFL2K5_BASE_CMP(NFL2K5_XBE_SHA256) != 0) {
-        const char *env = getenv("NFL2K5_PACK");
-        if (env && *env) {
-            snprintf(pack_dir, sizeof pack_dir, "%s", env);
-        } else {
-            char pattern[MAX_PATH];
-            WIN32_FIND_DATAA fd;
-            HANDLE fh;
-            snprintf(pattern, sizeof pattern, "%s/mods/packs/*", root);
-            fh = FindFirstFileA(pattern, &fd);
-            if (fh != INVALID_HANDLE_VALUE) {
-                do {
-                    char cand[MAX_PATH], hex[65];
-                    if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) || fd.cFileName[0] == '.') continue;
-                    snprintf(cand, sizeof cand, "%s/mods/packs/%s/default.xbe", root, fd.cFileName);
-                    if (nfl2k5_file_sha256(cand, hex) && !strcmp(hex, NFL2K5_XBE_SHA256)) {
-                        snprintf(pack_dir, sizeof pack_dir, "%s/mods/packs/%s", root, fd.cFileName);
-                        break;
-                    }
-                } while (FindNextFileA(fh, &fd));
-                FindClose(fh);
-            }
-        }
-        if (!pack_dir[0]) {
-            fprintf(stderr, "[BOOT] This build is for a mod pack whose default.xbe has SHA-256 %s;\n"
-                            "       install the pack with tools/pack-install.py first.\n", NFL2K5_XBE_SHA256);
-            return 2;
-        }
-        snprintf(pack_xbe, sizeof pack_xbe, "%s/default.xbe", pack_dir);
-        xbe_path = pack_xbe;
-        _putenv_s("NFL2K5_PACK", pack_dir);
-        printf("[BOOT] Mod pack: %s\n", pack_dir);
-    } else {
-        /* The retail build running a mod pack that has no native build of its
-         * own (mods\active-pack.ini, or NFL2K5_INTERP_PACK=<folder>): its
-         * executable runs on this native code, and whatever it changed or
-         * added runs in the interpreter (src/interp). */
-        char active[MAX_PATH] = "", cand[MAX_PATH], native_exe[MAX_PATH];
+    {
+        char active[MAX_PATH] = "", cand[MAX_PATH];
         const char *env = getenv("NFL2K5_INTERP_PACK");
         if (env && *env) snprintf(active, sizeof active, "%s", env);
         else {
@@ -2912,15 +2890,13 @@ int main(int argc, char **argv)
         }
         if (active[0] && !strpbrk(active, "/\\:")) {
             snprintf(cand, sizeof cand, "%s/mods/packs/%s/default.xbe", root, active);
-            snprintf(native_exe, sizeof native_exe, "%s/mods/packs/%s/native/NFL2K5.exe", root, active);
-            if (GetFileAttributesA(cand) != INVALID_FILE_ATTRIBUTES &&
-                (getenv("NFL2K5_INTERP_PACK") || GetFileAttributesA(native_exe) == INVALID_FILE_ATTRIBUTES)) {
+            if (GetFileAttributesA(cand) != INVALID_FILE_ATTRIBUTES) {
                 snprintf(pack_dir, sizeof pack_dir, "%s/mods/packs/%s", root, active);
                 snprintf(pack_xbe, sizeof pack_xbe, "%s", cand);
                 xbe_path = pack_xbe;
                 g_interp_pack = 1;
                 _putenv_s("NFL2K5_PACK", pack_dir);
-                printf("[BOOT] Mod pack (interpreted): %s\n", pack_dir);
+                printf("[BOOT] Mod pack (portable): %s\n", pack_dir);
             }
         }
     }
@@ -3109,7 +3085,7 @@ int main(int argc, char **argv)
      * entered by its injected menu objects.  Do not interpret the whole
      * 0x6E000 block: it also contains the frontend's per-frame dispatcher,
      * which leaves the title screen unable to advance after START. */
-    if (!strcmp(NFL2K5_XBE_SHA256,
+    if (!strcmp(digest_hex,
                 "f67e6fc1cb76c9ea1f1ad504e4a6491ff126483d66a9da8ddb92950bbaf740ba")) {
         printf("[BOOT] SOFTDRINK v0.6 dispatcher compatibility: %u function\n",
                nfl2k5_interp_force(0x0006E4E5u, 0x0006E5F5u));
