@@ -6,7 +6,8 @@
 /saves/
 /downloads/
 /dependencies/
-/external/
+/external/*
+!/external/xboxrecomp
 *.xbe
 *.iso
 *.xiso

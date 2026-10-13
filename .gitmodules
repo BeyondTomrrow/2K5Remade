@@ -1,0 +1,4 @@
+[submodule "external/xboxrecomp"]
+	path = external/xboxrecomp
+	url = https://github.com/BeyondTomrrow/xboxrecomp.git
+	branch = nfl2k5-port
