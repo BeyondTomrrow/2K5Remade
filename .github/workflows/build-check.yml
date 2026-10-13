@@ -1,0 +1,39 @@
+# Build check: runs on every push and pull request.
+#
+# What it proves:
+#   - the xboxrecomp submodule clones from a fresh checkout
+#   - every xbox_* runtime function the game calls is defined in the submodule
+#   - the xboxrecomp runtime libraries and the non-game tools compile with MSVC
+#
+# What it can't prove: the full game build and launch. That needs
+# analysis/disasm/functions.json from tools/analyze.ps1, which comes from the
+# retail game and is not in the repo, so it still happens on the build machine.
+name: Build check
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-2022   # has Visual Studio 2022 with the C++ workload
+
+    steps:
+      - name: Check out (with the xboxrecomp submodule)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Runtime functions the game calls exist in xboxrecomp
+        run: python tools/ci/check-runtime-symbols.py src external/xboxrecomp/src
+
+      - name: Configure (runtime libraries and tools, no game)
+        run: cmake -S . -B build/ci -G "Visual Studio 17 2022" -A x64 -DNFL2K5_BUILD_GAME=OFF
+
+      - name: Build
+        run: cmake --build build/ci --config Release --parallel
