@@ -8,6 +8,8 @@ organized saves, and selectable broadcast presentation packages.
 > **Preview release:** The game is playable, but this project is still under
 > active development and has known bugs. Back up your saves before testing.
 
+[![Build check](https://github.com/BeyondTomrrow/2K5Remade/actions/workflows/build-check.yml/badge.svg?branch=master)](https://github.com/BeyondTomrrow/2K5Remade/actions/workflows/build-check.yml)
+
 ## What you need
 
 - 64-bit Windows 10 or Windows 11
