@@ -1,13 +1,3 @@
-# Build check: runs on every push and pull request.
-#
-# What it proves:
-#   - the xboxrecomp submodule clones from a fresh checkout
-#   - every xbox_* runtime function the game calls is defined in the submodule
-#   - the xboxrecomp runtime libraries and the non-game tools compile with MSVC
-#
-# What it can't prove: the full game build and launch. That needs
-# analysis/disasm/functions.json from tools/analyze.ps1, which comes from the
-# retail game and is not in the repo, so it still happens on the build machine.
 name: Build check
 
 on:
@@ -16,24 +6,36 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
-    runs-on: windows-2022   # has Visual Studio 2022 with the C++ workload
-
+  build-windows:
+    runs-on: windows-2022
     steps:
-      - name: Check out (with the xboxrecomp submodule)
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Runtime functions the game calls exist in xboxrecomp
+      - name: Runtime functions exist
         run: python tools/ci/check-runtime-symbols.py src external/xboxrecomp/src
 
-      - name: Configure (runtime libraries and tools, no game)
-        run: cmake -S . -B build/ci -G "Visual Studio 17 2022" -A x64 -DNFL2K5_BUILD_GAME=OFF
+      - name: Configure CMake (Windows D3D11 + SDL3)
+        run: cmake -B build -G "Visual Studio 17 2022" -A x64
 
-      - name: Build
-        run: cmake --build build/ci --config Release --parallel
+      - name: Build Windows Binary
+        run: cmake --build build --config Release --parallel
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libsdl3-dev libssl-dev libepoxy-dev
+
+      - name: Configure CMake (Linux POSIX + SDL3 GPU)
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build Linux Binary
+        run: cmake --build build --parallel
