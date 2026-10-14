@@ -1,25 +1,21 @@
-/* Discord Rich Presence.
+/* Discord Rich Presence (Cross-platform: Win32 Named Pipe / POSIX Unix Socket).
  *
- * Shows what is being played on the player's Discord profile: the teams and
- * score, the quarter and clock, or the menu they are in. It speaks Discord's
- * local IPC protocol over the named pipe the Discord desktop app opens
- * (\\?\pipe\discord-ipc-0..9), so there is no SDK or network access here.
- *
- * Settings: mods\discord.ini
+ * Settings: mods/discord.ini
  *     enabled = 1
  *     client_id = <the Application ID of a Discord application>
- *     large_image = nfl2k5        ; an art asset uploaded to that application
- * Create the application at https://discord.com/developers/applications
- * (New Application, name it "ESPN NFL 2K5"; the Application ID is on the
- * General Information page; Rich Presence > Art Assets takes the picture).
- * With no client_id the feature stays off and says so in the log.
- *
- * The protocol, per Discord's RPC documentation: a frame is a 32-bit opcode
- * and a 32-bit length (little endian) then JSON. Opcode 0 is the handshake
- * {"v":1,"client_id":...}, 1 a frame, 2 close, 3 ping, 4 pong. The activity
- * is set with {"cmd":"SET_ACTIVITY","args":{"pid":N,"activity":{...}}}.
+ *     large_image = nfl2k5
  */
+#include <SDL3/SDL.h>
+
+#if defined(_WIN32)
 #include <windows.h>
+#else
+#include <fcntl.h>
+#include <poll.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <unistd.h>
+#endif
 
 #include <cstdio>
 #include <cstdlib>
@@ -40,7 +36,7 @@ struct Config {
 static Config load_config()
 {
     Config c;
-    FILE *f = fopen("mods\\discord.ini", "r");
+    FILE *f = fopen("mods/discord.ini", "r");
     if (!f) return c;
     char line[512];
     while (fgets(line, sizeof line, f)) {
@@ -68,7 +64,16 @@ static std::string json_escape(const std::string &s)
     return o;
 }
 
-static bool write_frame(HANDLE pipe, unsigned op, const std::string &json)
+#if defined(_WIN32)
+using IpcHandle = HANDLE;
+static const IpcHandle kInvalidIpc = INVALID_HANDLE_VALUE;
+
+static void close_ipc(IpcHandle h)
+{
+    if (h != INVALID_HANDLE_VALUE) CloseHandle(h);
+}
+
+static bool write_frame(IpcHandle pipe, unsigned op, const std::string &json)
 {
     std::string buf(8 + json.size(), '\0');
     unsigned len = (unsigned)json.size();
@@ -79,15 +84,14 @@ static bool write_frame(HANDLE pipe, unsigned op, const std::string &json)
     return WriteFile(pipe, buf.data(), (DWORD)buf.size(), &wrote, nullptr) && wrote == buf.size();
 }
 
-/* One frame back from Discord (opcode, payload); false on a broken pipe. */
-static bool read_frame(HANDLE pipe, unsigned *op, std::string *payload)
+static bool read_frame(IpcHandle pipe, unsigned *op, std::string *payload)
 {
     unsigned hdr[2];
     DWORD got = 0;
     if (!ReadFile(pipe, hdr, 8, &got, nullptr) || got != 8) return false;
     *op = hdr[0];
-    payload->assign(hdr[1] <= (1u << 20) ? hdr[1] : 0, '\0');
     if (hdr[1] > (1u << 20)) return false;
+    payload->assign(hdr[1], '\0');
     DWORD done = 0;
     while (done < hdr[1]) {
         if (!ReadFile(pipe, &(*payload)[done], hdr[1] - done, &got, nullptr) || !got) return false;
@@ -96,7 +100,13 @@ static bool read_frame(HANDLE pipe, unsigned *op, std::string *payload)
     return true;
 }
 
-static HANDLE open_pipe()
+static bool has_incoming_frame(IpcHandle pipe)
+{
+    DWORD avail = 0;
+    return PeekNamedPipe(pipe, nullptr, 0, nullptr, &avail, nullptr) && avail >= 8;
+}
+
+static IpcHandle open_ipc()
 {
     for (int i = 0; i < 10; i++) {
         char name[64];
@@ -107,13 +117,123 @@ static HANDLE open_pipe()
     return INVALID_HANDLE_VALUE;
 }
 
+static unsigned long current_pid()
+{
+    return (unsigned long)GetCurrentProcessId();
+}
+
+#else /* POSIX Unix domain socket */
+
+using IpcHandle = int;
+static const IpcHandle kInvalidIpc = -1;
+
+static void close_ipc(IpcHandle fd)
+{
+    if (fd >= 0) close(fd);
+}
+
+static bool write_all(int fd, const void *data, size_t len)
+{
+    const uint8_t *p = static_cast<const uint8_t *>(data);
+    size_t done = 0;
+    while (done < len) {
+#ifdef MSG_NOSIGNAL
+        ssize_t n = send(fd, p + done, len - done, MSG_NOSIGNAL);
+#else
+        ssize_t n = write(fd, p + done, len - done);
+#endif
+        if (n <= 0) return false;
+        done += (size_t)n;
+    }
+    return true;
+}
+
+static bool read_all(int fd, void *data, size_t len)
+{
+    uint8_t *p = static_cast<uint8_t *>(data);
+    size_t done = 0;
+    while (done < len) {
+        ssize_t n = recv(fd, p + done, len - done, 0);
+        if (n <= 0) return false;
+        done += (size_t)n;
+    }
+    return true;
+}
+
+static bool write_frame(IpcHandle fd, unsigned op, const std::string &json)
+{
+    std::string buf(8 + json.size(), '\0');
+    unsigned len = (unsigned)json.size();
+    memcpy(&buf[0], &op, 4);
+    memcpy(&buf[4], &len, 4);
+    memcpy(&buf[8], json.data(), json.size());
+    return write_all(fd, buf.data(), buf.size());
+}
+
+static bool read_frame(IpcHandle fd, unsigned *op, std::string *payload)
+{
+    unsigned hdr[2];
+    if (!read_all(fd, hdr, 8)) return false;
+    *op = hdr[0];
+    if (hdr[1] > (1u << 20)) return false;
+    payload->assign(hdr[1], '\0');
+    if (hdr[1] > 0 && !read_all(fd, &(*payload)[0], hdr[1])) return false;
+    return true;
+}
+
+static bool has_incoming_frame(IpcHandle fd)
+{
+    struct pollfd pfd{};
+    pfd.fd = fd;
+    pfd.events = POLLIN;
+    return poll(&pfd, 1, 0) > 0 && (pfd.revents & POLLIN);
+}
+
+static IpcHandle open_ipc()
+{
+    const char *runtime = getenv("XDG_RUNTIME_DIR");
+    const char *dirs[4] = {
+        runtime ? runtime : "/tmp",
+        "/tmp",
+        getenv("TMPDIR") ? getenv("TMPDIR") : "/tmp",
+        getenv("TEMP") ? getenv("TEMP") : "/tmp"
+    };
+    const char *subpaths[3] = {
+        "",
+        "/app/com.discordapp.Discord",
+        "/snap.discord"
+    };
+
+    for (const char *base : dirs) {
+        for (const char *sub : subpaths) {
+            for (int i = 0; i < 10; i++) {
+                struct sockaddr_un addr{};
+                addr.sun_family = AF_UNIX;
+                snprintf(addr.sun_path, sizeof addr.sun_path, "%s%s/discord-ipc-%d", base, sub, i);
+                int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+                if (fd < 0) continue;
+                if (connect(fd, reinterpret_cast<struct sockaddr *>(&addr), sizeof addr) == 0) {
+                    return fd;
+                }
+                close(fd);
+            }
+        }
+    }
+    return kInvalidIpc;
+}
+
+static unsigned long current_pid()
+{
+    return (unsigned long)getpid();
+}
+#endif
+
 static std::string team_label(const Nfl2k5BroadcastTeamState &t)
 {
     std::string n = t.name[0] ? t.name : t.abbreviation;
     return n;
 }
 
-/* What to show for the game as it is now. */
 static void describe(std::string *details, std::string *state, bool *in_game)
 {
     Nfl2k5BroadcastState g{};
@@ -142,37 +262,37 @@ static void describe(std::string *details, std::string *state, bool *in_game)
     *state = buf;
 }
 
-static DWORD WINAPI worker(void *)
+static int SDLCALL worker(void *)
 {
     Config cfg = load_config();
     if (!cfg.enabled) return 0;
     if (cfg.client_id.empty()) {
-        fprintf(stderr, "[DISCORD] no client_id in mods\\discord.ini; Rich Presence is off "
+        fprintf(stderr, "[DISCORD] no client_id in mods/discord.ini; Rich Presence is off "
                         "(see the notes at the top of src/nfl2k5_discord.cpp)\n");
         return 0;
     }
     const long long started = (long long)time(nullptr);
-    HANDLE pipe = INVALID_HANDLE_VALUE;
+    IpcHandle pipe = kInvalidIpc;
     std::string last_details, last_state;
     bool last_in_game = false;
-    ULONGLONG last_sent = 0;
+    Uint64 last_sent = 0;
     unsigned nonce = 1;
     for (;;) {
-        if (pipe == INVALID_HANDLE_VALUE) {
-            pipe = open_pipe();
-            if (pipe != INVALID_HANDLE_VALUE) {
+        if (pipe == kInvalidIpc) {
+            pipe = open_ipc();
+            if (pipe != kInvalidIpc) {
                 char hs[160];
                 snprintf(hs, sizeof hs, "{\"v\":1,\"client_id\":\"%s\"}", json_escape(cfg.client_id).c_str());
                 unsigned op = 0;
                 std::string reply;
                 if (!write_frame(pipe, 0, hs) || !read_frame(pipe, &op, &reply)) {
-                    CloseHandle(pipe);
-                    pipe = INVALID_HANDLE_VALUE;
+                    close_ipc(pipe);
+                    pipe = kInvalidIpc;
                 } else if (reply.find("\"READY\"") == std::string::npos) {
                     fprintf(stderr, "[DISCORD] handshake refused (check client_id): %.160s\n", reply.c_str());
-                    CloseHandle(pipe);
-                    pipe = INVALID_HANDLE_VALUE;
-                    Sleep(60000);
+                    close_ipc(pipe);
+                    pipe = kInvalidIpc;
+                    SDL_Delay(60000);
                     continue;
                 } else {
                     fprintf(stderr, "[DISCORD] connected; showing Rich Presence\n");
@@ -181,17 +301,15 @@ static DWORD WINAPI worker(void *)
                     last_sent = 0;
                 }
             }
-            if (pipe == INVALID_HANDLE_VALUE) {          /* Discord is not running (yet) */
-                Sleep(30000);
+            if (pipe == kInvalidIpc) {
+                SDL_Delay(30000);
                 continue;
             }
         }
         std::string details, state;
         bool in_game;
         describe(&details, &state, &in_game);
-        ULONGLONG now = GetTickCount64();
-        /* Discord allows about five updates per 20 s: send on a change, at
-         * most every 5 s, and every 2 minutes regardless. */
+        Uint64 now = SDL_GetTicks();
         bool changed = details != last_details || state != last_state || in_game != last_in_game;
         if ((changed && now - last_sent >= 5000) || now - last_sent >= 120000 || !last_sent) {
             std::string act = "{\"details\":\"" + json_escape(details) + "\"";
@@ -201,26 +319,25 @@ static DWORD WINAPI worker(void *)
             act += ",\"instance\":false}";
             char head[128];
             snprintf(head, sizeof head, "{\"cmd\":\"SET_ACTIVITY\",\"nonce\":\"%u\",\"args\":{\"pid\":%lu,\"activity\":",
-                     nonce++, (unsigned long)GetCurrentProcessId());
+                     nonce++, current_pid());
             if (!write_frame(pipe, 1, std::string(head) + act + "}}")) {
-                CloseHandle(pipe);
-                pipe = INVALID_HANDLE_VALUE;
+                close_ipc(pipe);
+                pipe = kInvalidIpc;
                 continue;
             }
-            /* The reply; a PING in between must be answered. */
             unsigned op = 0;
             std::string reply;
-            DWORD avail = 0;
-            while (PeekNamedPipe(pipe, nullptr, 0, nullptr, &avail, nullptr) && avail >= 8) {
-                if (!read_frame(pipe, &op, &reply)) { avail = 0; CloseHandle(pipe); pipe = INVALID_HANDLE_VALUE; break; }
+            while (has_incoming_frame(pipe)) {
+                if (!read_frame(pipe, &op, &reply)) { close_ipc(pipe); pipe = kInvalidIpc; break; }
                 if (op == 3) write_frame(pipe, 4, reply);
-                else if (op == 2) { CloseHandle(pipe); pipe = INVALID_HANDLE_VALUE; break; }
+                else if (op == 2) { close_ipc(pipe); pipe = kInvalidIpc; break; }
             }
             last_details = details; last_state = state; last_in_game = in_game;
             last_sent = now;
         }
-        Sleep(2000);
+        SDL_Delay(2000);
     }
+    return 0;
 }
 
 } // namespace
@@ -228,6 +345,6 @@ static DWORD WINAPI worker(void *)
 extern "C" void nfl2k5_discord_init(void)
 {
     if (getenv("NFL2K5_NO_DISCORD")) return;
-    HANDLE t = CreateThread(nullptr, 0, worker, nullptr, 0, nullptr);
-    if (t) { SetThreadPriority(t, THREAD_PRIORITY_BELOW_NORMAL); CloseHandle(t); }
+    SDL_Thread *t = SDL_CreateThread(worker, "discord_rpc", nullptr);
+    if (t) SDL_DetachThread(t);
 }

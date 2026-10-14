@@ -1,56 +1,58 @@
 /*
- * Controllers, keyboard and mouse for NFL 2K5 (2026-10-09).
+ * Controllers, keyboard and mouse for NFL 2K5 (Unified SDL3 Backend).
  *
- * The game polls up to four Xbox gamepads through XInput HLE
- * (src/nfl2k5_input_hle.c). This layer decides what is on each port:
- *
- *   - Xbox controllers through XInput (user indices 0..3), and
- *   - PlayStation controllers -- DualShock 4 (054C:05C4/09CC/0BA0) and
- *     DualSense / DualSense Edge (054C:0CE6/0DF2) -- read straight from their
- *     HID reports (USB and Bluetooth), since XInput does not see them.
- *
- * Ports are filled in that order; the keyboard and mouse add to port 0.
- * Per-user settings (controls.ini in the per-user folder, see kernel_path.c
- * xbox_user_path): vibration, left/right stick and trigger dead zones, the
- * mouse, the button mapping (any game button from any controller button),
- * and keyboard bindings. They are edited on the F1 page (Controls,
- * Controller Buttons, Keyboard pages) or in the file.
- *
- * Button prompts: the game draws its button icons from one texture sheet;
- * with PlayStation prompts (automatic: the last controller used) the
- * renderer repaints it with PlayStation glyphs (nv2a_gpu_prompts.inc.c).
+ * Replaces Win32 XInput + SetupAPI/HID PlayStation reader with SDL3.
+ * Preserves controls.ini compatibility, F1 menu pages, deadzones, and
+ * automatic Xbox / DualShock 4 / DualSense prompt detection.
  */
-#include <windows.h>
-#include <setupapi.h>
-#include <hidsdi.h>
-#include <xinput.h>
+#include <SDL3/SDL.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "xinput_xbox.h"
 
-#pragma comment(lib, "setupapi.lib")
-#pragma comment(lib, "hid.lib")
-
 extern char *xbox_user_path(const char *rel, char *out, size_t n);
+extern void *xbox_FramebufferWindowHwnd(void);
 
-/* ---- the game's buttons ---------------------------------------------------
- * Indices into a mapping table: what each game button reads from. Sources use
- * the same names on the physical controller (Xbox layout; a PlayStation pad's
- * Cross/Circle/Square/Triangle are A/B/X/Y, L1/R1 are LB/RB). */
+/* Virtual-Key constants kept for controls.ini backward compatibility */
+#ifndef VK_LBUTTON
+#define VK_LBUTTON  0x01
+#define VK_RBUTTON  0x02
+#define VK_MBUTTON  0x04
+#define VK_BACK     0x08
+#define VK_TAB      0x09
+#define VK_RETURN   0x0D
+#define VK_SHIFT    0x10
+#define VK_CONTROL  0x11
+#define VK_MENU     0x12
+#define VK_ESCAPE   0x1B
+#define VK_SPACE    0x20
+#define VK_PRIOR    0x21
+#define VK_NEXT     0x22
+#define VK_END      0x23
+#define VK_HOME     0x24
+#define VK_LEFT     0x25
+#define VK_UP       0x26
+#define VK_RIGHT    0x27
+#define VK_DOWN     0x28
+#define VK_INSERT   0x2D
+#define VK_DELETE   0x2E
+#define VK_F1       0x70
+#endif
+
 enum { C_A, C_B, C_X, C_Y, C_LB, C_RB, C_LT, C_RT, C_START, C_BACK, C_LS, C_RS,
        C_DUP, C_DDOWN, C_DLEFT, C_DRIGHT, C_COUNT };
+
 static const char *const k_ctl_names[C_COUNT] = {
     "A", "B", "X", "Y", "LB (White)", "RB (Black)", "LT", "RT", "Start", "Back",
     "Left stick click", "Right stick click", "D-pad up", "D-pad down", "D-pad left", "D-pad right" };
-static const char *const k_ctl_keys[C_COUNT] = {     /* controls.ini names */
+static const char *const k_ctl_keys[C_COUNT] = {
     "a", "b", "x", "y", "lb", "rb", "lt", "rt", "start", "back", "ls", "rs", "dup", "ddown", "dleft", "dright" };
 static const char *const k_ps_names[C_COUNT] = {
     "Cross", "Circle", "Square", "Triangle", "L1", "R1", "L2", "R2", "Options", "Share/Create",
     "L3", "R3", "D-pad up", "D-pad down", "D-pad left", "D-pad right" };
 
-/* Keyboard: the game buttons plus the left stick's four directions. */
 enum { K_LUP = C_COUNT, K_LDOWN, K_LLEFT, K_LRIGHT, K_COUNT };
 static const char *const k_key_names[K_COUNT] = {
     "A", "B", "X", "Y", "LB (White)", "RB (Black)", "LT", "RT", "Start", "Back",
@@ -60,22 +62,78 @@ static const char *const k_key_ini[K_COUNT] = {
     "key_a", "key_b", "key_x", "key_y", "key_lb", "key_rb", "key_lt", "key_rt", "key_start", "key_back",
     "key_ls", "key_rs", "key_dup", "key_ddown", "key_dleft", "key_dright",
     "key_lup", "key_ldown", "key_lleft", "key_lright" };
-/* The bindings the game shipped with in this port (see nfl2k5_input_hle.c history). */
 static const int k_key_default[K_COUNT] = {
     'Z', 'X', 'C', 'V', 'R', 'F', 'Q', 'E', VK_RETURN, VK_BACK, 'T', 'G',
     VK_UP, VK_DOWN, VK_LEFT, VK_RIGHT, 'W', 'S', 'A', 'D' };
 
 typedef struct {
-    int vibration;                  /* 0/1 */
-    int dz_left, dz_right, dz_trig; /* percent */
-    int mouse;                      /* mouse buttons/stick on port 0 */
-    int prompts;                    /* 0 automatic, 1 Xbox, 2 PlayStation, 3 keyboard, 4 original Xbox */
-    int map[C_COUNT];               /* game button <- controller button */
-    int keys[K_COUNT];              /* virtual-key codes, 0 = unbound */
+    int vibration;
+    int dz_left, dz_right, dz_trig;
+    int mouse;
+    int prompts;
+    int map[C_COUNT];
+    int keys[K_COUNT];
 } Controls;
-static Controls s_cfg;
-static CRITICAL_SECTION s_lock;
-static LONG s_inited;
+
+static Controls      s_cfg;
+static SDL_Mutex    *s_lock;
+static SDL_AtomicInt s_inited;
+
+/* Map Windows VK codes used in controls.ini to SDL_Scancode */
+static SDL_Scancode vk_to_scancode(int vk)
+{
+    if (vk >= 'A' && vk <= 'Z')
+        return (SDL_Scancode)(SDL_SCANCODE_A + (vk - 'A'));
+    if (vk >= '1' && vk <= '9')
+        return (SDL_Scancode)(SDL_SCANCODE_1 + (vk - '1'));
+    if (vk == '0')
+        return SDL_SCANCODE_0;
+    if (vk >= 0x70 && vk <= 0x7B) /* VK_F1..VK_F12 */
+        return (SDL_SCANCODE_F1 + (vk - 0x70));
+
+    switch (vk) {
+        case VK_BACK:   return SDL_SCANCODE_BACKSPACE;
+        case VK_TAB:    return SDL_SCANCODE_TAB;
+        case VK_RETURN: return SDL_SCANCODE_RETURN;
+        case VK_SHIFT:  return SDL_SCANCODE_LSHIFT;
+        case VK_CONTROL:return SDL_SCANCODE_LCTRL;
+        case VK_MENU:   return SDL_SCANCODE_LALT;
+        case VK_ESCAPE: return SDL_SCANCODE_ESCAPE;
+        case VK_SPACE:  return SDL_SCANCODE_SPACE;
+        case VK_PRIOR:  return SDL_SCANCODE_PAGEUP;
+        case VK_NEXT:   return SDL_SCANCODE_PAGEDOWN;
+        case VK_END:    return SDL_SCANCODE_END;
+        case VK_HOME:   return SDL_SCANCODE_HOME;
+        case VK_LEFT:   return SDL_SCANCODE_LEFT;
+        case VK_UP:     return SDL_SCANCODE_UP;
+        case VK_RIGHT:  return SDL_SCANCODE_RIGHT;
+        case VK_DOWN:   return SDL_SCANCODE_DOWN;
+        case VK_INSERT: return SDL_SCANCODE_INSERT;
+        case VK_DELETE: return SDL_SCANCODE_DELETE;
+        default:        return SDL_SCANCODE_UNKNOWN;
+    }
+}
+
+static int vk_pressed(int vk)
+{
+    int numkeys = 0;
+    const bool *state;
+    SDL_Scancode sc;
+
+    if (!vk) return 0;
+    state = SDL_GetKeyboardState(&numkeys);
+    if (!state) return 0;
+
+    if (vk == VK_SHIFT)
+        return state[SDL_SCANCODE_LSHIFT] || state[SDL_SCANCODE_RSHIFT];
+    if (vk == VK_CONTROL)
+        return state[SDL_SCANCODE_LCTRL] || state[SDL_SCANCODE_RCTRL];
+    if (vk == VK_MENU)
+        return state[SDL_SCANCODE_LALT] || state[SDL_SCANCODE_RALT];
+
+    sc = vk_to_scancode(vk);
+    return (sc != SDL_SCANCODE_UNKNOWN && (int)sc < numkeys) ? state[sc] : 0;
+}
 
 static void cfg_defaults(Controls *c)
 {
@@ -90,7 +148,7 @@ static void cfg_defaults(Controls *c)
 
 static void cfg_save(void)
 {
-    char p[MAX_PATH];
+    char p[512];
     FILE *f = fopen(xbox_user_path("controls.ini", p, sizeof p), "w");
     int i;
     if (!f) return;
@@ -107,7 +165,7 @@ static void cfg_save(void)
 
 static void cfg_load(void)
 {
-    char p[MAX_PATH], line[160];
+    char p[512], line[160];
     FILE *f;
     cfg_defaults(&s_cfg);
     f = fopen(xbox_user_path("controls.ini", p, sizeof p), "r");
@@ -137,264 +195,124 @@ static void cfg_load(void)
 #undef CLAMP
 }
 
-/* ---- a controller's raw state, in Xbox layout ----------------------------- */
 typedef struct {
     int connected;
-    char kind[32];                  /* "Xbox controller", "DualSense", ... */
-    int ps;                         /* PlayStation layout (for labels) */
-    int dev;                        /* 0 Xbox, 1 DualShock 4, 2 DualSense (pictures, prompts) */
-    unsigned char btn[C_COUNT];     /* 0..255 per control (sticks clicks and d-pad digital) */
+    char kind[32];
+    int ps;
+    int dev; /* 0 Xbox, 1 DualShock 4, 2 DualSense */
+    unsigned char btn[C_COUNT];
     short lx, ly, rx, ry;
 } RawPad;
 
-/* ---- PlayStation controllers over HID ------------------------------------- */
-#define MAX_PS 4
-typedef struct {
-    HANDLE h;
-    int used;
-    int dualsense, edge, bt;
-    char path[512];
-    volatile LONG gen;
-    RawPad state;
-    unsigned char out_left, out_right;  /* rumble asked for */
-    int rumble_sent_l, rumble_sent_r;
-    HANDLE thread;
-} PsPad;
-static PsPad s_ps[MAX_PS];
+static SDL_Gamepad *s_pads[4] = { NULL };
+static Uint64       s_last_scan_ms = 0;
 
-static void ps_parse(PsPad *d, const unsigned char *r, DWORD n)
+static int classify_gamepad(SDL_Gamepad *pad, char *kind_out, size_t kind_len, int *is_ps)
 {
-    RawPad s;
-    const unsigned char *p;
-    int hat;
-    memset(&s, 0, sizeof s);
-    s.connected = 1;
-    s.ps = 1;
-    s.dev = d->dualsense ? 2 : 1;
-    snprintf(s.kind, sizeof s.kind, "%s%s", d->dualsense ? (d->edge ? "DualSense Edge" : "DualSense") : "DualShock 4",
-             d->bt ? " (Bluetooth)" : "");
-    if (n < 10) return;
-    if (d->dualsense && r[0] == 0x31 && n >= 12) p = r + 2;         /* DualSense BT full report */
-    else if (d->dualsense && r[0] == 0x01 && n >= 11 && !d->bt) p = r + 1;  /* DualSense USB */
-    else if (!d->dualsense && r[0] == 0x11 && n >= 12) p = r + 3;   /* DS4 BT full report */
-    else if (r[0] == 0x01) p = r + 1;                               /* DS4 USB, or BT simple report */
-    else return;
-    s.lx = (short)((p[0] - 128) * 256 + (p[0] >= 128 ? 255 : 0));
-    s.ly = (short)((127 - p[1]) * 256 + (p[1] <= 127 ? 255 : 0));
-    s.rx = (short)((p[2] - 128) * 256 + (p[2] >= 128 ? 255 : 0));
-    s.ry = (short)((127 - p[3]) * 256 + (p[3] <= 127 ? 255 : 0));
-    {
-        unsigned char b0, b1, l2, r2;
-        if (d->dualsense && !(r[0] == 0x01 && d->bt)) { l2 = p[4]; r2 = p[5]; b0 = p[7]; b1 = p[8]; }
-        else { b0 = p[4]; b1 = p[5]; l2 = p[7]; r2 = p[8]; }
-        hat = b0 & 0x0F;
-        if (b0 & 0x10) s.btn[C_X] = 255;           /* square */
-        if (b0 & 0x20) s.btn[C_A] = 255;           /* cross */
-        if (b0 & 0x40) s.btn[C_B] = 255;           /* circle */
-        if (b0 & 0x80) s.btn[C_Y] = 255;           /* triangle */
-        if (b1 & 0x01) s.btn[C_LB] = 255;
-        if (b1 & 0x02) s.btn[C_RB] = 255;
-        if (b1 & 0x10) s.btn[C_BACK] = 255;        /* share / create */
-        if (b1 & 0x20) s.btn[C_START] = 255;       /* options */
-        if (b1 & 0x40) s.btn[C_LS] = 255;
-        if (b1 & 0x80) s.btn[C_RS] = 255;
-        s.btn[C_LT] = l2; s.btn[C_RT] = r2;
-    }
-    if (hat == 0 || hat == 1 || hat == 7) s.btn[C_DUP] = 255;
-    if (hat >= 1 && hat <= 3) s.btn[C_DRIGHT] = 255;
-    if (hat >= 3 && hat <= 5) s.btn[C_DDOWN] = 255;
-    if (hat >= 5 && hat <= 7) s.btn[C_DLEFT] = 255;
-    EnterCriticalSection(&s_lock);
-    d->state = s;
-    LeaveCriticalSection(&s_lock);
-    InterlockedIncrement(&d->gen);
-}
+    SDL_GamepadType type = SDL_GetGamepadType(pad);
+    Uint16 vid = SDL_GetGamepadVendor(pad);
+    Uint16 pid = SDL_GetGamepadProduct(pad);
 
-/* Rumble, USB only: Bluetooth output reports need a CRC and a mode switch. */
-static void ps_rumble(PsPad *d)
-{
-    unsigned char out[64];
-    DWORD w;
-    OVERLAPPED ov;
-    if (d->bt || (d->out_left == d->rumble_sent_l && d->out_right == d->rumble_sent_r)) return;
-    memset(out, 0, sizeof out);
-    if (d->dualsense) {
-        out[0] = 0x02; out[1] = 0x03;               /* compatible vibration, haptics select */
-        out[3] = d->out_right; out[4] = d->out_left;
-    } else {
-        out[0] = 0x05; out[1] = 0x01;               /* rumble enable */
-        out[4] = d->out_right; out[5] = d->out_left;
+    if (type == SDL_GAMEPAD_TYPE_PS5 || (vid == 0x054C && (pid == 0x0CE6 || pid == 0x0DF2))) {
+        *is_ps = 1;
+        snprintf(kind_out, kind_len, "%s", pid == 0x0DF2 ? "DualSense Edge" : "DualSense");
+        return 2;
     }
-    memset(&ov, 0, sizeof ov);
-    ov.hEvent = CreateEventA(NULL, TRUE, FALSE, NULL);
-    if (!WriteFile(d->h, out, d->dualsense ? 48 : 32, &w, &ov) && GetLastError() == ERROR_IO_PENDING)
-        WaitForSingleObject(ov.hEvent, 50);
-    CloseHandle(ov.hEvent);
-    d->rumble_sent_l = d->out_left; d->rumble_sent_r = d->out_right;
-}
-
-static DWORD WINAPI ps_reader(void *arg)
-{
-    PsPad *d = (PsPad *)arg;
-    unsigned char buf[128];
-    OVERLAPPED ov;
-    memset(&ov, 0, sizeof ov);
-    ov.hEvent = CreateEventA(NULL, TRUE, FALSE, NULL);
-    for (;;) {
-        DWORD n = 0;
-        ResetEvent(ov.hEvent);
-        if (!ReadFile(d->h, buf, sizeof buf, &n, &ov)) {
-            if (GetLastError() != ERROR_IO_PENDING) break;
-            if (WaitForSingleObject(ov.hEvent, 1000) != WAIT_OBJECT_0) { CancelIo(d->h); continue; }
-            if (!GetOverlappedResult(d->h, &ov, &n, FALSE)) break;
-        }
-        ps_parse(d, buf, n);
-        ps_rumble(d);
+    if (type == SDL_GAMEPAD_TYPE_PS4 || (vid == 0x054C && (pid == 0x05C4 || pid == 0x09CC || pid == 0x0BA0))) {
+        *is_ps = 1;
+        snprintf(kind_out, kind_len, "DualShock 4");
+        return 1;
     }
-    CloseHandle(ov.hEvent);
-    EnterCriticalSection(&s_lock);
-    CloseHandle(d->h);
-    d->h = NULL;
-    d->state.connected = 0;
-    d->used = 0;
-    LeaveCriticalSection(&s_lock);
+    *is_ps = 0;
+    snprintf(kind_out, kind_len, "Xbox controller");
     return 0;
 }
 
-static void ps_scan(void)
+static void sdl_pads_refresh(void)
 {
-    GUID hid;
-    HDEVINFO set;
-    SP_DEVICE_INTERFACE_DATA ifd;
-    DWORD i;
-    HidD_GetHidGuid(&hid);
-    set = SetupDiGetClassDevsA(&hid, NULL, NULL, DIGCF_PRESENT | DIGCF_DEVICEINTERFACE);
-    if (set == INVALID_HANDLE_VALUE) return;
-    ifd.cbSize = sizeof ifd;
-    for (i = 0; SetupDiEnumDeviceInterfaces(set, NULL, &hid, i, &ifd); i++) {
-        char buf[1024];
-        SP_DEVICE_INTERFACE_DETAIL_DATA_A *det = (SP_DEVICE_INTERFACE_DETAIL_DATA_A *)buf;
-        HIDD_ATTRIBUTES at;
-        HANDLE h;
-        int k, known = 0, ds = 0, edge = 0;
-        det->cbSize = sizeof *det;
-        if (!SetupDiGetDeviceInterfaceDetailA(set, &ifd, det, sizeof buf, NULL, NULL)) continue;
-        for (k = 0; k < MAX_PS; k++) if (s_ps[k].used && !_stricmp(s_ps[k].path, det->DevicePath)) known = 1;
-        if (known) continue;
-        h = CreateFileA(det->DevicePath, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL,
-                        OPEN_EXISTING, FILE_FLAG_OVERLAPPED, NULL);
-        if (h == INVALID_HANDLE_VALUE) continue;
-        at.Size = sizeof at;
-        if (!HidD_GetAttributes(h, &at) || at.VendorID != 0x054C ||
-            !(at.ProductID == 0x05C4 || at.ProductID == 0x09CC || at.ProductID == 0x0BA0 ||
-              at.ProductID == 0x0CE6 || at.ProductID == 0x0DF2)) { CloseHandle(h); continue; }
-        ds = at.ProductID == 0x0CE6 || at.ProductID == 0x0DF2;
-        edge = at.ProductID == 0x0DF2;
-        {
-            PHIDP_PREPARSED_DATA pp;
-            HIDP_CAPS caps;
-            /* Gamepads are the top-level collection Usage Page 1, Usage 5. */
-            if (!HidD_GetPreparsedData(h, &pp)) { CloseHandle(h); continue; }
-            HidP_GetCaps(pp, &caps);
-            HidD_FreePreparsedData(pp);
-            if (caps.UsagePage != 1 || caps.Usage != 5) { CloseHandle(h); continue; }
-            EnterCriticalSection(&s_lock);
-            for (k = 0; k < MAX_PS && s_ps[k].used; k++) {}
-            if (k == MAX_PS) { LeaveCriticalSection(&s_lock); CloseHandle(h); continue; }
-            memset(&s_ps[k], 0, sizeof s_ps[k]);
-            s_ps[k].used = 1;
-            s_ps[k].h = h;
-            s_ps[k].dualsense = ds; s_ps[k].edge = edge;
-            /* Bluetooth: a larger input report than over USB. */
-            s_ps[k].bt = caps.InputReportByteLength > 64;
-            strncpy(s_ps[k].path, det->DevicePath, sizeof s_ps[k].path - 1);
-            s_ps[k].rumble_sent_l = s_ps[k].rumble_sent_r = -1;
-            LeaveCriticalSection(&s_lock);
-            fprintf(stderr, "[CONTROLS] %s connected (%04X:%04X, %s)\n", ds ? (edge ? "DualSense Edge" : "DualSense") : "DualShock 4",
-                    at.VendorID, at.ProductID, s_ps[k].bt ? "Bluetooth" : "USB");
-            {
-                extern void xbox_PresentToast(const char *header, const char *line1, const char *line2, unsigned ms);
-                xbox_PresentToast("CONTROLLER", ds ? (edge ? "DualSense Edge connected" : "DualSense connected") : "DualShock 4 connected",
-                                  "F1 > Controls to set it up", 4000);
-            }
-            s_ps[k].thread = CreateThread(NULL, 0, ps_reader, &s_ps[k], 0, NULL);
+    Uint64 now = SDL_GetTicks();
+    int count = 0;
+    SDL_JoystickID *ids;
+
+    if (s_last_scan_ms && now - s_last_scan_ms < 1000)
+        return;
+    s_last_scan_ms = now;
+
+    if (!SDL_WasInit(SDL_INIT_GAMEPAD))
+        SDL_InitSubSystem(SDL_INIT_GAMEPAD);
+
+    SDL_LockMutex(s_lock);
+    for (int i = 0; i < 4; i++) {
+        if (s_pads[i] && !SDL_GamepadConnected(s_pads[i])) {
+            SDL_CloseGamepad(s_pads[i]);
+            s_pads[i] = NULL;
         }
     }
-    SetupDiDestroyDeviceInfoList(set);
-}
 
-static DWORD WINAPI scan_thread(void *arg)
-{
-    (void)arg;
-    for (;;) { ps_scan(); Sleep(2000); }
-}
-
-/* ---- ports ---------------------------------------------------------------- */
-typedef struct { int src; int index; } PortSrc;     /* src 0 none, 1 XInput user index, 2 PS slot */
-
-/* Which XInput slots have a controller. Asking an empty slot is slow (XInput
- * looks for the device each time), so empty slots are re-checked once a
- * second rather than on every poll. */
-static volatile LONG s_xi_conn[4];
-static DWORD s_xi_checked;
-
-static void xinput_refresh(void)
-{
-    DWORD now = GetTickCount();
-    int i;
-    if (s_xi_checked && now - s_xi_checked < 1000) return;
-    s_xi_checked = now;
-    for (i = 0; i < 4; i++) {
-        XINPUT_STATE x;
-        InterlockedExchange(&s_xi_conn[i], XInputGetState((DWORD)i, &x) == ERROR_SUCCESS);
+    ids = SDL_GetGamepads(&count);
+    if (ids) {
+        for (int i = 0; i < count; i++) {
+            if (SDL_GetGamepadFromID(ids[i]) != NULL)
+                continue;
+            for (int slot = 0; slot < 4; slot++) {
+                if (!s_pads[slot]) {
+                    s_pads[slot] = SDL_OpenGamepad(ids[i]);
+                    if (s_pads[slot]) {
+                        char kind[32];
+                        int is_ps = 0;
+                        classify_gamepad(s_pads[slot], kind, sizeof kind, &is_ps);
+                        fprintf(stderr, "[CONTROLS] %s connected on slot %d\n", kind, slot);
+                    }
+                    break;
+                }
+            }
+        }
+        SDL_free(ids);
     }
+    SDL_UnlockMutex(s_lock);
 }
 
-static void xinput_raw(int user, RawPad *s)
+static void read_sdl_pad(int slot, RawPad *s)
 {
-    XINPUT_STATE x;
+    SDL_Gamepad *pad;
     memset(s, 0, sizeof *s);
-    if (XInputGetState((DWORD)user, &x) != ERROR_SUCCESS) { InterlockedExchange(&s_xi_conn[user & 3], 0); return; }
+
+    SDL_UpdateGamepads();
+    SDL_LockMutex(s_lock);
+    pad = (slot >= 0 && slot < 4) ? s_pads[slot] : NULL;
+    if (!pad || !SDL_GamepadConnected(pad)) {
+        SDL_UnlockMutex(s_lock);
+        return;
+    }
+
     s->connected = 1;
-    snprintf(s->kind, sizeof s->kind, "Xbox controller");
-#define B(bit, c) if (x.Gamepad.wButtons & (bit)) s->btn[c] = 255
-    B(XINPUT_GAMEPAD_A, C_A); B(XINPUT_GAMEPAD_B, C_B); B(XINPUT_GAMEPAD_X, C_X); B(XINPUT_GAMEPAD_Y, C_Y);
-    B(XINPUT_GAMEPAD_LEFT_SHOULDER, C_LB); B(XINPUT_GAMEPAD_RIGHT_SHOULDER, C_RB);
-    B(XINPUT_GAMEPAD_START, C_START); B(XINPUT_GAMEPAD_BACK, C_BACK);
-    B(XINPUT_GAMEPAD_LEFT_THUMB, C_LS); B(XINPUT_GAMEPAD_RIGHT_THUMB, C_RS);
-    B(XINPUT_GAMEPAD_DPAD_UP, C_DUP); B(XINPUT_GAMEPAD_DPAD_DOWN, C_DDOWN);
-    B(XINPUT_GAMEPAD_DPAD_LEFT, C_DLEFT); B(XINPUT_GAMEPAD_DPAD_RIGHT, C_DRIGHT);
-#undef B
-    s->btn[C_LT] = x.Gamepad.bLeftTrigger;
-    s->btn[C_RT] = x.Gamepad.bRightTrigger;
-    s->lx = x.Gamepad.sThumbLX; s->ly = x.Gamepad.sThumbLY;
-    s->rx = x.Gamepad.sThumbRX; s->ry = x.Gamepad.sThumbRY;
+    s->dev = classify_gamepad(pad, s->kind, sizeof s->kind, &s->ps);
+
+    if (SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_SOUTH))          s->btn[C_A] = 255;
+    if (SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_EAST))           s->btn[C_B] = 255;
+    if (SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_WEST))           s->btn[C_X] = 255;
+    if (SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_NORTH))          s->btn[C_Y] = 255;
+    if (SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_LEFT_SHOULDER))  s->btn[C_LB] = 255;
+    if (SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER)) s->btn[C_RB] = 255;
+    if (SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_START))          s->btn[C_START] = 255;
+    if (SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_BACK))           s->btn[C_BACK] = 255;
+    if (SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_LEFT_STICK))     s->btn[C_LS] = 255;
+    if (SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_RIGHT_STICK))    s->btn[C_RS] = 255;
+    if (SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_DPAD_UP))        s->btn[C_DUP] = 255;
+    if (SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_DPAD_DOWN))      s->btn[C_DDOWN] = 255;
+    if (SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_DPAD_LEFT))      s->btn[C_DLEFT] = 255;
+    if (SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_DPAD_RIGHT))     s->btn[C_DRIGHT] = 255;
+
+    s->btn[C_LT] = (unsigned char)(SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_LEFT_TRIGGER) >> 7);
+    s->btn[C_RT] = (unsigned char)(SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) >> 7);
+
+    s->lx = SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_LEFTX);
+    s->ly = (short)(-1 - SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_LEFTY));
+    s->rx = SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_RIGHTX);
+    s->ry = (short)(-1 - SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_RIGHTY));
+    SDL_UnlockMutex(s_lock);
 }
 
-/* Which controller is on which game port: Xbox controllers first (in their
- * XInput order), then PlayStation controllers in the order they arrived. */
-static int port_map(PortSrc ports[4])
-{
-    int n = 0, i;
-    memset(ports, 0, sizeof(PortSrc) * 4);
-    xinput_refresh();
-    for (i = 0; i < 4 && n < 4; i++)
-        if (s_xi_conn[i]) { ports[n].src = 1; ports[n].index = i; n++; }
-    EnterCriticalSection(&s_lock);
-    for (i = 0; i < MAX_PS && n < 4; i++)
-        if (s_ps[i].used && s_ps[i].state.connected) { ports[n].src = 2; ports[n].index = i; n++; }
-    LeaveCriticalSection(&s_lock);
-    return n;
-}
-
-static void raw_for(const PortSrc *p, RawPad *s)
-{
-    memset(s, 0, sizeof *s);
-    if (p->src == 1) xinput_raw(p->index, s);
-    else if (p->src == 2) { EnterCriticalSection(&s_lock); *s = s_ps[p->index].state; LeaveCriticalSection(&s_lock); }
-}
-
-/* Radial dead zone, rescaled so the edge of the zone reads as zero. */
 static void deadzone(short *x, short *y, int pct)
 {
     double fx = *x, fy = *y, m = sqrt(fx * fx + fy * fy), dz = 32767.0 * pct / 100.0, k;
@@ -404,47 +322,47 @@ static void deadzone(short *x, short *y, int pct)
     *x = (short)(fx * k); *y = (short)(fy * k);
 }
 
-/* Which kind of controller was used last (automatic button prompts):
- * 0 Xbox, 1 DualShock 4, 2 DualSense, 3 keyboard. */
-static volatile LONG s_last_ps, s_last_dev;
+static SDL_AtomicInt s_last_ps, s_last_dev;
 static void note_use(const RawPad *s)
 {
-    int i;
-    for (i = 0; i < C_COUNT; i++)
-        if (s->btn[i] > 128) { InterlockedExchange(&s_last_ps, s->ps); InterlockedExchange(&s_last_dev, s->dev); return; }
+    for (int i = 0; i < C_COUNT; i++) {
+        if (s->btn[i] > 128) {
+            SDL_SetAtomicInt(&s_last_ps, s->ps);
+            SDL_SetAtomicInt(&s_last_dev, s->dev);
+            return;
+        }
+    }
 }
 
-/* Button prompt style now: 0 Xbox, 1 PlayStation, 2 keyboard, 3 the original
- * Xbox icons (src/nfl2k5_controller_art.cpp). */
 int nfl2k5_controls_style(void)
 {
     switch (s_cfg.prompts) {
-    case 1: return 0;
-    case 2: return 1;
-    case 3: return 2;
-    case 4: return 3;
+        case 1: return 0;
+        case 2: return 1;
+        case 3: return 2;
+        case 4: return 3;
     }
-    return s_last_dev == 3 ? 2 : s_last_ps ? 1 : 0;
+    return SDL_GetAtomicInt(&s_last_dev) == 3 ? 2 : SDL_GetAtomicInt(&s_last_ps) ? 1 : 0;
 }
 
-/* Which PlayStation controller the prompts are for: 1 DualShock 4, 2 DualSense. */
 int nfl2k5_controls_ps_kind(void)
 {
-    int i, k = s_last_dev == 1 || s_last_dev == 2 ? (int)s_last_dev : 0;
-    if (k) return k;
-    EnterCriticalSection(&s_lock);
-    for (i = 0; i < MAX_PS; i++) if (s_ps[i].used && s_ps[i].state.connected) { k = s_ps[i].dualsense ? 2 : 1; break; }
-    LeaveCriticalSection(&s_lock);
-    return k ? k : 2;
+    int last = SDL_GetAtomicInt(&s_last_dev);
+    if (last == 1 || last == 2) return last;
+
+    for (int i = 0; i < 4; i++) {
+        RawPad s;
+        read_sdl_pad(i, &s);
+        if (s.connected && s.ps) return s.dev;
+    }
+    return 2;
 }
 
-/* For the renderer's old button-sheet repaint (nv2a_gpu_prompts.inc.c): 1 = PlayStation. */
 static int prompt_style(void)
 {
     return nfl2k5_controls_style() == 1;
 }
 
-/* The key bound to a game button (see k_key_ini), 0 = none. */
 int nfl2k5_controls_key(int game_button)
 {
     return game_button >= 0 && game_button < K_COUNT ? s_cfg.keys[game_button] : 0;
@@ -460,8 +378,6 @@ static void to_gamepad(const RawPad *s, XBOX_GAMEPAD *g)
     if (v[C_RT] <= trig) v[C_RT] = 0;
     g->bAnalogButtons[0] = v[C_A]; g->bAnalogButtons[1] = v[C_B];
     g->bAnalogButtons[2] = v[C_X]; g->bAnalogButtons[3] = v[C_Y];
-    /* LB is the Duke's White button and RB its Black one: the game's left
-     * actions (Stiff Arm L) are on White, so they land on the left bumper. */
     g->bAnalogButtons[4] = v[C_RB]; g->bAnalogButtons[5] = v[C_LB];
     g->bAnalogButtons[6] = v[C_LT]; g->bAnalogButtons[7] = v[C_RT];
     if (v[C_DUP] > 128) g->wButtons |= 0x01;
@@ -479,20 +395,18 @@ static void to_gamepad(const RawPad *s, XBOX_GAMEPAD *g)
 
 static int window_focused(void)
 {
-    DWORD pid = 0;
-    HWND fg = GetForegroundWindow();
-    if (!fg) return 0;
-    GetWindowThreadProcessId(fg, &pid);
-    return pid == GetCurrentProcessId();
+    SDL_Window *win = (SDL_Window *)xbox_FramebufferWindowHwnd();
+    if (!win) return 0;
+    return (SDL_GetWindowFlags(win) & SDL_WINDOW_INPUT_FOCUS) != 0;
 }
 
 static void keyboard_into(XBOX_GAMEPAD *g)
 {
-#define KEY(i) (s_cfg.keys[i] && (GetAsyncKeyState(s_cfg.keys[i]) & 0x8000))
-    static const int analog[8] = { C_A, C_B, C_X, C_Y, C_RB, C_LB, C_LT, C_RT };   /* Black, White: see to_gamepad */
+#define KEY(i) (s_cfg.keys[i] && vk_pressed(s_cfg.keys[i]))
+    static const int analog[8] = { C_A, C_B, C_X, C_Y, C_RB, C_LB, C_LT, C_RT };
     int i;
     for (i = 0; i < 8; i++) if (KEY(analog[i])) g->bAnalogButtons[i] = 255;
-    for (i = 0; i < K_COUNT; i++) if (KEY(i)) { InterlockedExchange(&s_last_dev, 3); InterlockedExchange(&s_last_ps, 0); break; }
+    for (i = 0; i < K_COUNT; i++) if (KEY(i)) { SDL_SetAtomicInt(&s_last_dev, 3); SDL_SetAtomicInt(&s_last_ps, 0); break; }
     if (KEY(C_DUP)) g->wButtons |= 0x01;
     if (KEY(C_DDOWN)) g->wButtons |= 0x02;
     if (KEY(C_DLEFT)) g->wButtons |= 0x04;
@@ -510,115 +424,107 @@ static void keyboard_into(XBOX_GAMEPAD *g)
 
 static void mouse_into(XBOX_GAMEPAD *g)
 {
-    HWND hwnd = GetForegroundWindow();
-    POINT pt;
-    RECT rc;
-    LONG cx, cy, dx, dy;
-    if (!s_cfg.mouse || !hwnd) return;
-    if (GetAsyncKeyState(VK_LBUTTON) & 0x8000) g->bAnalogButtons[0] = 255;    /* A / confirm */
-    if (GetAsyncKeyState(VK_RBUTTON) & 0x8000) g->bAnalogButtons[1] = 255;    /* B / back */
-    if (GetAsyncKeyState(VK_MBUTTON) & 0x8000) g->wButtons |= 0x10;            /* START */
-    /* Shift + mouse position: the left stick, relative to the window centre. */
-    if (!(GetAsyncKeyState(VK_SHIFT) & 0x8000) || !GetCursorPos(&pt) || !ScreenToClient(hwnd, &pt) ||
-        !GetClientRect(hwnd, &rc)) return;
-    cx = (rc.right - rc.left) / 2; cy = (rc.bottom - rc.top) / 2;
-    if (cx <= 0 || cy <= 0) return;
-    dx = pt.x - cx; dy = cy - pt.y;
-    if (labs(dx) > cx * 15 / 100) g->sThumbLX = (SHORT)((dx * 32767L) / cx);
-    if (labs(dy) > cy * 15 / 100) g->sThumbLY = (SHORT)((dy * 32767L) / cy);
+    SDL_Window *win = (SDL_Window *)xbox_FramebufferWindowHwnd();
+    float mx = 0.0f, my = 0.0f;
+    int ww = 0, wh = 0;
+    SDL_MouseButtonFlags mb;
+
+    if (!s_cfg.mouse || !win || !window_focused()) return;
+
+    mb = SDL_GetMouseState(&mx, &my);
+    if (mb & SDL_BUTTON_LMASK) g->bAnalogButtons[0] = 255;
+    if (mb & SDL_BUTTON_RMASK) g->bAnalogButtons[1] = 255;
+    if (mb & SDL_BUTTON_MMASK) g->wButtons |= 0x10;
+
+    if (!vk_pressed(VK_SHIFT)) return;
+    SDL_GetWindowSize(win, &ww, &wh);
+    if (ww <= 0 || wh <= 0) return;
+
+    float cx = ww * 0.5f, cy = wh * 0.5f;
+    float dx = mx - cx, dy = cy - my;
+    if (fabsf(dx) > cx * 0.15f) g->sThumbLX = (SHORT)((dx * 32767.0f) / cx);
+    if (fabsf(dy) > cy * 0.15f) g->sThumbLY = (SHORT)((dy * 32767.0f) / cy);
 }
 
 static void controls_init(void)
 {
-    if (InterlockedCompareExchange(&s_inited, 1, 0) != 0) return;
-    InitializeCriticalSection(&s_lock);
+    if (!SDL_CompareAndSwapAtomicInt(&s_inited, 0, 1)) return;
+    s_lock = SDL_CreateMutex();
     cfg_load();
     {
         extern void nfl2k5_controls_menu_init(void);
         nfl2k5_controls_menu_init();
     }
-    {
-        HANDLE t = CreateThread(NULL, 0, scan_thread, NULL, 0, NULL);
-        if (t) CloseHandle(t);
-    }
+    sdl_pads_refresh();
 }
 
-/* Bitmask of game ports with a controller: port 0 always (keyboard). */
 unsigned nfl2k5_controls_ports(void)
 {
-    PortSrc p[4];
-    int n, i;
-    unsigned m = 1;
+    unsigned m = 1; /* Port 0 always active (keyboard) */
     controls_init();
-    n = port_map(p);
-    for (i = 1; i < n; i++) m |= 1u << i;
+    sdl_pads_refresh();
+    for (int i = 1; i < 4; i++) {
+        RawPad s;
+        read_sdl_pad(i, &s);
+        if (s.connected) m |= (1u << i);
+    }
     return m;
 }
 
-/* The game's view of port `port`. use_host: 0 = only keyboard/mouse (pads
- * ignored while a script drives). Returns nonzero when the port is live. */
 int nfl2k5_controls_get(int port, XBOX_GAMEPAD *g, int use_pads)
 {
-    PortSrc p[4];
     RawPad s;
     controls_init();
     memset(g, 0, sizeof *g);
-    port_map(p);
-    if (use_pads && port >= 0 && port < 4 && p[port].src) {
-        raw_for(&p[port], &s);
+    sdl_pads_refresh();
+
+    if (use_pads && port >= 0 && port < 4) {
+        read_sdl_pad(port, &s);
         if (s.connected) { note_use(&s); to_gamepad(&s, g); }
     }
     if (port == 0 && window_focused()) {
         keyboard_into(g);
         mouse_into(g);
     }
-    return port == 0 || p[port & 3].src != 0;
+    return port == 0 || s.connected;
 }
 
-/* The controller on a game port: 0 Xbox, 1 DualShock 4, 2 DualSense, -1 none. */
 int nfl2k5_controls_port_dev(int port)
 {
-    PortSrc p[4];
+    RawPad s;
     controls_init();
-    port_map(p);
-    if (port < 0 || port > 3 || !p[port].src) return -1;
-    if (p[port].src == 1) return 0;
-    return s_ps[p[port].index].dualsense ? 2 : 1;
+    if (port < 0 || port > 3) return -1;
+    read_sdl_pad(port, &s);
+    return s.connected ? s.dev : -1;
 }
 
-/* XInputSetState from the game: motor speeds 0..65535. */
 void nfl2k5_controls_rumble(int port, unsigned left, unsigned right)
 {
-    PortSrc p[4];
     controls_init();
     if (!s_cfg.vibration) left = right = 0;
-    port_map(p);
     if (port < 0 || port > 3) return;
-    if (p[port].src == 1) {
-        XINPUT_VIBRATION v;
-        v.wLeftMotorSpeed = (WORD)left; v.wRightMotorSpeed = (WORD)right;
-        XInputSetState((DWORD)p[port].index, &v);
-    } else if (p[port].src == 2) {
-        PsPad *d = &s_ps[p[port].index];
-        d->out_left = (unsigned char)(left >> 8);
-        d->out_right = (unsigned char)(right >> 8);
+
+    SDL_LockMutex(s_lock);
+    if (s_pads[port] && SDL_GamepadConnected(s_pads[port])) {
+        SDL_RumbleGamepad(s_pads[port], (Uint16)left, (Uint16)right, 1000);
     }
+    SDL_UnlockMutex(s_lock);
 }
 
-/* For the F1 page (any controller drives it). */
 static int menu_pad(XBOX_GAMEPAD *g)
 {
-    PortSrc p[4];
-    RawPad s;
-    int n = port_map(p), i;
     memset(g, 0, sizeof *g);
-    for (i = 0; i < n; i++) {
+    for (int i = 0; i < 4; i++) {
+        RawPad s;
         XBOX_GAMEPAD one;
-        raw_for(&p[i], &s);
+        read_sdl_pad(i, &s);
         if (!s.connected) continue;
         to_gamepad(&s, &one);
         g->wButtons |= one.wButtons;
-        { int k; for (k = 0; k < 8; k++) if (one.bAnalogButtons[k] > g->bAnalogButtons[k]) g->bAnalogButtons[k] = one.bAnalogButtons[k]; }
+        for (int k = 0; k < 8; k++) {
+            if (one.bAnalogButtons[k] > g->bAnalogButtons[k])
+                g->bAnalogButtons[k] = one.bAnalogButtons[k];
+        }
     }
     return 1;
 }
@@ -636,73 +542,78 @@ extern void xbox_MenuAddPage(const XboxMenuPage *p);
 extern void xbox_MenuInvalidate(void);
 extern int (*g_xbox_menu_pad)(XBOX_GAMEPAD *g);
 
-/* Binding capture: waiting for a controller button (page 2) or a key (page 3). */
-static volatile LONG s_capture_pad = -1, s_capture_key = -1;
-static DWORD s_capture_start;
+static SDL_AtomicInt s_capture_pad = { -1 }, s_capture_key = { -1 };
+static Uint64 s_capture_start;
 
-static DWORD WINAPI capture_thread(void *arg)
+static int SDLCALL capture_thread(void *arg)
 {
     (void)arg;
     for (;;) {
-        Sleep(15);
-        if (s_capture_pad >= 0) {
-            PortSrc p[4];
-            int n = port_map(p), i, c, idle = GetTickCount() - s_capture_start < 300;
-            for (i = 0; i < n && !idle; i++) {
+        SDL_Delay(15);
+        int cap_pad = SDL_GetAtomicInt(&s_capture_pad);
+        if (cap_pad >= 0) {
+            int idle = (SDL_GetTicks() - s_capture_start) < 300;
+            for (int i = 0; i < 4 && !idle; i++) {
                 RawPad s;
-                raw_for(&p[i], &s);
-                for (c = 0; c < C_COUNT; c++)
+                read_sdl_pad(i, &s);
+                if (!s.connected) continue;
+                for (int c = 0; c < C_COUNT; c++) {
                     if (s.btn[c] > 200) {
-                        s_cfg.map[s_capture_pad] = c;
-                        InterlockedExchange(&s_capture_pad, -1);
+                        s_cfg.map[cap_pad] = c;
+                        SDL_SetAtomicInt(&s_capture_pad, -1);
                         cfg_save();
                         xbox_MenuInvalidate();
                         break;
                     }
-                if (s_capture_pad < 0) break;
+                }
+                if (SDL_GetAtomicInt(&s_capture_pad) < 0) break;
             }
-            if (GetTickCount() - s_capture_start > 6000) { InterlockedExchange(&s_capture_pad, -1); xbox_MenuInvalidate(); }
+            if (SDL_GetTicks() - s_capture_start > 6000) {
+                SDL_SetAtomicInt(&s_capture_pad, -1);
+                xbox_MenuInvalidate();
+            }
         }
-        if (s_capture_key >= 0) {
-            int vk;
-            if (GetTickCount() - s_capture_start < 300) continue;
-            for (vk = 8; vk < 256; vk++) {
+
+        int cap_key = SDL_GetAtomicInt(&s_capture_key);
+        if (cap_key >= 0) {
+            if (SDL_GetTicks() - s_capture_start < 300) continue;
+            for (int vk = 8; vk < 256; vk++) {
                 if (vk == VK_F1 || vk == VK_LBUTTON || vk == VK_RBUTTON || vk == VK_MBUTTON ||
                     vk == VK_SHIFT || vk == VK_CONTROL || vk == VK_MENU) continue;
-                if (GetAsyncKeyState(vk) & 0x8000) {
-                    if (vk != VK_ESCAPE) { s_cfg.keys[s_capture_key] = vk; cfg_save(); }
-                    InterlockedExchange(&s_capture_key, -1);
+                if (vk_pressed(vk)) {
+                    if (vk != VK_ESCAPE) { s_cfg.keys[cap_key] = vk; cfg_save(); }
+                    SDL_SetAtomicInt(&s_capture_key, -1);
                     xbox_MenuInvalidate();
                     break;
                 }
             }
-            if (GetTickCount() - s_capture_start > 6000) { InterlockedExchange(&s_capture_key, -1); xbox_MenuInvalidate(); }
+            if (SDL_GetTicks() - s_capture_start > 6000) {
+                SDL_SetAtomicInt(&s_capture_key, -1);
+                xbox_MenuInvalidate();
+            }
         }
     }
+    return 0;
 }
 
 static void vk_name(int vk, char *out, size_t n)
 {
-    UINT sc;
-    LONG lp;
     if (!vk) { snprintf(out, n, "(none)"); return; }
-    sc = MapVirtualKeyA((UINT)vk, MAPVK_VK_TO_VSC);
-    lp = (LONG)(sc << 16);
-    if (vk == VK_UP || vk == VK_DOWN || vk == VK_LEFT || vk == VK_RIGHT || vk == VK_PRIOR || vk == VK_NEXT ||
-        vk == VK_INSERT || vk == VK_DELETE || vk == VK_HOME || vk == VK_END)
-        lp |= 1 << 24;                                /* extended key: arrow names */
-    if (!GetKeyNameTextA(lp, out, (int)n)) snprintf(out, n, "key %d", vk);
+    SDL_Scancode sc = vk_to_scancode(vk);
+    const char *name = sc != SDL_SCANCODE_UNKNOWN ? SDL_GetScancodeName(sc) : NULL;
+    if (name && *name)
+        snprintf(out, n, "%s", name);
+    else
+        snprintf(out, n, "key %d", vk);
 }
 
 static const char *pad_kind(void)
 {
-    PortSrc p[4];
-    int n = port_map(p), i;
     static char buf[160];
     buf[0] = 0;
-    for (i = 0; i < n; i++) {
+    for (int i = 0; i < 4; i++) {
         RawPad s;
-        raw_for(&p[i], &s);
+        read_sdl_pad(i, &s);
         if (!s.connected) continue;
         snprintf(buf + strlen(buf), sizeof buf - strlen(buf), "%s%d: %s", buf[0] ? ", " : "", i + 1, s.kind);
     }
@@ -712,14 +623,14 @@ static const char *pad_kind(void)
 
 static int any_ps(void)
 {
-    int i, r = 0;
-    EnterCriticalSection(&s_lock);
-    for (i = 0; i < MAX_PS; i++) if (s_ps[i].used && s_ps[i].state.connected) r = 1;
-    LeaveCriticalSection(&s_lock);
-    return r;
+    for (int i = 0; i < 4; i++) {
+        RawPad s;
+        read_sdl_pad(i, &s);
+        if (s.connected && s.ps) return 1;
+    }
+    return 0;
 }
 
-/* Page 1: Controls */
 enum { R_DEVICES, R_VIB, R_DZL, R_DZR, R_DZT, R_MOUSE, R_PROMPTS, R_RESET, R_COUNT };
 static int p1_count(void) { return R_COUNT; }
 static void p1_label(int r, char *name, char *val, size_t n)
@@ -766,14 +677,13 @@ static void p1_activate(int r)
 }
 static const XboxMenuPage k_p1 = { "CONTROLS", p1_count, p1_label, p1_change, p1_activate, NULL };
 
-/* Page 2: Controller Buttons */
 static int p2_count(void) { return C_COUNT + 1; }
 static void p2_label(int r, char *name, char *val, size_t n)
 {
     int ps = any_ps();
     if (r == C_COUNT) { strcpy(name, "Default layout"); val[0] = 0; return; }
     snprintf(name, 64, "Game %s", k_ctl_names[r]);
-    if (s_capture_pad == r) snprintf(val, n, "press a controller button...");
+    if (SDL_GetAtomicInt(&s_capture_pad) == r) snprintf(val, n, "press a controller button...");
     else snprintf(val, n, "%s%s", ps ? k_ps_names[s_cfg.map[r]] : k_ctl_names[s_cfg.map[r]],
                   s_cfg.map[r] == r ? "" : "  (changed)");
 }
@@ -786,39 +696,38 @@ static void p2_change(int r, int dir)
 }
 static void p2_activate(int r)
 {
-    if (r == -1) { InterlockedExchange(&s_capture_pad, -1); return; }
-    if (r == C_COUNT) { int i; for (i = 0; i < C_COUNT; i++) s_cfg.map[i] = i; cfg_save(); xbox_MenuInvalidate(); return; }
-    s_capture_start = GetTickCount();
-    InterlockedExchange(&s_capture_pad, r);
+    if (r == -1) { SDL_SetAtomicInt(&s_capture_pad, -1); return; }
+    if (r == C_COUNT) { for (int i = 0; i < C_COUNT; i++) s_cfg.map[i] = i; cfg_save(); xbox_MenuInvalidate(); return; }
+    s_capture_start = SDL_GetTicks();
+    SDL_SetAtomicInt(&s_capture_pad, r);
     xbox_MenuInvalidate();
 }
-static int p2_busy(void) { return s_capture_pad >= 0; }
+static int p2_busy(void) { return SDL_GetAtomicInt(&s_capture_pad) >= 0; }
 static const XboxMenuPage k_p2 = { "CONTROLLER BUTTONS", p2_count, p2_label, p2_change, p2_activate, p2_busy };
 
-/* Page 3: Keyboard */
 static int p3_count(void) { return K_COUNT + 1; }
 static void p3_label(int r, char *name, char *val, size_t n)
 {
     if (r == K_COUNT) { strcpy(name, "Default keys"); val[0] = 0; return; }
     snprintf(name, 64, "%s", k_key_names[r]);
-    if (s_capture_key == r) snprintf(val, n, "press a key...  (Esc: cancel)");
+    if (SDL_GetAtomicInt(&s_capture_key) == r) snprintf(val, n, "press a key...  (Esc: cancel)");
     else vk_name(s_cfg.keys[r], val, n);
 }
 static void p3_activate(int r)
 {
-    if (r == -1) { InterlockedExchange(&s_capture_key, -1); return; }
-    if (r == K_COUNT) { int i; for (i = 0; i < K_COUNT; i++) s_cfg.keys[i] = k_key_default[i]; cfg_save(); xbox_MenuInvalidate(); return; }
-    s_capture_start = GetTickCount();
-    InterlockedExchange(&s_capture_key, r);
+    if (r == -1) { SDL_SetAtomicInt(&s_capture_key, -1); return; }
+    if (r == K_COUNT) { for (int i = 0; i < K_COUNT; i++) s_cfg.keys[i] = k_key_default[i]; cfg_save(); xbox_MenuInvalidate(); return; }
+    s_capture_start = SDL_GetTicks();
+    SDL_SetAtomicInt(&s_capture_key, r);
     xbox_MenuInvalidate();
 }
 static void p3_change(int r, int dir) { (void)dir; if (r >= 0 && r < K_COUNT) { s_cfg.keys[r] = 0; cfg_save(); xbox_MenuInvalidate(); } }
-static int p3_busy(void) { return s_capture_key >= 0; }
+static int p3_busy(void) { return SDL_GetAtomicInt(&s_capture_key) >= 0; }
 static const XboxMenuPage k_p3 = { "KEYBOARD", p3_count, p3_label, p3_change, p3_activate, p3_busy };
 
 void nfl2k5_controls_menu_init(void)
 {
-    HANDLE t;
+    SDL_Thread *t;
     xbox_MenuAddPage(&k_p1);
     xbox_MenuAddPage(&k_p2);
     xbox_MenuAddPage(&k_p3);
@@ -827,10 +736,8 @@ void nfl2k5_controls_menu_init(void)
         extern int (*g_xbox_prompt_style)(void);
         g_xbox_prompt_style = prompt_style;
     }
-    t = CreateThread(NULL, 0, capture_thread, NULL, 0, NULL);
-    if (t) CloseHandle(t);
+    t = SDL_CreateThread(capture_thread, "ctl_capture", NULL);
+    if (t) SDL_DetachThread(t);
 }
 
-/* Started at boot (src/main.c) so devices and pages are ready before the
- * game first polls. */
 void nfl2k5_controls_start(void) { controls_init(); }

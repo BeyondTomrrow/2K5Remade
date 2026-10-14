@@ -1,41 +1,12 @@
 /*
- * XInput HLE for NFL 2K5 (2026-09-23).
- *
- * The title polls its controllers through XAPI in the XPP section:
- *   0x4DBC0A XGetDevices(type)             0x4DBC2C XGetDeviceChanges(type, &ins, &rem)
- *   0x4DBC99 XInputOpen(type, port, slot, poll)       0x4DBCEF XInputClose(h)
- *   0x4DBCFB XInputGetCapabilities(h, &caps)          0x4DBED3 XInputGetState(h, &state)
- *   0x4DBF46 XInputSetState(h, &feedback)
- * all driven from the scheduler pump sub_00039380 against the gamepad device
- * type at 0x4DA614 (identified live on xemu). Underneath is a USB stack this
- * runtime does not emulate, so no pad ever arrives -- and the attract state
- * (FSM 0xA84B18, state 0x4F6870, tick sub_000F5AB0) waits for START forever.
- *
- * Instead a gamepad on port 0 is reported and fed from the host: an XInput pad
- * (xbox_InputGetState) plus the keyboard while the game window has focus,
- *   Enter START  Backspace BACK  arrows D-pad  Z/Space A  X B  C X  V Y
- *   Q/E triggers  W/A/S/D left stick
- * Mouse input is also controller input while the game window has focus:
- *   left click=A, right click=B, middle click=START; Shift + movement drives
- *   the left stick relative to the client-area centre. Set NFL2K5_MOUSE=0 to
- *   turn that mapping off. Xbox menus do not expose pointer hit-testing, so
- *   a click confirms the currently focused control rather than selecting a
- *   screen coordinate directly.
- * and NFL2K5_AUTO_PRESS="start@20,a@35" holds buttons for 300 ms at those
- * seconds after the first poll, for unattended runs (the bring-up harness runs
- * the window hidden).  Script names include a/b/x/y, start/back, d-pad
- * directions, black/white (also lb/rb), lt/rt, and l3/r3. Other device types
- * (memory units, headsets) still go to
- * the original code. NFL2K5_INPUT_HLE=0 turns all of it off.
- *
- * Each gen patch (tools/apply-gen-patches.py) calls one of the nfl2k5_hle_*
- * functions at its XAPI function's entry and returns early when it was handled.
+ * XInput HLE for NFL 2K5 (Unified SDL3 Backend).
  */
+#include <SDL3/SDL.h>
+#include <math.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <windows.h>
 #include "xbox_memory_layout.h"
 #include "recomp_funcs.h"
 #include "xinput_xbox.h"
@@ -43,7 +14,12 @@
 #define NFL2K5_XPP_GAMEPAD_TYPE 0x004DA614u
 #define NFL2K5_XINPUT_HANDLE    0x7FFE0000u  /* | port */
 
-static DWORD s_first_poll_ms;
+extern void *xbox_FramebufferWindowHwnd(void);
+extern unsigned nfl2k5_controls_ports(void);
+extern int nfl2k5_controls_get(int port, XBOX_GAMEPAD *g, int use_pads);
+extern void nfl2k5_controls_rumble(int port, unsigned left, unsigned right);
+
+static Uint64 s_first_poll_ms;
 
 static int input_hle_on(void)
 {
@@ -60,7 +36,6 @@ static int is_our_handle(uint32_t h)
     return (h & 0xFFFF0000u) == NFL2K5_XINPUT_HANDLE;
 }
 
-/* Scripted presses: "start@20,a@35.5". */
 static WORD auto_press(BYTE analog[8])
 {
     static char spec[256];
@@ -76,7 +51,7 @@ static WORD auto_press(BYTE analog[8])
     }
     if (!spec[0] || !s_first_poll_ms)
         return 0;
-    t = (GetTickCount() - s_first_poll_ms) / 1000.0;
+    t = (double)(SDL_GetTicks() - s_first_poll_ms) / 1000.0;
     for (p = spec; *p; ) {
         char name[16] = {0};
         double at = 0;
@@ -101,23 +76,19 @@ static WORD auto_press(BYTE analog[8])
     return buttons;
 }
 
-/* Presses from a command file: NFL2K5_PRESS_FILE=<path>. Write button names
- * ("a b x y start back up down left right", separated by spaces or commas)
- * into it; they are pressed in order, 200 ms each with 250 ms between, and the
- * file is deleted once read. Lets a script drive the menus without the window
- * having focus, which a background process cannot reliably take. */
-static DWORD g_last_script_press;   /* GetTickCount of the last scripted press */
+static Uint64 g_last_script_press;
 
 static WORD file_press(BYTE analog[8])
 {
     static char queue[64][8];
     static int head, tail;
-    static DWORD next_check, step_start;
+    static Uint64 next_check, step_start;
     static int pressing;
-    static const char *path;          /* looked up once: getenv per poll was ~15% of the game thread */
+    static const char *path;
     static int looked;
+
     if (!looked) { path = getenv("NFL2K5_PRESS_FILE"); looked = 1; }
-    DWORD now = GetTickCount();
+    Uint64 now = SDL_GetTicks();
     WORD buttons = 0;
 
     if (!path || !*path)
@@ -132,7 +103,7 @@ static WORD file_press(BYTE analog[8])
             buf[n] = 0;
             fclose(f);
             remove(path);
-            for (tok = strtok_s(buf, " ,\r\n\t", &ctx); tok; tok = strtok_s(NULL, " ,\r\n\t", &ctx)) {
+            for (tok = SDL_strtok_r(buf, " ,\r\n\t", &ctx); tok; tok = SDL_strtok_r(NULL, " ,\r\n\t", &ctx)) {
                 if (strlen(tok) < 8 && (tail + 1) % 64 != head) {
                     strcpy(queue[tail], tok);
                     tail = (tail + 1) % 64;
@@ -167,12 +138,6 @@ static WORD file_press(BYTE analog[8])
         else if (!strcmp(name, "rt")) analog[7] = 255;
         else if (!strcmp(name, "l3")) buttons |= 0x40;
         else if (!strcmp(name, "r3")) buttons |= 0x80;
-        else if (!strcmp(name, "black") || !strcmp(name, "rb")) analog[4] = 255;
-        else if (!strcmp(name, "white") || !strcmp(name, "lb")) analog[5] = 255;
-        else if (!strcmp(name, "lt")) analog[6] = 255;
-        else if (!strcmp(name, "rt")) analog[7] = 255;
-        else if (!strcmp(name, "l3")) buttons |= 0x40;
-        else if (!strcmp(name, "r3")) buttons |= 0x80;
         if (now - step_start >= 200) {
             pressing = 0;
             step_start = now;
@@ -182,24 +147,16 @@ static WORD file_press(BYTE analog[8])
     return buttons;
 }
 
-/* A press from inside the runtime (src/nfl2k5_presentation.cpp skips the
- * pregame studio segment when a broadcast package plays its own open). */
-static volatile DWORD s_inject_a_until;
-void nfl2k5_input_press_a(unsigned ms) { s_inject_a_until = GetTickCount() + ms; }
+static volatile Uint64 s_inject_a_until;
+void nfl2k5_input_press_a(unsigned ms) { s_inject_a_until = SDL_GetTicks() + ms; }
 
 static int window_focused(void)
 {
-    DWORD pid = 0;
-    HWND fg = GetForegroundWindow();
-    if (!fg) return 0;
-    GetWindowThreadProcessId(fg, &pid);
-    return pid == GetCurrentProcessId();
+    SDL_Window *win = (SDL_Window *)xbox_FramebufferWindowHwnd();
+    if (!win) return 0;
+    return (SDL_GetWindowFlags(win) & SDL_WINDOW_INPUT_FOCUS) != 0;
 }
 
-/* The title receives only an XInput-style gamepad, never host mouse events.
- * Translate mouse movement to its left stick at this boundary rather than
- * trying to guess the layout of each individual Xbox UI screen. Stick motion
- * is held behind Shift so a parked cursor cannot make menus drift. */
 static int mouse_hle_on(void)
 {
     static int on = -1;
@@ -212,71 +169,63 @@ static int mouse_hle_on(void)
 
 static void host_mouse_gamepad(XBOX_GAMEPAD *g)
 {
-    HWND hwnd = GetForegroundWindow();
-    POINT pt;
-    RECT rc;
-    LONG cx, cy, dx, dy;
+    SDL_Window *win = (SDL_Window *)xbox_FramebufferWindowHwnd();
+    float mx = 0.0f, my = 0.0f;
+    int ww = 0, wh = 0, numkeys = 0;
+    const bool *kbd;
+    SDL_MouseButtonFlags mb;
 
-    if (!mouse_hle_on() || !hwnd || !window_focused())
+    if (!mouse_hle_on() || !win || !window_focused())
         return;
 
-    if (GetAsyncKeyState(VK_LBUTTON) & 0x8000)
-        g->bAnalogButtons[0] = 255;                 /* A / confirm */
-    if (GetAsyncKeyState(VK_RBUTTON) & 0x8000)
-        g->bAnalogButtons[1] = 255;                 /* B / back */
-    if (GetAsyncKeyState(VK_MBUTTON) & 0x8000)
-        g->wButtons |= 0x10;                         /* START */
+    mb = SDL_GetMouseState(&mx, &my);
+    if (mb & SDL_BUTTON_LMASK) g->bAnalogButtons[0] = 255;
+    if (mb & SDL_BUTTON_RMASK) g->bAnalogButtons[1] = 255;
+    if (mb & SDL_BUTTON_MMASK) g->wButtons |= 0x10;
 
-    if (!(GetAsyncKeyState(VK_SHIFT) & 0x8000)
-            || !GetCursorPos(&pt) || !ScreenToClient(hwnd, &pt)
-            || !GetClientRect(hwnd, &rc))
+    kbd = SDL_GetKeyboardState(&numkeys);
+    if (!kbd || !(kbd[SDL_SCANCODE_LSHIFT] || kbd[SDL_SCANCODE_RSHIFT]))
         return;
-    cx = (rc.right - rc.left) / 2;
-    cy = (rc.bottom - rc.top) / 2;
-    if (cx <= 0 || cy <= 0)
+
+    SDL_GetWindowSize(win, &ww, &wh);
+    if (ww <= 0 || wh <= 0)
         return;
-    dx = pt.x - cx;
-    dy = cy - pt.y;                                  /* Xbox Y is up */
-    /* Keep the centre 15% quiet, then scale the remaining range to a stick. */
-    if (labs(dx) > cx * 15 / 100)
-        g->sThumbLX = (SHORT)((dx * 32767L) / cx);
-    if (labs(dy) > cy * 15 / 100)
-        g->sThumbLY = (SHORT)((dy * 32767L) / cy);
+
+    float cx = ww * 0.5f, cy = wh * 0.5f;
+    float dx = mx - cx, dy = cy - my;
+    if (fabsf(dx) > cx * 0.15f)
+        g->sThumbLX = (SHORT)((dx * 32767.0f) / cx);
+    if (fabsf(dy) > cy * 0.15f)
+        g->sThumbLY = (SHORT)((dy * 32767.0f) / cy);
 }
 
-/* Keep the documented keyboard controls on the normal per-port path too.
- * The controller-settings work introduced host_gamepad_port(), but left this
- * mapping behind in the legacy branch below. That made Enter and the menu
- * keys work only when NFL2K5_LEGACY_INPUT was set, while the active default
- * silently ignored them. */
 static void host_keyboard_gamepad(XBOX_GAMEPAD *g)
 {
+    int numkeys = 0;
+    const bool *kbd;
     if (!window_focused()) return;
-#define KEY(vk) (GetAsyncKeyState(vk) & 0x8000)
-    if (KEY(VK_RETURN)) g->wButtons |= 0x10;
-    if (KEY(VK_BACK))   g->wButtons |= 0x20;
-    if (KEY(VK_UP))     g->wButtons |= 0x01;
-    if (KEY(VK_DOWN))   g->wButtons |= 0x02;
-    if (KEY(VK_LEFT))   g->wButtons |= 0x04;
-    if (KEY(VK_RIGHT))  g->wButtons |= 0x08;
-    if (KEY('Z') || KEY(VK_SPACE)) g->bAnalogButtons[0] = 255;
-    if (KEY('X')) g->bAnalogButtons[1] = 255;
-    if (KEY('C')) g->bAnalogButtons[2] = 255;
-    if (KEY('V')) g->bAnalogButtons[3] = 255;
-    if (KEY('Q')) g->bAnalogButtons[6] = 255;
-    if (KEY('E')) g->bAnalogButtons[7] = 255;
-    if (KEY('A')) g->sThumbLX = -32767;
-    if (KEY('D')) g->sThumbLX = 32767;
-    if (KEY('W')) g->sThumbLY = 32767;
-    if (KEY('S')) g->sThumbLY = -32767;
+    kbd = SDL_GetKeyboardState(&numkeys);
+    if (!kbd) return;
+
+#define KEY(sc) ((int)(sc) < numkeys && kbd[sc])
+    if (KEY(SDL_SCANCODE_RETURN))    g->wButtons |= 0x10;
+    if (KEY(SDL_SCANCODE_BACKSPACE)) g->wButtons |= 0x20;
+    if (KEY(SDL_SCANCODE_UP))        g->wButtons |= 0x01;
+    if (KEY(SDL_SCANCODE_DOWN))      g->wButtons |= 0x02;
+    if (KEY(SDL_SCANCODE_LEFT))      g->wButtons |= 0x04;
+    if (KEY(SDL_SCANCODE_RIGHT))     g->wButtons |= 0x08;
+    if (KEY(SDL_SCANCODE_Z) || KEY(SDL_SCANCODE_SPACE)) g->bAnalogButtons[0] = 255;
+    if (KEY(SDL_SCANCODE_X)) g->bAnalogButtons[1] = 255;
+    if (KEY(SDL_SCANCODE_C)) g->bAnalogButtons[2] = 255;
+    if (KEY(SDL_SCANCODE_V)) g->bAnalogButtons[3] = 255;
+    if (KEY(SDL_SCANCODE_Q)) g->bAnalogButtons[6] = 255;
+    if (KEY(SDL_SCANCODE_E)) g->bAnalogButtons[7] = 255;
+    if (KEY(SDL_SCANCODE_A)) g->sThumbLX = -32767;
+    if (KEY(SDL_SCANCODE_D)) g->sThumbLX = 32767;
+    if (KEY(SDL_SCANCODE_W)) g->sThumbLY = 32767;
+    if (KEY(SDL_SCANCODE_S)) g->sThumbLY = -32767;
 #undef KEY
 }
-
-/* src/nfl2k5_controls.c: which controller is on each port, remapped, with
- * dead zones; the keyboard and mouse add to port 0. */
-extern unsigned nfl2k5_controls_ports(void);
-extern int nfl2k5_controls_get(int port, XBOX_GAMEPAD *g, int use_pads);
-extern void nfl2k5_controls_rumble(int port, unsigned left, unsigned right);
 
 static void host_gamepad_port(int port, XBOX_GAMEPAD *g)
 {
@@ -286,7 +235,7 @@ static void host_gamepad_port(int port, XBOX_GAMEPAD *g)
     if (g_xbox_input_blocked)
         return;
     if (no_host_pad < 0) no_host_pad = getenv("NFL2K5_NO_HOST_PAD") != NULL;
-    nfl2k5_controls_get(port, g, !(no_host_pad && g_last_script_press && GetTickCount() - g_last_script_press < 15000));
+    nfl2k5_controls_get(port, g, !(no_host_pad && g_last_script_press && SDL_GetTicks() - g_last_script_press < 15000));
     if (port == 0) {
         host_keyboard_gamepad(g);
         host_mouse_gamepad(g);
@@ -294,54 +243,45 @@ static void host_gamepad_port(int port, XBOX_GAMEPAD *g)
         g->wButtons |= file_press(g->bAnalogButtons);
     }
     {
-        /* the Controller Setup screen's Custom layout editor may take the port */
         extern void nfl2k5_cs_input(int port, XBOX_GAMEPAD *g);
         nfl2k5_cs_input(port, g);
     }
     if (port != 0)
         return;
-    {   /* L3: show what is playing; R3: next song (local music library). */
+    {
         extern void nfl2k5_local_music_buttons(int l3, int r3);
         nfl2k5_local_music_buttons((g->wButtons & 0x40) != 0, (g->wButtons & 0x80) != 0);
     }
-    if (GetTickCount() < s_inject_a_until) g->bAnalogButtons[0] = 255;
+    if (SDL_GetTicks() < s_inject_a_until) g->bAnalogButtons[0] = 255;
 }
 
 static void host_gamepad(XBOX_GAMEPAD *g)
 {
     XBOX_INPUT_STATE pad;
-    /* The video settings page (F1) has the controller while it is open. */
     extern volatile long g_xbox_input_blocked;
     static int legacy = -1;
-    if (legacy < 0) legacy = getenv("NFL2K5_LEGACY_INPUT") != NULL;   /* the pre-2026-10-09 path */
+    if (legacy < 0) legacy = getenv("NFL2K5_LEGACY_INPUT") != NULL;
     if (!legacy) { host_gamepad_port(0, g); return; }
     memset(g, 0, sizeof *g);
     if (g_xbox_input_blocked)
         return;
-    /* NFL2K5_NO_HOST_PAD=1 ignores host controllers while a script is
-     * driving: scripted runs on a machine with a pad attached got stray d-pad
-     * presses that walked the menu cursor away from what the script selected
-     * (2026-09-25). Only for 15 s after the last scripted press, though --
-     * ignoring the pad for the whole run left the user on the keyboard in
-     * every game a script had launched (2026-10-01). */
     static int no_host_pad = -1;
     if (no_host_pad < 0) no_host_pad = getenv("NFL2K5_NO_HOST_PAD") != NULL;
     if (!(no_host_pad && g_last_script_press &&
-          GetTickCount() - g_last_script_press < 15000) &&
+          SDL_GetTicks() - g_last_script_press < 15000) &&
         xbox_InputGetState(0, &pad) == 0)
         *g = pad.Gamepad;
     host_keyboard_gamepad(g);
     host_mouse_gamepad(g);
     g->wButtons |= auto_press(g->bAnalogButtons);
     g->wButtons |= file_press(g->bAnalogButtons);
-    {   /* L3: show what is playing; R3: next song (local music library). */
+    {
         extern void nfl2k5_local_music_buttons(int l3, int r3);
         nfl2k5_local_music_buttons((g->wButtons & 0x40) != 0, (g->wButtons & 0x80) != 0);
     }
-    if (GetTickCount() < s_inject_a_until) g->bAnalogButtons[0] = 255;
+    if (SDL_GetTicks() < s_inject_a_until) g->bAnalogButtons[0] = 255;
 }
 
-/* An XINPUT_GAMEPAD in guest memory: 22 bytes, packed. */
 static void put_gamepad(uint32_t va, const XBOX_GAMEPAD *g)
 {
     int i;
@@ -354,9 +294,6 @@ static void put_gamepad(uint32_t va, const XBOX_GAMEPAD *g)
     MEM16(va + 16u) = (uint16_t)g->sThumbRY;
 }
 
-/* Each returns 1 when it handled the call (eax set, stdcall args popped). */
-/* Ports with a controller (bit per port; port 0 always: the keyboard).
- * Up to four, so local multiplayer works like four pads on an Xbox. */
 static unsigned s_reported_ports;
 
 int nfl2k5_hle_XGetDevices(void)
@@ -365,25 +302,24 @@ int nfl2k5_hle_XGetDevices(void)
         return 0;
     g_eax = getenv("NFL2K5_LEGACY_INPUT") ? 1u : nfl2k5_controls_ports();
     s_reported_ports = g_eax;
-    g_esp += 8u;                                    /* ret 4 */
+    g_esp += 8u;
     return 1;
 }
 
 int nfl2k5_hle_XGetDeviceChanges(void)
 {
-    static LONG reported;
+    static SDL_AtomicInt reported;
     uint32_t ins_va, rem_va;
     if (!input_hle_on() || MEM32(g_esp + 4u) != NFL2K5_XPP_GAMEPAD_TYPE)
         return 0;
     ins_va = MEM32(g_esp + 8u);
     rem_va = MEM32(g_esp + 12u);
     if (getenv("NFL2K5_LEGACY_INPUT")) {
-        MEM32(ins_va) = InterlockedExchange(&reported, 1) ? 0u : 1u;
+        MEM32(ins_va) = SDL_CompareAndSwapAtomicInt(&reported, 0, 1) ? 1u : 0u;
         MEM32(rem_va) = 0u;
     } else {
-        /* Controllers plugged in or out since the game last asked. */
         unsigned now = nfl2k5_controls_ports();
-        if (!InterlockedExchange(&reported, 1)) s_reported_ports = 0;
+        if (SDL_CompareAndSwapAtomicInt(&reported, 0, 1)) s_reported_ports = 0;
         MEM32(ins_va) = now & ~s_reported_ports;
         MEM32(rem_va) = s_reported_ports & ~now;
         if (now != s_reported_ports)
@@ -391,7 +327,7 @@ int nfl2k5_hle_XGetDeviceChanges(void)
         s_reported_ports = now;
     }
     g_eax = (MEM32(ins_va) || MEM32(rem_va)) ? 1u : 0u;
-    g_esp += 16u;                                   /* ret 0xC */
+    g_esp += 16u;
     return 1;
 }
 
@@ -403,9 +339,9 @@ int nfl2k5_hle_XInputOpen(void)
     port = MEM32(g_esp + 8u);
     g_eax = (port == 0 || (port < 4 && (nfl2k5_controls_ports() >> port) & 1u)) ? (NFL2K5_XINPUT_HANDLE | port) : 0u;
     if (!s_first_poll_ms)
-        s_first_poll_ms = GetTickCount();
+        s_first_poll_ms = SDL_GetTicks();
     fprintf(stderr, "  [XINPUT] XInputOpen(port %u) -> 0x%08X\n", port, g_eax);
-    g_esp += 20u;                                   /* ret 0x10 */
+    g_esp += 20u;
     return 1;
 }
 
@@ -413,7 +349,7 @@ int nfl2k5_hle_XInputClose(void)
 {
     if (!is_our_handle(MEM32(g_esp + 4u)))
         return 0;
-    g_esp += 8u;                                    /* ret 4 */
+    g_esp += 8u;
     return 1;
 }
 
@@ -424,14 +360,14 @@ int nfl2k5_hle_XInputGetCapabilities(void)
     if (!is_our_handle(MEM32(g_esp + 4u)))
         return 0;
     caps = MEM32(g_esp + 8u);
-    MEM8(caps) = 1;                                 /* XINPUT_DEVSUBTYPE_GC_GAMEPAD */
+    MEM8(caps) = 1;
     MEM16(caps + 2u) = 0;
-    memset(&all, 0xFF, sizeof all);                 /* every control present */
+    memset(&all, 0xFF, sizeof all);
     put_gamepad(caps + 4u, &all);
-    MEM16(caps + 26u) = 0xFFFFu;                    /* both rumble motors */
+    MEM16(caps + 26u) = 0xFFFFu;
     MEM16(caps + 28u) = 0xFFFFu;
     g_eax = 0;
-    g_esp += 12u;                                   /* ret 8 */
+    g_esp += 12u;
     return 1;
 }
 
@@ -444,28 +380,25 @@ int nfl2k5_hle_XInputGetState(void)
     uint32_t state;
     if (!is_our_handle(MEM32(g_esp + 4u)))
         return 0;
-    /* XInput is polled throughout live play even when the native ESPN HUD is
-     * hidden.  This is a stable guest-thread service point for the read-only
-     * two-team FOX passer sampler. */
     nfl2k5_live_qb_guest_tick();
-    {   /* the game loop's thread, for the frame-statistics hitch log */
+    {
         extern volatile DWORD g_xbox_game_tid;
-        g_xbox_game_tid = GetCurrentThreadId();
+        g_xbox_game_tid = (DWORD)SDL_GetCurrentThreadID();
     }
     state = MEM32(g_esp + 8u);
     if (!s_first_poll_ms)
-        s_first_poll_ms = GetTickCount();
+        s_first_poll_ms = SDL_GetTicks();
     {
         uint32_t port = MEM32(g_esp + 4u) & 3u;
         static uint32_t packets[4];
         static XBOX_GAMEPAD lasts[4];
-        if (port != 0) {                            /* players 2-4 */
+        if (port != 0) {
             host_gamepad_port((int)port, &g);
             if (memcmp(&g, &lasts[port], sizeof g)) { packets[port]++; lasts[port] = g; }
             MEM32(state) = packets[port];
             put_gamepad(state + 4u, &g);
             g_eax = 0;
-            g_esp += 12u;                           /* ret 8 */
+            g_esp += 12u;
             return 1;
         }
     }
@@ -480,7 +413,7 @@ int nfl2k5_hle_XInputGetState(void)
     MEM32(state) = packet;
     put_gamepad(state + 4u, &g);
     g_eax = 0;
-    g_esp += 12u;                                   /* ret 8 */
+    g_esp += 12u;
     return 1;
 }
 
@@ -490,11 +423,9 @@ int nfl2k5_hle_XInputSetState(void)
     if (!is_our_handle(MEM32(g_esp + 4u)))
         return 0;
     fb = MEM32(g_esp + 8u);
-    /* XINPUT_FEEDBACK: header (dwStatus, hEvent, Reserved[58]) then
-     * XINPUT_RUMBLE { wLeftMotorSpeed, wRightMotorSpeed } at +66. */
     nfl2k5_controls_rumble((int)(MEM32(g_esp + 4u) & 3u), MEM16(fb + 66u), MEM16(fb + 68u));
-    MEM32(fb) = 0;                                  /* XINPUT_FEEDBACK_HEADER.dwStatus */
+    MEM32(fb) = 0;
     g_eax = 0;
-    g_esp += 12u;                                   /* ret 8 */
+    g_esp += 12u;
     return 1;
 }

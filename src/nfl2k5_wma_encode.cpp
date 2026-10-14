@@ -1,16 +1,81 @@
-// Convert any audio file Windows can decode (MP3, AAC/M4A, FLAC, WAV, WMA)
-// into the WMA the game's own soundtrack player decodes: Windows Media Audio
-// 8/9 Standard (format tag 0x161), 44.1 kHz stereo, about 128 kbit/s, in an
-// ASF file -- what an Xbox dashboard rip produced. Media Foundation does both
-// halves, so the port needs no codec of its own.
+// Convert any audio file (MP3, AAC/M4A, FLAC, WAV, OGG, WMA) into the WMA
+// format the game's own soundtrack player decodes: Windows Media Audio 8/9
+// Standard (format tag 0x161 / wmav2), 44.1 kHz stereo, ~128 kbit/s, in an
+// ASF container with Extended Content Description tags stripped.
+#include <stdio.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
+#include <wchar.h>
+
+// Portable UTF-8 version of the ASF Extended Content Description tag stripper.
+// The XDK WMA decoder rejects files containing WM/Encoder or Lavf tags.
+extern "C" int nfl2k5_asf_strip_tags_utf8(const char *path)
+{
+    static const uint8_t ext_cd[16] = {
+        0x40,0xA4,0xD0,0xD2,0x07,0xE3,0xD2,0x11,
+        0x97,0xF0,0x00,0xA0,0xC9,0x5E,0xA8,0x50
+    };
+    FILE *f = fopen(path, "rb");
+    if (!f) return 0;
+
+    fseek(f, 0, SEEK_END);
+    long fsize = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    if (fsize <= 30) { fclose(f); return 0; }
+
+    size_t got = (size_t)fsize;
+    uint8_t *d = (uint8_t *)malloc(got);
+    if (!d || fread(d, 1, got, f) != got) {
+        free(d);
+        fclose(f);
+        return 0;
+    }
+    fclose(f);
+
+    uint64_t hsize = 0;
+    uint32_t count = 0, keep = 0;
+    memcpy(&hsize, d + 16, 8);
+    memcpy(&count, d + 24, 4);
+
+    int changed = 0;
+    uint64_t pos = 30, out = 30;
+    for (uint32_t i = 0; i < count && pos + 24 <= hsize && hsize <= got; i++) {
+        uint64_t osize = 0;
+        memcpy(&osize, d + pos + 16, 8);
+        if (osize < 24 || pos + osize > hsize) break;
+        if (memcmp(d + pos, ext_cd, 16) != 0) {
+            memmove(d + out, d + pos, (size_t)osize);
+            out += osize;
+            keep++;
+        } else {
+            changed = 1;
+        }
+        pos += osize;
+    }
+
+    if (changed) {
+        memmove(d + out, d + hsize, (size_t)(got - hsize));
+        memcpy(d + 16, &out, 8);
+        memcpy(d + 24, &keep, 4);
+        size_t total = (size_t)(out + (got - hsize));
+        f = fopen(path, "wb");
+        if (f) {
+            fwrite(d, 1, total, f);
+            fclose(f);
+        }
+    }
+
+    free(d);
+    return changed;
+}
+
+#if defined(_WIN32)
 #include <windows.h>
 #include <mfapi.h>
 #include <mfidl.h>
 #include <mfreadwrite.h>
 #include <mferror.h>
-#include <stdio.h>
-#include <stdint.h>
-#include <stdlib.h>
 
 #pragma comment(lib, "mfplat.lib")
 #pragma comment(lib, "mfreadwrite.lib")
@@ -19,8 +84,6 @@
 
 template <class T> static void release(T *&p) { if (p) { p->Release(); p = nullptr; } }
 
-// The encoder's own list of WMA 8/9 output types; take the 44.1 kHz stereo
-// one closest to 128 kbit/s.
 static IMFMediaType *pick_wma_type()
 {
     IMFCollection *types = nullptr;
@@ -54,56 +117,14 @@ static IMFMediaType *pick_wma_type()
     return best;
 }
 
-// Drop the Extended Content Description object (tags: WM/Encoder and the
-// like) from an ASF file, in place. The XDK WMA decoder's parser for it
-// rejects what Media Foundation writes, and with it the whole song
-// (decoder create E_FAIL after reading the descriptor count, 2026-10-01).
-// The dashboard's rips carried no such tags. Idempotent.
 extern "C" int nfl2k5_asf_strip_tags(const wchar_t *path)
 {
-    static const uint8_t ext_cd[16] = { 0x40,0xA4,0xD0,0xD2,0x07,0xE3,0xD2,0x11,0x97,0xF0,0x00,0xA0,0xC9,0x5E,0xA8,0x50 };
-    HANDLE f = CreateFileW(path, GENERIC_READ | GENERIC_WRITE, 0, nullptr, OPEN_EXISTING, 0, nullptr);
-    if (f == INVALID_HANDLE_VALUE) return 0;
-    LARGE_INTEGER size;
-    GetFileSizeEx(f, &size);
-    uint8_t *d = (uint8_t *)malloc((size_t)size.QuadPart);
-    DWORD got = 0;
-    int changed = 0;
-    if (d && ReadFile(f, d, (DWORD)size.QuadPart, &got, nullptr) && got == size.QuadPart && got > 30) {
-        uint64_t hsize;
-        uint32_t count, keep = 0;
-        memcpy(&hsize, d + 16, 8);
-        memcpy(&count, d + 24, 4);
-        uint64_t pos = 30, out = 30;
-        for (uint32_t i = 0; i < count && pos + 24 <= hsize && hsize <= got; i++) {
-            uint64_t osize;
-            memcpy(&osize, d + pos + 16, 8);
-            if (osize < 24 || pos + osize > hsize) break;
-            if (memcmp(d + pos, ext_cd, 16)) {
-                memmove(d + out, d + pos, (size_t)osize);
-                out += osize;
-                keep++;
-            } else {
-                changed = 1;
-            }
-            pos += osize;
-        }
-        if (changed) {
-            memmove(d + out, d + hsize, (size_t)(got - hsize));
-            memcpy(d + 16, &out, 8);
-            memcpy(d + 24, &keep, 4);
-            DWORD total = (DWORD)(out + (got - hsize)), w = 0;
-            SetFilePointer(f, 0, nullptr, FILE_BEGIN);
-            WriteFile(f, d, total, &w, nullptr);
-            SetEndOfFile(f);
-        }
-    }
-    free(d);
-    CloseHandle(f);
-    return changed;
+    char utf8[1024];
+    if (!WideCharToMultiByte(CP_UTF8, 0, path, -1, utf8, sizeof utf8, nullptr, nullptr))
+        return 0;
+    return nfl2k5_asf_strip_tags_utf8(utf8);
 }
 
-// 0 on success; otherwise the failing HRESULT.
 extern "C" long nfl2k5_wma_transcode(const wchar_t *src, const wchar_t *dst)
 {
     HRESULT hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
@@ -120,7 +141,6 @@ extern "C" long nfl2k5_wma_transcode(const wchar_t *src, const wchar_t *dst)
     reader->SetStreamSelection((DWORD)MF_SOURCE_READER_ALL_STREAMS, FALSE);
     reader->SetStreamSelection((DWORD)MF_SOURCE_READER_FIRST_AUDIO_STREAM, TRUE);
 
-    /* Decode to 16-bit PCM at the encoder's rate and layout. */
     MFCreateMediaType(&pcm);
     pcm->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Audio);
     pcm->SetGUID(MF_MT_SUBTYPE, MFAudioFormat_PCM);
@@ -139,7 +159,6 @@ extern "C" long nfl2k5_wma_transcode(const wchar_t *src, const wchar_t *dst)
     if (!wma) { hr = MF_E_TOPO_CODEC_NOT_FOUND; goto done; }
     DeleteFileW(dst);
     {
-        /* ASF regardless of the file name (the library writes to a temp name). */
         IMFAttributes *attr = nullptr;
         MFCreateAttributes(&attr, 1);
         attr->SetGUID(MF_TRANSCODE_CONTAINERTYPE, MFTranscodeContainerType_ASF);
@@ -184,12 +203,71 @@ done:
     return SUCCEEDED(hr) ? 0 : (long)hr;
 }
 
-#ifdef NFL2K5_WMA_ENCODE_MAIN
-int wmain(int argc, wchar_t **argv)
+extern "C" long nfl2k5_wma_transcode_utf8(const char *src, const char *dst)
 {
-    if (argc < 3) { fwprintf(stderr, L"usage: wma-encode <in> <out.wma>\n"); return 2; }
-    long r = nfl2k5_wma_transcode(argv[1], argv[2]);
-    if (r) fwprintf(stderr, L"failed: 0x%08lX\n", (unsigned long)r);
-    return r ? 1 : 0;
+    wchar_t wsrc[1024], wdst[1024];
+    if (!MultiByteToWideChar(CP_UTF8, 0, src, -1, wsrc, 1024) ||
+        !MultiByteToWideChar(CP_UTF8, 0, dst, -1, wdst, 1024))
+        return -1;
+    return nfl2k5_wma_transcode(wsrc, wdst);
+}
+
+#else /* POSIX: FFmpeg wmav2 transcode + ASF Extended Content Description strip */
+
+#include <spawn.h>
+#include <sys/wait.h>
+#include <unistd.h>
+
+extern char **environ;
+
+extern "C" int nfl2k5_asf_strip_tags(const wchar_t *path)
+{
+    char utf8[1024];
+    if (wcstombs(utf8, path, sizeof utf8) == (size_t)-1)
+        return 0;
+    return nfl2k5_asf_strip_tags_utf8(utf8);
+}
+
+extern "C" long nfl2k5_wma_transcode_utf8(const char *src, const char *dst)
+{
+    unlink(dst);
+
+    const char *argv[] = {
+        "ffmpeg",
+        "-nostdin",
+        "-y",
+        "-v", "error",
+        "-i", src,
+        "-vn",
+        "-map_metadata", "-1",
+        "-acodec", "wmav2",
+        "-ar", "44100",
+        "-ac", "2",
+        "-b:a", "128k",
+        "-f", "asf",
+        dst,
+        nullptr
+    };
+
+    pid_t pid = 0;
+    int rc = posix_spawnp(&pid, "ffmpeg", nullptr, nullptr, const_cast<char *const *>(argv), environ);
+    if (rc != 0)
+        return -1;
+
+    int status = 0;
+    if (waitpid(pid, &status, 0) < 0 || !WIFEXITED(status) || WEXITSTATUS(status) != 0)
+        return -1;
+
+    nfl2k5_asf_strip_tags_utf8(dst);
+    return 0;
+}
+
+extern "C" long nfl2k5_wma_transcode(const wchar_t *src, const wchar_t *dst)
+{
+    char u8_src[1024], u8_dst[1024];
+    if (wcstombs(u8_src, src, sizeof u8_src) == (size_t)-1 ||
+        wcstombs(u8_dst, dst, sizeof u8_dst) == (size_t)-1)
+        return -1;
+    return nfl2k5_wma_transcode_utf8(u8_src, u8_dst);
 }
 #endif

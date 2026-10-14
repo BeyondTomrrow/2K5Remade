@@ -12,6 +12,7 @@
  * single-threaded apartment with a message loop and a DispatcherQueue.
  * Capture frames arrive on a capture worker thread. */
 #include "presentation_host.h"
+#if defined(_WIN32)
 
 #include <windows.h>
 #include <d3d11.h>
@@ -557,4 +558,36 @@ std::unique_ptr<PresentationHost> create_webview2_presentation_host()
     return std::make_unique<WebView2Host>();
 }
 
+}
+#else /* !_WIN32 */
+
+#include <cstdio>
+
+namespace nfl2k5 {
+    namespace {
+
+        class StubPresentationHost final : public PresentationHost {
+        public:
+            bool start(const PresentationHostConfig &) override {
+                fprintf(stderr, "[HTMLPRES] WebView2 unavailable on this platform; using native HUD\n");
+                return false;
+            }
+            void stop() override {}
+            void post_state(const std::string &) override {}
+            void post_event(const std::string &) override {}
+            bool acquire_shared(PresentationSharedSurface &) override { return false; }
+            bool acquire_surface(PresentationSurface &) override { return false; }
+            std::string status() const override { return "unavailable (non-Windows)"; }
+        };
+
+    } // namespace
+
+    std::unique_ptr<PresentationHost> create_webview2_presentation_host()
+    {
+        return std::make_unique<StubPresentationHost>();
+    }
+
 } // namespace nfl2k5
+
+#endif /* _WIN32 */
+
