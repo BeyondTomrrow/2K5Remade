@@ -34,7 +34,13 @@ Textures are the game's: player models only name materials, and the game binds
 them at runtime from the PLYDATA gear bank, a team's UNIFORM entry (the
 "Uniform" number in the app), PLADATA player art (faces, hair), the low-detail
 family banks and the coach bank. Numbers and decals are lifted 3 mm off the
-jersey so they don't z-fight.
+jersey so they don't z-fight; decals use clamped (not repeating) textures.
+
+Models are listed by what they are ("Player, 1940s-50s leather helmet (high)",
+"Coach", "Face", ...) with the raw file name in brackets, and export as
+`<name>_<file>.glb`. Old-era bodies use the throwback uniform in the
+**Historic** box (default 0x2A0, 1920s Notre Dame: gold leather helmet, blue
+jersey, khaki pants); **Pick uniform...** shows both kinds as thumbnails.
 
 ## Animations
 
@@ -46,20 +52,35 @@ Euler convention, plus root position and heading in its header.
 
 The **Animations** category lists the 17 groups (1,510 clips) by their tags:
 tackles, passes, fumbles, celebrations, coaches, referees, injuries, stances.
-Exporting a group gives the player with every clip as a Blender action
-(sidebar > NCAA 07 picks one); mirrored clips are named `_M`.
+Exporting a group gives the player with every clip as a Blender action;
+mirrored clips are named `_M`.
+
+### Playing the animations in Blender
+
+1. In the app: **Install Blender add-on** (once; again after updating the app).
+2. Pick the **Animations** category, **Load models**, select a group (e.g.
+   tackles), **Export selected** with "Send to Blender after export" on.
+3. In Blender, click the player's skeleton (the armature) to select it.
+4. Press **N** in the 3D view and open the **NCAA 07** tab.
+5. Click a clip's name (the play buttons under "Animations") to play that
+   clip, or press **Line up all clips**: every clip goes one after another on
+   an NLA track and Space plays the whole group.
+6. By hand: Dope Sheet > Action Editor; the action drop-down lists every clip.
 
 ## Stadiums and fields
 
-All 623 stadium models export with their textures. **Build field + stadium**
-assembles the FLDDATA turf, lines, numbers, midfield logo, both end zones and
-goal posts with a selected stadium, in your open Blender.
+Every stadium exports complete, as one GLB with **Stadium**, **Field** and
+**Props** (collections in Blender), using the field the game builds for it
+(`ncaa_stadium.py`): league.dat TEAM/STAD tables; xbe 0x401760 `select TGID,
+TMFL, TL35, TEZ1, TEZ2 from TEAM where SGID = stadium` gives midfield
+0x4c+TMFL, end zones 0x445+TEZ1/TEZ2, 35-yard logos 0x281+TL35; 0x401ae0
+picks the turf from STAD.SFTY. Goal posts (STAD.SGPT), pylons, benches and
+tables are added. **Complete stadium to Blender** sends one straight over.
 
 ## Still open
 
-- Field team art (midfield logo, end zones) is mapped for the first four teams
-  only; the rest need the game's team table.
-- Turf colour is an editable tint, not the game's runtime palette.
+- Bench/table spots are a standard layout, not read from the game; SGPT 1 =
+  white posts is inferred. Bowl sites get a plain field. No sky or wear overlay.
 - Low-detail players' team colours come from a runtime palette, so their
   textures look dark; hand-finger animation (17-bone hand rigs) is not
   exported yet; animation playback speed assumes 30 fps.

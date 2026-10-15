@@ -205,6 +205,12 @@ def export_glb(model: dict, output: Path):
                 material['pbrMetallicRoughness']['baseColorFactor'] = model['_preview_material_tint']
                 material['extras'] = {'shaderReconstruction': 'Editable preview tint on source grayscale detail'}
             rec = material_records.get(mi)
+            if model.get('_override_png'):
+                # caller-composed texture (e.g. the turf colour + grain)
+                if 'override' not in texture_cache:
+                    texture_cache['override'] = glb.image(model['_override_png'], model['name'])
+                material['pbrMetallicRoughness']['baseColorTexture'] = {'index': texture_cache['override']}
+                rec = None
             if rec:
                 material["name"] = rec["name"]
                 if rec["textures"]:

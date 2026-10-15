@@ -32,7 +32,7 @@ pts = [o.matrix_world @ Vector(c) for o in visible for c in o.bound_box]
 lo = Vector([min(p[i] for p in pts) for i in range(3)]); hi = Vector([max(p[i] for p in pts) for i in range(3)])
 center = (lo + hi) / 2; size = max(hi - lo)
 import os
-view = Vector((0.6, 3, 0.6)) if os.environ.get('NCAA_BACK') else Vector((0.6, -3, 0.4))
+view = Vector((0.6, 3, 0.6)) if os.environ.get('NCAA_BACK') else Vector((-3, -1.2, 0.5)) if os.environ.get('NCAA_SIDE') else Vector((0.6, -3, 0.4))
 bpy.ops.object.camera_add(location=center + view * size)
 cam = bpy.context.object
 cam.rotation_euler = (center - cam.location).to_track_quat('-Z', 'Y').to_euler()
@@ -44,6 +44,6 @@ scene.render.engine = 'BLENDER_EEVEE_NEXT' if 'BLENDER_EEVEE_NEXT' in [e.identif
 import os
 if os.environ.get('NCAA_CYCLES'):
     scene.render.engine = 'CYCLES'; scene.cycles.samples = 16
-scene.render.resolution_x = 700; scene.render.resolution_y = 900
+scene.render.resolution_x = int(os.environ.get('NCAA_W', 700)); scene.render.resolution_y = int(os.environ.get('NCAA_H', 900))
 scene.render.filepath = args[1]
 bpy.ops.render.render(write_still=True)

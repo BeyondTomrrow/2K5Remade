@@ -44,7 +44,17 @@ def catalog(folder: Path):
                 continue
             name = r.string(table['Info']['offset']) if 'Info' in table else p.stem
             bones = r.unpack('<I', table['Skel']['offset'])[0] if 'Skel' in table else 0
-            result.append({'name': name, 'file': str(p.resolve()), 'nodes': nc,
+            from ncaa_names import friendly
+            materials = None
+            if bones and 'Matl' in table:
+                try:
+                    from ncaa_player import _materials
+                    materials = set(_materials(p)[0].values())
+                except Exception:
+                    materials = None
+            label = friendly(name, materials)
+            result.append({'name': label if label == name else f'{label}   [{name}]', 'source_name': name,
+                           'label': label, 'file': str(p.resolve()), 'nodes': nc,
                            'bones': bones, 'textures': 'Text' in table, 'archive_index': p.stem})
         except Exception as e:
             errors.append({'file': str(p), 'error': str(e)})
@@ -75,7 +85,8 @@ def extract(game: Path, category: str, scratch: Path, log=print):
     return destination
 
 
-def player_textures(folder: Path, game: Path | None, scratch: Path | None, uniform: int, log=print):
+def player_textures(folder: Path, game: Path | None, scratch: Path | None, uniform: int, log=print,
+                    historic: int = 0x2A0):
     """Runtime texture banks for players (gear, team uniform, player art)."""
     from ncaa_player import Textures
     if game and scratch:
@@ -90,17 +101,18 @@ def player_textures(folder: Path, game: Path | None, scratch: Path | None, unifo
         log(f'Uniform entry {uniform} not found; using the first one')
         uniform_file = next(iter(sorted((scratch / 'uniform_raw').glob('*.3ds'))), uniform_file)
     return Textures(gear=folder / '00000001.3ds', uniform=uniform_file,
-                    art=scratch / 'player_art_raw' / '00000000.3ds', coach=folder / '00000022.3ds')
+                    art=scratch / 'player_art_raw' / '00000000.3ds', coach=folder / '00000022.3ds',
+                    historic=scratch / 'uniform_raw' / f'{historic:08x}.3ds')
 
 
 def convert(rows, destination: Path, preview=False, log=print, game=None, scratch=None, uniform=9,
-            variants=True):
+            variants=True, historic=0x2A0):
     destination.mkdir(parents=True, exist_ok=True)
     records = []
     textures = None
     for i, row in enumerate(rows):
         path = Path(row['file'])
-        output = destination / f"{safe(path.stem)}_{safe(row['name'])}.glb"
+        output = destination / f"{safe(row.get('label', row['name']))}_{safe(path.stem)}.glb"
         original = output
         number = 2
         while output.exists():
@@ -120,7 +132,7 @@ def convert(rows, destination: Path, preview=False, log=print, game=None, scratc
                 log(f"Decoding {row['nodes']} clips ...")
                 clips = library_clips(path, payloads, rig)
                 if textures is None:
-                    textures = player_textures(players, game, scratch, uniform, log)
+                    textures = player_textures(players, game, scratch, uniform, log, historic)
                 report = export_player(players / '00000004.tmd', output, players / '00000003.tmd',
                                        textures=textures, include_variants=False, animations=clips)
                 report['kind'] = 'player'
@@ -128,13 +140,19 @@ def convert(rows, destination: Path, preview=False, log=print, game=None, scratc
                 # every part placed with the skeleton; the configured player
                 # visible, every other option tagged for the hidden Variants
                 if textures is None:
-                    textures = player_textures(path.parent, game, scratch, uniform, log)
-                face = None if row['name'].startswith('fm') else face_for(path)
+                    textures = player_textures(path.parent, game, scratch, uniform, log, historic)
+                face = None if row.get('source_name', row['name']).startswith('fm') else face_for(path)
                 report = export_player(path, output, face, textures=textures, include_variants=variants)
                 report['kind'] = 'player'
             elif preview and row['bones']:
                 from ncaa_rig import export_preview
                 report = export_preview(path, output)
+            elif path.parent.name == 'stadiums_raw' and game and scratch:
+                # the stadium with its own field (turf, logos, end zones) and props
+                from ncaa_assemble import ensure_assets
+                from ncaa_stadium import build_stadium
+                ensure_assets(Path(game), Path(scratch), log=log)
+                report = build_stadium(path, game, scratch, output, log=log)
             else:
                 model = decode_model(path.read_bytes(), str(path))
                 report = export_glb(model, output)
@@ -173,6 +191,7 @@ def launch():
     search = tk.StringVar()
     preview = tk.BooleanVar(value=False)
     uniform = tk.IntVar(value=9)
+    historic = tk.IntVar(value=0x2A0)
     send_after = tk.BooleanVar(value=True)
     variants = tk.BooleanVar(value=True)
     status = tk.StringVar(value='Choose a category, then Load models. Existing extracted files are reused.')
@@ -283,7 +302,16 @@ def launch():
         images = []
         cols = 12
         def choose(i):
-            uniform.set(i); log(f'Uniform {i} selected'); top.destroy()
+            from ncaa_assemble import TextureBank
+            try:
+                names = TextureBank(folder / f'{i:08x}.3ds').names
+            except Exception:
+                names = {}
+            if 'TORSO' in names:          # historic-team entry: dresses the old-era bodies
+                historic.set(i); log(f'Historic uniform {i} selected (old-era players)')
+            else:
+                uniform.set(i); log(f'Uniform {i} selected (modern players)')
+            top.destroy()
         def fill(start=0):
             for i in range(start, min(start + 6, count)):
                 try:
@@ -300,6 +328,8 @@ def launch():
         canvas.bind_all('<MouseWheel>', lambda e: canvas.yview_scroll(-e.delta // 120, 'units'))
         fill()
     ttk.Button(options, text='Pick uniform...', command=pick_uniform).pack(side='left', padx=(6, 0))
+    ttk.Label(options, text='Historic').pack(side='left', padx=(10, 4))
+    ttk.Spinbox(options, from_=0x221, to=0x2E0, textvariable=historic, width=5).pack(side='left')
     ttk.Label(frame, text='Players are exported on their skeleton: the configured player is visible, every other helmet, facemask, hair style and hand pose sits in a hidden Variants collection (Blender sidebar > NCAA 07 swaps them). Models go into the Blender you already have open.',
               foreground='#6a4b17', wraplength=1050).pack(anchor='w', pady=3)
 
@@ -310,9 +340,9 @@ def launch():
         chosen = [rows[int(i)] for i in ids]
         destination, rig = Path(output.get()), preview.get()
         game_path, scratch_path, team = Path(game.get()), Path(scratch.get()), uniform.get()
-        keep_variants, send = variants.get(), send_after.get()
+        keep_variants, send, old_team = variants.get(), send_after.get(), historic.get()
         def job():
-            result = convert(chosen, destination, rig, log, game_path, scratch_path, team, keep_variants)
+            result = convert(chosen, destination, rig, log, game_path, scratch_path, team, keep_variants, old_team)
             events.put(('exports', result))
             log(f"Finished: {sum(r['status']=='exported' for r in result)} exported, {sum(r['status']=='failed' for r in result)} failed. {destination}")
             if send:
@@ -354,14 +384,13 @@ def launch():
     def assembled(player=False):
         selected=tree.selection()
         if not player and (len(selected)!=1 or category.get()!='Stadiums'):
-            messagebox.showinfo('Select stadium','Load Stadiums and select one stadium to include its field.');return
+            messagebox.showinfo('Select stadium','Load Stadiums and select one stadium.');return
         source=rows[int(selected[0])]['file'] if not player else None
         game_path,cache,destination=Path(game.get()),Path(scratch.get()),Path(output.get())
         team=uniform.get()
         def job():
-            from ncaa_assemble import ensure_assets, field_parts, fresh_output
+            from ncaa_assemble import ensure_assets, fresh_output
             from ncaa_bridge_client import send
-            import tempfile
             ensure_assets(game_path,cache,player=player,log=log)
             if player:
                 from ncaa_player import export_player
@@ -372,21 +401,16 @@ def launch():
                 report.update(file=str(target),status='exported',kind='player')
                 send({'action':'player','file':str(target),'name':target.stem},BLENDER,log=log)
             else:
-                model=decode_model(Path(source).read_bytes(),str(source));code=model['name'].split('_')[0]
-                team_index={'AIRFOR':0,'AKRONX':1,'ALBAAM':2,'ALBAMA':3}.get(code)
-                work=Path(tempfile.mkdtemp(prefix='stadium_field_',dir=destination))
-                layers=field_parts(cache,work,team_index)
-                stadium=work/'structure.glb';export_glb(model,stadium)
-                prop=cache/'stadata_raw/0000002e.tmd';goal=work/'goalpost.glb'
-                export_glb(decode_model(prop.read_bytes(),str(prop)),goal)
-                name=model['name'].replace('.ea3','')+'_With_Field'
-                send({'action':'field','name':name,'job':{'stadium':str(stadium),'goalpost':str(goal),'layers':layers}},
-                     BLENDER,log=log)
-                report={'file':str(stadium),'status':'exported','kind':'stadium'}
+                from ncaa_stadium import build_stadium
+                stem=decode_model(Path(source).read_bytes(),str(source))['name'].replace('.ea3','')
+                target=fresh_output(destination,stem+'_Complete').with_suffix('.glb')
+                report=build_stadium(source,game_path,cache,target,log=log)
+                report.update(status='exported')
+                send({'action':'stadium','file':str(target),'name':target.stem},BLENDER,log=log)
             events.put(('exports',[report]));log('In Blender.')
         start(job)
     builders=ttk.Frame(frame);builders.pack(fill='x',pady=(0,5))
-    for label,command in [('Build field + stadium',lambda:assembled(False)),('Build configured player',lambda:assembled(True))]:
+    for label,command in [('Complete stadium to Blender',lambda:assembled(False)),('Build configured player',lambda:assembled(True))]:
         button=ttk.Button(builders,text=label,command=command);button.pack(side='left',padx=(0,8));actions.append(button)
     ttk.Button(controls, text='Open export folder', command=lambda: os.startfile(output.get()) if Path(output.get()).is_dir() else None).pack(side='left')
     ttk.Label(frame, textvariable=status, wraplength=1080).pack(anchor='w', pady=3)
@@ -444,9 +468,12 @@ def main():
     if a.command == 'catalog':
         data, errors = catalog(a.source); print(json.dumps({'models': data, 'errors': errors}, indent=2)); return
     if a.command in ('build-player','build-stadium'):
-        from ncaa_assemble import build_clean_player,build_stadium_field
+        from ncaa_assemble import build_clean_player,ensure_assets,fresh_output
         if a.command=='build-player':result=build_clean_player(a.game,a.cache,a.output,BLENDER)
-        else:result=build_stadium_field(a.source,a.game,a.cache,a.output,BLENDER)
+        else:
+            from ncaa_stadium import build_stadium
+            ensure_assets(a.game,a.cache)
+            result=build_stadium(a.source,a.game,a.cache,fresh_output(a.output,a.source.stem+'_Complete').with_suffix('.glb'))
         (a.output/'assembly_report.json').write_text(json.dumps(result,indent=2),encoding='utf-8')
         return 0
     if a.command == 'export':

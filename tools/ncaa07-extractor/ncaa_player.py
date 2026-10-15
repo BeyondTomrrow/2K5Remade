@@ -41,7 +41,8 @@ DEFAULT_CHOICES = {
     'PrideStickers': None, 'HelmSideNum': 'Double', 'LeftCollarDecal': 'Default',
     'RightCollarDeca': 'Default', 'LeftSideHipDeca': 'Default', 'RightSideHipDec': 'Default',
     'HelmBackNumSing': None, 'HelmBackNumDoub': 'Left1Right1', 'Mouthpiece': None,
-    'Cleats': 'Default', 'HelmetLogo': 'Normal', 'LeftWrist': 'Bare', 'RightWrist': 'Bare',
+    'Cleats': 'Default', 'HelmetLogo': None,   # the logo is already in the HELMET atlas
+    'LeftWrist': 'Bare', 'RightWrist': 'Bare',
     'LeftShoeDecal': 'Nike', 'RightShoeDecal': 'Nike', 'HelmetPadPie': 'HelmetStd',
     'Shadow': None,
     # face model (fm*)
@@ -66,8 +67,10 @@ MATERIAL_TEXTURES = {
     'helmet_numb_lt': ('uniform', 'NUM1', True), 'helmet_numb_rt': ('uniform', 'NUM2', True),
     'helmet_numb_center': ('uniform', 'NUM0', True),
     'decal_two': ('uniform', 'DECAL', True), 'decal_collarbone_Lt': ('uniform', 'DECAL1', True),
-    'decal_collarbone_Rt': ('uniform', 'DECAL1', True), 'decal_hips_Lt': ('uniform', 'DECAL2', True),
-    'decal_hips_Rt': ('uniform', 'DECAL2', True), 'decal_sleeves': ('uniform', 'DECAL1', True),
+    'decal_collarbone_Rt': ('uniform', 'DECAL1', True), 'decal_hips_Lt': ('uniform', 'DECAL1', True),
+    'decal_hips_Rt': ('uniform', 'DECAL1', True), 'decal_sleeves': ('uniform', 'DECAL1', True),
+    # default.xbe material table (0x5F25D0): the shoe decal is drawn from the helmet atlas
+    'decal_shoe': ('uniform', 'HELMET', True),
     'pride_stickers': ('uniform', 'PRIDE', True), 'pride_stickers_alpha': ('gear', 'PRIDEALPHA', True),
     'helmetInner': ('gear', 'HelmetInner', False), 'chinstrap': ('gear', 'CHINSTRAP', False),
     'tab': ('gear', 'TABS', False), 'visor': ('gear', 'VISOR', True), 'armpad_Rt': ('gear', 'ARMPAD', False),
@@ -85,9 +88,12 @@ MATERIAL_TEXTURES = {
     # 32-bone old-era bodies (h*, 40s/50s, 60s, 60s/70s): jersey, pants and
     # helmet are laid out for the full uniform textures; only the shoe+sock
     # piece uses its family bank's small atlas (PLYDATA 0C-0F, team palette)
-    'head': ('art', 'YOUNGFACEWHITE', False), 'helmet': ('uniform', 'HELMET', False),
-    'torso': ('uniform', 'TORSOSLEEVE', False), 'shoulder': ('uniform', 'TORSOSLEEVE', False),
-    'hip': ('uniform', 'HIPTHIGH', False), 'shoe': ('low', 'SHOE0', False), 'arm': ('art', 'ARM', False),
+    # (default.xbe material table 0x5F3080): their own uniform entries in
+    # UNIFORM.DAT, the 76 historic-team banks 0x221-0x2E0 (HELMET, TORSO,
+    # SHOULDER, HIP, SHOE, NUM0-9); head -> BALD from player art
+    'head': ('art', 'BALD', False), 'helmet': ('historic', 'HELMET', False),
+    'torso': ('historic', 'TORSO', False), 'shoulder': ('historic', 'SHOULDER', False),
+    'hip': ('historic', 'HIP', False), 'shoe': ('historic', 'SHOE', False), 'arm': ('gear', 'SpecArm2', False),
     # the coach (PLYDATA 22)
     'suit_jacket': ('coach', 'JACKET', False), 'suit_pants': ('coach', 'PANTS', False),
     'suit_shirt': ('coach', 'SHIRTTIE', False),
@@ -233,10 +239,12 @@ def node_tags(groups: dict, chosen: dict) -> dict:
 class Textures:
     """PNG for a (material, option) from the runtime texture banks."""
 
-    def __init__(self, gear=None, uniform=None, art=None, skin_face='YOUNGFACEWHITE', coach=None):
+    def __init__(self, gear=None, uniform=None, art=None, skin_face='YOUNGFACEWHITE', coach=None, historic=None):
         from ncaa_assemble import TextureBank
         self.banks = {}
-        for key, path in (('gear', gear), ('uniform', uniform), ('art', art), ('coach', coach)):
+        self.historic_numbers = False
+        for key, path in (('gear', gear), ('uniform', uniform), ('art', art), ('coach', coach),
+                          ('historic', historic)):
             if path and Path(path).is_file():
                 self.banks[key] = TextureBank(path)
         self.skin_face = skin_face
@@ -248,6 +256,10 @@ class Textures:
         """Low-detail players take textures from their family's bank."""
         from ncaa_assemble import TextureBank
         stem = model_name.lower()
+        historic = any(k in stem for k in ('40s', '60s')) or stem.startswith('h')
+        if historic != self.historic_numbers:      # numbers come from the historic entry
+            self.historic_numbers = historic
+            self.cache = {k: v for k, v in self.cache.items() if not k[1].startswith('NUM')}
         path = None
         for key, file in LOW_BANKS:
             if key in stem if key != 'h' else stem.startswith('h'):
@@ -310,6 +322,8 @@ class Textures:
             entry = ('art', self.skin_face, False)
         else:
             entry = MATERIAL_TEXTURES.get(material)
+        if entry and self.historic_numbers and entry[0] == 'uniform' and entry[1].startswith('NUM'):
+            entry = ('historic',) + entry[1:]
         return entry
 
     def png(self, material: str, option: str | None):
@@ -460,7 +474,15 @@ def export_player(body: Path, output: Path, face: Path | None = None, choices: d
                        'pbrMetallicRoughness': {'metallicFactor': 0, 'roughnessFactor': .8}}
                 bind = textures.binding(material, option) if textures else None
                 if bind:
-                    mat['pbrMetallicRoughness']['baseColorTexture'] = {'index': glb.image(bind['png'], bind['texture'])}
+                    ti = glb.image(bind['png'], bind['texture'])
+                    if bind['alpha']:
+                        # decals and numbers are clamped in the game; repeating them
+                        # tiles one logo across the whole chest or helmet
+                        glb.doc.setdefault('samplers', [])
+                        if not glb.doc['samplers']:
+                            glb.doc['samplers'].append({'wrapS': 33071, 'wrapT': 33071})
+                        glb.doc['textures'][ti]['sampler'] = 0
+                    mat['pbrMetallicRoughness']['baseColorTexture'] = {'index': ti}
                     if bind['tint']:
                         mat['pbrMetallicRoughness']['baseColorFactor'] = bind['tint']
                     if bind['alpha']:
@@ -527,12 +549,13 @@ def is_player(path: Path) -> bool:
         return False
 
 
-def default_textures(scratch: Path, players: Path, uniform_index: int = 9) -> Textures:
+def default_textures(scratch: Path, players: Path, uniform_index: int = 9, historic_index: int = 0x2A0) -> Textures:
     scratch = Path(scratch)
     return Textures(gear=Path(players) / '00000001.3ds',
                     uniform=scratch / 'uniform_raw' / f'{uniform_index:08x}.3ds',
                     art=scratch / 'player_art_raw' / '00000000.3ds',
-                    coach=Path(players) / '00000022.3ds')
+                    coach=Path(players) / '00000022.3ds',
+                    historic=scratch / 'uniform_raw' / f'{historic_index:08x}.3ds')
 
 
 def face_for(body: Path) -> Path | None:

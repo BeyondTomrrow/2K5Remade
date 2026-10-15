@@ -271,7 +271,24 @@ def import_stadium(path, name=None):
     name = name or Path(path).stem
     root = _collection(name)
     objects = import_glb(path, root)
-    frame(objects)
+    # complete stadiums carry top nodes Stadium / Field / Props / Sky:
+    # one sub-collection each (Sky starts hidden, it surrounds everything)
+    groups = {}
+    for ob in objects:
+        top = ob
+        while top.parent:
+            top = top.parent
+        group = top.name.split('.')[0]
+        if group in ('Stadium', 'Field', 'Props', 'Sky'):
+            if group not in groups:
+                groups[group] = _collection(f'{name} {group}', root)
+            _move(ob, groups[group])
+    if 'Sky' in groups:
+        layer = _layer_collection(groups['Sky'])
+        if layer:
+            layer.hide_viewport = True
+        groups['Sky'].hide_render = True
+    frame([o for o in objects if 'Sky' not in groups or groups['Sky'] not in o.users_collection])
     return objects
 
 

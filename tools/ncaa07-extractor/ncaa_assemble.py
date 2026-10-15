@@ -171,7 +171,8 @@ def uniform_thumbnail(scratch, index, size=96):
         return out
     bank = TextureBank(scratch / 'uniform_raw' / f'{index:08x}.3ds')
     sheet = Image.new('RGB', (size, size + size // 2), (50, 50, 50))
-    for name, box, at in (('TORSOSLEEVE', (size, size), (0, 0)), ('HELMET', (size, size // 2), (0, size))):
+    torso = 'TORSOSLEEVE' if 'TORSOSLEEVE' in bank.names else 'TORSO'
+    for name, box, at in ((torso, (size, size), (0, 0)), ('HELMET', (size, size // 2), (0, size))):
         if name in bank.names:
             try:
                 sheet.paste(Image.open(io.BytesIO(bank.png(name))).convert('RGB').resize(box), at)
