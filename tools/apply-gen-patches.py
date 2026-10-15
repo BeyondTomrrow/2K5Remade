@@ -447,7 +447,7 @@ PATCHES = [
      * aligned jumped into nowhere and returned with esi and eax wrong --
      * the WMA decoder crashed on its first ring-buffer wrap (2026-10-01). */
     { uint32_t _d = MEM32(esp + 4), _s = MEM32(esp + 8), _n = MEM32(esp + 0xC);
-      if (_n) memmove(XBOX_PTR(_d), XBOX_PTR(_s), _n);
+      if (_n) memmove((void *)XBOX_PTR(_d), (const void *)XBOX_PTR(_s), _n);
       eax = _d; esp += 4; return; }
 """),
     ("MEMCPY_NATIVE_3739F0", "sub_003739F0", "loc_003739F0: ;", "after", """    /* MSVC memcpy (memmove semantics) run natively. Its misaligned-
@@ -457,7 +457,7 @@ PATCHES = [
      * aligned jumped into nowhere and returned with esi and eax wrong --
      * the WMA decoder crashed on its first ring-buffer wrap (2026-10-01). */
     { uint32_t _d = MEM32(esp + 4), _s = MEM32(esp + 8), _n = MEM32(esp + 0xC);
-      if (_n) memmove(XBOX_PTR(_d), XBOX_PTR(_s), _n);
+      if (_n) memmove((void *)XBOX_PTR(_d), (const void *)XBOX_PTR(_s), _n);
       eax = _d; esp += 4; return; }
 """),
     ("DIAG_JUKEBOXART", "sub_0032A8A0", "loc_0032A911: ;", "after", """    { extern void nfl2k5_diag_txtr(uint32_t res, uint32_t album); nfl2k5_diag_txtr(eax, MEM32(0xCB69F4)); }
@@ -605,7 +605,7 @@ PATCHES = [
     if (eax == 3u) { extern uint32_t nfl2k5_cs_name(void); uint32_t _cs = nfl2k5_cs_name(); if (_cs) { eax = _cs; esp += 4; return; } }
 """),
     ("CONTROLLER_SETUP_PORT_LAYOUT", "sub_00077230", "loc_00077230: ;", "after", """\
-    { extern volatile long nfl2k5_cs_custom_ports; uint32_t _cs = MEM32(ecx * 0x1Cu + 0xE5FE90u);
+    { extern volatile int32_t nfl2k5_cs_custom_ports; uint32_t _cs = MEM32(ecx * 0x1Cu + 0xE5FE90u);
       if (_cs > 2u || (ecx < 4u && ((nfl2k5_cs_custom_ports >> ecx) & 1))) { extern uint32_t nfl2k5_cs_port_layout(uint32_t, uint32_t, uint32_t); uint32_t _p = ecx; ecx = ecx * 0x1Cu; eax = nfl2k5_cs_port_layout(_p, _cs, MEM32(esp)); esp += 4; return; } }
 """),
     ("CONTROLLER_SETUP_APPLY", "sub_00357370", "loc_00357370: ;", "after", """\

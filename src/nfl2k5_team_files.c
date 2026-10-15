@@ -277,7 +277,15 @@ void nfl2k5_team_identity(const char *rost_path, uint32_t slot)
  * ARCHIVE_EXTRA_PACK), every added team's files go into one more pack, G,
  * written to the disc folder, and their entries are appended to a copy of the
  * table: the game then opens them by name like its own files. */
-extern BOOL xbox_translate_path(const char *xbox_path, WCHAR *host, DWORD n);
+/* The runtime's host path type: UTF-16 on Windows, UTF-8 on POSIX. */
+#ifdef _WIN32
+typedef WCHAR tf_host_char;
+#define tf_fopen_wb(p) _wfopen((p), L"wb")
+#else
+typedef char tf_host_char;
+#define tf_fopen_wb(p) fopen((p), "wb")
+#endif
+extern BOOL xbox_translate_path(const char *xbox_path, tf_host_char *host, DWORD n);
 
 static uint32_t name_crc(const char *name)
 {
@@ -300,7 +308,7 @@ void nfl2k5_archive_extend(void)
     int nf = 0, k;
     uint32_t blocks = 0, count = MEM32(0xA764F8), packs = MEM32(0xA76500), table = MEM32(0xA76594);
     uint32_t start = 0, i, nt;
-    WCHAR packw[MAX_PATH];
+    tf_host_char packw[MAX_PATH];
     if (s_n < 0) scan();
     if (packs >= 36 || !table) return;
     for (k = 0; k < s_n; k++) {
@@ -328,7 +336,7 @@ void nfl2k5_archive_extend(void)
         if (!xbox_translate_path(xp, packw, MAX_PATH)) return;
     }
     {   /* the pack: each file at a 2 KB boundary */
-        FILE *out = _wfopen(packw, L"wb");
+        FILE *out = tf_fopen_wb(packw);
         static char buf[1 << 16];
         if (!out) { fprintf(stderr, "[TEAMFILES] cannot write the extra pack\n"); return; }
         for (i = 0; i < (uint32_t)nf; i++) {

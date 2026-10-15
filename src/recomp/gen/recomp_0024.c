@@ -103228,7 +103228,7 @@ loc_003739F0: ;
      * aligned jumped into nowhere and returned with esi and eax wrong --
      * the WMA decoder crashed on its first ring-buffer wrap (2026-10-01). */
     { uint32_t _d = MEM32(esp + 4), _s = MEM32(esp + 8), _n = MEM32(esp + 0xC);
-      if (_n) memmove(XBOX_PTR(_d), XBOX_PTR(_s), _n);
+      if (_n) memmove((void *)XBOX_PTR(_d), (const void *)XBOX_PTR(_s), _n);
       eax = _d; esp += 4; return; }
     PUSH32(esp, ebp);
     ebp = esp;

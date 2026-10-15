@@ -16,7 +16,11 @@
 // "Original Xbox" prompts (F1 > Controls) keep the game's own icons.
 // tools/controller-art builds the assets.
 #include <windows.h>
+#ifdef _WIN32
 #include <wincodec.h>
+#else
+#include "platform/posix/image_bgra.h"
+#endif
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -80,6 +84,7 @@ std::string find_dir()
     return "assets\\controls\\";
 }
 
+#ifdef _WIN32
 Img load_png(const std::string &path)
 {
     Img im;
@@ -107,6 +112,21 @@ Img load_png(const std::string &path)
     if (!im.ok() && g_log) fprintf(stderr, "[ART] cannot load %s\n", path.c_str());
     return im;
 }
+#else
+Img load_png(const std::string &path)
+{
+    Img im;
+    uint32_t iw = 0, ih = 0;
+    uint32_t *px = nfl2k5_image_load_bgra(path.c_str(), &iw, &ih);
+    if (px) {
+        im.px.assign(px, px + (size_t)iw * ih);
+        im.w = (int)iw; im.h = (int)ih;
+        nfl2k5_image_free(px);
+    }
+    if (!im.ok() && g_log) fprintf(stderr, "[ART] cannot load %s\n", path.c_str());
+    return im;
+}
+#endif
 
 const Img &file(const std::string &name)
 {
