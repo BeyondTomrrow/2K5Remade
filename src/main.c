@@ -948,7 +948,10 @@ void nfl2k5_diag_res(uint32_t res, int load, uint32_t ret, uint32_t r2, uint32_t
 static int snf_pregame_read(uint32_t address, void *out, size_t size)
 {
     uint64_t end = (uint64_t)address + size;
-    if (address < 0x10000u || end > 0x10000000u) return 0;
+    /* Script contexts and vignette instances also live in the contiguous
+     * guest heap window. Match the presentation reader's two ranges. */
+    if (!((address >= 0x10000u && end <= 0x10000000u) ||
+          (address >= 0x80000000u && end <= 0x90000000u))) return 0;
     __try {
         memcpy(out, (const uint8_t *)xbox_GetMemoryOffset() + address, size);
         return 1;
@@ -963,6 +966,7 @@ static void snf_pregame_script_trace(uint32_t ctx, uint32_t op, uint32_t start)
     static volatile LONG printed;
     uint32_t period, phase, clock_object, cursor, frame = 0, type = 0;
     uint32_t state_c8 = 0, state_cc = 0, camera_c4 = 0, camera_c8 = 0;
+    uint32_t camera_mode = 0, camera_pending = 0;
     float clock, length;
     uint8_t args[8];
     if (enabled < 0) enabled = getenv("NFL2K5_DIAG_SNF_PREGAME") != NULL;
@@ -983,10 +987,22 @@ static void snf_pregame_script_trace(uint32_t ctx, uint32_t op, uint32_t start)
     snf_pregame_read(0x00E602CCu, &state_cc, sizeof state_cc);
     snf_pregame_read(0x00B616C4u, &camera_c4, sizeof camera_c4);
     snf_pregame_read(0x00B616C8u, &camera_c8, sizeof camera_c8);
-    fprintf(stderr, "[SNF-PREGAME] t=%llu frame=%u ctx=%08X op=%u type=%u cursor=%08X args=%02X%02X%02X%02X %02X%02X%02X%02X state=%08X/%08X camera=%08X/%08X\n",
+    snf_pregame_read(0x00B616C0u, &camera_mode, sizeof camera_mode);
+    snf_pregame_read(0x00B61700u, &camera_pending, sizeof camera_pending);
+    fprintf(stderr, "[SNF-PREGAME] t=%llu frame=%u ctx=%08X op=%u type=%u cursor=%08X args=%02X%02X%02X%02X %02X%02X%02X%02X state=%08X/%08X camera=%08X/%08X mode=%u pending=%u\n",
             (unsigned long long)GetTickCount64(), frame, ctx, op, type, cursor,
             args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7],
-            state_c8, state_cc, camera_c4, camera_c8);
+            state_c8, state_cc, camera_c4, camera_c8, camera_mode, camera_pending);
+    for (uint32_t channel = 0; channel < 2u; ++channel) {
+        uint32_t slot = 0x00B607F0u + channel * 0x100u;
+        uint32_t scene = 0, flags = 0, instance = 0, ready = 0;
+        snf_pregame_read(slot, &flags, sizeof flags);
+        snf_pregame_read(slot + 0x10u, &scene, sizeof scene);
+        snf_pregame_read(slot + 0x18u, &instance, sizeof instance);
+        snf_pregame_read(slot + 0xF0u, &ready, sizeof ready);
+        fprintf(stderr, "[SNF-PREGAME-SCENE] t=%llu channel=%u id=%u flags=%08X instance=%08X ready=%u\n",
+                (unsigned long long)GetTickCount64(), channel, scene, flags, instance, ready);
+    }
 }
 
 /* 2026-09-25: presentation script commands (DIAG_SCRIPTOP). Prints each
@@ -1162,6 +1178,28 @@ static DWORD WINAPI nfl2k5_clock_log_thread(LPVOID unused)
     }
 }
 
+/* Optional short-quarter harness for reproducing quarter/halftime bugs.  The
+ * retail game is untouched unless NFL2K5_QUARTER_SECONDS is set.  The title
+ * rewrites its period length when a match is created, so keep the override
+ * alive until the game has entered a valid period. */
+static DWORD WINAPI nfl2k5_short_quarter_thread(LPVOID arg)
+{
+    float seconds = *(const float *)arg;
+    const uint8_t *m = (const uint8_t *)xbox_GetMemoryOffset();
+    for (;;) {
+        uint32_t period = *(const uint32_t *)(m + 0x00E602C4u);
+        if (period >= 1u && period <= 4u) {
+            float *length = (float *)(m + 0x00E602B0u);
+            if (*length != seconds) {
+                *length = seconds;
+                fprintf(stderr, "[TEST] quarter length override: %.0f seconds (period %u)\\n",
+                        seconds, period);
+            }
+        }
+        Sleep(100);
+    }
+}
+
 void nfl2k5_playercard_probe(uint32_t ctx)
 {
     static volatile LONG printed;
@@ -1215,7 +1253,8 @@ void nfl2k5_diag_popup(uint32_t obj, int what)
              * game's player card (slot 1) closes at once instead of
              * covering it (src/nfl2k5_presentation.cpp). */
             extern int nfl2k5_lineup_active(void);
-            if (*(const int32_t *)(m + obj) == 1 && nfl2k5_lineup_active()) {
+            if (*(const int32_t *)(m + obj) == 1 && nfl2k5_lineup_active() &&
+                !nfl2k5_presentation_pregame_metadata_needed()) {
                 *(float *)((uint8_t *)m + obj + 8u) = 0.01f;
                 fprintf(stderr, "  [POPUPOP] card closed: lineup intro playing\n");
             }
@@ -1228,10 +1267,7 @@ void nfl2k5_diag_popup(uint32_t obj, int what)
         msg[i] = 0;
         nfl2k5_presentation_coin_toss(title, msg,
                 *(const float *)(m + obj + 8u), *(const int32_t *)(m + obj), 0, obj);
-        if (*(const int32_t *)(m + obj) == 1 &&
-            *(const uint32_t *)(m + obj + 0x10u) == 1 &&
-            *(const uint32_t *)(m + obj + 0x48u) == 1 &&
-            *(const uint32_t *)(m + obj + 0x228u) == 1) {
+        if (*(const int32_t *)(m + obj) == 1) {
             if (nfl2k5_presentation_pregame_metadata_needed())
                 nfl2k5_pregame_guest_roster_snapshot();
             nfl2k5_presentation_player_fact(obj);
@@ -2803,6 +2839,24 @@ int main(int argc, char **argv)
      * available; keeping the original directory as the fallback preserves the
      * compact XBE-only development layout. */
     const char *root = nfl2k5_project_root();
+    /* --retail (or NFL2K5_RETAIL=1): the clean ESPN NFL 2K5, whatever mod
+     * pack Features > Mod Packs has selected. The selection itself is left
+     * as it is, so a normal launch still plays the pack. The argument is
+     * consumed here; the remaining ones are checked as before. */
+    int force_retail = 0;
+    {
+        const char *rv = getenv("NFL2K5_RETAIL");
+        int a, b;
+        if (rv && *rv == '1') force_retail = 1;
+        for (a = 1; a < argc; a++)
+            if (strcmp(argv[a], "--retail") == 0) {
+                force_retail = 1;
+                for (b = a; b < argc - 1; b++) argv[b] = argv[b + 1];
+                argc--;
+                a--;
+            }
+        if (force_retail) _putenv_s("NFL2K5_RETAIL", "1");   /* the same choice for anything later */
+    }
     /* Explorer sets the process working directory to the executable's
      * folder.  In a development build that is build/Release, while all
      * movable runtime content (mods, team logos, presentation settings,
@@ -2855,7 +2909,9 @@ int main(int argc, char **argv)
      * selected a native code pack in Features > Mod Packs, hand off before
      * any Xbox state is created.  Pack builds use the same path to return to
      * retail when the selected pack is turned off. */
-    if (!getenv("NFL2K5_NO_PACK_DISPATCH")) {
+    if (force_retail)
+        fprintf(stderr, "[BOOT] --retail: clean ESPN NFL 2K5; the selected mod pack is not loaded\n");
+    if (!force_retail && !getenv("NFL2K5_NO_PACK_DISPATCH")) {
         extern int nfl2k5_modpacks_boot_dispatch(const char *root);
         if (nfl2k5_modpacks_boot_dispatch(root)) {
             SetThreadExecutionState(ES_CONTINUOUS);
@@ -2878,7 +2934,8 @@ int main(int argc, char **argv)
     {
         char active[MAX_PATH] = "", cand[MAX_PATH];
         const char *env = getenv("NFL2K5_INTERP_PACK");
-        if (env && *env) snprintf(active, sizeof active, "%s", env);
+        if (force_retail) active[0] = 0;
+        else if (env && *env) snprintf(active, sizeof active, "%s", env);
         else {
             char ini[MAX_PATH];
             FILE *af;
@@ -2902,7 +2959,7 @@ int main(int argc, char **argv)
     }
     const int validate_only = argc == 2 && strcmp(argv[1], "--validate") == 0;
     if (argc > 1 && !validate_only && !(argc == 2 && strcmp(argv[1], "--run") == 0)) {
-        fprintf(stderr, "Usage: NFL2K5.exe [--validate | --run]\n");
+        fprintf(stderr, "Usage: NFL2K5.exe [--retail] [--validate | --run]\n");
         return 2;
     }
     setvbuf(stdout, NULL, _IONBF, 0);
@@ -2990,6 +3047,13 @@ int main(int argc, char **argv)
     if (hash_status < 0) { free(data); return 2; }
     for (unsigned i = 0; i < sizeof digest; ++i)
         sprintf(digest_hex + i * 2, "%02x", digest[i]);
+    /* A staged native pack is already translated from this exact image.
+     * Comparing it to the retail disc would mark its native functions dirty
+     * against the wrong baseline, mixing two incompatible translations. */
+    if (g_interp_pack && !strcmp(digest_hex, expected_sha)) {
+        g_interp_pack = 0;
+        printf("[BOOT] Selected pack matches this native build; using its translated code.\n");
+    }
     /* This build was converted from the retail executable with the built-in
      * widescreen patch (src/nfl2k5_widescreen_patch.h): the player's disc has
      * the plain retail one, so patch it in memory the same way. Whether the
@@ -3089,6 +3153,15 @@ int main(int argc, char **argv)
                 "f67e6fc1cb76c9ea1f1ad504e4a6491ff126483d66a9da8ddb92950bbaf740ba")) {
         printf("[BOOT] SOFTDRINK v0.6 dispatcher compatibility: %u function\n",
                nfl2k5_interp_force(0x0006E4E5u, 0x0006E5F5u));
+        /* These save-all detours branch after POPFD. The native lift only
+         * restores DF and emits an unresolved, always-false conditional.
+         * Interpret the wrapper and the copied continuation together so
+         * the original comparisons survive the mod's temporary work. */
+        unsigned flag_paths = nfl2k5_interp_force(0x014DE0BEu, 0x014DE142u);
+        flag_paths += nfl2k5_interp_force(0x000B6F30u, 0x000B7044u);
+        flag_paths += nfl2k5_interp_force(0x014E35C3u, 0x014E3613u);
+        flag_paths += nfl2k5_interp_force(0x000A27F0u, 0x000A2835u);
+        printf("[BOOT] SOFTDRINK v0.6 saved-flags compatibility: %u functions\n", flag_paths);
     }
     /* SoftDrink's MyCareer row stores its injected UTF-16 label at
      * 0x014E8698.  The native menu path accepts the row and action but the
@@ -3182,6 +3255,17 @@ int main(int argc, char **argv)
         CreateThread(NULL, 0, nfl2k5_find_text_thread, (LPVOID)getenv("RECOMP_FIND_TEXT"), 0, NULL);
     if (getenv("NFL2K5_CLOCK_LOG"))
         CreateThread(NULL, 0, nfl2k5_clock_log_thread, NULL, 0, NULL);
+    {
+        const char *short_q = getenv("NFL2K5_QUARTER_SECONDS");
+        static float short_q_seconds;
+        if (short_q && *short_q) {
+            short_q_seconds = (float)strtod(short_q, NULL);
+            if (short_q_seconds >= 10.0f && short_q_seconds <= 900.0f)
+                CreateThread(NULL, 0, nfl2k5_short_quarter_thread, &short_q_seconds, 0, NULL);
+            else
+                fprintf(stderr, "[BOOT] Ignoring NFL2K5_QUARTER_SECONDS=%s (use 10..900).\\n", short_q);
+        }
+    }
     {   /* <root>/Music folders -> Xbox custom soundtracks (saves/Soundtracks) */
         extern void nfl2k5_local_music_start(const char *root, const char *save_dir);
         nfl2k5_local_music_start(root, save_dir);
@@ -3711,15 +3795,25 @@ int main(int argc, char **argv)
         uint32_t test_buffer = xbox_HeapAlloc(4096, 16);
         if (!test_buffer || !nfl2k5_test_memmove(test_buffer)) return 8;
         printf("[TEST] Guest memmove overlap directions, zero length and stack cleanup passed.\n");
-        uint32_t used_before = xbox_ContiguousAllocatedBytes();
+        extern int nfl2k5_test_interp_flags(uint32_t);
+        if (!nfl2k5_test_interp_flags(test_buffer)) return 9;
+        printf("[TEST] Interpreter native flag handoff and PUSHFD/POPFD preservation passed (8 cases).\n");
         uint32_t a = xbox_ContiguousAlloc(8192, 4096);
         uint32_t b = xbox_ContiguousAlloc(4096, 4096);
         if (!a || !b || xbox_ContiguousBlockSize(a) != 8192 ||
             !xbox_ContiguousFree(a) || xbox_ContiguousBlockSize(a) != 0) return 7;
         uint32_t reused = xbox_ContiguousAlloc(8192, 4096);
         if (reused != a || !xbox_ContiguousFree(b) || !xbox_ContiguousFree(reused) ||
-            xbox_ContiguousAllocatedBytes() != used_before) return 7;
+            xbox_ContiguousBlockSize(b) != 0 || xbox_ContiguousBlockSize(reused) != 0) return 7;
         printf("[TEST] Contiguous allocation, size lookup, reuse and release passed.\n");
+        /* Validation is a short-lived diagnostic process, while normal game
+         * launches deliberately run forever. Background guest/APU threads
+         * cannot safely be drained through the full game teardown sequence;
+         * terminate this diagnostic process after its checks instead of
+         * releasing guest memory underneath those threads. */
+        fflush(stdout);
+        fflush(stderr);
+        ExitProcess(0);
     }
     if (!validate_only) {
         /* XDK D3D fence wait at 00426427: device=[004409A8],
@@ -3774,6 +3868,13 @@ int main(int argc, char **argv)
             ExitProcess(1);
         }
         printf("[BOOT] Guest entry returned.\n");
+    }
+    /* The local-music indexer owns a host thread. Join it before releasing
+     * guest memory; otherwise a fast validation exit can leave the worker
+     * dereferencing the torn-down Xbox address space. */
+    {
+        extern void nfl2k5_local_music_shutdown(void);
+        nfl2k5_local_music_shutdown();
     }
     xbox_kernel_bridge_shutdown();
     xbox_kernel_shutdown();

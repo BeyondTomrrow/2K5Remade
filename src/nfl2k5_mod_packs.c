@@ -218,16 +218,34 @@ static DWORD WINAPI mp_patch_thread(void *arg)
         si.cb = sizeof si;
         si.dwFlags = STARTF_USESHOWWINDOW;
         si.wShowWindow = SW_HIDE;
+        {   /* the installer writes its log there; a missing folder must not fail the install */
+            char logdir[MAX_PATH];
+            snprintf(logdir, sizeof logdir, "%s\\logs", s_root);
+            CreateDirectoryA(logdir, NULL);
+        }
+        DWORD launch_error = 0;
         if (CreateProcessA(NULL, cmd, NULL, NULL, FALSE, CREATE_NO_WINDOW | BELOW_NORMAL_PRIORITY_CLASS,
                            NULL, s_root, &si, &pi)) {
             WaitForSingleObject(pi.hProcess, INFINITE);
             GetExitCodeProcess(pi.hProcess, &code);
             CloseHandle(pi.hThread);
             CloseHandle(pi.hProcess);
+        } else {
+            /* e.g. 2: python not on PATH; 267: the root folder is invalid */
+            launch_error = GetLastError();
+            fprintf(stderr, "[MODPACK] %s: could not start the installer (error %lu): %s\n",
+                    fd.cFileName, (unsigned long)launch_error, cmd);
         }
         {
             FILE *m = fopen(code == 0 ? done : failed, "w");
-            if (m) { fprintf(m, "see %s\n", logp); fclose(m); }
+            if (m) {
+                if (launch_error)
+                    fprintf(m, "the installer could not start (Windows error %lu); command: %s\n",
+                            (unsigned long)launch_error, cmd);
+                else
+                    fprintf(m, "see %s\n", logp);
+                fclose(m);
+            }
         }
         fprintf(stderr, "[MODPACK] %s: installer exit %lu (log %s)\n", fd.cFileName, (unsigned long)code, logp);
         if (code == 0)
