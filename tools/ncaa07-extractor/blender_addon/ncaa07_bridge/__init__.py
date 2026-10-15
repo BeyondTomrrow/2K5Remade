@@ -407,7 +407,7 @@ class NCAA07_OT_play_clip(bpy.types.Operator):
         scene = context.scene
         scene.frame_start, scene.frame_end = int(act.frame_range[0]), int(act.frame_range[1])
         scene.frame_set(scene.frame_start)
-        if not context.screen.is_animation_playing:
+        if context.screen and not context.screen.is_animation_playing:
             bpy.ops.screen.animation_play()
         return {'FINISHED'}
 
