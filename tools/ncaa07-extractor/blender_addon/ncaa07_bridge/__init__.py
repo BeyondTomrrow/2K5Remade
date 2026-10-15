@@ -183,8 +183,12 @@ def organize_player(objects, name):
         rig['ncaa_choices'] = json.dumps(choices)
         # every decoded clip is kept with the file (unassigned actions are
         # otherwise dropped when the .blend is saved)
-        for act in bpy.data.actions:
+        new_actions = [a for a in bpy.data.actions if not a.get('ncaa_owner')]
+        for act in new_actions:
             act.use_fake_user = True
+            act['ncaa_owner'] = name
+        if new_actions:
+            rig['ncaa_actions'] = sorted(a.name for a in new_actions)
     for ob in objects:
         if ob.type != 'MESH':
             continue
@@ -383,6 +387,63 @@ class NCAA07_OT_set_option(bpy.types.Operator):
         return {'FINISHED'}
 
 
+class NCAA07_OT_play_clip(bpy.types.Operator):
+    """Put this clip on the player and fit the timeline to it"""
+    bl_idname = 'ncaa07.play_clip'
+    bl_label = 'Play clip'
+    bl_options = {'REGISTER', 'UNDO'}
+    action: bpy.props.StringProperty()
+
+    def execute(self, context):
+        rig = _rig(context)
+        act = bpy.data.actions.get(self.action)
+        if not rig or not act:
+            return {'CANCELLED'}
+        ad = rig.animation_data or rig.animation_data_create()
+        for track in list(ad.nla_tracks):            # leave "all clips" mode
+            if track.name == 'NCAA07 all clips':
+                ad.nla_tracks.remove(track)
+        ad.action = act
+        scene = context.scene
+        scene.frame_start, scene.frame_end = int(act.frame_range[0]), int(act.frame_range[1])
+        scene.frame_set(scene.frame_start)
+        if not context.screen.is_animation_playing:
+            bpy.ops.screen.animation_play()
+        return {'FINISHED'}
+
+
+class NCAA07_OT_all_clips(bpy.types.Operator):
+    """Line up every clip one after another (NLA), so Play runs them all"""
+    bl_idname = 'ncaa07.all_clips'
+    bl_label = 'Line up all clips'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        rig = _rig(context)
+        if not rig:
+            return {'CANCELLED'}
+        ad = rig.animation_data or rig.animation_data_create()
+        for track in list(ad.nla_tracks):
+            if track.name == 'NCAA07 all clips':
+                ad.nla_tracks.remove(track)
+        ad.action = None
+        track = ad.nla_tracks.new()
+        track.name = 'NCAA07 all clips'
+        start = 1
+        names = rig.get('ncaa_actions') or sorted(a.name for a in bpy.data.actions)
+        for name in names:
+            act = bpy.data.actions.get(name)
+            if not act:
+                continue
+            strip = track.strips.new(name, start, act)
+            strip.blend_type = 'REPLACE'
+            start = int(strip.frame_end) + 1
+        context.scene.frame_start, context.scene.frame_end = 1, max(1, start - 1)
+        context.scene.frame_set(1)
+        self.report({'INFO'}, f'{len(track.strips)} clips, {start - 1} frames; press Play')
+        return {'FINISHED'}
+
+
 class NCAA07_OT_join_visible(bpy.types.Operator):
     bl_idname = 'ncaa07.join_visible'
     bl_label = 'Join configured parts per category'
@@ -419,13 +480,16 @@ class NCAA07_PT_panel(bpy.types.Panel):
             layout.label(text='Select a player rig for its options')
             return
         layout.label(text=rig['ncaa_player'], icon='ARMATURE_DATA')
-        if rig.animation_data:
+        names = rig.get('ncaa_actions')
+        if names:
             box = layout.box()
-            box.label(text='Animation (decoded from the game)', icon='ACTION')
-            box.prop(rig.animation_data, 'action', text='')
-            act = rig.animation_data.action
-            if act:
-                box.label(text=f'{int(act.frame_range[1] - act.frame_range[0]) + 1} frames at 30 fps')
+            box.label(text=f'Animations ({len(names)} clips from the game)', icon='ACTION')
+            box.operator('ncaa07.all_clips', icon='SEQ_STRIP_DUPLICATE')
+            current = rig.animation_data.action.name if rig.animation_data and rig.animation_data.action else ''
+            col = box.column(align=True)
+            for name in names:
+                op = col.operator('ncaa07.play_clip', text=name, depress=name == current, icon='PLAY')
+                op.action = name
         choices = choices_of(rig)
         groups = {}
         for ob in player_parts(rig):
@@ -449,7 +513,7 @@ class NCAA07_PT_panel(bpy.types.Panel):
         layout.operator('ncaa07.join_visible')
 
 
-classes = (NCAA07_OT_set_option, NCAA07_OT_join_visible, NCAA07_PT_panel)
+classes = (NCAA07_OT_set_option, NCAA07_OT_play_clip, NCAA07_OT_all_clips, NCAA07_OT_join_visible, NCAA07_PT_panel)
 
 
 def register():

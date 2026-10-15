@@ -82,10 +82,12 @@ MATERIAL_TEXTURES = {
     'elbow_upper_Left': ('gear', 'SpecArm2', False), 'elbow_upper_Rt': ('gear', 'SpecArm2', False),
     'face': ('art', 'YOUNGFACEWHITE', False), 'eye_Left': ('art', 'EYE', False),
     'eye_Right': ('art', 'EYE', False), 'facemasklow': ('uniform', 'FMASKL', True),
-    # low-detail (32-bone) players: their family's bank (PLYDATA 0C-0F)
-    'head': ('art', 'YOUNGFACEWHITE', False), 'helmet': ('low', 'HELMET0', False),
-    'torso': ('low', 'TORSO0', False), 'shoulder': ('low', 'TORSO0', False),
-    'hip': ('low', 'THIGH0', False), 'shoe': ('low', 'SHOE0', False), 'arm': ('art', 'ARM', False),
+    # 32-bone old-era bodies (h*, 40s/50s, 60s, 60s/70s): jersey, pants and
+    # helmet are laid out for the full uniform textures; only the shoe+sock
+    # piece uses its family bank's small atlas (PLYDATA 0C-0F, team palette)
+    'head': ('art', 'YOUNGFACEWHITE', False), 'helmet': ('uniform', 'HELMET', False),
+    'torso': ('uniform', 'TORSOSLEEVE', False), 'shoulder': ('uniform', 'TORSOSLEEVE', False),
+    'hip': ('uniform', 'HIPTHIGH', False), 'shoe': ('low', 'SHOE0', False), 'arm': ('art', 'ARM', False),
     # the coach (PLYDATA 22)
     'suit_jacket': ('coach', 'JACKET', False), 'suit_pants': ('coach', 'PANTS', False),
     'suit_shirt': ('coach', 'SHIRTTIE', False),
@@ -258,6 +260,47 @@ class Textures:
             if path and path.is_file():
                 self.banks['low'] = TextureBank(path)
 
+    # stadium/sideline bodies (llstadiumobj): their 32x32 textures carry no
+    # palette of their own; the game colours them with the team's UNIFORM
+    # PALETTE set (12 palettes). Each one takes the palette whose colours best
+    # match the full-size uniform texture of the same piece.
+    LOW_REFERENCE = {'TORSO0': ('uniform', 'TORSOSLEEVE'), 'THIGH0': ('uniform', 'HIPTHIGH'),
+                     'HELMET0': ('uniform', 'HELMET'), 'SHOE0': ('gear', 'SHOE')}
+
+    def _team_palettes(self):
+        from ncaa_textures import checked
+        uni = self.banks.get('uniform')
+        if uni is None or 'PALETTE' not in uni.names:
+            return []
+        f = uni.meta['files'][uni.names['PALETTE']]
+        return [checked(uni.data, p['data_offset'], p['size'])
+                for p in uni.meta['palettes'][f['palette_index']:f['palette_index'] + f['palette_count']]]
+
+    def _low_png(self, bank, name):
+        import io
+        from PIL import Image
+        palettes = self._team_palettes()
+        ref = self.LOW_REFERENCE.get(name)
+        target = None
+        if ref and ref[0] in self.banks and ref[1] in self.banks[ref[0]].names:
+            try:
+                im = Image.open(io.BytesIO(self.banks[ref[0]].png(ref[1]))).convert('RGB').resize((16, 16))
+                target = np.asarray(im, dtype=float).reshape(-1, 3).mean(0)
+            except Exception:
+                target = None
+        best, best_d = None, None
+        for pal in palettes:
+            try:
+                png = bank.png(name, pal)
+            except Exception:
+                continue
+            im = Image.open(io.BytesIO(png)).convert('RGB').resize((16, 16))
+            colour = np.asarray(im, dtype=float).reshape(-1, 3).mean(0)
+            d = float(np.sum((colour - target) ** 2)) if target is not None else -float(colour.std())
+            if best is None or d < best_d:
+                best, best_d = png, d
+        return best
+
     def lookup(self, material: str, option: str | None):
         if material == 'hair':
             name = HAIR_TEXTURES.get(option or '')
@@ -279,6 +322,12 @@ class Textures:
             return self.cache[key]
         result = None
         b = self.banks.get(bank)
+        if bank == 'low' and b is not None and name in b.names:
+            result = self._low_png(b, name)
+            self.cache[key] = result
+            if result is None:
+                self.missing.add(f'{bank}:{name}')
+            return result
         if b is not None and name in b.names:
             try:
                 result = b.png(name)
@@ -325,7 +374,7 @@ def _materials(path: Path):
 
 def export_player(body: Path, output: Path, face: Path | None = None, choices: dict | None = None,
                   textures: Textures | None = None, include_variants: bool = True,
-                  order: str = 'ZYX', mode: str = 'slerp_pivot', animations: list | None = None) -> dict:
+                  order: str = 'ZYX', mode: str = 'game', animations: list | None = None) -> dict:
     """One GLB: the source skeleton, the configured player and (optionally)
     every alternative part, tagged for the Blender organizer."""
     body = Path(body)
@@ -392,6 +441,8 @@ def export_player(body: Path, output: Path, face: Path | None = None, choices: d
             group, option, selected, member = tags.get(node, ('Base', '', True, {}))
             material = materials.get(node, 'material')
             cat = category(material, group)
+            if cat == 'Decal' and textures and textures.binding(material, option) is None:
+                cat = 'Effect'          # e.g. the name plate: its texture is made at runtime from the roster
             if cat in ('Shadow', 'Effect'):
                 selected = False
             if not selected and not include_variants:
@@ -456,7 +507,7 @@ def export_player(body: Path, output: Path, face: Path | None = None, choices: d
     glb.doc['extras'] = {'ncaa_kind': 'player', 'sources': [s.name for s in sources],
                          'choices': report['choices'],
                          'coordinates': 'player Y-up (glTF native)',
-                         'skinning': 'source clusters as parent/child linear weights'}
+                         'skinning': 'game cluster palette (default.xbe 0x2C3E0) at bind; partial clusters as parent/child linear weights'}
     if textures and textures.missing:
         report['missing_textures'] = sorted(textures.missing)
     if animations:

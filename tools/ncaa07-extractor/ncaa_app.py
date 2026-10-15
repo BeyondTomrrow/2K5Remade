@@ -264,6 +264,42 @@ def launch():
     ttk.Checkbutton(options, text='Players: keep alternative helmets/hair/facemasks (hidden)', variable=variants).pack(side='left', padx=(14, 0))
     ttk.Label(options, text='Uniform (UNIFORM.DAT entry)').pack(side='left', padx=(14, 4))
     ttk.Spinbox(options, from_=0, to=1205, textvariable=uniform, width=6).pack(side='left')
+
+    def pick_uniform():
+        """Every UNIFORM.DAT entry as jersey + helmet thumbnails; click one."""
+        from ncaa_assemble import uniform_thumbnail, ensure_assets
+        cache = Path(scratch.get())
+        folder = cache / 'uniform_raw'
+        if not folder.is_dir():
+            try:
+                ensure_assets(Path(game.get()), cache, player=True, log=log)
+            except Exception as e:
+                messagebox.showerror('Uniforms', str(e)); return
+        count = len(list(folder.glob('*.3ds')))
+        top = tk.Toplevel(window); top.title('Choose a uniform (UNIFORM.DAT)'); top.geometry('1180x760')
+        canvas = tk.Canvas(top, bg='#2b2b2b'); bar = ttk.Scrollbar(top, orient='vertical', command=canvas.yview)
+        canvas.configure(yscrollcommand=bar.set); bar.pack(side='right', fill='y'); canvas.pack(fill='both', expand=True)
+        grid = ttk.Frame(canvas); canvas.create_window((0, 0), window=grid, anchor='nw')
+        images = []
+        cols = 12
+        def choose(i):
+            uniform.set(i); log(f'Uniform {i} selected'); top.destroy()
+        def fill(start=0):
+            for i in range(start, min(start + 6, count)):
+                try:
+                    img = tk.PhotoImage(file=str(uniform_thumbnail(cache, i)))
+                except Exception:
+                    continue
+                images.append(img)
+                b = tk.Button(grid, image=img, text=str(i), compound='top', command=lambda i=i: choose(i),
+                              bg='#3a3a3a', fg='white', relief='flat')
+                b.grid(row=i // cols, column=i % cols, padx=2, pady=2)
+            grid.update_idletasks(); canvas.configure(scrollregion=canvas.bbox('all'))
+            if start + 6 < count and top.winfo_exists():
+                top.after(1, lambda: fill(start + 6))
+        canvas.bind_all('<MouseWheel>', lambda e: canvas.yview_scroll(-e.delta // 120, 'units'))
+        fill()
+    ttk.Button(options, text='Pick uniform...', command=pick_uniform).pack(side='left', padx=(6, 0))
     ttk.Label(frame, text='Players are exported on their skeleton: the configured player is visible, every other helmet, facemask, hair style and hand pose sits in a hidden Variants collection (Blender sidebar > NCAA 07 swaps them). Models go into the Blender you already have open.',
               foreground='#6a4b17', wraplength=1050).pack(anchor='w', pady=3)
 

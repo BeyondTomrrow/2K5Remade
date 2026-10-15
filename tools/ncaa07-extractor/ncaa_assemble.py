@@ -158,3 +158,25 @@ def build_stadium_field(source, game, scratch, output, blender, log=print):
         'blend':str(target.with_suffix('.blend').resolve()),'glb':str(target.with_suffix('.glb').resolve())},work,blender,log)
     result.update(field_team=code if team is not None else 'generic source field; team-logo mapping pending')
     return result
+
+
+def uniform_thumbnail(scratch, index, size=96):
+    """PNG of a UNIFORM.DAT entry: jersey (TORSOSLEEVE) over helmet (HELMET),
+    cached in <scratch>/uniform_thumbs."""
+    import io
+    from PIL import Image
+    scratch = Path(scratch)
+    out = scratch / 'uniform_thumbs' / f'{index:08x}.png'
+    if out.is_file():
+        return out
+    bank = TextureBank(scratch / 'uniform_raw' / f'{index:08x}.3ds')
+    sheet = Image.new('RGB', (size, size + size // 2), (50, 50, 50))
+    for name, box, at in (('TORSOSLEEVE', (size, size), (0, 0)), ('HELMET', (size, size // 2), (0, size))):
+        if name in bank.names:
+            try:
+                sheet.paste(Image.open(io.BytesIO(bank.png(name))).convert('RGB').resize(box), at)
+            except Exception:
+                pass
+    out.parent.mkdir(parents=True, exist_ok=True)
+    sheet.save(out)
+    return out

@@ -97,7 +97,39 @@ def transformed(model, matrices):
     return np.einsum('nij,nj->ni', matrices[rows[:, 3].astype(int), :3, :3], rows[:, 5:8]) + matrices[rows[:, 3].astype(int), :3, 3]
 
 
+def game_cluster_matrices(model, pose=None, order='ZYX'):
+    """Cluster matrices exactly as NCAA 07 builds its skinning palette
+    (default.xbe 0x2C3E0 / 0x2BF20). Cluster 0 is the identity; cluster c =
+    {bone b, parent cluster p, weight w}: b == 0xFF copies cluster p, else
+    M[c] = M[p] @ T(bone translation) @ Rz@Ry@Rx(r), r = bind + (pose - bind)
+    * w / 4096 per Euler component (integer, >> 12). With no pose (the bind
+    pose) every cluster takes its bone's full bind rotation."""
+    bones = model['skeleton']['bones']
+    clusters = model['clusters']
+    result = np.zeros((len(clusters), 4, 4))
+    result[0] = np.eye(4)
+    for c in range(1, len(clusters)):
+        b, p, w = (int(v) for v in clusters[c])
+        if b == 0xFF:
+            result[c] = result[p]
+            continue
+        bind = bones[b]['rotation_i16_raw']
+        if pose is None:
+            raw = list(bind)
+        else:
+            raw = [int(a) + ((int(t) - int(a)) * w >> 12) for a, t in zip(bind, pose[b])]
+        local = np.eye(4)
+        local[:3, :3] = np.array(euler(raw, order, math.tau / 65536))
+        local[:3, 3] = bones[b]['local_translation']
+        result[c] = result[p] @ local
+    return result
+
+
 def partial_matrices(model, order, mode):
+    if mode == 'game':
+        # the game's palette starts at the hips; IDEAL_OUT (root) places it
+        root = bone_matrices(model, order)[0]
+        return np.array([root @ m for m in game_cluster_matrices(model, None, order)])
     worlds = bone_matrices(model, order)
     bones = model['skeleton']['bones']
     result = []

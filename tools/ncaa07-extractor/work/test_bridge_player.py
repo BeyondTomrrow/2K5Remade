@@ -31,7 +31,9 @@ for ob in scene.objects:
 pts = [o.matrix_world @ Vector(c) for o in visible for c in o.bound_box]
 lo = Vector([min(p[i] for p in pts) for i in range(3)]); hi = Vector([max(p[i] for p in pts) for i in range(3)])
 center = (lo + hi) / 2; size = max(hi - lo)
-bpy.ops.object.camera_add(location=center + Vector((0.6, -3, 0.4)) * size)
+import os
+view = Vector((0.6, 3, 0.6)) if os.environ.get('NCAA_BACK') else Vector((0.6, -3, 0.4))
+bpy.ops.object.camera_add(location=center + view * size)
 cam = bpy.context.object
 cam.rotation_euler = (center - cam.location).to_track_quat('-Z', 'Y').to_euler()
 cam.data.type = 'ORTHO'; cam.data.ortho_scale = size * 1.15
