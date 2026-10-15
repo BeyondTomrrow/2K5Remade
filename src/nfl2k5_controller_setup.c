@@ -67,7 +67,7 @@ static uint8_t s_perm[4][8];
 /* Ports whose chosen layout is Custom. The game keeps the choice in memory
  * only (it resets at boot), so this remembers it (controller_layouts.ini)
  * and the per-port layout read follows it. Read by generated code. */
-volatile long nfl2k5_cs_custom_ports;
+volatile LONG nfl2k5_cs_custom_ports;   /* LONG: 32-bit on every host, as Interlocked* expects */
 static volatile LONG s_play_dirty = 0xF, s_label_port = -1;
 static uint32_t s_orig_help_off, s_orig_help_def;
 

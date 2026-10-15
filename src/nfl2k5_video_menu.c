@@ -362,6 +362,7 @@ static DWORD WINAPI vm_memdump_thread(void *arg)
         }
         Sleep(10000);
     }
+    return 0;   /* not reached */
 }
 
 void nfl2k5_video_menu_install(void)

@@ -43232,7 +43232,7 @@ void sub_00077230(void)
 
 loc_00077230: ;
     /* NFL2K5-GENPATCH:CONTROLLER_SETUP_PORT_LAYOUT */
-    { extern volatile long nfl2k5_cs_custom_ports; uint32_t _cs = MEM32(ecx * 0x1Cu + 0xE5FE90u);
+    { extern volatile int32_t nfl2k5_cs_custom_ports; uint32_t _cs = MEM32(ecx * 0x1Cu + 0xE5FE90u);
       if (_cs > 2u || (ecx < 4u && ((nfl2k5_cs_custom_ports >> ecx) & 1))) { extern uint32_t nfl2k5_cs_port_layout(uint32_t, uint32_t, uint32_t); uint32_t _p = ecx; ecx = ecx * 0x1Cu; eax = nfl2k5_cs_port_layout(_p, _cs, MEM32(esp)); esp += 4; return; } }
     ecx = (uint32_t)((int32_t)ecx * (int32_t)0x1C);
     eax = MEM32(ecx + 0xE5FE90);

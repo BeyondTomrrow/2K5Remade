@@ -1335,6 +1335,7 @@ typedef void (*recomp_func_t)(void);
 extern RECOMP_TLS uint32_t g_eax, g_esp, g_ecx, g_edx, g_ebx, g_esi, g_edi;
 extern void xbox_bridge_signal_worker_completion(void);
 extern void xbox_bridge_wait_worker_completion(unsigned long timeout_ms);
+extern void xbox_bridge_drain_guest_dpcs(void);
 extern void xbox_bridge_service_scheduler_now(void);
 extern void xbox_bridge_note_scheduler_ready(void);
 extern void xbox_bridge_drive_scheduler_until(uint32_t target_count,
