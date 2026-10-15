@@ -20,9 +20,11 @@ BASE = Path(sys.executable).parent if getattr(sys, 'frozen', False) else HERE
 SCRATCH = Path(r'H:\NCAA07_Extractor_Work') if Path('H:/').exists() else BASE / 'workspace'
 BLENDER = Path(r'C:\Program Files\Blender Foundation\Blender 5.2\blender.exe')
 ARCHIVES = {'Players': 'PLYDATA.DAT', 'Stadiums': 'STADIUMS.DAT',
-            'Stadium props': 'STADATA.dat', 'Field layers': 'FLDDATA.DAT', 'UI models': 'UIS_MODL.DAT'}
+            'Stadium props': 'STADATA.dat', 'Field layers': 'FLDDATA.DAT', 'UI models': 'UIS_MODL.DAT',
+            'Animations': 'ANIMDATA.dat'}
 FOLDERS = {'Players': 'players_raw', 'Stadiums': 'stadiums_raw',
-           'Stadium props': 'stadata_raw', 'Field layers': 'field_raw', 'UI models': 'ui_raw'}
+           'Stadium props': 'stadata_raw', 'Field layers': 'field_raw', 'UI models': 'ui_raw',
+           'Animations': 'animdata_raw'}
 
 
 def safe(value):
@@ -106,7 +108,23 @@ def convert(rows, destination: Path, preview=False, log=print, game=None, scratc
             number += 1
         try:
             from ncaa_player import is_player, export_player, face_for
-            if row['bones'] and is_player(path):
+            if row.get('kind') == 'animations':
+                # the configured player on its skeleton, every clip of the group as an action
+                from ncaa_anim import groups, library_clips, body_rig, body_rig_file
+                folder = path.parent
+                players = Path(scratch) / 'players_raw' if scratch else None
+                if not players or not (players / '00000004.tmd').is_file():
+                    raise FileNotFoundError('Load Players once first (the animations play on the player model).')
+                payloads = groups(folder)[path]
+                rig = body_rig(body_rig_file(folder))
+                log(f"Decoding {row['nodes']} clips ...")
+                clips = library_clips(path, payloads, rig)
+                if textures is None:
+                    textures = player_textures(players, game, scratch, uniform, log)
+                report = export_player(players / '00000004.tmd', output, players / '00000003.tmd',
+                                       textures=textures, include_variants=False, animations=clips)
+                report['kind'] = 'player'
+            elif row['bones'] and is_player(path):
                 # every part placed with the skeleton; the configured player
                 # visible, every other option tagged for the hidden Variants
                 if textures is None:
@@ -198,6 +216,14 @@ def launch():
             folder = scratch_path / FOLDERS[selected_category]
             if selected_category == 'Players' and not folder.exists() and (HERE / 'outputs/plydata_extracted').exists():
                 folder = HERE / 'outputs/plydata_extracted'
+            if selected_category == 'Animations':
+                if not folder.exists() or not any(folder.glob('*.vap')):
+                    folder = extract(game_path, selected_category, scratch_path, log)
+                from ncaa_anim import catalog as anim_catalog
+                data, errors = anim_catalog(folder), []
+                events.put(('catalog', data))
+                log(f'Loaded {len(data)} animation groups ({sum(r["nodes"] for r in data)} clips) from {folder}.')
+                return
             if not folder.exists() or not any(folder.glob('*.tmd')):
                 folder = extract(game_path, selected_category, scratch_path, log)
             data, errors = catalog(folder)

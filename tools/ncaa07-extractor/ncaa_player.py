@@ -97,6 +97,73 @@ DECAL_LIFT = 0.003          # source units are metres (a player is ~2.0 tall)
 SKIN_DETAIL = {'wrist_Rt', 'wrist_Left', 'elbow_lower_Left', 'elbow_lower_Rt', 'elbow_upper_Left', 'elbow_upper_Rt'}
 
 
+def quaternion(m) -> np.ndarray:
+    """glTF quaternion (x, y, z, w) of a rotation matrix."""
+    m = np.asarray(m, dtype=float)
+    t = np.trace(m)
+    if t > 0:
+        s = np.sqrt(t + 1.0) * 2
+        q = [(m[2, 1] - m[1, 2]) / s, (m[0, 2] - m[2, 0]) / s, (m[1, 0] - m[0, 1]) / s, 0.25 * s]
+    elif m[0, 0] > m[1, 1] and m[0, 0] > m[2, 2]:
+        s = np.sqrt(1.0 + m[0, 0] - m[1, 1] - m[2, 2]) * 2
+        q = [0.25 * s, (m[0, 1] + m[1, 0]) / s, (m[0, 2] + m[2, 0]) / s, (m[2, 1] - m[1, 2]) / s]
+    elif m[1, 1] > m[2, 2]:
+        s = np.sqrt(1.0 + m[1, 1] - m[0, 0] - m[2, 2]) * 2
+        q = [(m[0, 1] + m[1, 0]) / s, 0.25 * s, (m[1, 2] + m[2, 1]) / s, (m[0, 2] - m[2, 0]) / s]
+    else:
+        s = np.sqrt(1.0 + m[2, 2] - m[0, 0] - m[1, 1]) * 2
+        q = [(m[0, 2] + m[2, 0]) / s, (m[1, 2] + m[2, 1]) / s, 0.25 * s, (m[1, 0] - m[0, 1]) / s]
+    q = np.array(q)
+    return q / np.linalg.norm(q)
+
+
+def add_animations(glb, bones, animations, order='ZYX'):
+    """glTF animations from decoded clips. Each clip: {'name', 'frames':
+    [(header, values)], 'rig': [30 channel names], 'fps'}. A channel triple is
+    the bone's local rotation in the skeleton's own convention (raw i16,
+    65536 = turn, Rz@Ry@Rx); the frame header moves the root."""
+    import math
+    from ncaa_rig_math import euler
+    from ncaa_anim import root_motion
+    index = {b['name']: b['index'] for b in bones}
+    for anim in animations:
+        frames, rig, fps = anim['frames'], anim['rig'], anim.get('fps', 30.0)
+        if not frames:
+            continue
+        times = glb.accessor([[i / fps] for i in range(len(frames))], 1, bounds=True)
+        samplers, channels = [], []
+        for slot, name in enumerate(rig):
+            # channels 88/89 (leye y/z) are left unscaled by the game's MMX loop
+            if name not in index or 3 * slot + 2 >= 88:
+                continue
+            quats = []
+            for header, values in frames:
+                raw = [int(v) for v in values[3 * slot:3 * slot + 3]]
+                quats.append(quaternion(np.array(euler(raw, order, math.tau / 65536))))
+            for i in range(1, len(quats)):                       # shortest path between keys
+                if np.dot(quats[i], quats[i - 1]) < 0:
+                    quats[i] = -quats[i]
+            out = glb.accessor(quats, 4)
+            samplers.append({'input': times, 'output': out, 'interpolation': 'LINEAR'})
+            channels.append({'sampler': len(samplers) - 1, 'target': {'node': index[name], 'path': 'rotation'}})
+        root = index.get('IDEAL_OUT')
+        motion = [root_motion(h) for h, _ in frames]
+        if anim.get('mirror') and all(motion):            # the codec mirrors channels, not the root
+            motion = [(-m[0], m[1], m[2], -m[3]) for m in motion]
+        if root is not None and all(motion):
+            out = glb.accessor([[m[0], m[1], m[2]] for m in motion], 3)
+            samplers.append({'input': times, 'output': out, 'interpolation': 'LINEAR'})
+            channels.append({'sampler': len(samplers) - 1, 'target': {'node': root, 'path': 'translation'}})
+            yaw = [quaternion(np.array(euler([0, int(m[3] * 65536), 0], order, math.tau / 65536))) for m in motion]
+            for i in range(1, len(yaw)):
+                if np.dot(yaw[i], yaw[i - 1]) < 0:
+                    yaw[i] = -yaw[i]
+            samplers.append({'input': times, 'output': glb.accessor(yaw, 4), 'interpolation': 'LINEAR'})
+            channels.append({'sampler': len(samplers) - 1, 'target': {'node': root, 'path': 'rotation'}})
+        glb.doc.setdefault('animations', []).append({'name': anim['name'], 'samplers': samplers,
+                                                     'channels': channels})
+
+
 def category(material: str, group: str) -> str:
     m = material.lower()
     if group == 'Shadow' or m == 'shadow':
@@ -257,7 +324,7 @@ def _materials(path: Path):
 
 def export_player(body: Path, output: Path, face: Path | None = None, choices: dict | None = None,
                   textures: Textures | None = None, include_variants: bool = True,
-                  order: str = 'ZYX', mode: str = 'slerp_pivot') -> dict:
+                  order: str = 'ZYX', mode: str = 'slerp_pivot', animations: list | None = None) -> dict:
     """One GLB: the source skeleton, the configured player and (optionally)
     every alternative part, tagged for the Blender organizer."""
     body = Path(body)
@@ -271,11 +338,13 @@ def export_player(body: Path, output: Path, face: Path | None = None, choices: d
     report = {'output': str(output), 'model': first['skeleton']['model_name'], 'parts': 0, 'variant_parts': 0,
               'vertices': 0, 'triangles': 0, 'choices': {}, 'bones': len(bones)}
 
-    # skeleton nodes 0..n-1, exactly as ncaa_rig.export
+    # skeleton nodes 0..n-1 as translation/rotation/scale (animatable)
     for bone in bones:
         parent = bone['parent']
         local = worlds[bone['index']] if parent is None else np.linalg.inv(worlds[parent]) @ worlds[bone['index']]
-        node = {'name': bone['name'], 'matrix': local.T.reshape(-1).tolist(),
+        scale = np.linalg.norm(local[:3, :3], axis=0)
+        node = {'name': bone['name'], 'translation': local[:3, 3].tolist(),
+                'rotation': quaternion(local[:3, :3] / scale).tolist(), 'scale': scale.tolist(),
                 'extras': {'sourceBoneIndex': bone['index']}}
         kids = [b['index'] for b in bones if b['parent'] == bone['index']]
         if kids:
@@ -387,6 +456,9 @@ def export_player(body: Path, output: Path, face: Path | None = None, choices: d
                          'skinning': 'source clusters as parent/child linear weights'}
     if textures and textures.missing:
         report['missing_textures'] = sorted(textures.missing)
+    if animations:
+        add_animations(glb, bones, animations, order)
+        report['animations'] = [a['name'] for a in animations]
     glb.write(Path(output))
     return report
 

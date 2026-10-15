@@ -181,6 +181,11 @@ def organize_player(objects, name):
         rig['ncaa_player'] = name
         rig['ncaa_root_collection'] = root.name
         rig['ncaa_choices'] = json.dumps(choices)
+        # every decoded clip is kept with the file (unassigned actions are
+        # otherwise dropped when the .blend is saved)
+        for act in bpy.data.actions:
+            if not act.use_fake_user and act.users == 0 or act.name[:3].isalnum() and '_' in act.name:
+                act.use_fake_user = True
     for ob in objects:
         if ob.type != 'MESH':
             continue
@@ -415,6 +420,13 @@ class NCAA07_PT_panel(bpy.types.Panel):
             layout.label(text='Select a player rig for its options')
             return
         layout.label(text=rig['ncaa_player'], icon='ARMATURE_DATA')
+        if rig.animation_data:
+            box = layout.box()
+            box.label(text='Animation (decoded from the game)', icon='ACTION')
+            box.prop(rig.animation_data, 'action', text='')
+            act = rig.animation_data.action
+            if act:
+                box.label(text=f'{int(act.frame_range[1] - act.frame_range[0]) + 1} frames at 30 fps')
         choices = choices_of(rig)
         groups = {}
         for ob in player_parts(rig):
