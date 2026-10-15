@@ -25,7 +25,11 @@ Then:
     cmake -B build-linux-game -G Ninja -DCMAKE_BUILD_TYPE=Release -DNFL2K5_BUILD_GAME=ON
     cmake --build build-linux-game
 
-The generated code is about 220 MB of C; expect several minutes.
+The generated code is about 220 MB of C; expect several minutes. The game
+target builds at -O2 by default (`NFL2K5_LINUX_OPT`; 0 for debugging, 1 if
+an -O2 build misbehaves). The largest generated files need about 2 GB of RAM
+each to compile, so if a parallel build runs out of memory, limit the jobs:
+`cmake --build build-linux-game -j6`.
 
 The four `NFL2K5_FORCE_UNBLOCK_*` options that `tools/build.ps1` enables for
 Windows (AUDIO_LOCK, 33660_DRAIN, NETPOLL, STATE9_READY) default to ON on Linux.

@@ -106,10 +106,15 @@ endif()
 target_link_options(NFL2K5 PRIVATE /DEBUG /LARGEADDRESSAWARE /STACK:16777216)
 else()
   target_link_libraries(NFL2K5 PRIVATE xboxrecomp OpenSSL::Crypto)
-  # Recompiled code is huge; -O0 unless NFL2K5_OPTIMIZE, like the /Od default.
-  if(NOT NFL2K5_OPTIMIZE)
-    target_compile_options(NFL2K5 PRIVATE -O0)
-  endif()
+  # Optimisation level for the game target (recompiled code included).
+  # GCC spends its time parsing the 220 MB of generated C, not optimising
+  # it: the largest file (30 MB) takes ~30 s and ~2 GB of RAM at -O1 and -O2
+  # alike, so -O2 costs almost nothing over -O0 and runs far faster. Set 0
+  # for debugging, or 1 if an -O2 build misbehaves. With many parallel jobs,
+  # budget ~2 GB of RAM per job for the biggest files (cmake --build -j N).
+  set(NFL2K5_LINUX_OPT "2" CACHE STRING "Optimisation level (0-3) for the game target on Linux")
+  set_property(CACHE NFL2K5_LINUX_OPT PROPERTY STRINGS 0 1 2 3)
+  target_compile_options(NFL2K5 PRIVATE -O${NFL2K5_LINUX_OPT})
   target_compile_options(NFL2K5 PRIVATE -g1 -fno-strict-aliasing -fwrapv)
   # MSVC calling-convention keyword used by tools/apply-gen-patches.py output.
   target_compile_definitions(NFL2K5 PRIVATE __cdecl=)
