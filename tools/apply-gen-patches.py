@@ -406,8 +406,8 @@ PATCHES = [
      * the interrupt would; clear it only after 2 s as a last resort. */
     {
         extern void xbox_bridge_drain_guest_dpcs(void);
-        extern unsigned long __stdcall GetTickCount(void);
-        extern void __stdcall Sleep(unsigned long);
+        extern uint32_t GetTickCount(void);   /* DWORD; 32-bit on every host */
+        extern void Sleep(uint32_t);
         unsigned long t0 = GetTickCount();
         while (MEM32(ebx) != 0 && GetTickCount() - t0 < 2000u) {
             xbox_bridge_drain_guest_dpcs();

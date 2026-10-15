@@ -27,6 +27,16 @@ Then:
 
 The generated code is about 220 MB of C; expect several minutes.
 
+The four `NFL2K5_FORCE_UNBLOCK_*` options that `tools/build.ps1` enables for
+Windows (AUDIO_LOCK, 33660_DRAIN, NETPOLL, STATE9_READY) default to ON on Linux.
+Without them the game sits on a black screen (the main thread waits forever
+in XNetStartup's network poll). A build directory configured before they
+defaulted on keeps them OFF in its cache; reconfigure it with
+
+    cmake -B build-linux-game -DNFL2K5_FORCE_UNBLOCK_AUDIO_LOCK=ON \
+      -DNFL2K5_FORCE_UNBLOCK_33660_DRAIN=ON -DNFL2K5_FORCE_UNBLOCK_NETPOLL=ON \
+      -DNFL2K5_FORCE_UNBLOCK_STATE9_READY=ON
+
 ## Game files
 
 Put your extracted disc in `original/` (it must contain `default.xbe` and
