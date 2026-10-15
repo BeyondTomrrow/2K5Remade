@@ -1186,13 +1186,25 @@ static DWORD WINAPI nfl2k5_short_quarter_thread(LPVOID arg)
 {
     float seconds = *(const float *)arg;
     const uint8_t *m = (const uint8_t *)xbox_GetMemoryOffset();
+    uint32_t last_period = 0xFFFFFFFFu;
     for (;;) {
         uint32_t period = *(const uint32_t *)(m + 0x00E602C4u);
+        if (period != last_period) {
+            fprintf(stderr, "[TEST] period %u -> %u (t=%lu)\n", last_period, period, (unsigned long)GetTickCount());
+            last_period = period;
+        }
         if (period >= 1u && period <= 4u) {
             float *length = (float *)(m + 0x00E602B0u);
+            /* the length is read when a quarter starts; the running clock
+             * (clock object [E6028C] + 0x10, seconds) is what counts down */
+            uint32_t clock_object = *(const uint32_t *)(m + 0x00E6028Cu);
+            if (clock_object && clock_object < 0x08000000u) {
+                float *clock = (float *)((uint8_t *)m + clock_object + 0x10u);
+                if (*clock > seconds && *clock < 4000.0f) *clock = seconds;
+            }
             if (*length != seconds) {
                 *length = seconds;
-                fprintf(stderr, "[TEST] quarter length override: %.0f seconds (period %u)\\n",
+                fprintf(stderr, "[TEST] quarter length override: %.0f seconds (period %u)\n",
                         seconds, period);
             }
         }
@@ -3263,7 +3275,7 @@ int main(int argc, char **argv)
             if (short_q_seconds >= 10.0f && short_q_seconds <= 900.0f)
                 CreateThread(NULL, 0, nfl2k5_short_quarter_thread, &short_q_seconds, 0, NULL);
             else
-                fprintf(stderr, "[BOOT] Ignoring NFL2K5_QUARTER_SECONDS=%s (use 10..900).\\n", short_q);
+                fprintf(stderr, "[BOOT] Ignoring NFL2K5_QUARTER_SECONDS=%s (use 10..900).\n", short_q);
         }
     }
     {   /* <root>/Music folders -> Xbox custom soundtracks (saves/Soundtracks) */
