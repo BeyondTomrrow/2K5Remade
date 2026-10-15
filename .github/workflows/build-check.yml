@@ -16,10 +16,23 @@ jobs:
       - name: Runtime functions exist
         run: python tools/ci/check-runtime-symbols.py src external/xboxrecomp/src
 
-      - name: Configure CMake (Windows D3D11 + SDL3)
-        run: cmake -B build -G "Visual Studio 17 2022" -A x64
+      - name: Check out pinned SDL3 source (3.2.20)
+        uses: actions/checkout@v4
+        with:
+          repository: libsdl-org/SDL
+          ref: 96292a5b464258a2b926e0a3d72f8b98c2a81aa6
+          path: dependencies/SDL
 
-      - name: Build Windows Binary
+      - name: Build SDL3 SDK
+        run: |
+          cmake -S dependencies/SDL -B build-sdl -G "Visual Studio 17 2022" -A x64 -DCMAKE_INSTALL_PREFIX="${{ github.workspace }}/dependencies/sdl3-sdk" -DSDL_TESTS=OFF -DSDL_EXAMPLES=OFF
+          cmake --build build-sdl --config Release --parallel
+          cmake --install build-sdl --config Release
+
+      - name: Configure CMake (Windows D3D11 + SDL3)
+        run: cmake -B build -G "Visual Studio 17 2022" -A x64 -DNFL2K5_BUILD_GAME=OFF -DCMAKE_PREFIX_PATH="${{ github.workspace }}/dependencies/sdl3-sdk"
+
+      - name: Build Windows runtime and tools (no game)
         run: cmake --build build --config Release --parallel
 
   build-linux:
@@ -32,10 +45,41 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build libsdl3-dev libssl-dev libepoxy-dev
+          sudo apt-get install -y ninja-build libssl-dev libepoxy-dev libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev libxfixes-dev libxss-dev libwayland-dev libxkbcommon-dev
+
+      - name: Check out pinned SDL3 source (3.2.20)
+        uses: actions/checkout@v4
+        with:
+          repository: libsdl-org/SDL
+          ref: 96292a5b464258a2b926e0a3d72f8b98c2a81aa6
+          path: dependencies/SDL
+
+      - name: Build SDL3 SDK
+        run: |
+          cmake -S dependencies/SDL -B build-sdl -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="${{ github.workspace }}/dependencies/sdl3-sdk" -DSDL_TESTS=OFF -DSDL_EXAMPLES=OFF
+          cmake --build build-sdl --parallel
+          cmake --install build-sdl
 
       - name: Configure CMake (Linux POSIX + SDL3 GPU)
-        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DNFL2K5_BUILD_GAME=OFF -DCMAKE_PREFIX_PATH="${{ github.workspace }}/dependencies/sdl3-sdk"
 
-      - name: Build Linux Binary
+      - name: Check POSIX condition waits and lock reacquisition
+        run: |
+          cmake -S external/xboxrecomp/tests/condition_srw_posix -B build-condition -G Ninja
+          cmake --build build-condition
+          ctest --test-dir build-condition --output-on-failure
+
+      - name: Check real AC97 faults and guest-memory copy boundaries
+        run: |
+          cmake -S external/xboxrecomp/tests/ac97_posix -B build-ac97 -G Ninja
+          cmake --build build-ac97
+          ctest --test-dir build-ac97 --output-on-failure
+          cmake -S tests/guest_memory_posix -B build-guest-memory -G Ninja
+          cmake --build build-guest-memory
+          ctest --test-dir build-guest-memory --output-on-failure
+          cmake -S external/xboxrecomp/tests/renderer_staging -B build-renderer -G Ninja -DCMAKE_PREFIX_PATH="${{ github.workspace }}/dependencies/sdl3-sdk"
+          cmake --build build-renderer
+          ctest --test-dir build-renderer --output-on-failure
+
+      - name: Build Linux runtime (no game)
         run: cmake --build build --parallel

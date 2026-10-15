@@ -2,10 +2,12 @@ cmake_minimum_required(VERSION 3.20)
 project(NFL2K5_PC LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 17)
 add_subdirectory(external/xboxrecomp)
-add_executable(NFL2K5_toolchain_check tools/toolchain_check.cpp)
-target_link_libraries(NFL2K5_toolchain_check PRIVATE d3d12 dxgi)
-add_executable(NFL2K5_AssetIndex tools/asset_index.c)
-target_compile_definitions(NFL2K5_AssetIndex PRIVATE _CRT_SECURE_NO_WARNINGS NFL2K5_PROJECT_ROOT="${CMAKE_CURRENT_SOURCE_DIR}")
+if(WIN32)
+  add_executable(NFL2K5_toolchain_check tools/toolchain_check.cpp)
+  target_link_libraries(NFL2K5_toolchain_check PRIVATE d3d12 dxgi)
+  add_executable(NFL2K5_AssetIndex tools/asset_index.c)
+  target_compile_definitions(NFL2K5_AssetIndex PRIVATE _CRT_SECURE_NO_WARNINGS NFL2K5_PROJECT_ROOT="${CMAKE_CURRENT_SOURCE_DIR}")
+endif()
 
 
 
