@@ -12,7 +12,11 @@
 // name. Larger images get a mip chain, so they stay sharp up close and calm far
 // away. Folders are read in name order; the first file for a hash wins.
 #include <windows.h>
+#ifdef _WIN32
 #include <wincodec.h>
+#else
+#include "platform/posix/image_bgra.h"
+#endif
 #include <stdint.h>
 #include <stdio.h>
 #include <algorithm>
@@ -22,7 +26,9 @@
 #include <string>
 #include <vector>
 
+#ifdef _WIN32
 #pragma comment(lib, "windowscodecs.lib")
+#endif
 
 extern "C" char *xbox_user_path(const char *rel, char *out, size_t n);
 extern "C" volatile long g_xbox_tex_dump_wanted;    // renderer: decode DXT for the dump
@@ -39,7 +45,9 @@ std::list<std::pair<uint32_t, Pic>> g_cache;        // most recent first
 size_t g_cache_bytes;
 const size_t kCacheMax = 768u << 20;                // decoded images kept for re-uploads
 std::string g_dump_dir;
+#ifdef _WIN32
 IWICImagingFactory *g_wic;
+#endif
 
 bool hex8(const char *s, uint32_t *v)
 {
@@ -79,6 +87,7 @@ void scan(const std::string &dir, int depth)
     }
 }
 
+#ifdef _WIN32
 bool decode(const std::string &path, Pic *o)
 {
     IWICBitmapDecoder *dec = nullptr;
@@ -122,6 +131,27 @@ void write_png(const std::string &path, const uint32_t *px, uint32_t w, uint32_t
     if (enc) enc->Release();
     if (st) st->Release();
 }
+
+#else
+bool decode(const std::string &path, Pic *o)
+{
+    uint32_t iw = 0, ih = 0;
+    uint32_t *px = nfl2k5_image_load_bgra(path.c_str(), &iw, &ih);
+    bool ok = false;
+    if (px && iw && ih && iw <= 16384 && ih <= 16384) {
+        o->px.assign(px, px + (size_t)iw * ih);
+        o->w = iw; o->h = ih;
+        ok = true;
+    }
+    if (px) nfl2k5_image_free(px);
+    return ok;
+}
+
+void write_png(const std::string &path, const uint32_t *px, uint32_t w, uint32_t h)
+{
+    nfl2k5_image_write_png_bgra(path.c_str(), px, w, h);
+}
+#endif
 
 }  // namespace
 
@@ -174,8 +204,10 @@ extern "C" void nfl2k5_texture_packs_init(void)
 {
     char ini[MAX_PATH], line[160], dd[MAX_PATH];
     InitializeCriticalSection(&g_lock);
+#ifdef _WIN32
     CoInitializeEx(nullptr, COINIT_MULTITHREADED);
     if (FAILED(CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&g_wic)))) g_wic = nullptr;
+#endif
     FILE *f = fopen(xbox_user_path("nfl2k5_game.ini", ini, sizeof ini), "r");
     if (f) {
         while (fgets(line, sizeof line, f)) { int v; if (sscanf(line, " texture_dump = %d", &v) == 1) g_dump = v != 0; }

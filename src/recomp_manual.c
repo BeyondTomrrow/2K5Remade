@@ -2660,22 +2660,6 @@ void recomp_icall_not_code_log(uint32_t address)
 }
 
 
-static void sub_004952F8(void)
-{
-    uint32_t arg1 = MEM32(g_esp + 4);
-    uint32_t arg2 = MEM32(g_esp + 8);
-    uint32_t arg3 = MEM32(g_esp + 12);
-    uint32_t arg4 = MEM32(g_esp + 16);
-    uint32_t arg5 = MEM32(g_esp + 20);
-    uint32_t arg6 = MEM32(g_esp + 24);
-
-    // Perform operations with the arguments
-    // ...
-
-    // Return from the function
-    g_esp += 28; // Adjust stack pointer to account for all arguments
-    return;
-}
 
 
 /* ---- scorebug hooks for packs that change its functions --------------------

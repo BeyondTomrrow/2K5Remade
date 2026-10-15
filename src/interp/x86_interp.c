@@ -30,6 +30,7 @@
 #include <string.h>
 #include <math.h>
 #include <windows.h>
+#include "platform/xbox_winnt.h"   /* XBOX_THREAD_LOCAL */
 
 #include "recomp_types.h"
 
@@ -348,8 +349,8 @@ static recomp_func_t native_for(uint32_t va)
 
 /* The last instructions interpreted on this thread (oldest first in the
  * report), so a fatal stop shows how control got there. */
-static __declspec(thread) uint32_t t_trail[64];
-static __declspec(thread) unsigned t_trail_n;
+static XBOX_THREAD_LOCAL uint32_t t_trail[64];
+static XBOX_THREAD_LOCAL unsigned t_trail_n;
 
 static void fatal(Cpu *c, const char *what)
 {
@@ -427,7 +428,9 @@ static void string_op(Cpu *c, uint8_t op)
  * frame returns. */
 extern ptrdiff_t xbox_GetMemoryOffset(void);
 /* The instruction being interpreted on this thread, for the fault report. */
-static __declspec(thread) Cpu *t_cur;
+static XBOX_THREAD_LOCAL Cpu *t_cur;
+/* Diagnostic only. TODO(posix): report through a SIGSEGV handler. */
+#ifdef _WIN32
 static LONG WINAPI interp_fault_report(EXCEPTION_POINTERS *ep)
 {
     static LONG reported;
@@ -446,6 +449,7 @@ static LONG WINAPI interp_fault_report(EXCEPTION_POINTERS *ep)
     }
     return EXCEPTION_CONTINUE_SEARCH;
 }
+#endif
 
 void recomp_interp_call(uint32_t va)
 {
@@ -458,7 +462,9 @@ void recomp_interp_call(uint32_t va)
     esp0 = c->r[ESP];
     if (s_interp_log < 0) {
         s_interp_log = getenv("NFL2K5_INTERP_LOG") != NULL;
+#ifdef _WIN32
         AddVectoredExceptionHandler(1, interp_fault_report);
+#endif
     }
     if (s_interp_log) { fprintf(stderr, "[INTERP] enter %08X esp %08X ret %08X\n", va, esp0, rd32(esp0)); }
 
@@ -473,7 +479,7 @@ void recomp_interp_call(uint32_t va)
         }
         t_cur = c;
         {   /* record control transfers only: from -> to */
-            static __declspec(thread) uint32_t last;
+            static XBOX_THREAD_LOCAL uint32_t last;
             if (c->start <= last || c->start > last + 15) {
                 t_trail[t_trail_n++ & 63] = last;
                 t_trail[t_trail_n++ & 63] = c->start;

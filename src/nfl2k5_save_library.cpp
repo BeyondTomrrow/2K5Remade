@@ -1,6 +1,15 @@
 #include <windows.h>
+#ifdef _WIN32
 #include <bcrypt.h>
 #include <shellapi.h>   /* ShellExecuteA: F1 > System > Open the saves folder */
+#else
+#include <openssl/evp.h>
+#include <openssl/hmac.h>
+#include <sys/random.h>
+#include <signal.h>
+#include <sys/wait.h>
+#include <unistd.h>
+#endif
 
 #include <algorithm>
 #include <cctype>
@@ -99,6 +108,7 @@ static std::vector<unsigned char> read_bytes(const std::string &path)
     return v;
 }
 
+#ifdef _WIN32
 static bool hmac_sha1(const std::vector<unsigned char> &data,
                       const unsigned char key[16], unsigned char out[20])
 {
@@ -112,6 +122,14 @@ static bool hmac_sha1(const std::vector<unsigned char> &data,
     if (alg) BCryptCloseAlgorithmProvider(alg, 0);
     return status >= 0;
 }
+#else
+static bool hmac_sha1(const std::vector<unsigned char> &data,
+                      const unsigned char key[16], unsigned char out[20])
+{
+    unsigned int len = 0;
+    return HMAC(EVP_sha1(), key, 16, data.data(), data.size(), out, &len) && len == 20;
+}
+#endif
 
 static bool write_atomic_bytes(const std::string &path,
                                const unsigned char *data, size_t size)
@@ -269,7 +287,7 @@ static unsigned long long mtime(const std::string &path)
 {
     WIN32_FILE_ATTRIBUTE_DATA d{};
     if (!GetFileAttributesExA(path.c_str(), GetFileExInfoStandard, &d)) return 0;
-    return (unsigned long long(d.ftLastWriteTime.dwHighDateTime) << 32) |
+    return ((unsigned long long)d.ftLastWriteTime.dwHighDateTime << 32) |
            d.ftLastWriteTime.dwLowDateTime;
 }
 
@@ -363,6 +381,7 @@ static bool extract_save_zip(const std::string &zip_path, const std::string &out
     return got_dat && got_extra && extra_size == 20;
 }
 
+#ifdef _WIN32
 static bool run_converter(const std::string &converter, const std::string &input,
                           const std::string &zip_out)
 {
@@ -380,6 +399,30 @@ static bool run_converter(const std::string &converter, const std::string &input
     CloseHandle(pi.hThread); CloseHandle(pi.hProcess);
     return wait == WAIT_OBJECT_0 && exit_code == 0 && is_file(zip_out);
 }
+#else
+/* POSIX: run the converter directly (no shell), give it 120 s like Windows. */
+static bool run_converter(const std::string &converter, const std::string &input,
+                          const std::string &zip_out)
+{
+    std::string exe = converter, out_arg = "-out:" + zip_out, in = input;
+    for (std::string *p : {&exe, &out_arg, &in}) for (char &c : *p) if (c == '\\') c = '/';
+    pid_t pid = fork();
+    if (pid < 0) return false;
+    if (pid == 0) {
+        execl(exe.c_str(), exe.c_str(), in.c_str(), out_arg.c_str(), (char *)nullptr);
+        _exit(127);
+    }
+    int status = 0;
+    for (int waited_ms = 0;; waited_ms += 50) {
+        pid_t r = waitpid(pid, &status, WNOHANG);
+        if (r == pid) break;
+        if (r < 0) return false;
+        if (waited_ms >= 120000) { kill(pid, SIGKILL); waitpid(pid, &status, 0); return false; }
+        usleep(50 * 1000);
+    }
+    return WIFEXITED(status) && WEXITSTATUS(status) == 0 && is_file(zip_out);
+}
+#endif
 
 static std::vector<std::string> files(const std::string &path)
 {
@@ -501,7 +544,11 @@ static std::string new_container_id(const std::string &udata)
 {
     unsigned char random[6];
     for (;;) {
+#ifdef _WIN32
         if (BCryptGenRandom(NULL, random, sizeof random, BCRYPT_USE_SYSTEM_PREFERRED_RNG) < 0) {
+#else
+        if (getrandom(random, sizeof random, 0) != (ssize_t)sizeof random) {
+#endif
             unsigned long long n = GetTickCount64() ^ (unsigned long long)GetCurrentProcessId() << 32;
             memcpy(random, &n, sizeof random);
         }
@@ -799,7 +846,19 @@ void sys_activate(int r)
     if (r == S_OPEN) {
         char full[MAX_PATH];
         if (GetFullPathNameA(g_save_root.c_str(), MAX_PATH, full, nullptr))
+#ifdef _WIN32
             ShellExecuteA(nullptr, "open", full, nullptr, nullptr, SW_SHOWNORMAL);
+#else
+        {
+            pid_t pid = fork();     /* desktop file manager via xdg-open */
+            if (pid == 0) {
+                setsid();
+                if (fork() == 0) { execlp("xdg-open", "xdg-open", full, (char *)nullptr); _exit(127); }
+                _exit(0);
+            }
+            if (pid > 0) waitpid(pid, nullptr, 0);
+        }
+#endif
     } else if (r >= 0) sys_change(r, 1);
 }
 const XboxMenuPage kSystemPage = { "SYSTEM", sys_count, sys_label, sys_change, sys_activate, nullptr };

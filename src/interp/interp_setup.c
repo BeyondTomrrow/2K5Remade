@@ -6,6 +6,7 @@
  * two is marked, and RECOMP_INTERP_GATE sends calls to it to the interpreter.
  * Code the pack added has no native function at all, so calls to it reach the
  * interpreter through the dispatch fallbacks. */
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>

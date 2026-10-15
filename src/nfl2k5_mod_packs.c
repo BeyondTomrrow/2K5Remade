@@ -117,13 +117,24 @@ static int mp_same_path(const char *a, const char *b)
     return !_stricmp(aa, bb);
 }
 
+#ifdef _WIN32
 static void mp_retail_exe(char *out, size_t cap)
 {
     snprintf(out, cap, "%s\\NFL2K5.exe", s_root);
     if (!mp_file_exists(out))
         snprintf(out, cap, "%s\\build\\Release\\NFL2K5.exe", s_root);
 }
+#else
+/* POSIX: every pack runs on the main executable, so the retail target is
+ * whichever NFL2K5 is running (no build/Release layout, no .exe). */
+static int mp_current_exe(char *out, size_t cap);
+static void mp_retail_exe(char *out, size_t cap)
+{
+    if (!mp_current_exe(out, cap)) snprintf(out, cap, "%s/NFL2K5", s_root);
+}
+#endif
 
+#ifdef _WIN32
 static int mp_launch(const char *exe)
 {
     STARTUPINFOA si;
@@ -144,6 +155,50 @@ static int mp_launch(const char *exe)
     CloseHandle(pi.hProcess);
     return 1;
 }
+#else
+/* POSIX: run `cmd` through /bin/sh in `cwd`. wait=0 detaches; wait=1 blocks
+ * and stores the exit status in *code. Returns nonzero if it started. */
+#include <sys/wait.h>
+#include <unistd.h>
+static int mp_spawn_sh(const char *cmd, const char *cwd, int wait, DWORD *code)
+{
+    char dir[MAX_PATH];
+    pid_t pid;
+    snprintf(dir, sizeof dir, "%s", cwd);
+    xbox_path_normalize(dir);
+    pid = fork();
+    if (pid < 0) return 0;
+    if (pid == 0) {
+        if (!wait) setsid();
+        if (chdir(dir) != 0) _exit(127);
+        execl("/bin/sh", "sh", "-c", cmd, (char *)NULL);
+        _exit(127);
+    }
+    if (wait) {
+        int status = 0;
+        while (waitpid(pid, &status, 0) < 0) {}
+        if (code) *code = WIFEXITED(status) ? (DWORD)WEXITSTATUS(status) : 1u;
+    }
+    return 1;
+}
+
+static int mp_launch(const char *exe)
+{
+    char cmd[MAX_PATH * 2 + 16], work[MAX_PATH], *slash;
+    char path[MAX_PATH];
+    snprintf(path, sizeof path, "%s", exe);
+    xbox_path_normalize(path);
+    snprintf(cmd, sizeof(cmd), "\"%s\" --run", path);
+    snprintf(work, sizeof(work), "%s", path);
+    slash = strrchr(work, '/');
+    if (slash) *slash = 0;
+    if (!mp_spawn_sh(cmd, slash ? work : s_root, 0, NULL)) {
+        fprintf(stderr, "[MODPACK] Could not launch %s\n", path);
+        return 0;
+    }
+    return 1;
+}
+#endif
 
 /* Called before Xbox state is initialized. Returns nonzero when this process
  * handed off to the selected build and the caller should exit immediately. */
@@ -167,6 +222,7 @@ int nfl2k5_modpacks_boot_dispatch(const char *root)
     }
     mp_retail_exe(target, sizeof(target));
     if (!mp_current_exe(current, sizeof(current)) || mp_same_path(current, target)) return 0;
+    if (!mp_file_exists(target)) return 0;      /* nothing to hand off to: keep running */
     fprintf(stderr, "[MODPACK] Handing off to %s\n", target);
     return mp_launch(target);
 }
@@ -193,8 +249,10 @@ static DWORD WINAPI mp_patch_thread(void *arg)
     do {
         char file[MAX_PATH], done[MAX_PATH], failed[MAX_PATH], cmd[4 * MAX_PATH], logp[MAX_PATH];
         const char *ext = strrchr(fd.cFileName, '.');
+#ifdef _WIN32
         STARTUPINFOA si;
         PROCESS_INFORMATION pi;
+#endif
         DWORD code = 1;
         if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY || !ext) continue;
         if (_stricmp(ext, ".2k5patch") && _stricmp(ext, ".iso") && _stricmp(ext, ".xiso")) continue;
@@ -213,6 +271,7 @@ static DWORD WINAPI mp_patch_thread(void *arg)
             continue;
         xbox_PresentToast("MOD PACKS", "Installing", fd.cFileName, 8000);
         fprintf(stderr, "[MODPACK] installing %s\n", file);
+#ifdef _WIN32
         memset(&si, 0, sizeof si);
         memset(&pi, 0, sizeof pi);
         si.cb = sizeof si;
@@ -225,6 +284,9 @@ static DWORD WINAPI mp_patch_thread(void *arg)
             CloseHandle(pi.hThread);
             CloseHandle(pi.hProcess);
         }
+#else
+        mp_spawn_sh(cmd, s_root, 1, &code);
+#endif
         {
             FILE *m = fopen(code == 0 ? done : failed, "w");
             if (m) { fprintf(m, "see %s\n", logp); fclose(m); }
