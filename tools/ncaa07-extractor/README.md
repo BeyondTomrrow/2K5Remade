@@ -1,44 +1,72 @@
 # NCAA 07 to Blender
 
-Version 2 adds source FLDDATA field assembly and a configured, textured player
-with three editable meshes on one source skeleton. See `outputs/fixes/READ_ME_v2.md`.
-The main app now has **Build field + stadium** and **Build clean Alabama player**
-buttons, producing packed `.blend` and `.glb` files through the installed Blender.
+Extracts NCAA Football 07 (Xbox) players, animations, stadiums and fields from
+your own game files, straight into the Blender you already have open. The goal
+is porting NCAA 07 content to ESPN NFL 2K5.
 
-Windows desktop model browser and GLB exporter, validated against the user's NCAA Football 07 archives. Start with `outputs/START_HERE.md` and `outputs/VERIFIED_FORMATS.md` for the current guide and complete format status. The packaged executable includes its Python runtime.
+Started by ChatGPT on 2026-10-14 (archive/TMDL/texture readers, stadium and
+field assembly, the skeleton). Fixed and extended in this repository.
 
 ## Run
 
-```powershell
-python .\ncaa_app.py gui
-python .\ncaa_app.py export "H:\NCAA07_Extractor_Work\stadiums_raw" .\outputs\stadiums --filter ALBAMA
-python .\ncaa_app.py export .\outputs\plydata_extracted .\outputs\players --rig-preview
-python .\ncaa07_tool.py scan "H:\07\NCAA Football 07  (axekin.com)\data" --report .\work\scan_report.json
-python .\ncaa07_tool.py extract "H:\07\NCAA Football 07  (axekin.com)\data" .\outputs\extracted
-python .\ncaa07_tool.py quickbms "H:\07\NCAA Football 07  (axekin.com)\data\PLYDATA.DAT" .\outputs\plydata --quickbms C:\tools\quickbms.exe --script C:\tools\madden_terf.bms
-```
+`Open_NCAA07_Tool_v3.cmd` (in `H:\NCAA07_Extractor_Work`) starts the packaged
+app; from source: `python ncaa_app.py gui`. Build the app with `build_app.ps1`
+(needs `tools\quickbms.exe`, which is not kept in git).
 
-The main app loads or decompresses player, stadium and stadium-prop archives, searches source model names, exports GLB and opens exports in Blender. `ncaa07_tool.py` remains the lower-level archive inspector; `ncaa_blender_tool.py` provides an additional source-only browser with individual mesh selection. `Launch.cmd` opens the main app from source. Source use requires Python with Tkinter; experimental rigs additionally require NumPy. Stadium decoding uses the standard library. The included QuickBMS runtime handles game compression.
+1. **Install Blender add-on** once. Every Blender you open then listens for the
+   extractor (sidebar > **NCAA 07**).
+2. Pick a category, **Load models**, select, **Export selected**. With
+   "Send to Blender after export" on, the models appear in your open Blender.
+   If no Blender is open, one is started once and reused after that.
 
-## Evidence from the supplied files
+## Players
 
-Verified in the actual files at `H:\07\NCAA Football 07  (axekin.com)\data`:
+Every player model is exported on its skeleton (75-bone bodies with their face
+model, 32-bone low-detail and throwback bodies, the coach in his suit). The
+configured player is what you see: one helmet, facemask, hand pose, shoes and
+so on, chosen with the game's own Swap tables. Every alternative (4 helmets,
+9 hair styles, 14 facemasks, 10 hand poses per hand, elbow/wrist/shoe options,
+shadow and effect meshes) is kept, tagged, and filed in a hidden
+`<player> Variants` collection. In Blender's sidebar, **NCAA 07** swaps them:
+pick Afro and the helmet, facemask and their companions go away.
 
-- All sampled asset containers begin with `TERF` and expose a `DIR1` directory marker.
-- `Geom` node/stream tables, positions/normals, UVs, colors and triangle-strip indices are decoded and bounds-checked.
-- All 623 full stadium models exported with embedded textures and no decoder failures. All 26 player geometry models and 46 stadium props also exported.
-- `PLYDATA.DAT` is verified to use COMP algorithm 5 (`ea_madden`). After decompression, the supplied archive produces 26 TMdl models, 8 MMAP texture archives, and one SEVT payload. Player TMDLs contain a verified `Skel` block with a bone count and 16-byte bone-name table; the sample player contains 75 named bones.
-- `ANIMDATA.dat` decompresses into 18 `.vap` animation payloads plus associated `.sdb`, `.1lk`, `.nfc`, `.trg`, and `.app` resources. Their association with animation data is verified from the extracted archive layout, but their track/keyframe codec is still pending.
-- GLB export works in Blender 5.2. A 75-bone experimental player skin is editable, with provisional bind rotations/blending explicitly labeled. Animation export and native FBX export are pending.
+Textures are the game's: player models only name materials, and the game binds
+them at runtime from the PLYDATA gear bank, a team's UNIFORM entry (the
+"Uniform" number in the app), PLADATA player art (faces, hair), the low-detail
+family banks and the coach bank. Numbers and decals are lifted 3 mm off the
+jersey so they don't z-fight.
 
-## Status
+## Animations
 
-Implemented: Windows executable, responsive model browser, read-only game extraction, GLB export, embedded stadium textures/materials, source skeleton metadata, optional experimental skins, and Blender opening. Eight real-fixture/export tests pass.
+The body animation codec is decoded from the game's own code in default.xbe
+(see `ncaa_anim.py`: block loader 0x37AF0, frame fetch 0x1D8CF0, codec
+0x1C65B0, bit unpacker 0x1C0830, root motion 0x1C66D0). Each frame has 90
+channels: the local rotations of the 30 body-rig bones, in the skeleton's own
+Euler convention, plus root position and heading in its header.
 
-Pending: exact player partial-cluster deformation/bind conventions, sparse morphs, runtime player texture selection, compressed animation keyframes/timing, source shaders, stadium field/prop assembly, native FBX export.
+The **Animations** category lists the 17 groups (1,510 clips) by their tags:
+tackles, passes, fumbles, celebrations, coaches, referees, injuries, stances.
+Exporting a group gives the player with every clip as a Blender action
+(sidebar > NCAA 07 picks one); mirrored clips are named `_M`.
 
-## Verified versus pending
+## Stadiums and fields
 
-See `outputs/VERIFIED_FORMATS.md`. Detailed skeleton, pose/seam, animation and texture evidence is preserved in the source ZIP's research notes. Preview GLB skin mechanics are tested independently of the still-unverified game deformation model.
+All 623 stadium models export with their textures. **Build field + stadium**
+assembles the FLDDATA turf, lines, numbers, midfield logo, both end zones and
+goal posts with a selected stadium, in your open Blender.
 
-Run `python -m unittest discover -s . -p "test_*.py" -v` for the integration checks. Fixture-specific tests skip when their local game files are unavailable. No game files are included in the source-code distribution.
+## Still open
+
+- Field team art (midfield logo, end zones) is mapped for the first four teams
+  only; the rest need the game's team table.
+- Turf colour is an editable tint, not the game's runtime palette.
+- Low-detail players' team colours come from a runtime palette, so their
+  textures look dark; hand-finger animation (17-bone hand rigs) is not
+  exported yet; animation playback speed assumes 30 fps.
+- The partial-cluster skinning matches the bind pose; exact in-game blending
+  of partially weighted vertices is an approximation.
+
+## Tests
+
+`python -m unittest discover -s . -p "test_*.py" -v`; `work/test_bridge_player.py`
+and `work/render_anim.py` render players and animations headlessly in Blender.

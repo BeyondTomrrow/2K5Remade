@@ -184,8 +184,7 @@ def organize_player(objects, name):
         # every decoded clip is kept with the file (unassigned actions are
         # otherwise dropped when the .blend is saved)
         for act in bpy.data.actions:
-            if not act.use_fake_user and act.users == 0 or act.name[:3].isalnum() and '_' in act.name:
-                act.use_fake_user = True
+            act.use_fake_user = True
     for ob in objects:
         if ob.type != 'MESH':
             continue

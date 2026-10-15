@@ -93,6 +93,7 @@ MATERIAL_TEXTURES = {
 # low-detail player family -> its texture bank in PLYDATA (archive order)
 LOW_BANKS = (('60s_70s', '0000000f.3ds'), ('60s', '0000000e.3ds'), ('40s_50s', '0000000d.3ds'), ('h', '0000000c.3ds'))
 SKIN_TINT = [.58, .32, .20, 1]
+UNTEXTURED_COLORS = {'lashes': [.05, .04, .03, 1]}     # no texture in any bank
 DECAL_LIFT = 0.003          # source units are metres (a player is ~2.0 tall)
 SKIN_DETAIL = {'wrist_Rt', 'wrist_Left', 'elbow_lower_Left', 'elbow_lower_Rt', 'elbow_upper_Left', 'elbow_upper_Rt'}
 
@@ -414,6 +415,8 @@ def export_player(body: Path, output: Path, face: Path | None = None, choices: d
                     if bind['alpha']:
                         mat['alphaMode'] = 'MASK'; mat['alphaCutoff'] = .35
                     mat['extras'] = {'sourceTexture': bind['texture']}
+                elif material in UNTEXTURED_COLORS:
+                    mat['pbrMetallicRoughness']['baseColorFactor'] = UNTEXTURED_COLORS[material]
                 glb.doc['materials'].append(mat)
             placed = positions[indices]
             if cat == 'Decal':
