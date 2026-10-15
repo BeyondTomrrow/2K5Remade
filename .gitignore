@@ -54,3 +54,10 @@ mods/presentations/NBC_SNF/assets/branding/*
 mods/teams/*/files/
 mods/teams/*/team.rost
 mods/teams/*/creator.json
+
+# Linux build output and files the game writes when run from the source tree
+/build-*/
+build.log
+icall_targets.dump
+controls.ini
+nfl2k5_game.ini
