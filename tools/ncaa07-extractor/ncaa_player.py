@@ -66,6 +66,7 @@ MATERIAL_TEXTURES = {
     'sN_Left': ('uniform', 'NUM1', True), 'sN_Rt': ('uniform', 'NUM2', True), 'sN_Mid': ('uniform', 'NUM0', True),
     'helmet_numb_lt': ('uniform', 'NUM1', True), 'helmet_numb_rt': ('uniform', 'NUM2', True),
     'helmet_numb_center': ('uniform', 'NUM0', True),
+    'helmet_groove_overlay': ('gear', 'STANDARD', True),
     'decal_two': ('uniform', 'DECAL', True), 'decal_collarbone_Lt': ('uniform', 'DECAL1', True),
     'decal_collarbone_Rt': ('uniform', 'DECAL1', True), 'decal_hips_Lt': ('uniform', 'DECAL1', True),
     'decal_hips_Rt': ('uniform', 'DECAL1', True), 'decal_sleeves': ('uniform', 'DECAL1', True),
@@ -177,8 +178,10 @@ def category(material: str, group: str) -> str:
     m = material.lower()
     if group == 'Shadow' or m == 'shadow':
         return 'Shadow'
-    if m in ('helmet_groove_overlay', 'lambert1'):
-        return 'Effect'                 # runtime shader passes; no source texture
+    if m == 'helmet_groove_overlay':
+        return 'Decal'                  # seam line and ear hole drawn over the shell (gear STANDARD)
+    if m == 'lambert1':
+        return 'Effect'                 # runtime shader pass; no source texture
     if m == 'hair' or group == 'NeckRollPart' and m == 'hair':
         return 'Hair'
     if m in ('face', 'eye_left', 'eye_right', 'lashes', 'faceshade', 'binky'):
@@ -249,6 +252,7 @@ class Textures:
                 self.banks[key] = TextureBank(path)
         self.skin_face = skin_face
         self.cache = {}
+        self.number = 12                         # jersey number drawn by the NUM placeholders
         self.missing = set()
         self.low_path = None
 
@@ -322,6 +326,13 @@ class Textures:
             entry = ('art', self.skin_face, False)
         else:
             entry = MATERIAL_TEXTURES.get(material)
+        if entry and entry[1] and entry[1].startswith('NUM') and self.number is not None:
+            # NUM0/1/2 are placeholders the game fills per player: left = tens,
+            # right = ones, the centred (single-digit) part = the only digit
+            n = int(self.number) % 100
+            digit = n % 10 if material.endswith(('_Mid', '_center')) else (
+                n // 10 if material.endswith(('_Left', '_lt')) else n % 10)
+            entry = (entry[0], f'NUM{digit}', entry[2])
         if entry and self.historic_numbers and entry[0] == 'uniform' and entry[1].startswith('NUM'):
             entry = ('historic',) + entry[1:]
         return entry
@@ -388,10 +399,19 @@ def _materials(path: Path):
 
 def export_player(body: Path, output: Path, face: Path | None = None, choices: dict | None = None,
                   textures: Textures | None = None, include_variants: bool = True,
-                  order: str = 'ZYX', mode: str = 'game', animations: list | None = None) -> dict:
+                  order: str = 'ZYX', mode: str = 'game', animations: list | None = None,
+                  number: int | None = None) -> dict:
     """One GLB: the source skeleton, the configured player and (optionally)
     every alternative part, tagged for the Blender organizer."""
     body = Path(body)
+    if number is not None:
+        if textures:
+            textures.number = number
+        if int(number) < 10:            # single-digit parts instead of the two-digit ones
+            choices = dict(choices or {})
+            for g, value in (('Numbers', DEFAULT_CHOICES['Numbers'].replace('Double', 'Single')),
+                             ('HelmSideNum', 'Single'), ('HelmBackNumSing', 'Center'), ('HelmBackNumDoub', None)):
+                choices.setdefault(g, value)
     sources = [body] + ([Path(face)] if face else [])
     first = load(body)
     bones = first['skeleton']['bones']

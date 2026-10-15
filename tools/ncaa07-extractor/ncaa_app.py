@@ -106,7 +106,7 @@ def player_textures(folder: Path, game: Path | None, scratch: Path | None, unifo
 
 
 def convert(rows, destination: Path, preview=False, log=print, game=None, scratch=None, uniform=9,
-            variants=True, historic=0x2A0):
+            variants=True, historic=0x2A0, number=12):
     destination.mkdir(parents=True, exist_ok=True)
     records = []
     textures = None
@@ -134,7 +134,8 @@ def convert(rows, destination: Path, preview=False, log=print, game=None, scratc
                 if textures is None:
                     textures = player_textures(players, game, scratch, uniform, log, historic)
                 report = export_player(players / '00000004.tmd', output, players / '00000003.tmd',
-                                       textures=textures, include_variants=False, animations=clips)
+                                       textures=textures, include_variants=False, animations=clips,
+                                       number=number)
                 report['kind'] = 'player'
             elif row['bones'] and is_player(path):
                 # every part placed with the skeleton; the configured player
@@ -142,7 +143,8 @@ def convert(rows, destination: Path, preview=False, log=print, game=None, scratc
                 if textures is None:
                     textures = player_textures(path.parent, game, scratch, uniform, log, historic)
                 face = None if row.get('source_name', row['name']).startswith('fm') else face_for(path)
-                report = export_player(path, output, face, textures=textures, include_variants=variants)
+                report = export_player(path, output, face, textures=textures, include_variants=variants,
+                                       number=number)
                 report['kind'] = 'player'
             elif preview and row['bones']:
                 from ncaa_rig import export_preview
@@ -192,6 +194,7 @@ def launch():
     preview = tk.BooleanVar(value=False)
     uniform = tk.IntVar(value=9)
     historic = tk.IntVar(value=0x2A0)
+    number = tk.IntVar(value=12)
     send_after = tk.BooleanVar(value=True)
     variants = tk.BooleanVar(value=True)
     status = tk.StringVar(value='Choose a category, then Load models. Existing extracted files are reused.')
@@ -330,6 +333,8 @@ def launch():
     ttk.Button(options, text='Pick uniform...', command=pick_uniform).pack(side='left', padx=(6, 0))
     ttk.Label(options, text='Historic').pack(side='left', padx=(10, 4))
     ttk.Spinbox(options, from_=0x221, to=0x2E0, textvariable=historic, width=5).pack(side='left')
+    ttk.Label(options, text='Number').pack(side='left', padx=(10, 4))
+    ttk.Spinbox(options, from_=0, to=99, textvariable=number, width=4).pack(side='left')
     ttk.Label(frame, text='Players are exported on their skeleton: the configured player is visible, every other helmet, facemask, hair style and hand pose sits in a hidden Variants collection (Blender sidebar > NCAA 07 swaps them). Models go into the Blender you already have open.',
               foreground='#6a4b17', wraplength=1050).pack(anchor='w', pady=3)
 
@@ -341,8 +346,10 @@ def launch():
         destination, rig = Path(output.get()), preview.get()
         game_path, scratch_path, team = Path(game.get()), Path(scratch.get()), uniform.get()
         keep_variants, send, old_team = variants.get(), send_after.get(), historic.get()
+        jersey = number.get()
         def job():
-            result = convert(chosen, destination, rig, log, game_path, scratch_path, team, keep_variants, old_team)
+            result = convert(chosen, destination, rig, log, game_path, scratch_path, team, keep_variants, old_team,
+                             jersey)
             events.put(('exports', result))
             log(f"Finished: {sum(r['status']=='exported' for r in result)} exported, {sum(r['status']=='failed' for r in result)} failed. {destination}")
             if send:
@@ -387,7 +394,7 @@ def launch():
             messagebox.showinfo('Select stadium','Load Stadiums and select one stadium.');return
         source=rows[int(selected[0])]['file'] if not player else None
         game_path,cache,destination=Path(game.get()),Path(scratch.get()),Path(output.get())
-        team=uniform.get()
+        team=uniform.get(); jersey=number.get()
         def job():
             from ncaa_assemble import ensure_assets, fresh_output
             from ncaa_bridge_client import send
@@ -397,7 +404,7 @@ def launch():
                 players=cache/'players_raw'
                 target=fresh_output(destination,f'Player_uniform_{team}').with_suffix('.glb')
                 tex=player_textures(players,None,cache,team,log)
-                report=export_player(players/'00000004.tmd',target,players/'00000003.tmd',textures=tex)
+                report=export_player(players/'00000004.tmd',target,players/'00000003.tmd',textures=tex,number=jersey)
                 report.update(file=str(target),status='exported',kind='player')
                 send({'action':'player','file':str(target),'name':target.stem},BLENDER,log=log)
             else:

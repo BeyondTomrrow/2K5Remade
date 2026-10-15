@@ -41,6 +41,9 @@ Models are listed by what they are ("Player, 1940s-50s leather helmet (high)",
 `<name>_<file>.glb`. Old-era bodies use the throwback uniform in the
 **Historic** box (default 0x2A0, 1920s Notre Dame: gold leather helmet, blue
 jersey, khaki pants); **Pick uniform...** shows both kinds as thumbnails.
+The **Number** box sets the jersey number: the game's NUM placeholders get
+the real digits, and a single digit switches to the centred one-digit parts
+(back, shoulders, helmet), as the game does.
 
 ## Animations
 
