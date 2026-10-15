@@ -31,6 +31,7 @@
 
 #include "kernel.h"
 #include "xbox_memory_layout.h"
+#include "platform/guest_memory.h"
 #include "apu.h"
 #include "recomp_icall_feedback.h"
 #include "nfl2k5_presentation.h"
@@ -232,10 +233,15 @@ static LONG CALLBACK crash_report(EXCEPTION_POINTERS *ep)
 }
 #else
 static struct sigaction g_prev_segv_sa;
+static struct sigaction g_prev_trap_sa;
+static bool g_posix_mmio_installed;
 
 static void posix_audio_mmio_sigaction(int sig, siginfo_t *si, void *ucontext)
 {
-    if (g_apu_state && si && si->si_addr) {
+    if (xbox_ac97_handle_posix_signal(sig, si ? si->si_code : 0,
+                                    si ? (uintptr_t)si->si_addr : 0, ucontext))
+        return;
+    if (sig == SIGSEGV && g_apu_state && si && si->si_addr) {
         uintptr_t host = (uintptr_t)si->si_addr;
         uintptr_t offset = (uintptr_t)xbox_GetMemoryOffset();
         if (host >= offset && host - offset >= 0xFE800000ULL && host - offset < 0xFE880000ULL) {
@@ -245,11 +251,12 @@ static void posix_audio_mmio_sigaction(int sig, siginfo_t *si, void *ucontext)
                 return;
         }
     }
-    if (g_prev_segv_sa.sa_flags & SA_SIGINFO) {
-        if (g_prev_segv_sa.sa_sigaction)
-            g_prev_segv_sa.sa_sigaction(sig, si, ucontext);
-    } else if (g_prev_segv_sa.sa_handler != SIG_DFL && g_prev_segv_sa.sa_handler != SIG_IGN) {
-        g_prev_segv_sa.sa_handler(sig);
+    const struct sigaction *previous = sig == SIGTRAP ? &g_prev_trap_sa : &g_prev_segv_sa;
+    if (previous->sa_handler == SIG_IGN) return;
+    if (previous->sa_handler != SIG_DFL && (previous->sa_flags & SA_SIGINFO)) {
+        previous->sa_sigaction(sig, si, ucontext);
+    } else if (previous->sa_handler != SIG_DFL) {
+        previous->sa_handler(sig);
     } else {
         signal(sig, SIG_DFL);
         raise(sig);
@@ -258,12 +265,20 @@ static void posix_audio_mmio_sigaction(int sig, siginfo_t *si, void *ucontext)
 
 static bool install_audio_mmio_handler(void)
 {
+    if (g_posix_mmio_installed) return true;
     struct sigaction sa;
     memset(&sa, 0, sizeof(sa));
     sa.sa_sigaction = posix_audio_mmio_sigaction;
     sigemptyset(&sa.sa_mask);
     sa.sa_flags = SA_SIGINFO | SA_NODEFER;
-    return sigaction(SIGSEGV, &sa, &g_prev_segv_sa) == 0;
+    if (sigaction(SIGSEGV, &sa, &g_prev_segv_sa) != 0) return false;
+    if (sigaction(SIGTRAP, &sa, &g_prev_trap_sa) != 0) {
+        sigaction(SIGSEGV, &g_prev_segv_sa, NULL);
+        return false;
+    }
+    g_posix_mmio_installed = true;
+    xbox_ac97_set_posix_handler_ready(true);
+    return true;
 }
 #endif
 
@@ -767,6 +782,13 @@ int main(int argc, char **argv)
         printf("[BOOT] Mod pack: 128 MB Xbox RAM\n");
     }
 
+#ifndef _WIN32
+    if (!install_audio_mmio_handler()) {
+        fprintf(stderr, "Failed to install POSIX MMIO signal handlers\n");
+        free(data);
+        return 1;
+    }
+#endif
     if (!xbox_MemoryLayoutInit(data, (size_t)length)) {
         free(data);
         return 3;
