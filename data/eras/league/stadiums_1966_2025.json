@@ -1,0 +1,1289 @@
+{
+ "schema": "nfl2k5_eras_stadiums/v1",
+ "seasons": "1966-2025",
+ "sources": [
+  "https://en.wikipedia.org/wiki/List_of_former_National_Football_League_stadiums",
+  "https://en.wikipedia.org/wiki/List_of_current_National_Football_League_stadiums",
+  "https://en.wikipedia.org/wiki/Texas_Stadium",
+  "https://interactive.wttw.com/node/441",
+  "https://en.wikipedia.org/wiki/Foxboro_Stadium",
+  "https://en.wikipedia.org/wiki/History_of_the_New_England_Patriots",
+  "https://www.britannica.com/place/Shea-Stadium",
+  "https://en.wikipedia.org/wiki/Giants_Stadium"
+ ],
+ "franchises": {
+  "bills": [
+   {
+    "stadium": "War Memorial Stadium",
+    "city": "Buffalo, NY",
+    "first": 1960,
+    "last": 1972,
+    "roof": "open",
+    "surface": "grass->turf",
+    "ingame": "RALPH WILSON STADIUM",
+    "ingame_match": "standin",
+    "note": "the \"Rockpile\"",
+    "needs_check": false,
+    "moved_to": "Rich Stadium / Ralph Wilson Stadium / New Era Field / Bills Stadium / Highmark Stadium (old)"
+   },
+   {
+    "stadium": "Rich Stadium / Ralph Wilson Stadium / New Era Field / Bills Stadium / Highmark Stadium (old)",
+    "city": "Orchard Park, NY",
+    "first": 1973,
+    "last": 2025,
+    "roof": "open",
+    "surface": "turf",
+    "ingame": "RALPH WILSON STADIUM",
+    "ingame_match": "exact",
+    "note": "replaced by the new Highmark Stadium in 2026",
+    "needs_check": false,
+    "moved_to": null
+   }
+  ],
+  "dolphins": [
+   {
+    "stadium": "Miami Orange Bowl",
+    "city": "Miami, FL",
+    "first": 1966,
+    "last": 1986,
+    "roof": "open",
+    "surface": "turf->grass",
+    "ingame": "PRO PLAYER STADIUM",
+    "ingame_match": "standin",
+    "note": "",
+    "needs_check": false,
+    "moved_to": "Joe Robbie Stadium / Pro Player / Dolphin / Sun Life / Hard Rock Stadium"
+   },
+   {
+    "stadium": "Joe Robbie Stadium / Pro Player / Dolphin / Sun Life / Hard Rock Stadium",
+    "city": "Miami Gardens, FL",
+    "first": 1987,
+    "last": null,
+    "roof": "open",
+    "surface": "grass",
+    "ingame": "PRO PLAYER STADIUM",
+    "ingame_match": "exact",
+    "note": "",
+    "needs_check": false,
+    "moved_to": null
+   }
+  ],
+  "patriots": [
+   {
+    "stadium": "Fenway Park",
+    "city": "Boston, MA",
+    "first": 1963,
+    "last": 1968,
+    "roof": "open",
+    "surface": "grass",
+    "ingame": "GILLETTE STADIUM",
+    "ingame_match": "standin",
+    "note": "",
+    "needs_check": true,
+    "moved_to": "Alumni Stadium (Boston College)"
+   },
+   {
+    "stadium": "Alumni Stadium (Boston College)",
+    "city": "Chestnut Hill, MA",
+    "first": 1969,
+    "last": 1969,
+    "roof": "open",
+    "surface": "grass",
+    "ingame": "GILLETTE STADIUM",
+    "ingame_match": "standin",
+    "note": "",
+    "needs_check": false,
+    "moved_to": "Harvard Stadium"
+   },
+   {
+    "stadium": "Harvard Stadium",
+    "city": "Boston, MA",
+    "first": 1970,
+    "last": 1970,
+    "roof": "open",
+    "surface": "grass",
+    "ingame": "GILLETTE STADIUM",
+    "ingame_match": "standin",
+    "note": "stopgap while Schaefer Stadium was built",
+    "needs_check": false,
+    "moved_to": "Schaefer / Sullivan / Foxboro Stadium"
+   },
+   {
+    "stadium": "Schaefer / Sullivan / Foxboro Stadium",
+    "city": "Foxborough, MA",
+    "first": 1971,
+    "last": 2001,
+    "roof": "open",
+    "surface": "turf->grass",
+    "ingame": "GILLETTE STADIUM",
+    "ingame_match": "standin",
+    "note": "renamed Sullivan 1983, Foxboro 1990; Gillette was built next door",
+    "needs_check": false,
+    "moved_to": "Gillette Stadium"
+   },
+   {
+    "stadium": "Gillette Stadium",
+    "city": "Foxborough, MA",
+    "first": 2002,
+    "last": null,
+    "roof": "open",
+    "surface": "grass->turf",
+    "ingame": "GILLETTE STADIUM",
+    "ingame_match": "exact",
+    "note": "",
+    "needs_check": false,
+    "moved_to": null
+   }
+  ],
+  "jets": [
+   {
+    "stadium": "Shea Stadium",
+    "city": "Flushing, NY",
+    "first": 1964,
+    "last": 1983,
+    "roof": "open",
+    "surface": "grass",
+    "ingame": "JETS STADIUM",
+    "ingame_match": "standin",
+    "note": "",
+    "needs_check": false,
+    "moved_to": "Giants Stadium"
+   },
+   {
+    "stadium": "Giants Stadium",
+    "city": "East Rutherford, NJ",
+    "first": 1984,
+    "last": 2009,
+    "roof": "open",
+    "surface": "turf",
+    "ingame": "JETS STADIUM",
+    "ingame_match": "exact",
+    "note": "the game ships the building twice (Giants / Jets dressing)",
+    "needs_check": false,
+    "moved_to": "MetLife Stadium"
+   },
+   {
+    "stadium": "MetLife Stadium",
+    "city": "East Rutherford, NJ",
+    "first": 2010,
+    "last": null,
+    "roof": "open",
+    "surface": "turf",
+    "ingame": "JETS STADIUM",
+    "ingame_match": "standin",
+    "note": "",
+    "needs_check": false,
+    "moved_to": null
+   }
+  ],
+  "colts": [
+   {
+    "stadium": "Memorial Stadium",
+    "city": "Baltimore, MD",
+    "first": 1953,
+    "last": 1983,
+    "roof": "open",
+    "surface": "grass",
+    "ingame": "M&T BANK STADIUM",
+    "ingame_match": "standin",
+    "note": "open-air Baltimore stand-in",
+    "needs_check": false,
+    "moved_to": "Hoosier Dome / RCA Dome"
+   },
+   {
+    "stadium": "Hoosier Dome / RCA Dome",
+    "city": "Indianapolis, IN",
+    "first": 1984,
+    "last": 2007,
+    "roof": "dome",
+    "surface": "turf",
+    "ingame": "RCA DOME",
+    "ingame_match": "exact",
+    "note": "",
+    "needs_check": false,
+    "moved_to": "Lucas Oil Stadium"
+   },
+   {
+    "stadium": "Lucas Oil Stadium",
+    "city": "Indianapolis, IN",
+    "first": 2008,
+    "last": null,
+    "roof": "retractable",
+    "surface": "turf",
+    "ingame": "RCA DOME",
+    "ingame_match": "standin",
+    "note": "",
+    "needs_check": false,
+    "moved_to": null
+   }
+  ],
+  "browns": [
+   {
+    "stadium": "Cleveland Municipal Stadium",
+    "city": "Cleveland, OH",
+    "first": 1946,
+    "last": 1995,
+    "roof": "open",
+    "surface": "grass",
+    "ingame": "CLEVELAND STADIUM",
+    "ingame_match": "standin",
+    "note": "same lakefront site as the 1999 stadium in the game",
+    "needs_check": false,
+    "moved_to": "Cleveland Browns Stadium / FirstEnergy / Huntington Bank Field"
+   },
+   {
+    "stadium": "Cleveland Browns Stadium / FirstEnergy / Huntington Bank Field",
+    "city": "Cleveland, OH",
+    "first": 1999,
+    "last": null,
+    "roof": "open",
+    "surface": "grass",
+    "ingame": "CLEVELAND STADIUM",
+    "ingame_match": "exact",
+    "note": "franchise inactive 1996-1998",
+    "needs_check": false,
+    "moved_to": null
+   }
+  ],
+  "ravens": [
+   {
+    "stadium": "Memorial Stadium",
+    "city": "Baltimore, MD",
+    "first": 1996,
+    "last": 1997,
+    "roof": "open",
+    "surface": "grass",
+    "ingame": "M&T BANK STADIUM",
+    "ingame_match": "standin",
+    "note": "",
+    "needs_check": false,
+    "moved_to": "PSINet / Ravens / M&T Bank Stadium"
+   },
+   {
+    "stadium": "PSINet / Ravens / M&T Bank Stadium",
+    "city": "Baltimore, MD",
+    "first": 1998,
+    "last": null,
+    "roof": "open",
+    "surface": "turf->grass",
+    "ingame": "M&T BANK STADIUM",
+    "ingame_match": "exact",
+    "note": "",
+    "needs_check": false,
+    "moved_to": null
+   }
+  ],
+  "steelers": [
+   {
+    "stadium": "Pitt Stadium",
+    "city": "Pittsburgh, PA",
+    "first": 1958,
+    "last": 1969,
+    "roof": "open",
+    "surface": "grass->turf",
+    "ingame": "HEINZ FIELD",
+    "ingame_match": "standin",
+    "note": "",
+    "needs_check": false,
+    "moved_to": "Three Rivers Stadium"
+   },
+   {
+    "stadium": "Three Rivers Stadium",
+    "city": "Pittsburgh, PA",
+    "first": 1970,
+    "last": 2000,
+    "roof": "open",
+    "surface": "turf",
+    "ingame": "HEINZ FIELD",
+    "ingame_match": "standin",
+    "note": "same riverfront site",
+    "needs_check": false,
+    "moved_to": "Heinz Field / Acrisure Stadium"
+   },
+   {
+    "stadium": "Heinz Field / Acrisure Stadium",
+    "city": "Pittsburgh, PA",
+    "first": 2001,
+    "last": null,
+    "roof": "open",
+    "surface": "grass",
+    "ingame": "HEINZ FIELD",
+    "ingame_match": "exact",
+    "note": "",
+    "needs_check": false,
+    "moved_to": null
+   }
+  ],
+  "bengals": [
+   {
+    "stadium": "Nippert Stadium",
+    "city": "Cincinnati, OH",
+    "first": 1968,
+    "last": 1969,
+    "roof": "open",
+    "surface": "grass",
+    "ingame": "PAUL BROWN STADIUM",
+    "ingame_match": "standin",
+    "note": "expansion team 1968",
+    "needs_check": true,
+    "moved_to": "Riverfront Stadium / Cinergy Field"
+   },
+   {
+    "stadium": "Riverfront Stadium / Cinergy Field",
+    "city": "Cincinnati, OH",
+    "first": 1970,
+    "last": 1999,
+    "roof": "open",
+    "surface": "turf",
+    "ingame": "PAUL BROWN STADIUM",
+    "ingame_match": "standin",
+    "note": "",
+    "needs_check": false,
+    "moved_to": "Paul Brown Stadium / Paycor Stadium"
+   },
+   {
+    "stadium": "Paul Brown Stadium / Paycor Stadium",
+    "city": "Cincinnati, OH",
+    "first": 2000,
+    "last": null,
+    "roof": "open",
+    "surface": "grass->turf",
+    "ingame": "PAUL BROWN STADIUM",
+    "ingame_match": "exact",
+    "note": "",
+    "needs_check": false,
+    "moved_to": null
+   }
+  ],
+  "oilers_titans": [
+   {
+    "stadium": "Rice Stadium",
+    "city": "Houston, TX",
+    "first": 1965,
+    "last": 1967,
+    "roof": "open",
+    "surface": "grass",
+    "ingame": "RELIANT STADIUM",
+    "ingame_match": "standin",
+    "note": "",
+    "needs_check": true,
+    "moved_to": "Astrodome"
+   },
+   {
+    "stadium": "Astrodome",
+    "city": "Houston, TX",
+    "first": 1968,
+    "last": 1996,
+    "roof": "dome",
+    "surface": "turf",
+    "ingame": "RELIANT STADIUM",
+    "ingame_match": "standin",
+    "note": "list gives 1970-1996 from the merger; the Oilers moved in 1968",
+    "needs_check": true,
+    "moved_to": "Liberty Bowl Memorial Stadium"
+   },
+   {
+    "stadium": "Liberty Bowl Memorial Stadium",
+    "city": "Memphis, TN",
+    "first": 1997,
+    "last": 1997,
+    "roof": "open",
+    "surface": "grass",
+    "ingame": "TITANS COLISEUM",
+    "ingame_match": "standin",
+    "note": "temporary (Tennessee Oilers)",
+    "needs_check": false,
+    "moved_to": "Vanderbilt Stadium"
+   },
+   {
+    "stadium": "Vanderbilt Stadium",
+    "city": "Nashville, TN",
+    "first": 1998,
+    "last": 1998,
+    "roof": "open",
+    "surface": "grass",
+    "ingame": "TITANS COLISEUM",
+    "ingame_match": "standin",
+    "note": "temporary",
+    "needs_check": false,
+    "moved_to": "Adelphia Coliseum / LP Field / Nissan Stadium"
+   },
+   {
+    "stadium": "Adelphia Coliseum / LP Field / Nissan Stadium",
+    "city": "Nashville, TN",
+    "first": 1999,
+    "last": null,
+    "roof": "open",
+    "surface": "grass->turf",
+    "ingame": "TITANS COLISEUM",
+    "ingame_match": "exact",
+    "note": "",
+    "needs_check": false,
+    "moved_to": null
+   }
+  ],
+  "texans": [
+   {
+    "stadium": "Reliant Stadium / NRG Stadium",
+    "city": "Houston, TX",
+    "first": 2002,
+    "last": null,
+    "roof": "retractable",
+    "surface": "grass->turf",
+    "ingame": "RELIANT STADIUM",
+    "ingame_match": "exact",
+    "note": "expansion team 2002",
+    "needs_check": false,
+    "moved_to": null
+   }
+  ],
+  "jaguars": [
+   {
+    "stadium": "Jacksonville Municipal / Alltel / EverBank Stadium",
+    "city": "Jacksonville, FL",
+    "first": 1995,
+    "last": null,
+    "roof": "open",
+    "surface": "grass",
+    "ingame": "ALLTEL STADIUM",
+    "ingame_match": "exact",
+    "note": "expansion team 1995",
+    "needs_check": false,
+    "moved_to": null
+   }
+  ],
+  "broncos": [
+   {
+    "stadium": "Bears Stadium / Mile High Stadium",
+    "city": "Denver, CO",
+    "first": 1960,
+    "last": 2000,
+    "roof": "open",
+    "surface": "grass",
+    "ingame": "INVESCO FIELD",
+    "ingame_match": "standin",
+    "note": "Invesco was built next to it",
+    "needs_check": false,
+    "moved_to": "Invesco Field at Mile High / Empower Field"
+   },
+   {
+    "stadium": "Invesco Field at Mile High / Empower Field",
+    "city": "Denver, CO",
+    "first": 2001,
+    "last": null,
+    "roof": "open",
+    "surface": "grass",
+    "ingame": "INVESCO FIELD",
+    "ingame_match": "exact",
+    "note": "",
+    "needs_check": false,
+    "moved_to": null
+   }
+  ],
+  "chiefs": [
+   {
+    "stadium": "Kansas City Municipal Stadium",
+    "city": "Kansas City, MO",
+    "first": 1963,
+    "last": 1971,
+    "roof": "open",
+    "surface": "grass",
+    "ingame": "ARROWHEAD STADIUM",
+    "ingame_match": "standin",
+    "note": "",
+    "needs_check": false,
+    "moved_to": "Arrowhead Stadium"
+   },
+   {
+    "stadium": "Arrowhead Stadium",
+    "city": "Kansas City, MO",
+    "first": 1972,
+    "last": null,
+    "roof": "open",
+    "surface": "turf->grass",
+    "ingame": "ARROWHEAD STADIUM",
+    "ingame_match": "exact",
+    "note": "",
+    "needs_check": false,
+    "moved_to": null
+   }
+  ],
+  "raiders": [
+   {
+    "stadium": "Oakland-Alameda County Coliseum",
+    "city": "Oakland, CA",
+    "first": 1966,
+    "last": 1981,
+    "roof": "open",
+    "surface": "grass",
+    "ingame": "NETWORK ASSOCIATES",
+    "ingame_match": "exact",
+    "note": "",
+    "needs_check": false,
+    "moved_to": "Los Angeles Memorial Coliseum"
+   },
+   {
+    "stadium": "Los Angeles Memorial Coliseum",
+    "city": "Los Angeles, CA",
+    "first": 1982,
+    "last": 1994,
+    "roof": "open",
+    "surface": "grass",
+    "ingame": "QUALCOMM STADIUM",
+    "ingame_match": "standin",
+    "note": "large open bowl stand-in",
+    "needs_check": false,
+    "moved_to": "Oakland-Alameda County Coliseum (Network Associates, McAfee, ...)"
+   },
+   {
+    "stadium": "Oakland-Alameda County Coliseum (Network Associates, McAfee, ...)",
+    "city": "Oakland, CA",
+    "first": 1995,
+    "last": 2019,
+    "roof": "open",
+    "surface": "grass",
+    "ingame": "NETWORK ASSOCIATES",
+    "ingame_match": "exact",
+    "note": "Mt. Davis added 1996 (the game shows it)",
+    "needs_check": false,
+    "moved_to": "Allegiant Stadium"
+   },
+   {
+    "stadium": "Allegiant Stadium",
+    "city": "Paradise, NV",
+    "first": 2020,
+    "last": null,
+    "roof": "skylight",
+    "surface": "grass",
+    "ingame": "RELIANT STADIUM",
+    "ingame_match": "standin",
+    "note": "closed-roof stand-in (the mod tools have an Allegiant model)",
+    "needs_check": false,
+    "moved_to": null
+   }
+  ],
+  "chargers": [
+   {
+    "stadium": "San Diego Stadium / Jack Murphy / Qualcomm Stadium",
+    "city": "San Diego, CA",
+    "first": 1967,
+    "last": 2016,
+    "roof": "open",
+    "surface": "grass",
+    "ingame": "QUALCOMM STADIUM",
+    "ingame_match": "exact",
+    "note": "",
+    "needs_check": false,
+    "moved_to": "StubHub Center / Dignity Health Sports Park"
+   },
+   {
+    "stadium": "StubHub Center / Dignity Health Sports Park",
+    "city": "Carson, CA",
+    "first": 2017,
+    "last": 2019,
+    "roof": "open",
+    "surface": "grass",
+    "ingame": "QUALCOMM STADIUM",
+    "ingame_match": "standin",
+    "note": "temporary, 27,000 seats",
+    "needs_check": false,
+    "moved_to": "SoFi Stadium"
+   },
+   {
+    "stadium": "SoFi Stadium",
+    "city": "Inglewood, CA",
+    "first": 2020,
+    "last": null,
+    "roof": "skylight",
+    "surface": "turf",
+    "ingame": "RELIANT STADIUM",
+    "ingame_match": "standin",
+    "note": "closed-roof stand-in",
+    "needs_check": false,
+    "moved_to": null
+   }
+  ],
+  "seahawks": [
+   {
+    "stadium": "Kingdome",
+    "city": "Seattle, WA",
+    "first": 1976,
+    "last": 1999,
+    "roof": "dome",
+    "surface": "turf",
+    "ingame": "EDWARD JONES DOME",
+    "ingame_match": "standin",
+    "note": "expansion team 1976",
+    "needs_check": false,
+    "moved_to": "Husky Stadium"
+   },
+   {
+    "stadium": "Husky Stadium",
+    "city": "Seattle, WA",
+    "first": 2000,
+    "last": 2001,
+    "roof": "open",
+    "surface": "turf",
+    "ingame": "QWEST FIELD",
+    "ingame_match": "standin",
+    "note": "temporary",
+    "needs_check": false,
+    "moved_to": "Seahawks Stadium / Qwest Field / CenturyLink / Lumen Field"
+   },
+   {
+    "stadium": "Seahawks Stadium / Qwest Field / CenturyLink / Lumen Field",
+    "city": "Seattle, WA",
+    "first": 2002,
+    "last": null,
+    "roof": "open",
+    "surface": "turf",
+    "ingame": "QWEST FIELD",
+    "ingame_match": "exact",
+    "note": "",
+    "needs_check": false,
+    "moved_to": null
+   }
+  ],
+  "cowboys": [
+   {
+    "stadium": "Cotton Bowl",
+    "city": "Dallas, TX",
+    "first": 1960,
+    "last": 1971,
+    "roof": "open",
+    "surface": "grass",
+    "ingame": "TEXAS STADIUM",
+    "ingame_match": "standin",
+    "note": "first 1971 home games here; Texas Stadium opened 1971-10-24",
+    "needs_check": false,
+    "moved_to": "Texas Stadium"
+   },
+   {
+    "stadium": "Texas Stadium",
+    "city": "Irving, TX",
+    "first": 1971,
+    "last": 2008,
+    "roof": "open roof hole",
+    "surface": "turf",
+    "ingame": "TEXAS STADIUM",
+    "ingame_match": "exact",
+    "note": "from 1971-10-24",
+    "needs_check": false,
+    "moved_to": "Cowboys Stadium / AT&T Stadium"
+   },
+   {
+    "stadium": "Cowboys Stadium / AT&T Stadium",
+    "city": "Arlington, TX",
+    "first": 2009,
+    "last": null,
+    "roof": "retractable",
+    "surface": "turf",
+    "ingame": "RELIANT STADIUM",
+    "ingame_match": "standin",
+    "note": "retractable-roof stand-in",
+    "needs_check": false,
+    "moved_to": null
+   }
+  ],
+  "giants": [
+   {
+    "stadium": "Yankee Stadium",
+    "city": "Bronx, NY",
+    "first": 1956,
+    "last": 1973,
+    "roof": "open",
+    "surface": "grass",
+    "ingame": "GIANTS STADIUM",
+    "ingame_match": "standin",
+    "note": "left mid-1973",
+    "needs_check": false,
+    "moved_to": "Yale Bowl"
+   },
+   {
+    "stadium": "Yale Bowl",
+    "city": "New Haven, CT",
+    "first": 1973,
+    "last": 1974,
+    "roof": "open",
+    "surface": "grass",
+    "ingame": "GIANTS STADIUM",
+    "ingame_match": "standin",
+    "note": "temporary: last 1973 games and 1974",
+    "needs_check": false,
+    "moved_to": "Shea Stadium"
+   },
+   {
+    "stadium": "Shea Stadium",
+    "city": "Flushing, NY",
+    "first": 1975,
+    "last": 1975,
+    "roof": "open",
+    "surface": "grass",
+    "ingame": "JETS STADIUM",
+    "ingame_match": "standin",
+    "note": "temporary",
+    "needs_check": false,
+    "moved_to": "Giants Stadium"
+   },
+   {
+    "stadium": "Giants Stadium",
+    "city": "East Rutherford, NJ",
+    "first": 1976,
+    "last": 2009,
+    "roof": "open",
+    "surface": "turf",
+    "ingame": "GIANTS STADIUM",
+    "ingame_match": "exact",
+    "note": "from 1976-10-10 (week 5)",
+    "needs_check": false,
+    "moved_to": "MetLife Stadium"
+   },
+   {
+    "stadium": "MetLife Stadium",
+    "city": "East Rutherford, NJ",
+    "first": 2010,
+    "last": null,
+    "roof": "open",
+    "surface": "turf",
+    "ingame": "GIANTS STADIUM",
+    "ingame_match": "standin",
+    "note": "",
+    "needs_check": false,
+    "moved_to": null
+   }
+  ],
+  "eagles": [
+   {
+    "stadium": "Franklin Field",
+    "city": "Philadelphia, PA",
+    "first": 1958,
+    "last": 1970,
+    "roof": "open",
+    "surface": "grass->turf",
+    "ingame": "LINCOLN FINANCIAL FIELD",
+    "ingame_match": "standin",
+    "note": "",
+    "needs_check": false,
+    "moved_to": "Veterans Stadium"
+   },
+   {
+    "stadium": "Veterans Stadium",
+    "city": "Philadelphia, PA",
+    "first": 1971,
+    "last": 2002,
+    "roof": "open",
+    "surface": "turf",
+    "ingame": "LINCOLN FINANCIAL FIELD",
+    "ingame_match": "standin",
+    "note": "",
+    "needs_check": false,
+    "moved_to": "Lincoln Financial Field"
+   },
+   {
+    "stadium": "Lincoln Financial Field",
+    "city": "Philadelphia, PA",
+    "first": 2003,
+    "last": null,
+    "roof": "open",
+    "surface": "grass",
+    "ingame": "LINCOLN FINANCIAL FIELD",
+    "ingame_match": "exact",
+    "note": "",
+    "needs_check": false,
+    "moved_to": null
+   }
+  ],
+  "washington": [
+   {
+    "stadium": "D.C. Stadium / RFK Stadium",
+    "city": "Washington, DC",
+    "first": 1961,
+    "last": 1996,
+    "roof": "open",
+    "surface": "grass->turf->grass",
+    "ingame": "WASHINGTON FIELD",
+    "ingame_match": "standin",
+    "note": "",
+    "needs_check": false,
+    "moved_to": "Jack Kent Cooke / FedExField / Northwest Stadium"
+   },
+   {
+    "stadium": "Jack Kent Cooke / FedExField / Northwest Stadium",
+    "city": "Landover, MD",
+    "first": 1997,
+    "last": null,
+    "roof": "open",
+    "surface": "grass",
+    "ingame": "WASHINGTON FIELD",
+    "ingame_match": "exact",
+    "note": "",
+    "needs_check": false,
+    "moved_to": null
+   }
+  ],
+  "cardinals": [
+   {
+    "stadium": "Busch Memorial Stadium",
+    "city": "St. Louis, MO",
+    "first": 1966,
+    "last": 1987,
+    "roof": "open",
+    "surface": "grass->turf",
+    "ingame": "ARROWHEAD STADIUM",
+    "ingame_match": "standin",
+    "note": "open-air Midwest stand-in",
+    "needs_check": false,
+    "moved_to": "Sun Devil Stadium"
+   },
+   {
+    "stadium": "Sun Devil Stadium",
+    "city": "Tempe, AZ",
+    "first": 1988,
+    "last": 2005,
+    "roof": "open",
+    "surface": "grass",
+    "ingame": "ARIZONA STADIUM",
+    "ingame_match": "exact",
+    "note": "",
+    "needs_check": false,
+    "moved_to": "University of Phoenix / State Farm Stadium"
+   },
+   {
+    "stadium": "University of Phoenix / State Farm Stadium",
+    "city": "Glendale, AZ",
+    "first": 2006,
+    "last": null,
+    "roof": "retractable",
+    "surface": "grass",
+    "ingame": "RELIANT STADIUM",
+    "ingame_match": "standin",
+    "note": "retractable-roof stand-in",
+    "needs_check": false,
+    "moved_to": null
+   }
+  ],
+  "bears": [
+   {
+    "stadium": "Wrigley Field",
+    "city": "Chicago, IL",
+    "first": 1921,
+    "last": 1970,
+    "roof": "open",
+    "surface": "grass",
+    "ingame": "CHICAGO FIELD",
+    "ingame_match": "standin",
+    "note": "last game 1970-12-13",
+    "needs_check": false,
+    "moved_to": "Soldier Field"
+   },
+   {
+    "stadium": "Soldier Field",
+    "city": "Chicago, IL",
+    "first": 1971,
+    "last": 2001,
+    "roof": "open",
+    "surface": "turf->grass",
+    "ingame": "CHICAGO FIELD",
+    "ingame_match": "standin",
+    "note": "pre-2003 bowl; the game shows the renovated one",
+    "needs_check": false,
+    "moved_to": "Memorial Stadium (Champaign)"
+   },
+   {
+    "stadium": "Memorial Stadium (Champaign)",
+    "city": "Champaign, IL",
+    "first": 2002,
+    "last": 2002,
+    "roof": "open",
+    "surface": "grass",
+    "ingame": "CHICAGO FIELD",
+    "ingame_match": "standin",
+    "note": "temporary",
+    "needs_check": false,
+    "moved_to": "Soldier Field (renovated)"
+   },
+   {
+    "stadium": "Soldier Field (renovated)",
+    "city": "Chicago, IL",
+    "first": 2003,
+    "last": null,
+    "roof": "open",
+    "surface": "grass",
+    "ingame": "CHICAGO FIELD",
+    "ingame_match": "exact",
+    "note": "",
+    "needs_check": false,
+    "moved_to": null
+   }
+  ],
+  "lions": [
+   {
+    "stadium": "Tiger Stadium",
+    "city": "Detroit, MI",
+    "first": 1938,
+    "last": 1974,
+    "roof": "open",
+    "surface": "grass",
+    "ingame": "CLEVELAND STADIUM",
+    "ingame_match": "standin",
+    "note": "open-air Great Lakes stand-in (Ford Field is a dome)",
+    "needs_check": false,
+    "moved_to": "Pontiac Silverdome"
+   },
+   {
+    "stadium": "Pontiac Silverdome",
+    "city": "Pontiac, MI",
+    "first": 1975,
+    "last": 2001,
+    "roof": "dome",
+    "surface": "turf",
+    "ingame": "FORD FIELD",
+    "ingame_match": "standin",
+    "note": "",
+    "needs_check": false,
+    "moved_to": "Ford Field"
+   },
+   {
+    "stadium": "Ford Field",
+    "city": "Detroit, MI",
+    "first": 2002,
+    "last": null,
+    "roof": "dome",
+    "surface": "turf",
+    "ingame": "FORD FIELD",
+    "ingame_match": "exact",
+    "note": "",
+    "needs_check": false,
+    "moved_to": null
+   }
+  ],
+  "packers": [
+   {
+    "stadium": "Lambeau Field (City Stadium)",
+    "city": "Green Bay, WI",
+    "first": 1957,
+    "last": null,
+    "roof": "open",
+    "surface": "grass",
+    "ingame": "LAMBEAU FIELD",
+    "ingame_match": "exact",
+    "note": "plus 1-3 games a year at Milwaukee County Stadium through 1994",
+    "needs_check": false,
+    "moved_to": null
+   }
+  ],
+  "vikings": [
+   {
+    "stadium": "Metropolitan Stadium",
+    "city": "Bloomington, MN",
+    "first": 1961,
+    "last": 1981,
+    "roof": "open",
+    "surface": "grass",
+    "ingame": "LAMBEAU FIELD",
+    "ingame_match": "standin",
+    "note": "open-air northern stand-in",
+    "needs_check": false,
+    "moved_to": "Hubert H. Humphrey Metrodome"
+   },
+   {
+    "stadium": "Hubert H. Humphrey Metrodome",
+    "city": "Minneapolis, MN",
+    "first": 1982,
+    "last": 2013,
+    "roof": "dome",
+    "surface": "turf",
+    "ingame": "H. H. H. METRODOME",
+    "ingame_match": "exact",
+    "note": "",
+    "needs_check": false,
+    "moved_to": "TCF Bank Stadium"
+   },
+   {
+    "stadium": "TCF Bank Stadium",
+    "city": "Minneapolis, MN",
+    "first": 2014,
+    "last": 2015,
+    "roof": "open",
+    "surface": "turf",
+    "ingame": "LAMBEAU FIELD",
+    "ingame_match": "standin",
+    "note": "temporary",
+    "needs_check": false,
+    "moved_to": "U.S. Bank Stadium"
+   },
+   {
+    "stadium": "U.S. Bank Stadium",
+    "city": "Minneapolis, MN",
+    "first": 2016,
+    "last": null,
+    "roof": "skylight",
+    "surface": "turf",
+    "ingame": "H. H. H. METRODOME",
+    "ingame_match": "standin",
+    "note": "",
+    "needs_check": false,
+    "moved_to": null
+   }
+  ],
+  "buccaneers": [
+   {
+    "stadium": "Tampa Stadium",
+    "city": "Tampa, FL",
+    "first": 1976,
+    "last": 1997,
+    "roof": "open",
+    "surface": "grass",
+    "ingame": "TAMPA BAY STADIUM",
+    "ingame_match": "standin",
+    "note": "expansion team 1976; Raymond James was built next door",
+    "needs_check": false,
+    "moved_to": "Raymond James Stadium"
+   },
+   {
+    "stadium": "Raymond James Stadium",
+    "city": "Tampa, FL",
+    "first": 1998,
+    "last": null,
+    "roof": "open",
+    "surface": "grass",
+    "ingame": "TAMPA BAY STADIUM",
+    "ingame_match": "exact",
+    "note": "",
+    "needs_check": false,
+    "moved_to": null
+   }
+  ],
+  "falcons": [
+   {
+    "stadium": "Atlanta Stadium / Atlanta-Fulton County Stadium",
+    "city": "Atlanta, GA",
+    "first": 1966,
+    "last": 1991,
+    "roof": "open",
+    "surface": "grass",
+    "ingame": "ARROWHEAD STADIUM",
+    "ingame_match": "standin",
+    "note": "open-air stand-in",
+    "needs_check": false,
+    "moved_to": "Georgia Dome"
+   },
+   {
+    "stadium": "Georgia Dome",
+    "city": "Atlanta, GA",
+    "first": 1992,
+    "last": 2016,
+    "roof": "dome",
+    "surface": "turf",
+    "ingame": "GEORGIA DOME",
+    "ingame_match": "exact",
+    "note": "",
+    "needs_check": false,
+    "moved_to": "Mercedes-Benz Stadium"
+   },
+   {
+    "stadium": "Mercedes-Benz Stadium",
+    "city": "Atlanta, GA",
+    "first": 2017,
+    "last": null,
+    "roof": "retractable",
+    "surface": "turf",
+    "ingame": "GEORGIA DOME",
+    "ingame_match": "standin",
+    "note": "the mod tools have a Mercedes-Benz model",
+    "needs_check": false,
+    "moved_to": null
+   }
+  ],
+  "panthers": [
+   {
+    "stadium": "Memorial Stadium (Clemson)",
+    "city": "Clemson, SC",
+    "first": 1995,
+    "last": 1995,
+    "roof": "open",
+    "surface": "grass",
+    "ingame": "B OF A STADIUM",
+    "ingame_match": "standin",
+    "note": "temporary, first season",
+    "needs_check": false,
+    "moved_to": "Ericsson / Bank of America Stadium"
+   },
+   {
+    "stadium": "Ericsson / Bank of America Stadium",
+    "city": "Charlotte, NC",
+    "first": 1996,
+    "last": null,
+    "roof": "open",
+    "surface": "grass->turf",
+    "ingame": "B OF A STADIUM",
+    "ingame_match": "exact",
+    "note": "",
+    "needs_check": false,
+    "moved_to": null
+   }
+  ],
+  "saints": [
+   {
+    "stadium": "Tulane Stadium",
+    "city": "New Orleans, LA",
+    "first": 1967,
+    "last": 1974,
+    "roof": "open",
+    "surface": "grass->turf",
+    "ingame": "LOUISIANA SUPER DOME",
+    "ingame_match": "standin",
+    "note": "expansion team 1967; open-air",
+    "needs_check": false,
+    "moved_to": "Louisiana Superdome / Caesars Superdome"
+   },
+   {
+    "stadium": "Louisiana Superdome / Caesars Superdome",
+    "city": "New Orleans, LA",
+    "first": 1975,
+    "last": null,
+    "roof": "dome",
+    "surface": "turf",
+    "ingame": "LOUISIANA SUPER DOME",
+    "ingame_match": "exact",
+    "note": "2005: displaced by Hurricane Katrina",
+    "needs_check": false,
+    "moved_to": "Alamodome / Tiger Stadium (LSU) / Giants Stadium"
+   },
+   {
+    "stadium": "Alamodome / Tiger Stadium (LSU) / Giants Stadium",
+    "city": "San Antonio / Baton Rouge / East Rutherford",
+    "first": 2005,
+    "last": 2005,
+    "roof": "mixed",
+    "surface": "mixed",
+    "ingame": "LOUISIANA SUPER DOME",
+    "ingame_match": "standin",
+    "note": "2005 only: home games split after Katrina (one at Giants Stadium)",
+    "needs_check": true,
+    "moved_to": null
+   }
+  ],
+  "rams": [
+   {
+    "stadium": "Los Angeles Memorial Coliseum",
+    "city": "Los Angeles, CA",
+    "first": 1946,
+    "last": 1979,
+    "roof": "open",
+    "surface": "grass",
+    "ingame": "QUALCOMM STADIUM",
+    "ingame_match": "standin",
+    "note": "",
+    "needs_check": false,
+    "moved_to": "Anaheim Stadium"
+   },
+   {
+    "stadium": "Anaheim Stadium",
+    "city": "Anaheim, CA",
+    "first": 1980,
+    "last": 1994,
+    "roof": "open",
+    "surface": "grass",
+    "ingame": "QUALCOMM STADIUM",
+    "ingame_match": "standin",
+    "note": "",
+    "needs_check": false,
+    "moved_to": "Busch Memorial Stadium"
+   },
+   {
+    "stadium": "Busch Memorial Stadium",
+    "city": "St. Louis, MO",
+    "first": 1995,
+    "last": 1995,
+    "roof": "open",
+    "surface": "turf",
+    "ingame": "EDWARD JONES DOME",
+    "ingame_match": "standin",
+    "note": "part of 1995 while the dome was finished",
+    "needs_check": false,
+    "moved_to": "Trans World Dome / Edward Jones Dome"
+   },
+   {
+    "stadium": "Trans World Dome / Edward Jones Dome",
+    "city": "St. Louis, MO",
+    "first": 1995,
+    "last": 2015,
+    "roof": "dome",
+    "surface": "turf",
+    "ingame": "EDWARD JONES DOME",
+    "ingame_match": "exact",
+    "note": "",
+    "needs_check": false,
+    "moved_to": "Los Angeles Memorial Coliseum"
+   },
+   {
+    "stadium": "Los Angeles Memorial Coliseum",
+    "city": "Los Angeles, CA",
+    "first": 2016,
+    "last": 2019,
+    "roof": "open",
+    "surface": "grass",
+    "ingame": "QUALCOMM STADIUM",
+    "ingame_match": "standin",
+    "note": "temporary",
+    "needs_check": false,
+    "moved_to": "SoFi Stadium"
+   },
+   {
+    "stadium": "SoFi Stadium",
+    "city": "Inglewood, CA",
+    "first": 2020,
+    "last": null,
+    "roof": "skylight",
+    "surface": "turf",
+    "ingame": "RELIANT STADIUM",
+    "ingame_match": "standin",
+    "note": "closed-roof stand-in",
+    "needs_check": false,
+    "moved_to": null
+   }
+  ],
+  "49ers": [
+   {
+    "stadium": "Kezar Stadium",
+    "city": "San Francisco, CA",
+    "first": 1946,
+    "last": 1970,
+    "roof": "open",
+    "surface": "grass",
+    "ingame": "SAN FRANCISCO PARK",
+    "ingame_match": "standin",
+    "note": "",
+    "needs_check": false,
+    "moved_to": "Candlestick Park / 3Com Park / Monster Park"
+   },
+   {
+    "stadium": "Candlestick Park / 3Com Park / Monster Park",
+    "city": "San Francisco, CA",
+    "first": 1971,
+    "last": 2013,
+    "roof": "open",
+    "surface": "grass",
+    "ingame": "SAN FRANCISCO PARK",
+    "ingame_match": "exact",
+    "note": "",
+    "needs_check": false,
+    "moved_to": "Levi's Stadium"
+   },
+   {
+    "stadium": "Levi's Stadium",
+    "city": "Santa Clara, CA",
+    "first": 2014,
+    "last": null,
+    "roof": "open",
+    "surface": "grass",
+    "ingame": "SAN FRANCISCO PARK",
+    "ingame_match": "standin",
+    "note": "",
+    "needs_check": false,
+    "moved_to": null
+   }
+  ]
+ }
+}
