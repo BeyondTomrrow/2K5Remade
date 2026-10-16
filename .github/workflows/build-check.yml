@@ -45,7 +45,7 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build libssl-dev libepoxy-dev libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev libxfixes-dev libxss-dev libwayland-dev libxkbcommon-dev
+          sudo apt-get install -y ninja-build libssl-dev libepoxy-dev libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev libxfixes-dev libxss-dev libwayland-dev libxkbcommon-dev mesa-vulkan-drivers libvulkan1
 
       - name: Check out pinned SDL3 source (3.2.20)
         uses: actions/checkout@v4
@@ -80,6 +80,13 @@ jobs:
           cmake -S external/xboxrecomp/tests/renderer_staging -B build-renderer -G Ninja -DCMAKE_PREFIX_PATH="${{ github.workspace }}/dependencies/sdl3-sdk"
           cmake --build build-renderer
           ctest --test-dir build-renderer --output-on-failure
+          cmake -S external/xboxrecomp/tests/apu_mmio_decode_posix -B build-apu-decode -G Ninja
+          cmake --build build-apu-decode
+          ctest --test-dir build-apu-decode --output-on-failure
+          # SDL3 GPU renderer on Mesa's software Vulkan (lavapipe)
+          cmake -S external/xboxrecomp/tests/sdlgpu_posix -B build-sdlgpu -G Ninja -DCMAKE_PREFIX_PATH="${{ github.workspace }}/dependencies/sdl3-sdk"
+          cmake --build build-sdlgpu
+          LD_LIBRARY_PATH="${{ github.workspace }}/dependencies/sdl3-sdk/lib" ctest --test-dir build-sdlgpu --output-on-failure
 
       - name: Build Linux runtime (no game)
         run: cmake --build build --parallel
