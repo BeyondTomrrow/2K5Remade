@@ -45,7 +45,7 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build libssl-dev libepoxy-dev libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev libxfixes-dev libxss-dev libwayland-dev libxkbcommon-dev mesa-vulkan-drivers libvulkan1
+          sudo apt-get install -y ninja-build libssl-dev libepoxy-dev libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev libxfixes-dev libxss-dev libwayland-dev libxkbcommon-dev mesa-vulkan-drivers libvulkan1 glslang-tools
 
       - name: Check out pinned SDL3 source (3.2.20)
         uses: actions/checkout@v4

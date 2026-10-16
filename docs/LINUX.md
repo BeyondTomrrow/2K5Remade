@@ -41,6 +41,15 @@ defaulted on keeps them OFF in its cache; reconfigure it with
       -DNFL2K5_FORCE_UNBLOCK_33660_DRAIN=ON -DNFL2K5_FORCE_UNBLOCK_NETPOLL=ON \
       -DNFL2K5_FORCE_UNBLOCK_STATE9_READY=ON
 
+## Hardware rendering (in progress)
+
+`RECOMP_SDLGPU=1 tools/run-linux.sh` turns on the SDL3 GPU renderer
+(Vulkan). It currently draws the 2D layers (menus, HUD, text) and leaves 3D
+to the software rasterizer; design and status in
+`external/xboxrecomp/docs/sdl-gpu-renderer.md`. Building it needs
+`glslang` (`sudo pacman -S glslang`); without it the build still works and
+the renderer reports itself unavailable.
+
 ## Game files
 
 Put your extracted disc in `original/` (it must contain `default.xbe` and
