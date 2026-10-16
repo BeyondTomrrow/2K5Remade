@@ -1,0 +1,13 @@
+{
+  "name": "FRANKLIN FIELD",
+  "display": "Franklin Field",
+  "location": "Philadelphia, PA",
+  "code": "s63",
+  "clone": "Lincoln Financial Field",
+  "host": "Dream Superdome",
+  "capacity": 60546,
+  "indoor": 0,
+  "grass": 1,
+  "nfl": "Eagles 1958-1970",
+  "source": "NCAA Football 07 Franklin Field (STAD.SRES 94, PENNSY); tools/eras/stadiums/ncaa_stadiums.py"
+}

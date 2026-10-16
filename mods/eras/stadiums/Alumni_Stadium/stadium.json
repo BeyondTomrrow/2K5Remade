@@ -1,0 +1,13 @@
+{
+  "name": "ALUMNI STADIUM",
+  "display": "Alumni Stadium",
+  "location": "Chestnut Hill, MA",
+  "code": "s66",
+  "clone": "Gillette Stadium",
+  "host": "Metro Field",
+  "capacity": 26000,
+  "indoor": 0,
+  "grass": 1,
+  "nfl": "Patriots 1969",
+  "source": "NCAA Football 07 Alumni Stadium (STAD.SRES 17, BOSTON); tools/eras/stadiums/ncaa_stadiums.py"
+}

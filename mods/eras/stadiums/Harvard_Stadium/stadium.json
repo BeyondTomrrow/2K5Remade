@@ -1,0 +1,13 @@
+{
+  "name": "HARVARD STADIUM",
+  "display": "Harvard Stadium",
+  "location": "Boston, MA",
+  "code": "s65",
+  "clone": "Gillette Stadium",
+  "host": "Atomic Dome",
+  "capacity": 40000,
+  "indoor": 0,
+  "grass": 1,
+  "nfl": "Patriots 1970",
+  "source": "NCAA Football 07 Harvard Stadium (STAD.SRES 43, HARVAR; EA's generic small-bowl model); tools/eras/stadiums/ncaa_stadiums.py"
+}

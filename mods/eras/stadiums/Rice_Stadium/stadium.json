@@ -1,0 +1,13 @@
+{
+  "name": "RICE STADIUM",
+  "display": "Rice Stadium",
+  "location": "Houston, TX",
+  "code": "s68",
+  "clone": "Tampa Bay Stadium",
+  "host": "Axe Superdome",
+  "capacity": 70000,
+  "indoor": 0,
+  "grass": 1,
+  "nfl": "Oilers 1965-1967",
+  "source": "NCAA Football 07 Rice Stadium (STAD.SRES 99, RICEXX); tools/eras/stadiums/ncaa_stadiums.py"
+}

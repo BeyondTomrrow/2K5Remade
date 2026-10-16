@@ -1,0 +1,13 @@
+{
+  "name": "MIAMI ORANGE BOWL",
+  "display": "Miami Orange Bowl",
+  "location": "Miami, FL",
+  "code": "s61",
+  "clone": "Pro Player Stadium",
+  "host": "Electra Coliseum",
+  "capacity": 75000,
+  "indoor": 0,
+  "grass": 1,
+  "nfl": "Dolphins 1966-1986",
+  "source": "NCAA Football 07 Miami Stadium (STAD.SRES 63, MIAMFL); tools/eras/stadiums/ncaa_stadiums.py"
+}

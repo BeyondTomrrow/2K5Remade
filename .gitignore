@@ -54,3 +54,6 @@ mods/eras/office/files/
 # My NFL Eras: art extracted from the player's disc or supplied by the user (never commit)
 mods/eras/teams/**/*.png
 mods/eras/teams/**/*.jpg
+# My NFL Eras stadium packs: bundles and previews built from the player's NFL 2K5 / NCAA 07 discs (never commit)
+/data/eras/stadiums/
+mods/eras/stadiums/*/files/

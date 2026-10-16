@@ -22,6 +22,7 @@
     "surface": "grass->turf",
     "ingame": "RALPH WILSON STADIUM",
     "ingame_match": "standin",
+    "fallback": null,
     "note": "the \"Rockpile\"",
     "needs_check": false,
     "moved_to": "Rich Stadium / Ralph Wilson Stadium / New Era Field / Bills Stadium / Highmark Stadium (old)"
@@ -35,6 +36,7 @@
     "surface": "turf",
     "ingame": "RALPH WILSON STADIUM",
     "ingame_match": "exact",
+    "fallback": null,
     "note": "replaced by the new Highmark Stadium in 2026",
     "needs_check": false,
     "moved_to": null
@@ -48,9 +50,10 @@
     "last": 1986,
     "roof": "open",
     "surface": "turf->grass",
-    "ingame": "PRO PLAYER STADIUM",
-    "ingame_match": "standin",
-    "note": "",
+    "ingame": "MIAMI ORANGE BOWL",
+    "ingame_match": "exact",
+    "fallback": "PRO PLAYER STADIUM",
+    "note": "Eras stadium pack (NCAA Football 07 model); falls back to PRO PLAYER STADIUM",
     "needs_check": false,
     "moved_to": "Joe Robbie Stadium / Pro Player / Dolphin / Sun Life / Hard Rock Stadium"
    },
@@ -63,6 +66,7 @@
     "surface": "grass",
     "ingame": "PRO PLAYER STADIUM",
     "ingame_match": "exact",
+    "fallback": null,
     "note": "",
     "needs_check": false,
     "moved_to": null
@@ -78,6 +82,7 @@
     "surface": "grass",
     "ingame": "GILLETTE STADIUM",
     "ingame_match": "standin",
+    "fallback": null,
     "note": "",
     "needs_check": true,
     "moved_to": "Alumni Stadium (Boston College)"
@@ -89,9 +94,10 @@
     "last": 1969,
     "roof": "open",
     "surface": "grass",
-    "ingame": "GILLETTE STADIUM",
-    "ingame_match": "standin",
-    "note": "",
+    "ingame": "ALUMNI STADIUM",
+    "ingame_match": "exact",
+    "fallback": "GILLETTE STADIUM",
+    "note": "Eras stadium pack (NCAA Football 07 model); falls back to GILLETTE STADIUM",
     "needs_check": false,
     "moved_to": "Harvard Stadium"
    },
@@ -102,9 +108,10 @@
     "last": 1970,
     "roof": "open",
     "surface": "grass",
-    "ingame": "GILLETTE STADIUM",
-    "ingame_match": "standin",
-    "note": "stopgap while Schaefer Stadium was built",
+    "ingame": "HARVARD STADIUM",
+    "ingame_match": "exact",
+    "fallback": "GILLETTE STADIUM",
+    "note": "stopgap while Schaefer Stadium was built; Eras stadium pack (NCAA Football 07 model); falls back to GILLETTE STADIUM",
     "needs_check": false,
     "moved_to": "Schaefer / Sullivan / Foxboro Stadium"
    },
@@ -117,6 +124,7 @@
     "surface": "turf->grass",
     "ingame": "GILLETTE STADIUM",
     "ingame_match": "standin",
+    "fallback": null,
     "note": "renamed Sullivan 1983, Foxboro 1990; Gillette was built next door",
     "needs_check": false,
     "moved_to": "Gillette Stadium"
@@ -130,6 +138,7 @@
     "surface": "grass->turf",
     "ingame": "GILLETTE STADIUM",
     "ingame_match": "exact",
+    "fallback": null,
     "note": "",
     "needs_check": false,
     "moved_to": null
@@ -145,6 +154,7 @@
     "surface": "grass",
     "ingame": "JETS STADIUM",
     "ingame_match": "standin",
+    "fallback": null,
     "note": "",
     "needs_check": false,
     "moved_to": "Giants Stadium"
@@ -158,6 +168,7 @@
     "surface": "turf",
     "ingame": "JETS STADIUM",
     "ingame_match": "exact",
+    "fallback": null,
     "note": "the game ships the building twice (Giants / Jets dressing)",
     "needs_check": false,
     "moved_to": "MetLife Stadium"
@@ -171,6 +182,7 @@
     "surface": "turf",
     "ingame": "JETS STADIUM",
     "ingame_match": "standin",
+    "fallback": null,
     "note": "",
     "needs_check": false,
     "moved_to": null
@@ -186,6 +198,7 @@
     "surface": "grass",
     "ingame": "M&T BANK STADIUM",
     "ingame_match": "standin",
+    "fallback": null,
     "note": "open-air Baltimore stand-in",
     "needs_check": false,
     "moved_to": "Hoosier Dome / RCA Dome"
@@ -199,6 +212,7 @@
     "surface": "turf",
     "ingame": "RCA DOME",
     "ingame_match": "exact",
+    "fallback": null,
     "note": "",
     "needs_check": false,
     "moved_to": "Lucas Oil Stadium"
@@ -212,6 +226,7 @@
     "surface": "turf",
     "ingame": "RCA DOME",
     "ingame_match": "standin",
+    "fallback": null,
     "note": "",
     "needs_check": false,
     "moved_to": null
@@ -227,6 +242,7 @@
     "surface": "grass",
     "ingame": "CLEVELAND STADIUM",
     "ingame_match": "standin",
+    "fallback": null,
     "note": "same lakefront site as the 1999 stadium in the game",
     "needs_check": false,
     "moved_to": "Cleveland Browns Stadium / FirstEnergy / Huntington Bank Field"
@@ -240,6 +256,7 @@
     "surface": "grass",
     "ingame": "CLEVELAND STADIUM",
     "ingame_match": "exact",
+    "fallback": null,
     "note": "franchise inactive 1996-1998",
     "needs_check": false,
     "moved_to": null
@@ -255,6 +272,7 @@
     "surface": "grass",
     "ingame": "M&T BANK STADIUM",
     "ingame_match": "standin",
+    "fallback": null,
     "note": "",
     "needs_check": false,
     "moved_to": "PSINet / Ravens / M&T Bank Stadium"
@@ -268,6 +286,7 @@
     "surface": "turf->grass",
     "ingame": "M&T BANK STADIUM",
     "ingame_match": "exact",
+    "fallback": null,
     "note": "",
     "needs_check": false,
     "moved_to": null
@@ -283,6 +302,7 @@
     "surface": "grass->turf",
     "ingame": "HEINZ FIELD",
     "ingame_match": "standin",
+    "fallback": null,
     "note": "",
     "needs_check": false,
     "moved_to": "Three Rivers Stadium"
@@ -296,6 +316,7 @@
     "surface": "turf",
     "ingame": "HEINZ FIELD",
     "ingame_match": "standin",
+    "fallback": null,
     "note": "same riverfront site",
     "needs_check": false,
     "moved_to": "Heinz Field / Acrisure Stadium"
@@ -309,6 +330,7 @@
     "surface": "grass",
     "ingame": "HEINZ FIELD",
     "ingame_match": "exact",
+    "fallback": null,
     "note": "",
     "needs_check": false,
     "moved_to": null
@@ -322,9 +344,10 @@
     "last": 1969,
     "roof": "open",
     "surface": "grass",
-    "ingame": "PAUL BROWN STADIUM",
-    "ingame_match": "standin",
-    "note": "expansion team 1968",
+    "ingame": "NIPPERT STADIUM",
+    "ingame_match": "exact",
+    "fallback": "PAUL BROWN STADIUM",
+    "note": "expansion team 1968; Eras stadium pack (NCAA Football 07 model); falls back to PAUL BROWN STADIUM",
     "needs_check": true,
     "moved_to": "Riverfront Stadium / Cinergy Field"
    },
@@ -337,6 +360,7 @@
     "surface": "turf",
     "ingame": "PAUL BROWN STADIUM",
     "ingame_match": "standin",
+    "fallback": null,
     "note": "",
     "needs_check": false,
     "moved_to": "Paul Brown Stadium / Paycor Stadium"
@@ -350,6 +374,7 @@
     "surface": "grass->turf",
     "ingame": "PAUL BROWN STADIUM",
     "ingame_match": "exact",
+    "fallback": null,
     "note": "",
     "needs_check": false,
     "moved_to": null
@@ -363,9 +388,10 @@
     "last": 1967,
     "roof": "open",
     "surface": "grass",
-    "ingame": "RELIANT STADIUM",
-    "ingame_match": "standin",
-    "note": "",
+    "ingame": "RICE STADIUM",
+    "ingame_match": "exact",
+    "fallback": "RELIANT STADIUM",
+    "note": "Eras stadium pack (NCAA Football 07 model); falls back to RELIANT STADIUM",
     "needs_check": true,
     "moved_to": "Astrodome"
    },
@@ -378,6 +404,7 @@
     "surface": "turf",
     "ingame": "RELIANT STADIUM",
     "ingame_match": "standin",
+    "fallback": null,
     "note": "list gives 1970-1996 from the merger; the Oilers moved in 1968",
     "needs_check": true,
     "moved_to": "Liberty Bowl Memorial Stadium"
@@ -389,9 +416,10 @@
     "last": 1997,
     "roof": "open",
     "surface": "grass",
-    "ingame": "TITANS COLISEUM",
-    "ingame_match": "standin",
-    "note": "temporary (Tennessee Oilers)",
+    "ingame": "LIBERTY BOWL MEMORIAL STADIUM",
+    "ingame_match": "exact",
+    "fallback": "TITANS COLISEUM",
+    "note": "temporary (Tennessee Oilers); Eras stadium pack (NCAA Football 07 model); falls back to TITANS COLISEUM",
     "needs_check": false,
     "moved_to": "Vanderbilt Stadium"
    },
@@ -402,9 +430,10 @@
     "last": 1998,
     "roof": "open",
     "surface": "grass",
-    "ingame": "TITANS COLISEUM",
-    "ingame_match": "standin",
-    "note": "temporary",
+    "ingame": "VANDERBILT STADIUM",
+    "ingame_match": "exact",
+    "fallback": "TITANS COLISEUM",
+    "note": "temporary; Eras stadium pack (NCAA Football 07 model); falls back to TITANS COLISEUM",
     "needs_check": false,
     "moved_to": "Adelphia Coliseum / LP Field / Nissan Stadium"
    },
@@ -417,6 +446,7 @@
     "surface": "grass->turf",
     "ingame": "TITANS COLISEUM",
     "ingame_match": "exact",
+    "fallback": null,
     "note": "",
     "needs_check": false,
     "moved_to": null
@@ -432,6 +462,7 @@
     "surface": "grass->turf",
     "ingame": "RELIANT STADIUM",
     "ingame_match": "exact",
+    "fallback": null,
     "note": "expansion team 2002",
     "needs_check": false,
     "moved_to": null
@@ -447,6 +478,7 @@
     "surface": "grass",
     "ingame": "ALLTEL STADIUM",
     "ingame_match": "exact",
+    "fallback": null,
     "note": "expansion team 1995",
     "needs_check": false,
     "moved_to": null
@@ -462,6 +494,7 @@
     "surface": "grass",
     "ingame": "INVESCO FIELD",
     "ingame_match": "standin",
+    "fallback": null,
     "note": "Invesco was built next to it",
     "needs_check": false,
     "moved_to": "Invesco Field at Mile High / Empower Field"
@@ -475,6 +508,7 @@
     "surface": "grass",
     "ingame": "INVESCO FIELD",
     "ingame_match": "exact",
+    "fallback": null,
     "note": "",
     "needs_check": false,
     "moved_to": null
@@ -490,6 +524,7 @@
     "surface": "grass",
     "ingame": "ARROWHEAD STADIUM",
     "ingame_match": "standin",
+    "fallback": null,
     "note": "",
     "needs_check": false,
     "moved_to": "Arrowhead Stadium"
@@ -503,6 +538,7 @@
     "surface": "turf->grass",
     "ingame": "ARROWHEAD STADIUM",
     "ingame_match": "exact",
+    "fallback": null,
     "note": "",
     "needs_check": false,
     "moved_to": null
@@ -518,6 +554,7 @@
     "surface": "grass",
     "ingame": "NETWORK ASSOCIATES",
     "ingame_match": "exact",
+    "fallback": null,
     "note": "",
     "needs_check": false,
     "moved_to": "Los Angeles Memorial Coliseum"
@@ -531,7 +568,8 @@
     "surface": "grass",
     "ingame": "LA MEMORIAL COLISEUM",
     "ingame_match": "exact",
-    "note": "Eras stadium pack (NCAA 07 USC model); falls back to QUALCOMM STADIUM",
+    "fallback": "QUALCOMM STADIUM",
+    "note": "Eras stadium pack (NCAA Football 07 model); falls back to QUALCOMM STADIUM",
     "needs_check": false,
     "moved_to": "Oakland-Alameda County Coliseum (Network Associates, McAfee, ...)"
    },
@@ -544,6 +582,7 @@
     "surface": "grass",
     "ingame": "NETWORK ASSOCIATES",
     "ingame_match": "exact",
+    "fallback": null,
     "note": "Mt. Davis added 1996 (the game shows it)",
     "needs_check": false,
     "moved_to": "Allegiant Stadium"
@@ -557,6 +596,7 @@
     "surface": "grass",
     "ingame": "RELIANT STADIUM",
     "ingame_match": "standin",
+    "fallback": null,
     "note": "closed-roof stand-in (the mod tools have an Allegiant model)",
     "needs_check": false,
     "moved_to": null
@@ -572,6 +612,7 @@
     "surface": "grass",
     "ingame": "QUALCOMM STADIUM",
     "ingame_match": "exact",
+    "fallback": null,
     "note": "",
     "needs_check": false,
     "moved_to": "StubHub Center / Dignity Health Sports Park"
@@ -585,6 +626,7 @@
     "surface": "grass",
     "ingame": "QUALCOMM STADIUM",
     "ingame_match": "standin",
+    "fallback": null,
     "note": "temporary, 27,000 seats",
     "needs_check": false,
     "moved_to": "SoFi Stadium"
@@ -598,6 +640,7 @@
     "surface": "turf",
     "ingame": "RELIANT STADIUM",
     "ingame_match": "standin",
+    "fallback": null,
     "note": "closed-roof stand-in",
     "needs_check": false,
     "moved_to": null
@@ -613,6 +656,7 @@
     "surface": "turf",
     "ingame": "EDWARD JONES DOME",
     "ingame_match": "standin",
+    "fallback": null,
     "note": "expansion team 1976",
     "needs_check": false,
     "moved_to": "Husky Stadium"
@@ -624,9 +668,10 @@
     "last": 2001,
     "roof": "open",
     "surface": "turf",
-    "ingame": "QWEST FIELD",
-    "ingame_match": "standin",
-    "note": "temporary",
+    "ingame": "HUSKY STADIUM",
+    "ingame_match": "exact",
+    "fallback": "QWEST FIELD",
+    "note": "temporary; Eras stadium pack (NCAA Football 07 model); falls back to QWEST FIELD",
     "needs_check": false,
     "moved_to": "Seahawks Stadium / Qwest Field / CenturyLink / Lumen Field"
    },
@@ -639,6 +684,7 @@
     "surface": "turf",
     "ingame": "QWEST FIELD",
     "ingame_match": "exact",
+    "fallback": null,
     "note": "",
     "needs_check": false,
     "moved_to": null
@@ -652,9 +698,10 @@
     "last": 1971,
     "roof": "open",
     "surface": "grass",
-    "ingame": "TEXAS STADIUM",
-    "ingame_match": "standin",
-    "note": "first 1971 home games here; Texas Stadium opened 1971-10-24",
+    "ingame": "COTTON BOWL",
+    "ingame_match": "exact",
+    "fallback": "TEXAS STADIUM",
+    "note": "first 1971 home games here; Texas Stadium opened 1971-10-24; Eras stadium pack (NCAA Football 07 model); falls back to TEXAS STADIUM",
     "needs_check": false,
     "moved_to": "Texas Stadium"
    },
@@ -667,6 +714,7 @@
     "surface": "turf",
     "ingame": "TEXAS STADIUM",
     "ingame_match": "exact",
+    "fallback": null,
     "note": "from 1971-10-24",
     "needs_check": false,
     "moved_to": "Cowboys Stadium / AT&T Stadium"
@@ -680,6 +728,7 @@
     "surface": "turf",
     "ingame": "RELIANT STADIUM",
     "ingame_match": "standin",
+    "fallback": null,
     "note": "retractable-roof stand-in",
     "needs_check": false,
     "moved_to": null
@@ -695,6 +744,7 @@
     "surface": "grass",
     "ingame": "GIANTS STADIUM",
     "ingame_match": "standin",
+    "fallback": null,
     "note": "left mid-1973",
     "needs_check": false,
     "moved_to": "Yale Bowl"
@@ -706,9 +756,10 @@
     "last": 1974,
     "roof": "open",
     "surface": "grass",
-    "ingame": "GIANTS STADIUM",
-    "ingame_match": "standin",
-    "note": "temporary: last 1973 games and 1974",
+    "ingame": "YALE BOWL",
+    "ingame_match": "exact",
+    "fallback": "GIANTS STADIUM",
+    "note": "temporary: last 1973 games and 1974; Eras stadium pack (NCAA Football 07 model); falls back to GIANTS STADIUM",
     "needs_check": false,
     "moved_to": "Shea Stadium"
    },
@@ -721,6 +772,7 @@
     "surface": "grass",
     "ingame": "JETS STADIUM",
     "ingame_match": "standin",
+    "fallback": null,
     "note": "temporary",
     "needs_check": false,
     "moved_to": "Giants Stadium"
@@ -734,6 +786,7 @@
     "surface": "turf",
     "ingame": "GIANTS STADIUM",
     "ingame_match": "exact",
+    "fallback": null,
     "note": "from 1976-10-10 (week 5)",
     "needs_check": false,
     "moved_to": "MetLife Stadium"
@@ -747,6 +800,7 @@
     "surface": "turf",
     "ingame": "GIANTS STADIUM",
     "ingame_match": "standin",
+    "fallback": null,
     "note": "",
     "needs_check": false,
     "moved_to": null
@@ -760,9 +814,10 @@
     "last": 1970,
     "roof": "open",
     "surface": "grass->turf",
-    "ingame": "LINCOLN FINANCIAL FIELD",
-    "ingame_match": "standin",
-    "note": "",
+    "ingame": "FRANKLIN FIELD",
+    "ingame_match": "exact",
+    "fallback": "LINCOLN FINANCIAL FIELD",
+    "note": "Eras stadium pack (NCAA Football 07 model); falls back to LINCOLN FINANCIAL FIELD",
     "needs_check": false,
     "moved_to": "Veterans Stadium"
    },
@@ -775,6 +830,7 @@
     "surface": "turf",
     "ingame": "LINCOLN FINANCIAL FIELD",
     "ingame_match": "standin",
+    "fallback": null,
     "note": "",
     "needs_check": false,
     "moved_to": "Lincoln Financial Field"
@@ -788,6 +844,7 @@
     "surface": "grass",
     "ingame": "LINCOLN FINANCIAL FIELD",
     "ingame_match": "exact",
+    "fallback": null,
     "note": "",
     "needs_check": false,
     "moved_to": null
@@ -803,6 +860,7 @@
     "surface": "grass->turf->grass",
     "ingame": "WASHINGTON FIELD",
     "ingame_match": "standin",
+    "fallback": null,
     "note": "",
     "needs_check": false,
     "moved_to": "Jack Kent Cooke / FedExField / Northwest Stadium"
@@ -816,6 +874,7 @@
     "surface": "grass",
     "ingame": "WASHINGTON FIELD",
     "ingame_match": "exact",
+    "fallback": null,
     "note": "",
     "needs_check": false,
     "moved_to": null
@@ -831,6 +890,7 @@
     "surface": "grass->turf",
     "ingame": "ARROWHEAD STADIUM",
     "ingame_match": "standin",
+    "fallback": null,
     "note": "open-air Midwest stand-in",
     "needs_check": false,
     "moved_to": "Sun Devil Stadium"
@@ -844,6 +904,7 @@
     "surface": "grass",
     "ingame": "ARIZONA STADIUM",
     "ingame_match": "exact",
+    "fallback": null,
     "note": "",
     "needs_check": false,
     "moved_to": "University of Phoenix / State Farm Stadium"
@@ -857,6 +918,7 @@
     "surface": "grass",
     "ingame": "RELIANT STADIUM",
     "ingame_match": "standin",
+    "fallback": null,
     "note": "retractable-roof stand-in",
     "needs_check": false,
     "moved_to": null
@@ -872,6 +934,7 @@
     "surface": "grass",
     "ingame": "CHICAGO FIELD",
     "ingame_match": "standin",
+    "fallback": null,
     "note": "last game 1970-12-13",
     "needs_check": false,
     "moved_to": "Soldier Field"
@@ -885,6 +948,7 @@
     "surface": "turf->grass",
     "ingame": "CHICAGO FIELD",
     "ingame_match": "standin",
+    "fallback": null,
     "note": "pre-2003 bowl; the game shows the renovated one",
     "needs_check": false,
     "moved_to": "Memorial Stadium (Champaign)"
@@ -896,9 +960,10 @@
     "last": 2002,
     "roof": "open",
     "surface": "grass",
-    "ingame": "CHICAGO FIELD",
-    "ingame_match": "standin",
-    "note": "temporary",
+    "ingame": "MEMORIAL STADIUM CHAMPAIGN",
+    "ingame_match": "exact",
+    "fallback": "CHICAGO FIELD",
+    "note": "temporary; Eras stadium pack (NCAA Football 07 model); falls back to CHICAGO FIELD",
     "needs_check": false,
     "moved_to": "Soldier Field (renovated)"
    },
@@ -911,6 +976,7 @@
     "surface": "grass",
     "ingame": "CHICAGO FIELD",
     "ingame_match": "exact",
+    "fallback": null,
     "note": "",
     "needs_check": false,
     "moved_to": null
@@ -926,6 +992,7 @@
     "surface": "grass",
     "ingame": "CLEVELAND STADIUM",
     "ingame_match": "standin",
+    "fallback": null,
     "note": "open-air Great Lakes stand-in (Ford Field is a dome)",
     "needs_check": false,
     "moved_to": "Pontiac Silverdome"
@@ -939,6 +1006,7 @@
     "surface": "turf",
     "ingame": "FORD FIELD",
     "ingame_match": "standin",
+    "fallback": null,
     "note": "",
     "needs_check": false,
     "moved_to": "Ford Field"
@@ -952,6 +1020,7 @@
     "surface": "turf",
     "ingame": "FORD FIELD",
     "ingame_match": "exact",
+    "fallback": null,
     "note": "",
     "needs_check": false,
     "moved_to": null
@@ -967,6 +1036,7 @@
     "surface": "grass",
     "ingame": "LAMBEAU FIELD",
     "ingame_match": "exact",
+    "fallback": null,
     "note": "plus 1-3 games a year at Milwaukee County Stadium through 1994",
     "needs_check": false,
     "moved_to": null
@@ -982,6 +1052,7 @@
     "surface": "grass",
     "ingame": "LAMBEAU FIELD",
     "ingame_match": "standin",
+    "fallback": null,
     "note": "open-air northern stand-in",
     "needs_check": false,
     "moved_to": "Hubert H. Humphrey Metrodome"
@@ -995,6 +1066,7 @@
     "surface": "turf",
     "ingame": "H. H. H. METRODOME",
     "ingame_match": "exact",
+    "fallback": null,
     "note": "",
     "needs_check": false,
     "moved_to": "TCF Bank Stadium"
@@ -1008,6 +1080,7 @@
     "surface": "turf",
     "ingame": "LAMBEAU FIELD",
     "ingame_match": "standin",
+    "fallback": null,
     "note": "temporary",
     "needs_check": false,
     "moved_to": "U.S. Bank Stadium"
@@ -1021,6 +1094,7 @@
     "surface": "turf",
     "ingame": "H. H. H. METRODOME",
     "ingame_match": "standin",
+    "fallback": null,
     "note": "",
     "needs_check": false,
     "moved_to": null
@@ -1036,6 +1110,7 @@
     "surface": "grass",
     "ingame": "TAMPA BAY STADIUM",
     "ingame_match": "standin",
+    "fallback": null,
     "note": "expansion team 1976; Raymond James was built next door",
     "needs_check": false,
     "moved_to": "Raymond James Stadium"
@@ -1049,6 +1124,7 @@
     "surface": "grass",
     "ingame": "TAMPA BAY STADIUM",
     "ingame_match": "exact",
+    "fallback": null,
     "note": "",
     "needs_check": false,
     "moved_to": null
@@ -1064,6 +1140,7 @@
     "surface": "grass",
     "ingame": "ARROWHEAD STADIUM",
     "ingame_match": "standin",
+    "fallback": null,
     "note": "open-air stand-in",
     "needs_check": false,
     "moved_to": "Georgia Dome"
@@ -1077,6 +1154,7 @@
     "surface": "turf",
     "ingame": "GEORGIA DOME",
     "ingame_match": "exact",
+    "fallback": null,
     "note": "",
     "needs_check": false,
     "moved_to": "Mercedes-Benz Stadium"
@@ -1090,6 +1168,7 @@
     "surface": "turf",
     "ingame": "GEORGIA DOME",
     "ingame_match": "standin",
+    "fallback": null,
     "note": "the mod tools have a Mercedes-Benz model",
     "needs_check": false,
     "moved_to": null
@@ -1103,9 +1182,10 @@
     "last": 1995,
     "roof": "open",
     "surface": "grass",
-    "ingame": "B OF A STADIUM",
-    "ingame_match": "standin",
-    "note": "temporary, first season",
+    "ingame": "CLEMSON MEMORIAL STADIUM",
+    "ingame_match": "exact",
+    "fallback": "B OF A STADIUM",
+    "note": "temporary, first season; Eras stadium pack (NCAA Football 07 model); falls back to B OF A STADIUM",
     "needs_check": false,
     "moved_to": "Ericsson / Bank of America Stadium"
    },
@@ -1118,6 +1198,7 @@
     "surface": "grass->turf",
     "ingame": "B OF A STADIUM",
     "ingame_match": "exact",
+    "fallback": null,
     "note": "",
     "needs_check": false,
     "moved_to": null
@@ -1133,6 +1214,7 @@
     "surface": "grass->turf",
     "ingame": "LOUISIANA SUPER DOME",
     "ingame_match": "standin",
+    "fallback": null,
     "note": "expansion team 1967; open-air",
     "needs_check": false,
     "moved_to": "Louisiana Superdome / Caesars Superdome"
@@ -1146,20 +1228,50 @@
     "surface": "turf",
     "ingame": "LOUISIANA SUPER DOME",
     "ingame_match": "exact",
+    "fallback": null,
     "note": "2005: displaced by Hurricane Katrina",
     "needs_check": false,
-    "moved_to": "Alamodome / Tiger Stadium (LSU) / Giants Stadium"
+    "moved_to": "Alamodome"
    },
    {
-    "stadium": "Alamodome / Tiger Stadium (LSU) / Giants Stadium",
-    "city": "San Antonio / Baton Rouge / East Rutherford",
+    "stadium": "Alamodome",
+    "city": "San Antonio, TX",
     "first": 2005,
     "last": 2005,
-    "roof": "mixed",
-    "surface": "mixed",
-    "ingame": "LOUISIANA SUPER DOME",
-    "ingame_match": "standin",
-    "note": "2005 only: home games split after Katrina (one at Giants Stadium)",
+    "roof": "dome",
+    "surface": "turf",
+    "ingame": "ALAMODOME",
+    "ingame_match": "exact",
+    "fallback": "LOUISIANA SUPER DOME",
+    "note": "2005 only, after Hurricane Katrina: 3 home games; Eras stadium pack (NCAA Football 07 model); falls back to LOUISIANA SUPER DOME",
+    "needs_check": true,
+    "moved_to": "Tiger Stadium (LSU)"
+   },
+   {
+    "stadium": "Tiger Stadium (LSU)",
+    "city": "Baton Rouge, LA",
+    "first": 2005,
+    "last": 2005,
+    "roof": "open",
+    "surface": "grass",
+    "ingame": "TIGER STADIUM BATON ROUGE",
+    "ingame_match": "exact",
+    "fallback": "TAMPA BAY STADIUM",
+    "note": "2005 only, after Hurricane Katrina: 4 home games; Eras stadium pack (NCAA Football 07 model); falls back to TAMPA BAY STADIUM",
+    "needs_check": true,
+    "moved_to": "Giants Stadium"
+   },
+   {
+    "stadium": "Giants Stadium",
+    "city": "East Rutherford, NJ",
+    "first": 2005,
+    "last": 2005,
+    "roof": "open",
+    "surface": "turf",
+    "ingame": "GIANTS STADIUM",
+    "ingame_match": "exact",
+    "fallback": null,
+    "note": "2005 only, after Hurricane Katrina: 1 home game (vs Giants, Sept 19)",
     "needs_check": true,
     "moved_to": null
    }
@@ -1174,7 +1286,8 @@
     "surface": "grass",
     "ingame": "LA MEMORIAL COLISEUM",
     "ingame_match": "exact",
-    "note": "Eras stadium pack (NCAA 07 USC model); falls back to QUALCOMM STADIUM",
+    "fallback": "QUALCOMM STADIUM",
+    "note": "Eras stadium pack (NCAA Football 07 model); falls back to QUALCOMM STADIUM",
     "needs_check": false,
     "moved_to": "Anaheim Stadium"
    },
@@ -1187,6 +1300,7 @@
     "surface": "grass",
     "ingame": "QUALCOMM STADIUM",
     "ingame_match": "standin",
+    "fallback": null,
     "note": "",
     "needs_check": false,
     "moved_to": "Busch Memorial Stadium"
@@ -1200,6 +1314,7 @@
     "surface": "turf",
     "ingame": "EDWARD JONES DOME",
     "ingame_match": "standin",
+    "fallback": null,
     "note": "part of 1995 while the dome was finished",
     "needs_check": false,
     "moved_to": "Trans World Dome / Edward Jones Dome"
@@ -1213,6 +1328,7 @@
     "surface": "turf",
     "ingame": "EDWARD JONES DOME",
     "ingame_match": "exact",
+    "fallback": null,
     "note": "",
     "needs_check": false,
     "moved_to": "Los Angeles Memorial Coliseum"
@@ -1226,7 +1342,8 @@
     "surface": "grass",
     "ingame": "LA MEMORIAL COLISEUM",
     "ingame_match": "exact",
-    "note": "temporary; Eras stadium pack (NCAA 07 USC model)",
+    "fallback": "QUALCOMM STADIUM",
+    "note": "temporary; Eras stadium pack (NCAA Football 07 model); falls back to QUALCOMM STADIUM",
     "needs_check": false,
     "moved_to": "SoFi Stadium"
    },
@@ -1239,6 +1356,7 @@
     "surface": "turf",
     "ingame": "RELIANT STADIUM",
     "ingame_match": "standin",
+    "fallback": null,
     "note": "closed-roof stand-in",
     "needs_check": false,
     "moved_to": null
@@ -1254,6 +1372,7 @@
     "surface": "grass",
     "ingame": "SAN FRANCISCO PARK",
     "ingame_match": "standin",
+    "fallback": null,
     "note": "",
     "needs_check": false,
     "moved_to": "Candlestick Park / 3Com Park / Monster Park"
@@ -1267,6 +1386,7 @@
     "surface": "grass",
     "ingame": "SAN FRANCISCO PARK",
     "ingame_match": "exact",
+    "fallback": null,
     "note": "",
     "needs_check": false,
     "moved_to": "Levi's Stadium"
@@ -1280,6 +1400,7 @@
     "surface": "grass",
     "ingame": "SAN FRANCISCO PARK",
     "ingame_match": "standin",
+    "fallback": null,
     "note": "",
     "needs_check": false,
     "moved_to": null

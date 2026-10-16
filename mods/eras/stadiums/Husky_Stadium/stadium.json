@@ -1,0 +1,13 @@
+{
+  "name": "HUSKY STADIUM",
+  "display": "Husky Stadium",
+  "location": "Seattle, WA",
+  "code": "s72",
+  "clone": "Qwest Field",
+  "host": "Cobra Field",
+  "capacity": 72500,
+  "indoor": 0,
+  "grass": 1,
+  "nfl": "Seahawks 2000-2001",
+  "source": "NCAA Football 07 Husky Stadium (STAD.SRES 137, WASHIN); tools/eras/stadiums/ncaa_stadiums.py"
+}

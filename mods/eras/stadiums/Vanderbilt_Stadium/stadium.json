@@ -1,0 +1,13 @@
+{
+  "name": "VANDERBILT STADIUM",
+  "display": "Vanderbilt Stadium",
+  "location": "Nashville, TN",
+  "code": "s70",
+  "clone": "Titans Coliseum",
+  "host": "Express Dome",
+  "capacity": 41000,
+  "indoor": 0,
+  "grass": 1,
+  "nfl": "Oilers 1998",
+  "source": "NCAA Football 07 Vanderbilt Stadium (STAD.SRES 133, VANDER); tools/eras/stadiums/ncaa_stadiums.py"
+}

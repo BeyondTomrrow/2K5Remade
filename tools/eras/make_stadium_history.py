@@ -63,7 +63,7 @@ R = [
  ('chiefs', 'Kansas City Municipal Stadium', 'Kansas City, MO', 1963, 1971, 'open', 'grass', 'ARROWHEAD STADIUM', 'standin', '', False),
  ('chiefs', 'Arrowhead Stadium', 'Kansas City, MO', 1972, None, 'open', 'turf->grass', 'ARROWHEAD STADIUM', 'exact', '', False),
  ('raiders', 'Oakland-Alameda County Coliseum', 'Oakland, CA', 1966, 1981, 'open', 'grass', 'NETWORK ASSOCIATES', 'exact', '', False),
- ('raiders', 'Los Angeles Memorial Coliseum', 'Los Angeles, CA', 1982, 1994, 'open', 'grass', 'LA MEMORIAL COLISEUM', 'exact', 'Eras stadium pack (NCAA 07 USC model); falls back to QUALCOMM STADIUM', False),
+ ('raiders', 'Los Angeles Memorial Coliseum', 'Los Angeles, CA', 1982, 1994, 'open', 'grass', 'QUALCOMM STADIUM', 'standin', '', False),
  ('raiders', 'Oakland-Alameda County Coliseum (Network Associates, McAfee, ...)', 'Oakland, CA', 1995, 2019, 'open', 'grass', 'NETWORK ASSOCIATES', 'exact', 'Mt. Davis added 1996 (the game shows it)', False),
  ('raiders', 'Allegiant Stadium', 'Paradise, NV', 2020, None, 'skylight', 'grass', 'RELIANT STADIUM', 'standin', 'closed-roof stand-in (the mod tools have an Allegiant model)', False),
  ('chargers', 'San Diego Stadium / Jack Murphy / Qualcomm Stadium', 'San Diego, CA', 1967, 2016, 'open', 'grass', 'QUALCOMM STADIUM', 'exact', '', False),
@@ -109,23 +109,62 @@ R = [
  ('panthers', 'Ericsson / Bank of America Stadium', 'Charlotte, NC', 1996, None, 'open', 'grass->turf', 'B OF A STADIUM', 'exact', '', False),
  ('saints', 'Tulane Stadium', 'New Orleans, LA', 1967, 1974, 'open', 'grass->turf', 'LOUISIANA SUPER DOME', 'standin', 'expansion team 1967; open-air', False),
  ('saints', 'Louisiana Superdome / Caesars Superdome', 'New Orleans, LA', 1975, None, 'dome', 'turf', 'LOUISIANA SUPER DOME', 'exact', '2005: displaced by Hurricane Katrina', False),
- ('saints', 'Alamodome / Tiger Stadium (LSU) / Giants Stadium', 'San Antonio / Baton Rouge / East Rutherford', 2005, 2005, 'mixed', 'mixed', 'LOUISIANA SUPER DOME', 'standin', '2005 only: home games split after Katrina (one at Giants Stadium)', True),
- ('rams', 'Los Angeles Memorial Coliseum', 'Los Angeles, CA', 1946, 1979, 'open', 'grass', 'LA MEMORIAL COLISEUM', 'exact', 'Eras stadium pack (NCAA 07 USC model); falls back to QUALCOMM STADIUM', False),
+ ('saints', 'Alamodome', 'San Antonio, TX', 2005, 2005, 'dome', 'turf', 'LOUISIANA SUPER DOME', 'standin', '2005 only, after Hurricane Katrina: 3 home games', True),
+ ('saints', 'Tiger Stadium (LSU)', 'Baton Rouge, LA', 2005, 2005, 'open', 'grass', 'TAMPA BAY STADIUM', 'standin', '2005 only, after Hurricane Katrina: 4 home games', True),
+ ('saints', 'Giants Stadium', 'East Rutherford, NJ', 2005, 2005, 'open', 'turf', 'GIANTS STADIUM', 'exact', '2005 only, after Hurricane Katrina: 1 home game (vs Giants, Sept 19)', True),
+ ('rams', 'Los Angeles Memorial Coliseum', 'Los Angeles, CA', 1946, 1979, 'open', 'grass', 'QUALCOMM STADIUM', 'standin', '', False),
  ('rams', 'Anaheim Stadium', 'Anaheim, CA', 1980, 1994, 'open', 'grass', 'QUALCOMM STADIUM', 'standin', '', False),
  ('rams', 'Busch Memorial Stadium', 'St. Louis, MO', 1995, 1995, 'open', 'turf', 'EDWARD JONES DOME', 'standin', 'part of 1995 while the dome was finished', False),
  ('rams', 'Trans World Dome / Edward Jones Dome', 'St. Louis, MO', 1995, 2015, 'dome', 'turf', 'EDWARD JONES DOME', 'exact', '', False),
- ('rams', 'Los Angeles Memorial Coliseum', 'Los Angeles, CA', 2016, 2019, 'open', 'grass', 'LA MEMORIAL COLISEUM', 'exact', 'temporary; Eras stadium pack (NCAA 07 USC model)', False),
+ ('rams', 'Los Angeles Memorial Coliseum', 'Los Angeles, CA', 2016, 2019, 'open', 'grass', 'QUALCOMM STADIUM', 'standin', 'temporary', False),
  ('rams', 'SoFi Stadium', 'Inglewood, CA', 2020, None, 'skylight', 'turf', 'RELIANT STADIUM', 'standin', 'closed-roof stand-in', False),
  ('49ers', 'Kezar Stadium', 'San Francisco, CA', 1946, 1970, 'open', 'grass', 'SAN FRANCISCO PARK', 'standin', '', False),
  ('49ers', 'Candlestick Park / 3Com Park / Monster Park', 'San Francisco, CA', 1971, 2013, 'open', 'grass', 'SAN FRANCISCO PARK', 'exact', '', False),
  ('49ers', "Levi's Stadium", 'Santa Clara, CA', 2014, None, 'open', 'grass', 'SAN FRANCISCO PARK', 'standin', '', False),
 ]
 
+# My NFL Eras stadium packs (mods\eras\stadiums\<folder>\stadium.json, NCAA Football 07 models converted by
+# tools/eras/stadiums/coliseum_build.py and ncaa_stadiums.py; docs/eras/research/COLISEUM-IMPORT.md and
+# NCAA-STADIUMS-IMPORT.md). (franchise, stadium as in R, first season) -> pack name. Such a spell's 'ingame' is the
+# pack name (match 'exact'); 'fallback' keeps the retail stand-in for a game without the pack installed.
+PACKS = {
+ ('raiders', 'Los Angeles Memorial Coliseum', 1982): 'LA MEMORIAL COLISEUM',
+ ('rams', 'Los Angeles Memorial Coliseum', 1946): 'LA MEMORIAL COLISEUM',
+ ('rams', 'Los Angeles Memorial Coliseum', 2016): 'LA MEMORIAL COLISEUM',
+ ('dolphins', 'Miami Orange Bowl', 1966): 'MIAMI ORANGE BOWL',
+ ('cowboys', 'Cotton Bowl', 1960): 'COTTON BOWL',
+ ('eagles', 'Franklin Field', 1958): 'FRANKLIN FIELD',
+ ('giants', 'Yale Bowl', 1973): 'YALE BOWL',
+ ('patriots', 'Harvard Stadium', 1970): 'HARVARD STADIUM',
+ ('patriots', 'Alumni Stadium (Boston College)', 1969): 'ALUMNI STADIUM',
+ ('bengals', 'Nippert Stadium', 1968): 'NIPPERT STADIUM',
+ ('oilers_titans', 'Rice Stadium', 1965): 'RICE STADIUM',
+ ('oilers_titans', 'Liberty Bowl Memorial Stadium', 1997): 'LIBERTY BOWL MEMORIAL STADIUM',
+ ('oilers_titans', 'Vanderbilt Stadium', 1998): 'VANDERBILT STADIUM',
+ ('panthers', 'Memorial Stadium (Clemson)', 1995): 'CLEMSON MEMORIAL STADIUM',
+ ('seahawks', 'Husky Stadium', 2000): 'HUSKY STADIUM',
+ ('bears', 'Memorial Stadium (Champaign)', 2002): 'MEMORIAL STADIUM CHAMPAIGN',
+ ('saints', 'Tiger Stadium (LSU)', 2005): 'TIGER STADIUM BATON ROUGE',
+ ('saints', 'Alamodome', 2005): 'ALAMODOME',
+}
+
+
 def main():
     fr = {}
+    used = set()
     for (f, name, city, a, b, roof, surf, game, match, note, check) in R:
+        fallback = None
+        pk = PACKS.get((f, name, a))
+        if pk:
+            used.add((f, name, a))
+            fallback, game, match = game, pk, 'exact'
+            note = (note + '; ' if note else '') + f'Eras stadium pack (NCAA Football 07 model); falls back to {fallback}'
         fr.setdefault(f, []).append(dict(stadium=name, city=city, first=a, last=b, roof=roof, surface=surf,
-                                         ingame=game, ingame_match=match, note=note, needs_check=check))
+                                         ingame=game, ingame_match=match, fallback=fallback, note=note,
+                                         needs_check=check))
+    missing = set(PACKS) - used
+    if missing:
+        raise SystemExit(f'PACKS rows not in R: {sorted(missing)}')
     for f, rows in fr.items():
         rows.sort(key=lambda r: (r['first'], r['last'] or 9999))
         for i, r in enumerate(rows):
@@ -146,7 +185,9 @@ def main():
     md = ['# NFL home stadiums, 1966-2025', '',
           'Per franchise: every primary home stadium, the seasons used, where the team went next, and the',
           'NFL 2K5 venue an Eras game uses (`exact` = the same building is in the game, as it looked in 2004;',
-          '`standin` = the closest retail venue by roof, surface and setting). Data: `data/eras/league/stadiums_1966_2025.json`',
+          '`standin` = the closest retail venue by roof, surface and setting; a name with "fallback" is a My NFL Eras',
+          'stadium pack converted from NCAA Football 07, and the fallback the retail venue used without it).',
+          'Data: `data/eras/league/stadiums_1966_2025.json`',
           '(`tools/eras/make_stadium_history.py`). Rows marked * still need a check against a fetched source.', '']
     for f in sorted(fr):
         md += [f'## {f}', '', '| Seasons | Stadium | City | Then moved to | In game |', '|---|---|---|---|---|']

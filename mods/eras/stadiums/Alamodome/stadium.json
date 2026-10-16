@@ -1,0 +1,13 @@
+{
+  "name": "ALAMODOME",
+  "display": "Alamodome",
+  "location": "San Antonio, TX",
+  "code": "s75",
+  "clone": "Louisiana Super Dome",
+  "host": "Gold Coast Dome",
+  "capacity": 65000,
+  "indoor": 1,
+  "grass": 0,
+  "nfl": "Saints 2005 (3 home games)",
+  "source": "NCAA Football 07 Alamodome (STAD.SRES 144, ALAMOX; one model, day); tools/eras/stadiums/ncaa_stadiums.py"
+}

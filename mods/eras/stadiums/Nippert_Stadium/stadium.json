@@ -1,0 +1,13 @@
+{
+  "name": "NIPPERT STADIUM",
+  "display": "Nippert Stadium",
+  "location": "Cincinnati, OH",
+  "code": "s67",
+  "clone": "Paul Brown Stadium",
+  "host": "Bat Field",
+  "capacity": 28000,
+  "indoor": 0,
+  "grass": 1,
+  "nfl": "Bengals 1968-1969",
+  "source": "NCAA Football 07 Nippert Stadium (STAD.SRES 23, CINCIN); tools/eras/stadiums/ncaa_stadiums.py"
+}

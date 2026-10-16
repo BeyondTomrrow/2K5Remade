@@ -1,0 +1,13 @@
+{
+  "name": "COTTON BOWL",
+  "display": "Cotton Bowl",
+  "location": "Dallas, TX",
+  "code": "s62",
+  "clone": "Arrowhead Stadium",
+  "host": "Funk Field",
+  "capacity": 75504,
+  "indoor": 0,
+  "grass": 1,
+  "nfl": "Cowboys 1960 - Oct 1971",
+  "source": "NCAA Football 07 Cotton Bowl, neutral-site dressing (STAD.SRES 179, NEUCOT); tools/eras/stadiums/ncaa_stadiums.py"
+}

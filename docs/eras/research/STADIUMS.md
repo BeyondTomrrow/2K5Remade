@@ -2,7 +2,9 @@
 
 Per franchise: every primary home stadium, the seasons used, where the team went next, and the
 NFL 2K5 venue an Eras game uses (`exact` = the same building is in the game, as it looked in 2004;
-`standin` = the closest retail venue by roof, surface and setting). Data: `data/eras/league/stadiums_1966_2025.json`
+`standin` = the closest retail venue by roof, surface and setting; a name with "fallback" is a My NFL Eras
+stadium pack converted from NCAA Football 07, and the fallback the retail venue used without it).
+Data: `data/eras/league/stadiums_1966_2025.json`
 (`tools/eras/make_stadium_history.py`). Rows marked * still need a check against a fetched source.
 
 ## 49ers
@@ -19,14 +21,14 @@ NFL 2K5 venue an Eras game uses (`exact` = the same building is in the game, as 
 |---|---|---|---|---|
 | 1921-1970 | Wrigley Field | Chicago, IL | Soldier Field | CHICAGO FIELD (standin): last game 1970-12-13 |
 | 1971-2001 | Soldier Field | Chicago, IL | Memorial Stadium (Champaign) | CHICAGO FIELD (standin): pre-2003 bowl; the game shows the renovated one |
-| 2002-2002 | Memorial Stadium (Champaign) | Champaign, IL | Soldier Field (renovated) | CHICAGO FIELD (standin): temporary |
+| 2002-2002 | Memorial Stadium (Champaign) | Champaign, IL | Soldier Field (renovated) | MEMORIAL STADIUM CHAMPAIGN (exact): temporary; Eras stadium pack (NCAA Football 07 model); falls back to CHICAGO FIELD |
 | 2003-now | Soldier Field (renovated) | Chicago, IL | - | CHICAGO FIELD (exact) |
 
 ## bengals
 
 | Seasons | Stadium | City | Then moved to | In game |
 |---|---|---|---|---|
-| 1968-1969 * | Nippert Stadium | Cincinnati, OH | Riverfront Stadium / Cinergy Field | PAUL BROWN STADIUM (standin): expansion team 1968 |
+| 1968-1969 * | Nippert Stadium | Cincinnati, OH | Riverfront Stadium / Cinergy Field | NIPPERT STADIUM (exact): expansion team 1968; Eras stadium pack (NCAA Football 07 model); falls back to PAUL BROWN STADIUM |
 | 1970-1999 | Riverfront Stadium / Cinergy Field | Cincinnati, OH | Paul Brown Stadium / Paycor Stadium | PAUL BROWN STADIUM (standin) |
 | 2000-now | Paul Brown Stadium / Paycor Stadium | Cincinnati, OH | - | PAUL BROWN STADIUM (exact) |
 
@@ -93,7 +95,7 @@ NFL 2K5 venue an Eras game uses (`exact` = the same building is in the game, as 
 
 | Seasons | Stadium | City | Then moved to | In game |
 |---|---|---|---|---|
-| 1960-1971 | Cotton Bowl | Dallas, TX | Texas Stadium | TEXAS STADIUM (standin): first 1971 home games here; Texas Stadium opened 1971-10-24 |
+| 1960-1971 | Cotton Bowl | Dallas, TX | Texas Stadium | COTTON BOWL (exact): first 1971 home games here; Texas Stadium opened 1971-10-24; Eras stadium pack (NCAA Football 07 model); falls back to TEXAS STADIUM |
 | 1971-2008 | Texas Stadium | Irving, TX | Cowboys Stadium / AT&T Stadium | TEXAS STADIUM (exact): from 1971-10-24 |
 | 2009-now | Cowboys Stadium / AT&T Stadium | Arlington, TX | - | RELIANT STADIUM (standin): retractable-roof stand-in |
 
@@ -101,14 +103,14 @@ NFL 2K5 venue an Eras game uses (`exact` = the same building is in the game, as 
 
 | Seasons | Stadium | City | Then moved to | In game |
 |---|---|---|---|---|
-| 1966-1986 | Miami Orange Bowl | Miami, FL | Joe Robbie Stadium / Pro Player / Dolphin / Sun Life / Hard Rock Stadium | PRO PLAYER STADIUM (standin) |
+| 1966-1986 | Miami Orange Bowl | Miami, FL | Joe Robbie Stadium / Pro Player / Dolphin / Sun Life / Hard Rock Stadium | MIAMI ORANGE BOWL (exact): Eras stadium pack (NCAA Football 07 model); falls back to PRO PLAYER STADIUM |
 | 1987-now | Joe Robbie Stadium / Pro Player / Dolphin / Sun Life / Hard Rock Stadium | Miami Gardens, FL | - | PRO PLAYER STADIUM (exact) |
 
 ## eagles
 
 | Seasons | Stadium | City | Then moved to | In game |
 |---|---|---|---|---|
-| 1958-1970 | Franklin Field | Philadelphia, PA | Veterans Stadium | LINCOLN FINANCIAL FIELD (standin) |
+| 1958-1970 | Franklin Field | Philadelphia, PA | Veterans Stadium | FRANKLIN FIELD (exact): Eras stadium pack (NCAA Football 07 model); falls back to LINCOLN FINANCIAL FIELD |
 | 1971-2002 | Veterans Stadium | Philadelphia, PA | Lincoln Financial Field | LINCOLN FINANCIAL FIELD (standin) |
 | 2003-now | Lincoln Financial Field | Philadelphia, PA | - | LINCOLN FINANCIAL FIELD (exact) |
 
@@ -125,7 +127,7 @@ NFL 2K5 venue an Eras game uses (`exact` = the same building is in the game, as 
 | Seasons | Stadium | City | Then moved to | In game |
 |---|---|---|---|---|
 | 1956-1973 | Yankee Stadium | Bronx, NY | Yale Bowl | GIANTS STADIUM (standin): left mid-1973 |
-| 1973-1974 | Yale Bowl | New Haven, CT | Shea Stadium | GIANTS STADIUM (standin): temporary: last 1973 games and 1974 |
+| 1973-1974 | Yale Bowl | New Haven, CT | Shea Stadium | YALE BOWL (exact): temporary: last 1973 games and 1974; Eras stadium pack (NCAA Football 07 model); falls back to GIANTS STADIUM |
 | 1975-1975 | Shea Stadium | Flushing, NY | Giants Stadium | JETS STADIUM (standin): temporary |
 | 1976-2009 | Giants Stadium | East Rutherford, NJ | MetLife Stadium | GIANTS STADIUM (exact): from 1976-10-10 (week 5) |
 | 2010-now | MetLife Stadium | East Rutherford, NJ | - | GIANTS STADIUM (standin) |
@@ -156,10 +158,10 @@ NFL 2K5 venue an Eras game uses (`exact` = the same building is in the game, as 
 
 | Seasons | Stadium | City | Then moved to | In game |
 |---|---|---|---|---|
-| 1965-1967 * | Rice Stadium | Houston, TX | Astrodome | RELIANT STADIUM (standin) |
+| 1965-1967 * | Rice Stadium | Houston, TX | Astrodome | RICE STADIUM (exact): Eras stadium pack (NCAA Football 07 model); falls back to RELIANT STADIUM |
 | 1968-1996 * | Astrodome | Houston, TX | Liberty Bowl Memorial Stadium | RELIANT STADIUM (standin): list gives 1970-1996 from the merger; the Oilers moved in 1968 |
-| 1997-1997 | Liberty Bowl Memorial Stadium | Memphis, TN | Vanderbilt Stadium | TITANS COLISEUM (standin): temporary (Tennessee Oilers) |
-| 1998-1998 | Vanderbilt Stadium | Nashville, TN | Adelphia Coliseum / LP Field / Nissan Stadium | TITANS COLISEUM (standin): temporary |
+| 1997-1997 | Liberty Bowl Memorial Stadium | Memphis, TN | Vanderbilt Stadium | LIBERTY BOWL MEMORIAL STADIUM (exact): temporary (Tennessee Oilers); Eras stadium pack (NCAA Football 07 model); falls back to TITANS COLISEUM |
+| 1998-1998 | Vanderbilt Stadium | Nashville, TN | Adelphia Coliseum / LP Field / Nissan Stadium | VANDERBILT STADIUM (exact): temporary; Eras stadium pack (NCAA Football 07 model); falls back to TITANS COLISEUM |
 | 1999-now | Adelphia Coliseum / LP Field / Nissan Stadium | Nashville, TN | - | TITANS COLISEUM (exact) |
 
 ## packers
@@ -172,7 +174,7 @@ NFL 2K5 venue an Eras game uses (`exact` = the same building is in the game, as 
 
 | Seasons | Stadium | City | Then moved to | In game |
 |---|---|---|---|---|
-| 1995-1995 | Memorial Stadium (Clemson) | Clemson, SC | Ericsson / Bank of America Stadium | B OF A STADIUM (standin): temporary, first season |
+| 1995-1995 | Memorial Stadium (Clemson) | Clemson, SC | Ericsson / Bank of America Stadium | CLEMSON MEMORIAL STADIUM (exact): temporary, first season; Eras stadium pack (NCAA Football 07 model); falls back to B OF A STADIUM |
 | 1996-now | Ericsson / Bank of America Stadium | Charlotte, NC | - | B OF A STADIUM (exact) |
 
 ## patriots
@@ -180,8 +182,8 @@ NFL 2K5 venue an Eras game uses (`exact` = the same building is in the game, as 
 | Seasons | Stadium | City | Then moved to | In game |
 |---|---|---|---|---|
 | 1963-1968 * | Fenway Park | Boston, MA | Alumni Stadium (Boston College) | GILLETTE STADIUM (standin) |
-| 1969-1969 | Alumni Stadium (Boston College) | Chestnut Hill, MA | Harvard Stadium | GILLETTE STADIUM (standin) |
-| 1970-1970 | Harvard Stadium | Boston, MA | Schaefer / Sullivan / Foxboro Stadium | GILLETTE STADIUM (standin): stopgap while Schaefer Stadium was built |
+| 1969-1969 | Alumni Stadium (Boston College) | Chestnut Hill, MA | Harvard Stadium | ALUMNI STADIUM (exact): Eras stadium pack (NCAA Football 07 model); falls back to GILLETTE STADIUM |
+| 1970-1970 | Harvard Stadium | Boston, MA | Schaefer / Sullivan / Foxboro Stadium | HARVARD STADIUM (exact): stopgap while Schaefer Stadium was built; Eras stadium pack (NCAA Football 07 model); falls back to GILLETTE STADIUM |
 | 1971-2001 | Schaefer / Sullivan / Foxboro Stadium | Foxborough, MA | Gillette Stadium | GILLETTE STADIUM (standin): renamed Sullivan 1983, Foxboro 1990; Gillette was built next door |
 | 2002-now | Gillette Stadium | Foxborough, MA | - | GILLETTE STADIUM (exact) |
 
@@ -190,7 +192,7 @@ NFL 2K5 venue an Eras game uses (`exact` = the same building is in the game, as 
 | Seasons | Stadium | City | Then moved to | In game |
 |---|---|---|---|---|
 | 1966-1981 | Oakland-Alameda County Coliseum | Oakland, CA | Los Angeles Memorial Coliseum | NETWORK ASSOCIATES (exact) |
-| 1982-1994 | Los Angeles Memorial Coliseum | Los Angeles, CA | Oakland-Alameda County Coliseum (Network Associates, McAfee, ...) | LA MEMORIAL COLISEUM (exact): Eras stadium pack (NCAA 07 USC model); falls back to QUALCOMM STADIUM |
+| 1982-1994 | Los Angeles Memorial Coliseum | Los Angeles, CA | Oakland-Alameda County Coliseum (Network Associates, McAfee, ...) | LA MEMORIAL COLISEUM (exact): Eras stadium pack (NCAA Football 07 model); falls back to QUALCOMM STADIUM |
 | 1995-2019 | Oakland-Alameda County Coliseum (Network Associates, McAfee, ...) | Oakland, CA | Allegiant Stadium | NETWORK ASSOCIATES (exact): Mt. Davis added 1996 (the game shows it) |
 | 2020-now | Allegiant Stadium | Paradise, NV | - | RELIANT STADIUM (standin): closed-roof stand-in (the mod tools have an Allegiant model) |
 
@@ -198,11 +200,11 @@ NFL 2K5 venue an Eras game uses (`exact` = the same building is in the game, as 
 
 | Seasons | Stadium | City | Then moved to | In game |
 |---|---|---|---|---|
-| 1946-1979 | Los Angeles Memorial Coliseum | Los Angeles, CA | Anaheim Stadium | LA MEMORIAL COLISEUM (exact): Eras stadium pack (NCAA 07 USC model); falls back to QUALCOMM STADIUM |
+| 1946-1979 | Los Angeles Memorial Coliseum | Los Angeles, CA | Anaheim Stadium | LA MEMORIAL COLISEUM (exact): Eras stadium pack (NCAA Football 07 model); falls back to QUALCOMM STADIUM |
 | 1980-1994 | Anaheim Stadium | Anaheim, CA | Busch Memorial Stadium | QUALCOMM STADIUM (standin) |
 | 1995-1995 | Busch Memorial Stadium | St. Louis, MO | Trans World Dome / Edward Jones Dome | EDWARD JONES DOME (standin): part of 1995 while the dome was finished |
 | 1995-2015 | Trans World Dome / Edward Jones Dome | St. Louis, MO | Los Angeles Memorial Coliseum | EDWARD JONES DOME (exact) |
-| 2016-2019 | Los Angeles Memorial Coliseum | Los Angeles, CA | SoFi Stadium | LA MEMORIAL COLISEUM (exact): temporary; Eras stadium pack (NCAA 07 USC model) |
+| 2016-2019 | Los Angeles Memorial Coliseum | Los Angeles, CA | SoFi Stadium | LA MEMORIAL COLISEUM (exact): temporary; Eras stadium pack (NCAA Football 07 model); falls back to QUALCOMM STADIUM |
 | 2020-now | SoFi Stadium | Inglewood, CA | - | RELIANT STADIUM (standin): closed-roof stand-in |
 
 ## ravens
@@ -217,15 +219,17 @@ NFL 2K5 venue an Eras game uses (`exact` = the same building is in the game, as 
 | Seasons | Stadium | City | Then moved to | In game |
 |---|---|---|---|---|
 | 1967-1974 | Tulane Stadium | New Orleans, LA | Louisiana Superdome / Caesars Superdome | LOUISIANA SUPER DOME (standin): expansion team 1967; open-air |
-| 1975-now | Louisiana Superdome / Caesars Superdome | New Orleans, LA | Alamodome / Tiger Stadium (LSU) / Giants Stadium | LOUISIANA SUPER DOME (exact): 2005: displaced by Hurricane Katrina |
-| 2005-2005 * | Alamodome / Tiger Stadium (LSU) / Giants Stadium | San Antonio / Baton Rouge / East Rutherford | - | LOUISIANA SUPER DOME (standin): 2005 only: home games split after Katrina (one at Giants Stadium) |
+| 1975-now | Louisiana Superdome / Caesars Superdome | New Orleans, LA | Alamodome | LOUISIANA SUPER DOME (exact): 2005: displaced by Hurricane Katrina |
+| 2005-2005 * | Alamodome | San Antonio, TX | Tiger Stadium (LSU) | ALAMODOME (exact): 2005 only, after Hurricane Katrina: 3 home games; Eras stadium pack (NCAA Football 07 model); falls back to LOUISIANA SUPER DOME |
+| 2005-2005 * | Tiger Stadium (LSU) | Baton Rouge, LA | Giants Stadium | TIGER STADIUM BATON ROUGE (exact): 2005 only, after Hurricane Katrina: 4 home games; Eras stadium pack (NCAA Football 07 model); falls back to TAMPA BAY STADIUM |
+| 2005-2005 * | Giants Stadium | East Rutherford, NJ | - | GIANTS STADIUM (exact): 2005 only, after Hurricane Katrina: 1 home game (vs Giants, Sept 19) |
 
 ## seahawks
 
 | Seasons | Stadium | City | Then moved to | In game |
 |---|---|---|---|---|
 | 1976-1999 | Kingdome | Seattle, WA | Husky Stadium | EDWARD JONES DOME (standin): expansion team 1976 |
-| 2000-2001 | Husky Stadium | Seattle, WA | Seahawks Stadium / Qwest Field / CenturyLink / Lumen Field | QWEST FIELD (standin): temporary |
+| 2000-2001 | Husky Stadium | Seattle, WA | Seahawks Stadium / Qwest Field / CenturyLink / Lumen Field | HUSKY STADIUM (exact): temporary; Eras stadium pack (NCAA Football 07 model); falls back to QWEST FIELD |
 | 2002-now | Seahawks Stadium / Qwest Field / CenturyLink / Lumen Field | Seattle, WA | - | QWEST FIELD (exact) |
 
 ## steelers

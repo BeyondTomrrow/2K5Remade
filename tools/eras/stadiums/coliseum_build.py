@@ -45,6 +45,7 @@ import nfl_txtr as T  # noqa: E402
 import scne as S  # noqa: E402
 import p8  # noqa: E402
 import ncaa_source as N  # noqa: E402
+import coliseum_neutral as CN  # noqa: E402
 
 DISC = ROOT / "original" / "disc"
 OUT = ROOT / "data" / "eras" / "stadiums" / "coliseum" / "build"
@@ -59,7 +60,8 @@ SKIP_SUBSTRINGS = ("LIGHTRIG_FIELD", "LIGHTRIG_CROWD")
 JUMBO = {"JUMBOTRON"}
 SELF_LIT = {"LIGHTS01_BMP_MATERIAL"}                  # the light-tower lamps: LIGHT_ materials stay bright at night
 BIG_TEXTURES = {"USC_Tower01_bmp"}            # the peristyle keeps 256x256; everything else 128 at most
-# USC's own marks become the game's team banners (the home team's art at runtime)
+# USC's own marks go onto the stadium's fan-banner materials. These are NOT swapped per team at runtime (no such name
+# lookup in default.xbe): their art is whatever the bundle carries; coliseum_neutral.py paints neutral banners there
 TEAM_BANNERS = {"USC_Sign01_bmp_MATERIAL", "USC_Sign02_bmp_MATERIAL", "USC_EdgeWall03_bmp_FILE1Material"}
 AD_BANNERS = {"BNR_G", "BNR_S"}                       # NCAA's runtime ad placeholders -> banner_corp cells
 EA_BOARD = "RAIL"                                     # the scoreboard texture with the EA SPORTS logos
@@ -73,6 +75,7 @@ YARD_MATERIALS = {"yardfront", "yardside"}
 TOD_TINT = {"d": (1.0, 1.0, 1.0), "a": (0.95, 0.88, 0.80), "n": (1.0, 1.0, 1.0)}
 WEATHER_TINT = {"d": (1.0, 1.0, 1.0), "r": (0.80, 0.83, 0.88), "s": (0.90, 0.92, 0.96)}
 
+SHAPE_PREFIX = "coliseum"   # new shape names (ncaa_stadiums.py sets its own)
 CELL = 4000.0       # cm: the stadium is split into shapes on a 40 m grid (frustum culling per shape)
 
 # the retail banner atlases (s24 banners_corp01 / banners_fan01): banner_corp is 2 x 4 ad cells; the team
@@ -255,7 +258,7 @@ def build_stadium_scene(sc, tris, mats, textures, report):
             n_words += len(words) // 4
         if len(positions) >= 0xFFFF:
             raise SystemExit(f"cell {ix},{iz}: too many vertices ({len(positions)})")
-        name = f"coliseum_{'jt' if jumbo else ''}{ix + 50:02d}_{iz + 50:02d}"
+        name = f"{SHAPE_PREFIX}_{'jt' if jumbo else ''}{ix + 50:02d}_{iz + 50:02d}"
         shape = S.static_shape(template_shape, name, positions, colours, uvs, subs)
         sc.shapes.append(shape)
         sc.nodes.append(S.node_for(template_node, name, name))
@@ -298,7 +301,7 @@ PROP_START = 3000.0
 
 def _squeeze(x):
     ax = abs(x)
-    if ax <= PROP_START:
+    if ax <= PROP_START or WALL_X >= 5110.0:          # nothing to squeeze when the wall is beyond the deepest prop
         return x
     k = (WALL_X - PROP_START) / (5110.0 - PROP_START)     # s24's deepest prop reaches 5101
     return math.copysign(PROP_START + (ax - PROP_START) * k, x)
@@ -392,9 +395,11 @@ def compress_chunk(kind, decoded, system_bytes, video_bytes, template_span):
     return T.HEADER.pack(kind.encode("ascii"), stored, system_bytes, video_bytes, head[4], scratch, 0, 0) + body
 
 
-def build_bundle(retail, tris, mats, textures, report):
+def build_bundle(retail, tris, mats, textures, report, variant="dd", dry=None, neutral=True):
+    """``dry``: coliseum_neutral.retail_dry() of the base venue (the neutral art's tone reference)."""
     chunks = T.parse_chunks(retail, allow_trailing=True)
     out = bytearray()
+    neutral = neutral and dry is not None
     for c in chunks:
         span = retail[c.offset:c.end_offset]
         if c.kind == "SCNE":
@@ -403,6 +408,8 @@ def build_bundle(retail, tris, mats, textures, report):
             if name == "stadium":
                 sc = S.parse(body, c.system_bytes, secondary=True)
                 build_stadium_scene(sc, tris, mats, textures, report)
+                if neutral:
+                    CN.neutral_banners(sc, variant, dry, report)
                 decoded, system, video = S.serialize(sc)
                 report["scene"] = dict(retail_system=c.system_bytes, retail_video=c.video_bytes,
                                        system=system, video=video)
@@ -411,8 +418,19 @@ def build_bundle(retail, tris, mats, textures, report):
             elif name == "cityscape":
                 sc = S.parse(body, c.system_bytes, secondary=True)
                 green_cityscape(sc, report)
+                if neutral:
+                    CN.neutral_cityscape(sc, variant, dry, report)
                 decoded, system, video = S.serialize(sc)
                 span = compress_chunk("SCNE", decoded, system, video, span)
+            elif name == "field" and neutral:               # patched in place: same layout as retail
+                body = bytearray(body)
+                sc = S.parse(bytes(body), c.system_bytes, secondary=True)
+                CN.neutral_field(body, c.system_bytes, sc, variant, dry, report)
+                span = compress_chunk("SCNE", body, c.system_bytes, c.video_bytes, span)
+        elif c.kind == "TXTR" and neutral:
+            new = CN.replace_loose_txtr(retail, c, compress_chunk, report)
+            if new is not None:
+                span = new
         out += span
     tail = retail[chunks[-1].end_offset:]
     out += tail
@@ -425,6 +443,8 @@ def main(argv=None):
     ap.add_argument("--base", default="s24", help="retail venue whose bundles are the base (default s24)")
     ap.add_argument("--out", type=Path, default=OUT)
     ap.add_argument("--only", nargs="*", default=None, help="variants to build, e.g. dd nd")
+    ap.add_argument("--retail-art", action="store_true",
+                    help="keep the base venue's field, pads, fan banners and backdrop (v1 behaviour)")
     a = ap.parse_args(argv)
     import game_assets as G
     archive = G.Archive(DISC)
@@ -438,7 +458,8 @@ def main(argv=None):
         tris, mats = convert_source(src, tint)
         retail = archive.read(f"{a.base}{v}.iff")
         rep = {}
-        data = build_bundle(retail, tris, mats, src.textures, rep)
+        data = build_bundle(retail, tris, mats, src.textures, rep, variant=v,
+                            dry=None if a.retail_art else CN.retail_dry(archive, a.base))
         path = a.out / f"{a.code}{v}.iff"
         path.write_bytes(data)
         rep.update(file=path.name, size=len(data), retail_size=len(retail),

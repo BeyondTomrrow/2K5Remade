@@ -1,0 +1,13 @@
+{
+  "name": "CLEMSON MEMORIAL STADIUM",
+  "display": "Memorial Stadium",
+  "location": "Clemson, SC",
+  "code": "s71",
+  "clone": "B of A Stadium",
+  "host": "Cat Park",
+  "capacity": 81473,
+  "indoor": 0,
+  "grass": 1,
+  "nfl": "Panthers 1995",
+  "source": "NCAA Football 07 Clemson Memorial Stadium (STAD.SRES 24, CLEMSO); tools/eras/stadiums/ncaa_stadiums.py"
+}
