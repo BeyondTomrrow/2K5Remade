@@ -1,0 +1,7 @@
+cmake_minimum_required(VERSION 3.20)
+project(RecompPatchCheck LANGUAGES C)
+enable_testing()
+add_executable(recomp_patch_check check.c)
+target_include_directories(recomp_patch_check PRIVATE ../../src/recomp/gen ../../src)
+set_target_properties(recomp_patch_check PROPERTIES C_STANDARD 11)
+add_test(NAME generated_patch_nested_calls COMMAND recomp_patch_check)

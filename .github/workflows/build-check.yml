@@ -16,6 +16,12 @@ jobs:
       - name: Runtime functions exist
         run: python tools/ci/check-runtime-symbols.py src external/xboxrecomp/src
 
+      - name: Check nested calls inside register-local patches
+        run: |
+          cmake -S tests/recomp_patch -B build-recomp-patch
+          cmake --build build-recomp-patch --config Release
+          ctest --test-dir build-recomp-patch -C Release --output-on-failure
+
       - name: Check out pinned SDL3 source (3.2.20)
         uses: actions/checkout@v4
         with:
@@ -46,6 +52,12 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y ninja-build libssl-dev libepoxy-dev libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev libxfixes-dev libxss-dev libwayland-dev libxkbcommon-dev
+
+      - name: Check nested calls inside register-local patches
+        run: |
+          cmake -S tests/recomp_patch -B build-recomp-patch
+          cmake --build build-recomp-patch --config Release
+          ctest --test-dir build-recomp-patch -C Release --output-on-failure
 
       - name: Check out pinned SDL3 source (3.2.20)
         uses: actions/checkout@v4
