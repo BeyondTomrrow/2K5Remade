@@ -15,4 +15,5 @@
 #define ebx r_ebx
 #define esi r_esi
 #define edi r_edi
+#pragma pop_macro("RECOMP_REGS_OUT")
 RECOMP_REGS_IN();

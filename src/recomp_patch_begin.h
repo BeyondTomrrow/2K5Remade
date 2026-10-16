@@ -4,6 +4,11 @@
  * out, and the register names mean the globals until recomp_patch_end.h.
  * No include guard: included once per block. */
 RECOMP_REGS_OUT();
+/* Nested calls already operate on the globals in this block. Resyncing the
+ * suspended locals would discard arguments and a newly pushed return address. */
+#pragma push_macro("RECOMP_REGS_OUT")
+#undef RECOMP_REGS_OUT
+#define RECOMP_REGS_OUT() ((void)0)
 #undef eax
 #undef ecx
 #undef edx
