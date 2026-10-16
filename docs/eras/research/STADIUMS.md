@@ -190,7 +190,7 @@ NFL 2K5 venue an Eras game uses (`exact` = the same building is in the game, as 
 | Seasons | Stadium | City | Then moved to | In game |
 |---|---|---|---|---|
 | 1966-1981 | Oakland-Alameda County Coliseum | Oakland, CA | Los Angeles Memorial Coliseum | NETWORK ASSOCIATES (exact) |
-| 1982-1994 | Los Angeles Memorial Coliseum | Los Angeles, CA | Oakland-Alameda County Coliseum (Network Associates, McAfee, ...) | QUALCOMM STADIUM (standin): large open bowl stand-in |
+| 1982-1994 | Los Angeles Memorial Coliseum | Los Angeles, CA | Oakland-Alameda County Coliseum (Network Associates, McAfee, ...) | LA MEMORIAL COLISEUM (exact): Eras stadium pack (NCAA 07 USC model); falls back to QUALCOMM STADIUM |
 | 1995-2019 | Oakland-Alameda County Coliseum (Network Associates, McAfee, ...) | Oakland, CA | Allegiant Stadium | NETWORK ASSOCIATES (exact): Mt. Davis added 1996 (the game shows it) |
 | 2020-now | Allegiant Stadium | Paradise, NV | - | RELIANT STADIUM (standin): closed-roof stand-in (the mod tools have an Allegiant model) |
 
@@ -198,11 +198,11 @@ NFL 2K5 venue an Eras game uses (`exact` = the same building is in the game, as 
 
 | Seasons | Stadium | City | Then moved to | In game |
 |---|---|---|---|---|
-| 1946-1979 | Los Angeles Memorial Coliseum | Los Angeles, CA | Anaheim Stadium | QUALCOMM STADIUM (standin) |
+| 1946-1979 | Los Angeles Memorial Coliseum | Los Angeles, CA | Anaheim Stadium | LA MEMORIAL COLISEUM (exact): Eras stadium pack (NCAA 07 USC model); falls back to QUALCOMM STADIUM |
 | 1980-1994 | Anaheim Stadium | Anaheim, CA | Busch Memorial Stadium | QUALCOMM STADIUM (standin) |
 | 1995-1995 | Busch Memorial Stadium | St. Louis, MO | Trans World Dome / Edward Jones Dome | EDWARD JONES DOME (standin): part of 1995 while the dome was finished |
 | 1995-2015 | Trans World Dome / Edward Jones Dome | St. Louis, MO | Los Angeles Memorial Coliseum | EDWARD JONES DOME (exact) |
-| 2016-2019 | Los Angeles Memorial Coliseum | Los Angeles, CA | SoFi Stadium | QUALCOMM STADIUM (standin): temporary |
+| 2016-2019 | Los Angeles Memorial Coliseum | Los Angeles, CA | SoFi Stadium | LA MEMORIAL COLISEUM (exact): temporary; Eras stadium pack (NCAA 07 USC model) |
 | 2020-now | SoFi Stadium | Inglewood, CA | - | RELIANT STADIUM (standin): closed-roof stand-in |
 
 ## ravens

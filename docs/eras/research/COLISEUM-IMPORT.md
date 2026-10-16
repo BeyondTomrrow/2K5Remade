@@ -97,7 +97,7 @@ code, so s60 is ignored (see "In-game test").
 `coliseum_ingame_test.ps1` installs it, drives a background Quick Game (`tools\bg-drive.ps1`), keeps frames
 and removes it again. It is a test path only: it puts a "Coliseum Test" team in Team Select while installed.
 
-### B. Eras only: the stadium pack (ready-to-apply patch, NOT applied)
+### B. Eras only: the stadium pack (applied 2026-10-16, works in game)
 
 The pack: `mods\eras\stadiums\LA_Coliseum\stadium.json` + `files\s60*.iff`
 (`coliseum_test_team.py install-pack` copies it from `data/eras/stadiums/coliseum/pack/LA_Coliseum`):
@@ -299,3 +299,52 @@ setup), or a private build with the patch (no builds were to be run).
   brightness (NCAA's night colours are brighter than retail's), the NCAA lamps' LIGHT_ material at night.
 * The cityscape is San Diego's (Mission Valley hills); a Los Angeles skyline would be new art.
 * The field-level ad banners use retail banner_corp cells; the 1940s-70s look (no ads) would want them blank.
+
+## In-game test with the pack (date 2026-10-16)
+
+Patches 1 and 2 of "B. Eras only" are now applied (`src/nfl2k5_team_files.c`, `src/nfl2k5_teams.c/.h`,
+`src/nfl2k5_eras_launch.c`) and built (`build\Release\NFL2K5.exe`); no further code change was needed. Pack
+installed at `mods\eras\stadiums\LA_Coliseum` (`stadium.json` + `files\s60*.iff`).
+
+Setup: `data\eras\runtime\1980\teams.csv` backed up, the Vikings' `stadium` set to `LA MEMORIAL COLISEUM`
+for the run, then restored byte for byte (SHA-256 `19ff397e...b268` before and after; the file is untracked,
+so `cmp` against the backup, not `git diff`, is the check). Runs with `tools\eras-capture-test.ps1 -NoCapture`
+(background, muted, press file, 1x render scale, 60 s quarters), sandbox user folders `logs\eras\col1-home`
+and `logs\eras\col2-home`. Fresh league -> Play Next Game (Falcons at Vikings) -> Coach Match Up -> Start
+Game, CPU vs CPU.
+
+**Result: the pack loads and the game is played in the Coliseum.** `logs\eras\col1.stderr.log`:
+
+    [TEAMS] Eras stadium pack LA_Coliseum: LA MEMORIAL COLISEUM (code s60, from QUALCOMM STADIUM) in row 811CE7F0 (LOCO ARENA)
+    [ERAS] launch 1980w01-falcons-vikings (week 1): ... stadium LA MEMORIAL COLISEUM (record 811CE7F0 id 96); uniforms 3/6; ...
+
+col1 played the 1st quarter, 2nd quarter and halftime (Falcons 7, Vikings 0) into the 2nd-half kickoff, then
+was stopped. No `[CRASH]`, no `SHARING_VIOLATION`. The intro banner reads "L.A. MEMORIAL COLISEUM / LOS
+ANGELES, CA"; peristyle arches, torch tower and clock are drawn in the end-zone views.
+
+Contact sheet: `logs\eras\coliseum-ingame-sheet.png`. Frames (`logs\eras\`): `col1-pg0..pg6.png` (pregame:
+blimp, banner `pg2`, flyover `pg3`, sideline intros), `col1-g01..g30.png` (kickoff `g01`, plays, end-zone
+`g07`, huddle wides `g17` / `g24` / `g28`, 1st-quarter end `g23`), `col1-wide2.png`, `col1-wide3.png`,
+`col1-halftime.png`, `col1-htshow.png`, `col1-kick2.png`; all raw frames in `col1-frames\`.
+
+What was seen:
+* **"SAN DIEGO" end zones** (known): `col1-pg3.png`, `col1-g01.png`, `col1-kick2.png`, `col1-g17.png`.
+* **Chargers branding from the Qualcomm clone**: "Let's Go CHARGERS" banners on the peristyle-end wall
+  (`col1-g07.png`), CHARGERS sideline boards (`col1-g04.png`), a navy helmet logo at midfield, apparently the
+  Chargers' (`col1-g18.png`, `col1-g26.png`, `col1-g30.png`).
+* Far stands: not cut off in any wide shot at 1x (`col1-g01.png`, `col1-wide2.png`, `col1-wide3.png`,
+  `col1-pg3.png`).
+* Camera through the peristyle: not seen in the intro flyover or the kickoff/huddle wides captured
+  (`col1-pg1..pg3`, `col1-g07`, `col1-g17`, `col1-kick2`); only 1 frame/5 s was sampled, so a brief clip
+  between samples cannot be ruled out.
+* Missing textures / wrong field: none seen. The cityscape behind the bowl is Qualcomm's hills (`col1-pg3.png`).
+* Night and other weather variants (the other eight bundles) were not exercised: the game was day/clear.
+
+**Clean-up and retail afterwards** (run col2, `logs\eras\col2.stderr.log`): same launch (pack line again),
+then pause -> Quit -> Quit: `abandoned 1980w01-falcons-vikings ...`, both slots released, and
+`[TEAMS] Eras stadium pack: row 811CE7F0 restored`. Back to Main Menu -> Quick Game: Team Select shows retail
+teams (`col2-qts.png`, Steelers at Cowboys), and the game opens at Texas Stadium, Irving TX
+(`col2-qpg4.png`). Retail unaffected.
+
+Note: col1 was stopped by killing the process, so `col1-home`'s league still says `launched = ...` (the next
+start of that sandbox logs the "not cleaned up" line and clears it; sandbox only).
