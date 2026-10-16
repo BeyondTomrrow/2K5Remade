@@ -1,0 +1,18 @@
+{
+  "abbreviation": "NE",
+  "city": "New England",
+  "name": "Patriots",
+  "season": 1980,
+  "eras_id": "patriots",
+  "colors": {
+    "primary": "#C8102E",
+    "secondary": "#002244",
+    "text": "#FFFFFF"
+  },
+  "logos": {
+    "scorebug": "logos/scorebug.png",
+    "mini": "logos/mini.png"
+  },
+  "source": "disc logo_16_6",
+  "colors_note": "1980 colours from memory, not yet checked against a source"
+}

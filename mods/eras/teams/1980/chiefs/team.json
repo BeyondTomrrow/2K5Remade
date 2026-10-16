@@ -1,0 +1,18 @@
+{
+  "abbreviation": "KC",
+  "city": "Kansas City",
+  "name": "Chiefs",
+  "season": 1980,
+  "eras_id": "chiefs",
+  "colors": {
+    "primary": "#E31837",
+    "secondary": "#FFB81C",
+    "text": "#FFFFFF"
+  },
+  "logos": {
+    "scorebug": "logos/scorebug.png",
+    "mini": "logos/mini.png"
+  },
+  "source": "disc logo_13_3",
+  "colors_note": "1980 colours from memory, not yet checked against a source"
+}

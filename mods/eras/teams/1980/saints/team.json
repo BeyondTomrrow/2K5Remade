@@ -1,0 +1,18 @@
+{
+  "abbreviation": "NO",
+  "city": "New Orleans",
+  "name": "Saints",
+  "season": 1980,
+  "eras_id": "saints",
+  "colors": {
+    "primary": "#9F8958",
+    "secondary": "#000000",
+    "text": "#FFFFFF"
+  },
+  "logos": {
+    "scorebug": "logos/scorebug.png",
+    "mini": "logos/mini.png"
+  },
+  "source": "disc logo_17_5",
+  "colors_note": "1980 colours from memory, not yet checked against a source"
+}

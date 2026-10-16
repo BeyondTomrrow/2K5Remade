@@ -1,0 +1,18 @@
+{
+  "abbreviation": "OAK",
+  "city": "Oakland",
+  "name": "Raiders",
+  "season": 1980,
+  "eras_id": "raiders",
+  "colors": {
+    "primary": "#000000",
+    "secondary": "#A5ACAF",
+    "text": "#FFFFFF"
+  },
+  "logos": {
+    "scorebug": "logos/scorebug.png",
+    "mini": "logos/mini.png"
+  },
+  "source": "disc logo_20_0",
+  "colors_note": "1980 colours from memory, not yet checked against a source"
+}

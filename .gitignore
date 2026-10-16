@@ -50,3 +50,7 @@ mods/presentations/NBC_SNF/assets/branding/*
 mods/teams/*/files/
 mods/teams/*/team.rost
 mods/teams/*/creator.json
+mods/eras/office/files/
+# My NFL Eras: art extracted from the player's disc or supplied by the user (never commit)
+mods/eras/teams/**/*.png
+mods/eras/teams/**/*.jpg

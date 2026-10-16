@@ -1,0 +1,18 @@
+{
+  "abbreviation": "BUF",
+  "city": "Buffalo",
+  "name": "Bills",
+  "season": 1980,
+  "eras_id": "bills",
+  "colors": {
+    "primary": "#00338D",
+    "secondary": "#C60C30",
+    "text": "#FFFFFF"
+  },
+  "logos": {
+    "scorebug": "logos/scorebug.png",
+    "mini": "logos/mini.png"
+  },
+  "source": "disc logo_03_4",
+  "colors_note": "1980 colours from memory, not yet checked against a source"
+}

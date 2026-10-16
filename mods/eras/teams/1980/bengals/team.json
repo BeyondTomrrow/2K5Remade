@@ -1,0 +1,18 @@
+{
+  "abbreviation": "CIN",
+  "city": "Cincinnati",
+  "name": "Bengals",
+  "season": 1980,
+  "eras_id": "bengals",
+  "colors": {
+    "primary": "#FB4F14",
+    "secondary": "#000000",
+    "text": "#FFFFFF"
+  },
+  "logos": {
+    "scorebug": "logos/scorebug.png",
+    "mini": "logos/mini.png"
+  },
+  "source": "user logo.png",
+  "colors_note": "1980 colours from memory, not yet checked against a source"
+}

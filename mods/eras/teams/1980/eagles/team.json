@@ -1,0 +1,18 @@
+{
+  "abbreviation": "PHI",
+  "city": "Philadelphia",
+  "name": "Eagles",
+  "season": 1980,
+  "eras_id": "eagles",
+  "colors": {
+    "primary": "#004C54",
+    "secondary": "#A5ACAF",
+    "text": "#FFFFFF"
+  },
+  "logos": {
+    "scorebug": "logos/scorebug.png",
+    "mini": "logos/mini.png"
+  },
+  "source": "disc logo_21_6",
+  "colors_note": "1980 colours from memory, not yet checked against a source"
+}
