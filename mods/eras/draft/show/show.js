@@ -87,7 +87,11 @@
       $('announce-2').style.visibility = 'visible';
     },
     DRAFT_PICK_CARD: function (e) {
-      show('announce', false);
+      /* the captions go at once (no fade: the card never shares the frame with "...SELECT"),
+       * then the card slides in on the team clip's end (this event is posted at its last sample) */
+      $('announce').classList.add('cut'); show('announce', false);
+      void $('announce').offsetWidth;
+      setTimeout(function () { $('announce').classList.remove('cut'); }, 50);
       colours(e);
       $('card-round').textContent = e.round;
       $('card-pick').textContent = e.roundPick;

@@ -17,6 +17,11 @@ Writes (gitignored: retail data, never committed):
         SCNE draftply1    the commissioner re-dressed as the drafted player: the same mesh and
                           skin, renamed, the coat and trousers palettes turned charcoal, the grey
                           hair darkened (palette-only edits: same size, same layout)
+        SCNE dhd01..dhdNN the player's heads (M12): byte copies of sideline head-coach packages
+                          (outers 348-383, SCNE coach, renamed 'coach' -> 'dhdNN' in every name:
+                          dhdNNBodyGrp1 / dhdNNLodGrp1 / dhdNNHeadGrp1), a set spanning the skin
+                          tones; the runtime hides the body and LOD nodes and draws the 29-joint
+                          coachHeadGrp1 attached to the suited player's thorax / neck / head joints.
         The office's extra-pack hook already serves mods\\eras\\office\\files\\*.iff from pack G,
         so the game opens erasdraft.iff by name under the draft show's own context (ERASDRAFT).
 
@@ -26,6 +31,10 @@ Writes (gitignored: retail data, never committed):
         in the commish01 joint order, then the root trajectory lanes 0..2 in centimetres.
         Layout: "DSPOSE01", u32 clip count; per clip: char name[32], u32 frames, f32 fps,
         u32 reserved, then frames * (25 * 4 + 3) floats.
+
+  mods/eras/draft/files/draftheads.csv
+        the heads in erasdraft.iff: scene name, coach outer, skin tone (median face colour r,g,b
+        of the head texture) and its group (light / medium / dark), for the hand and neck tint.
 
   mods/eras/draft/files/draftjerseys.bin
         one jersey per first-round pick: the drafting team's 1980 home torso (kit file
@@ -48,6 +57,14 @@ PACK = os.path.join(ROOT, 'mods', 'eras', 'office', 'files', 'erasdraft.iff')
 POSES = os.path.join(ROOT, 'mods', 'eras', 'draft', 'files', 'draftposes.bin')
 JERSEYS = os.path.join(ROOT, 'mods', 'eras', 'draft', 'files', 'draftjerseys.bin')
 PICKS = os.path.join(ROOT, 'mods', 'eras', 'draft', 'picks_1981.csv')
+HEADS_CSV = os.path.join(ROOT, 'mods', 'eras', 'draft', 'files', 'draftheads.csv')
+# Head-coach packages whose heads the suited player wears (M12): (outer, tone group). Picked off a
+# sheet of the 36 head textures (build/eras/draftshow/heads/sheet.png) to span the skin tones.
+HEADS = (
+    (348, 'dark'), (353, 'dark'), (359, 'dark'), (367, 'dark'), (382, 'dark'),
+    (355, 'medium'), (362, 'medium'), (376, 'medium'),
+    (349, 'light'), (357, 'light'), (371, 'light'), (377, 'light'),
+)
 TEAMS_CSV = os.path.join(ROOT, 'data', 'eras', 'runtime', '1980', 'teams.csv')
 # 1980 team -> kit asset code (docs/eras/research/ERA-LOGOS.md section 3)
 KIT_CODE = {
@@ -163,6 +180,61 @@ def make_player(M, B, src, key):
     bits = body[8]
     chunk, info = B.compressed_chunk('SCNE', bytes(d), system, video, stream_tag=tag, offset_bits=bits)
     return chunk, n, done
+
+
+# ---- the heads: renamed copies of head-coach packages ----------------------------------------
+
+def head_skin(M, src, key, dec, scene):
+    """Median face colour (r, g, b) of the package's head texture."""
+    import numpy as np
+    sys.path.insert(0, os.path.join(MODTOOLS, 'tools'))
+    import nfl_tset_png_import as T
+    import nfl_txtr as X
+    inv = M._tools_module('nfl_scne_inventory')
+    resource = src.resource(key)
+    system, video = int(resource.word_08), int(resource.word_0c)
+    mat = next(m for m in scene['materials'] if m.get('name') == 'headShader1')
+    t = scene['embedded_textures'][int(mat['texture_index'])]
+    info = inv.texture_info(dec, int(t['descriptor_offset']), scene['name'], int(t['index']))
+    w, h = info.width, info.height
+    pal = T.parse_palette(dec, system + info.palette_offset)
+    idx = X.unswizzle_2d(dec[video + info.pixel_offset:video + info.pixel_offset + w * h], w, h, 1)
+    rgb = np.frombuffer(T.rgba_from_indices(idx, pal), np.uint8).reshape(h, w, 4)[..., :3].astype(float)
+    r, g, b = rgb[..., 0], rgb[..., 1], rgb[..., 2]
+    m = (r > g) & (g >= b * 0.9) & (r > 40)
+    med = np.median(rgb[m], axis=0) if m.sum() > 100 else rgb.reshape(-1, 3).mean(0)
+    return tuple(int(x) for x in med)
+
+
+def make_heads(M, B, src):
+    """[(scene name, chunk)], csv rows: a coach package per HEADS entry, 'coach' -> 'dhdNN'."""
+    out, rows = [], []
+    old = 'coach'.encode('utf-16-le')
+    for k, (outer, group) in enumerate(HEADS):
+        key = 'o%dc0' % outer
+        name = 'dhd%02d' % (k + 1)
+        resource = src.resource(key)
+        span = src.span(resource)
+        _r, decoded, scene = src.parse(key)
+        if scene['name'] != 'coach' or len(scene['shapes']) != 3:
+            sys.exit('%s: not a coach package (%s, %d shapes)' % (key, scene['name'], len(scene['shapes'])))
+        d = bytearray(decoded)
+        new = name.encode('utf-16-le')
+        n, i = 0, d.find(old)
+        while i >= 0:
+            d[i:i + len(old)] = new
+            n += 1
+            i = d.find(old, i + 2)
+        skin = head_skin(M, src, key, decoded, scene)
+        system, video = int(resource.word_08), int(resource.word_0c)
+        body = span[0x20:]
+        tag = struct.unpack_from('<I', body, 4)[0]
+        bits = body[8]
+        chunk, _info = B.compressed_chunk('SCNE', bytes(d), system, video, stream_tag=tag, offset_bits=bits)
+        out.append((name, chunk))
+        rows.append('%s,%d,%d,%d,%d,%s' % (name, outer, skin[0], skin[1], skin[2], group))
+        print('  head %s <- outer %d (%d names, %d bytes, skin %s, %s)' % (name, outer, n, len(chunk), skin, group))
+    return out, rows
 
 
 # ---- poses -----------------------------------------------------------------------------------
@@ -382,6 +454,8 @@ def main():
     commish = src.span(src.resource('o2725c7'))
     player, renamed, recoloured = make_player(M, B, src, 'o2725c7')
     recs = [('draft_menu', room), ('cutscene', podium), ('commish01', commish), ('draftply1', player)]
+    heads, head_rows = make_heads(M, B, src)
+    recs += heads
     for want, rec in recs:
         got = office.record_name('SCNE', rec)
         if got != want:
@@ -391,6 +465,10 @@ def main():
         f.write(b''.join(pad16(r) for _, r in recs))
     print('wrote %s: %s (player: %d names, palettes %s)' % (PACK, ', '.join('%s %d' % (n, len(r)) for n, r in recs),
                                                            renamed, ', '.join(recoloured)))
+    os.makedirs(os.path.dirname(HEADS_CSV), exist_ok=True)
+    with open(HEADS_CSV, 'w') as f:
+        f.write('name,outer,r,g,b,group\n' + ''.join(r + '\n' for r in head_rows))
+    print('wrote %s (%d heads)' % (HEADS_CSV, len(head_rows)))
     poses, rows = bake_poses(A)
     os.makedirs(os.path.dirname(POSES), exist_ok=True)
     with open(POSES, 'wb') as f:

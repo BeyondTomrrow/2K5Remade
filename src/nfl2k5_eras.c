@@ -70,6 +70,7 @@ static struct {
     char created[32];
     char launched[48];              /* M4: a launched game not cleaned up yet */
     char office_look[12];           /* M3-office: "auto" (or empty) / "1970s" .. "2020s" */
+    char draft_show[8];             /* M12: "first" (or empty) / "mine" / "off" */
     char extra[2048];              /* unknown lines, written back unchanged */
 } s_league;
 
@@ -305,6 +306,7 @@ static int league_write(void)
     fprintf(f, "rosters = unverified community roster\r\n");
     if (s_league.launched[0]) fprintf(f, "launched = %s\r\n", s_league.launched);
     if (s_league.office_look[0]) fprintf(f, "office_look = %s\r\n", s_league.office_look);
+    if (s_league.draft_show[0]) fprintf(f, "draft_show = %s\r\n", s_league.draft_show);
     if (s_league.extra[0]) fputs(s_league.extra, f);
     if (fclose(f)) return -1;
     if (!MoveFileExA(tmp, path, MOVEFILE_REPLACE_EXISTING)) return -1;
@@ -344,6 +346,7 @@ int nfl2k5_eras_league_load(void)
         else if (!strcmp(key, "rosters")) { /* label, rewritten */ }
         else if (!strcmp(key, "launched")) copy(s_league.launched, sizeof s_league.launched, val);
         else if (!strcmp(key, "office_look")) copy(s_league.office_look, sizeof s_league.office_look, val);
+        else if (!strcmp(key, "draft_show")) copy(s_league.draft_show, sizeof s_league.draft_show, val);
         else if (used + strlen(key) + strlen(val) + 6 < sizeof s_league.extra)
             snprintf(s_league.extra + used, sizeof s_league.extra - used, "%s = %s\r\n", key, val);
     }
@@ -431,6 +434,17 @@ int nfl2k5_eras_set_office_look_saved(const char *look)
 {
     if (!s_league.loaded) return -1;
     copy(s_league.office_look, sizeof s_league.office_look, look && _stricmp(look, "auto") ? look : "");
+    if (league_write()) { fprintf(stderr, "[ERAS] league.ini could not be written\n"); return -1; }
+    return 0;
+}
+
+/* M12: the Draft Show setting ("first" / "mine" / "off"; "first" is the default and not written). */
+const char *nfl2k5_eras_draft_show_saved(void) { return s_league.loaded && s_league.draft_show[0] ? s_league.draft_show : "first"; }
+
+int nfl2k5_eras_set_draft_show_saved(const char *mode)
+{
+    if (!s_league.loaded) return -1;
+    copy(s_league.draft_show, sizeof s_league.draft_show, mode && _stricmp(mode, "first") ? mode : "");
     if (league_write()) { fprintf(stderr, "[ERAS] league.ini could not be written\n"); return -1; }
     return 0;
 }

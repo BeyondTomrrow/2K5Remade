@@ -13,6 +13,7 @@ body.demo { background: #20242c; }
 /* every element starts hidden and slides in */
 .bug, .lower, .board, .slam, .announce, .card, .photo-strip, .ticker { position: absolute; opacity: 0; transition: opacity .35s, transform .45s cubic-bezier(.2, .8, .2, 1); }
 .on { opacity: 1 !important; transform: none !important; }
+.cut { transition: none !important; }   /* hidden at once (the captions before the card) */
 
 /* top-left draft bug */
 .bug { left: 70px; top: 52px; width: 760px; height: 70px; transform: translateX(-40px); }

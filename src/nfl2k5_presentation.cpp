@@ -1364,17 +1364,19 @@ static void music_tick()
 }
 
 /* RECOMP_AUDIO_WAV recordings get the theme too (apu_xaudio2.c tap). */
-/* Front-end voice clips (My NFL Eras draft show, docs/eras/results/M11-draftshow.md): two
- * channels (a chime's tail can ring under the call), each one clip at a time, decoded by Media
- * Foundation to 48 kHz stereo and played on this file's own XAudio2 engine; mixed into the
- * RECOMP_AUDIO_WAV / video-clip recordings like the theme. The caller ducks the game's own audio
- * (menu music) with nfl2k5_presentation_voice_duck. */
-#define VOICE_CHANNELS 3
+/* Front-end voice clips (My NFL Eras draft show, docs/eras/results/M11-draftshow.md): four
+ * channels (a chime's tail can ring under the call; channel 3 is the show's looping music bed,
+ * M12), each one clip at a time, decoded by Media Foundation to 48 kHz stereo and played on this
+ * file's own XAudio2 engine; mixed into the RECOMP_AUDIO_WAV / video-clip recordings like the
+ * theme. The caller ducks the game's own audio (menu music) with nfl2k5_presentation_voice_duck,
+ * and a channel's level (the bed under the call) with nfl2k5_presentation_voice_gain. */
+#define VOICE_CHANNELS 4
 struct VoiceChannel {
     IXAudio2SourceVoice *voice = nullptr;
     std::vector<int16_t> pcm;
     size_t cap_pos = 0;
     float vol = 1.0f;
+    bool loop = false;                    /* the whole clip again and again (the bed) */
     std::atomic<int> state{ 0 };          /* 0 idle, 1 decoding, 2 playing */
     std::atomic<int> generation{ 0 };
     double length = 0;
@@ -1401,16 +1403,19 @@ extern "C" void nfl2k5_presentation_voice_stop(int ch)
         if (ch < 0 || ch == i) { ++s_voice.ch[i].generation; voice_release_locked(s_voice.ch[i]); s_voice.ch[i].state = 0; }
 }
 
-/* Starts decoding and playing `path` (WAV or MP3) on channel `ch` at `volume`; 0, or -1. */
-extern "C" int nfl2k5_presentation_voice_play(int ch, const char *path, float volume)
+/* Starts decoding and playing `path` (WAV or MP3) on channel `ch` at `volume`; 0, or -1.
+ * loop: the clip repeats without a break until stopped (XAudio2 loops the one buffer; the
+ * recording copy wraps the same way). */
+extern "C" int nfl2k5_presentation_voice_play_ex(int ch, const char *path, float volume, int loop)
 {
     if (!path || !*path || ch < 0 || ch >= VOICE_CHANNELS) return -1;
     nfl2k5_presentation_voice_stop(ch);
     VoiceChannel &c = s_voice.ch[ch];
     int gen = ++c.generation;
     c.state = 1;
+    c.loop = loop != 0;
     std::string p = path;
-    std::thread([p, gen, volume, ch]() {
+    std::thread([p, gen, volume, ch, loop]() {
         std::vector<int16_t> pcm;
         CoInitializeEx(nullptr, COINIT_MULTITHREADED);
         bool ok = decode_mp3(p, pcm);
@@ -1433,6 +1438,7 @@ extern "C" int nfl2k5_presentation_voice_play(int ch, const char *path, float vo
         b.AudioBytes = (UINT32)(c.pcm.size() * 2);
         b.pAudioData = (const BYTE *)c.pcm.data();
         b.Flags = XAUDIO2_END_OF_STREAM;
+        if (loop) { b.LoopBegin = 0; b.LoopLength = 0; b.LoopCount = XAUDIO2_LOOP_INFINITE; }
         c.voice->SubmitSourceBuffer(&b);
         c.vol = volume;
         c.voice->SetVolume(volume);
@@ -1440,9 +1446,27 @@ extern "C" int nfl2k5_presentation_voice_play(int ch, const char *path, float vo
         c.length = c.pcm.size() / 96000.0;
         c.voice->Start();
         c.state = 2;
-        fprintf(stderr, "[PRES] voice t=%lu ch %d playing %s (%.2f s, volume %.2f)\n", GetTickCount(), ch, p.c_str(), c.length, volume);
+        fprintf(stderr, "[PRES] voice t=%lu ch %d playing %s (%.2f s, volume %.2f%s)\n", GetTickCount(), ch, p.c_str(), c.length, volume,
+                loop ? ", looping" : "");
     }).detach();
     return 0;
+}
+
+extern "C" int nfl2k5_presentation_voice_play(int ch, const char *path, float volume)
+{
+    return nfl2k5_presentation_voice_play_ex(ch, path, volume, 0);
+}
+
+/* The channel's level now (speakers and the recording copy): the caller ramps it. */
+extern "C" void nfl2k5_presentation_voice_gain(int ch, float gain)
+{
+    if (ch < 0 || ch >= VOICE_CHANNELS) return;
+    std::lock_guard<std::mutex> g(s_voice.lock);
+    VoiceChannel &c = s_voice.ch[ch];
+    gain = gain < 0.0f ? 0.0f : gain > 4.0f ? 4.0f : gain;
+    if (c.vol == gain) return;
+    c.vol = gain;
+    if (c.voice && c.state == 2) c.voice->SetVolume(gain);
 }
 
 /* 0 idle (finished), 1 decoding, 2 playing; elapsed / length in seconds while playing. */
@@ -1483,6 +1507,7 @@ static void capture_mix(int16_t *buf, int frames)
             for (int i = 0; i < frames * 2 && c.cap_pos < c.pcm.size(); i++, c.cap_pos++) {
                 int x = buf[i] + (int)(c.pcm[c.cap_pos] * v);
                 buf[i] = (int16_t)(x > 32767 ? 32767 : x < -32768 ? -32768 : x);
+                if (c.loop && c.cap_pos + 1 >= c.pcm.size() && c.voice) c.cap_pos = (size_t)-1;   /* wraps to 0 */
             }
             if (c.cap_pos >= c.pcm.size() && !c.voice) { c.pcm.clear(); c.cap_pos = 0; }
         }

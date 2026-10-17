@@ -20,9 +20,21 @@
  * game's shading with no renderer of our own.
  *
  * Audio: mods\eras\draft\audio (supplied by the user): the chime, "With the Nth pick", then
- * the team, played with MCI on a worker thread (RECOMP_AUDIO_MUTE: opened and timed but not
- * played, every clip logged). The cards are an HTML page (mods\eras\draft\show) shown by the
- * presentation layer's front-end mode (nfl2k5_presentation_frontend_begin / post_json). */
+ * the team, played on the presentation layer's voice channels (XAudio2; RECOMP_AUDIO_MUTE
+ * silences the speakers only, the recordings keep the mix). The show's music is a looping bed
+ * on a fourth channel (M12: draft\audio\bed.* supplied by the user, else draft\files\audio\bed.wav
+ * cut from the game's own menu music by tools\eras\draftshow\make_bed.py) with the game's own
+ * menu music muted while the show runs, so the retail track's fade-out / restart gap never falls
+ * inside a pick; without a bed file the menu music plays as before. The cards are an HTML page
+ * (mods\eras\draft\show) shown by the presentation layer's front-end mode
+ * (nfl2k5_presentation_frontend_begin / post_json).
+ *
+ * The suited player (M12): a coach head from erasdraft.iff's dhdNN scenes (sideline head-coach
+ * packages) drawn attached to his thorax / neck / head joints, his own face and glasses hidden,
+ * his hands and neck tinted to the head's skin; the head is chosen per pick from the tone group
+ * in draft\looks_1981.csv (a hash of the player's name picks within the group, never the previous
+ * pick's head); the suit (charcoal / navy / black, by the same hash) and the tie (the drafting
+ * team's colour) are palette edits of his coat and trousers textures in guest memory. */
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -42,6 +54,7 @@ extern void nfl2k5_presentation_frontend_begin(const char *root_dir, const char 
 extern void nfl2k5_presentation_frontend_end(void);
 extern void nfl2k5_presentation_post_json(const char *json);
 extern void xbox_PresentRecord(int seconds);   /* NFL2K5_REC=<prefix>: presented frames (with the overlay) to MP4 */
+extern void xbox_AudioMuteGameMusic(int mute); /* the game's own music stream in the mixdown (apu_dsp.c) */
 
 #define FOURCC_SCNE   0x454E4353u
 #define PAD_WORDS     0x00B37A78u     /* the game's button word per pad (stride 0x244) */
@@ -49,8 +62,10 @@ extern void xbox_PresentRecord(int seconds);   /* NFL2K5_REC=<prefix>: presented
 #define FSM_DT        0x104u
 #define RET_ADDR      0xFEE0FFF0u
 #define NJ            25              /* joints of commish01 (the player skeleton) */
+#define NHJ           29              /* joints of a coach head (coachHeadGrp1: thorax, neck, head, the face) */
 #define MAXPICKS      400
 #define MAXCLIPS      12
+#define MAXHEADS      16
 
 /* ---- staging (scene units: draft_menu is about 6 units per centimetre) -------------------- *
  * Kept in step with tools/eras/draftshow/preview_shots.py. */
@@ -85,7 +100,13 @@ enum { SC_ROOM, SC_SET, SC_COMMISH, SC_PLAYER, SCENES };
 static const char *const k_scene[SCENES] = { "draft_menu", "cutscene", "commish01", "draftply1" };
 
 typedef struct { char name[32]; int frames; float fps; float *data; } Clip;   /* data: frames * 103 */
-typedef struct { int round, pick; char team[24], pfr[8], player[48], pos[8], college[48]; } Pick;
+typedef struct {
+    int round, pick; char team[24], pfr[8], player[48], pos[8], college[48];
+    char tone[16];                /* looks csv: light / medium / dark ("" = any) */
+    int head, suit;               /* chosen at pick_begin: head index, suit variant 0 charcoal 1 navy 2 black */
+    unsigned char no_number, no_team;   /* the call's clips that were missing (summary at the end) */
+} Pick;
+typedef struct { char name[16]; int outer; int rgb[3]; char group[12]; } Head;   /* draftheads.csv */
 
 enum { PH_OFF, PH_INTRO, PH_CLOCK, PH_CHIME, PH_NUMBER, PH_TEAM, PH_CARD, PH_WALK, PH_SHAKE, PH_HOLD, PH_OUT, PH_END };
 static const char *const k_phase[] = { "off", "intro", "on the clock", "chime", "number", "team", "card",
@@ -100,6 +121,7 @@ typedef struct {
     float fq[NJ][4], fade;    /* crossfade from this pose (fade 1 -> 0) */
     float hand[2][3];         /* world lhand, rhand after the last actor_write */
     float ik;                 /* chest-height hold weight 0..1 (chest_hold) */
+    float Rw[NJ][3][3], Pw[NJ][3];   /* model-space joint rotations / positions of the last actor_write (the head follows) */
 } Actor;
 
 typedef struct { int pick; char team[24]; uint8_t *px; } Jersey;   /* px: 16384 indices + 1024 palette */
@@ -119,6 +141,20 @@ static struct {
     int jparent[NJ];
     float jlocal[NJ][3];
     int joints_ok;
+    /* the heads (M12) */
+    Head heads[MAXHEADS];
+    int nheads;
+    uint32_t w_head[MAXHEADS], head_scene[MAXHEADS], head_node[MAXHEADS];
+    int hjparent[NHJ];
+    float hjlocal[NHJ][3];
+    int hjoints_ok, head_cur;
+    /* the suited player's pristine palettes (coat, pants, hand, neckmaterial), 1024 bytes BGRA each */
+    uint8_t pal_save[4][1024];
+    int pal_ok;
+    /* the music bed */
+    int bed_on, music_muted;
+    float bed_gain, bed_target;
+    int summary_done;
     /* show */
     int phase, cur, last, first;    /* pick indices into picks[] */
     float pt;                       /* time in phase */
@@ -259,7 +295,67 @@ static int load_picks(int year)
     }
     fclose(f);
     DS_LOG("picks: %d from %s\n", s_d.npicks, path);
+    /* draft\looks_<year>.csv: pick, player, skin_group (light / medium / dark), community_skin, source */
+    snprintf(rel, sizeof rel, "draft\\looks_%d.csv", year);
+    nfl2k5_eras_path(rel, path, sizeof path);
+    if (!fopen_s(&f, path, "rb") && f) {
+        int n = 0, i;
+        fgets(line, sizeof line, f);
+        while (fgets(line, sizeof line, f)) {
+            char a[16], b[64], g[16], *p = line;
+            field(&p, a, sizeof a); field(&p, b, sizeof b); field(&p, g, sizeof g);
+            for (i = 0; i < s_d.npicks; i++)
+                if (s_d.picks[i].round == 1 && s_d.picks[i].pick == atoi(a) && g[0]) { snprintf(s_d.picks[i].tone, sizeof s_d.picks[i].tone, "%s", g); n++; }
+        }
+        fclose(f);
+        DS_LOG("looks: %d tone groups from %s\n", n, path);
+    }
     return s_d.npicks ? 0 : -1;
+}
+
+/* draft\files\draftheads.csv (the pack builder): name, outer, r, g, b, group */
+static int load_heads(void)
+{
+    char path[MAX_PATH], line[128];
+    FILE *f;
+    nfl2k5_eras_path("draft\\files\\draftheads.csv", path, sizeof path);
+    s_d.nheads = 0;
+    if (fopen_s(&f, path, "rb") || !f) { DS_LOG("no %s: the player keeps the commissioner's head\n", path); return -1; }
+    fgets(line, sizeof line, f);
+    while (s_d.nheads < MAXHEADS && fgets(line, sizeof line, f)) {
+        Head *h = &s_d.heads[s_d.nheads];
+        char a[16], r[8], g[8], b[8], *p = line;
+        field(&p, h->name, sizeof h->name); field(&p, a, sizeof a);
+        field(&p, r, sizeof r); field(&p, g, sizeof g); field(&p, b, sizeof b); field(&p, h->group, sizeof h->group);
+        h->outer = atoi(a); h->rgb[0] = atoi(r); h->rgb[1] = atoi(g); h->rgb[2] = atoi(b);
+        if (h->name[0]) s_d.nheads++;
+    }
+    fclose(f);
+    DS_LOG("heads: %d from %s\n", s_d.nheads, path);
+    return s_d.nheads ? 0 : -1;
+}
+
+static uint32_t name_hash(const char *s)
+{
+    uint32_t h = 2166136261u;
+    for (; *s; s++) h = (h ^ (uint8_t)tolower((unsigned char)*s)) * 16777619u;
+    return h;
+}
+
+/* The head for pick i: from its tone group (any group when it has none), by the hash of the
+ * player's name, never the previous pick's head. -1 without heads. */
+static int head_choose(int i)
+{
+    int pool[MAXHEADS], n = 0, k, prev = i > s_d.first ? s_d.picks[i - 1].head : -1;
+    const Pick *p = &s_d.picks[i];
+    if (!s_d.nheads) return -1;
+    for (k = 0; k < s_d.nheads; k++)
+        if (!p->tone[0] || !_stricmp(p->tone, s_d.heads[k].group) || (!_stricmp(p->tone, "dark_medium") && !strcmp(s_d.heads[k].group, "medium")))
+            pool[n++] = k;
+    if (!n) for (k = 0; k < s_d.nheads; k++) pool[n++] = k;
+    k = (int)(name_hash(p->player) % (uint32_t)n);
+    if (pool[k] == prev && n > 1) k = (k + 1) % n;
+    return pool[k];
 }
 
 /* ---- audio (the presentation layer's voice channel: one clip at a time) --------------------- *
@@ -269,16 +365,20 @@ static int load_picks(int year)
  * mixed into the game's recordings; RECOMP_AUDIO_MUTE silences the speakers only. */
 
 extern int nfl2k5_presentation_voice_play(int ch, const char *path, float volume);
+extern int nfl2k5_presentation_voice_play_ex(int ch, const char *path, float volume, int loop);
 extern int nfl2k5_presentation_voice_state(int ch, double *elapsed, double *length);
 extern void nfl2k5_presentation_voice_stop(int ch);
 extern void nfl2k5_presentation_voice_duck(float gain);
+extern void nfl2k5_presentation_voice_gain(int ch, float gain);
 
 #define VOL_VOICE   1.0f
 #define VOL_CHIME   0.8f
+#define VOL_BED     1.0f      /* the bed file is cut at the menu music's own level (make_bed.py: -31 dBFS RMS) */
 #define DUCK_GAME   0.25f
+#define DUCK_RAMP   0.35f     /* seconds for the bed / music to move between full and ducked */
 #define CLIP_GAP    0.25f
 #define CHIME_CALL  3.4f      /* the call starts here: the chime's loud body is 0-3.3 s, its tail rings under the voice */
-enum { CH_CHIME, CH_NUMBER, CH_TEAM };   /* the presentation layer's voice channels */
+enum { CH_CHIME, CH_NUMBER, CH_TEAM, CH_BED };   /* the presentation layer's voice channels */
 
 static struct {
     int muted, active[3];
@@ -293,8 +393,61 @@ static void au_stop(void)
     for (i = 0; i < 3; i++) {
         if (s_au.active[i] && nfl2k5_presentation_voice_state(i, NULL, NULL)) DS_LOG("audio: %s stopped (skip)\n", s_au.name[i]);
         s_au.active[i] = 0;
+        nfl2k5_presentation_voice_stop(i);           /* the bed (CH_BED) plays on */
     }
-    nfl2k5_presentation_voice_stop(-1);
+}
+
+/* ---- the music bed (M12) --------------------------------------------------------------------- *
+ * A looping bed on CH_BED replaces the game's menu music while the show runs (the retail track
+ * ends and restarts with a ~2-4 s gap that used to fall inside picks). Files: draft\audio\bed.wav
+ * / .mp3 (the user's), else draft\files\audio\bed.wav (tools\eras\draftshow\make_bed.py). Under
+ * the call the bed (or, without a bed, the game's music) goes to DUCK_GAME over DUCK_RAMP s. */
+static void bed_start(void)
+{
+    static const char *const k_bed[] = { "draft\\audio\\bed.wav", "draft\\audio\\bed.mp3", "draft\\files\\audio\\bed.wav" };
+    char path[MAX_PATH];
+    int i;
+    if (s_d.bed_on || getenv("NFL2K5_ERAS_DRAFTSHOW_NOBED")) return;
+    for (i = 0; i < 3; i++) {
+        if (!nfl2k5_eras_exists(k_bed[i])) continue;
+        nfl2k5_eras_path(k_bed[i], path, sizeof path);
+        if (nfl2k5_presentation_voice_play_ex(CH_BED, path, VOL_BED, 1)) continue;
+        s_d.bed_on = 1;
+        s_d.bed_gain = s_d.bed_target = 1.0f;
+        xbox_AudioMuteGameMusic(1);
+        s_d.music_muted = 1;
+        DS_LOG("audio: music bed %s (looping; the game's menu music muted while the show runs)\n", k_bed[i]);
+        return;
+    }
+    DS_LOG("audio: no music bed (draft\\audio\\bed.wav or make_bed.py): the game's menu music plays, its track gap included\n");
+}
+
+static void bed_stop(void)
+{
+    if (s_d.bed_on) { nfl2k5_presentation_voice_stop(CH_BED); DS_LOG("audio: music bed stopped\n"); }
+    s_d.bed_on = 0;
+    if (s_d.music_muted) xbox_AudioMuteGameMusic(0);
+    s_d.music_muted = 0;
+    nfl2k5_presentation_voice_duck(1.0f);
+    s_d.bed_gain = s_d.bed_target = 1.0f;
+}
+
+/* the music under the call: the bed when there is one, else the game's own audio */
+static void duck(float gain)
+{
+    s_d.bed_target = gain;
+    if (!s_d.bed_on) nfl2k5_presentation_voice_duck(gain);
+}
+
+static void bed_tick(float dt)
+{
+    float k;
+    if (!s_d.bed_on || s_d.bed_gain == s_d.bed_target) return;
+    k = dt / DUCK_RAMP;
+    if (k > 1.0f) k = 1.0f;
+    s_d.bed_gain += (s_d.bed_target - s_d.bed_gain) * k;
+    if (fabsf(s_d.bed_target - s_d.bed_gain) < 0.01f) s_d.bed_gain = s_d.bed_target;
+    nfl2k5_presentation_voice_gain(CH_BED, VOL_BED * s_d.bed_gain);
 }
 
 static int au_suspect(const char *rel)
@@ -600,9 +753,10 @@ static void chest_hold(float Rw[NJ][3][3], float Pw[NJ][3], float w)
         float lu, ll, d, ca, sa, R[3][3];
         const int *j = arm[s];
         memcpy(S, Pw[j[0]], 12); memcpy(E, Pw[j[1]], 12); memcpy(H, Pw[j[3]], 12);
-        /* the target: between the thorax and the neck, 30 cm in front, 21 cm to the side */
+        /* the target: between the thorax and the neck, 30 cm in front, 21 cm to the side; 4 cm
+         * lower than M11 so the wrists stay behind the jersey's top (M12 item 4) */
         T[0] = Pw[10][0] + side * 21.0f;
-        T[1] = (Pw[10][1] + Pw[11][1]) * 0.5f - 2.0f;
+        T[1] = (Pw[10][1] + Pw[11][1]) * 0.5f - 6.0f;
         T[2] = Pw[10][2] + 30.0f;
         for (k = 0; k < 3; k++) T[k] = H[k] + (T[k] - H[k]) * w;      /* blend from the clip's hand */
         for (k = 0; k < 3; k++) { a1[k] = E[k] - S[k]; b1[k] = H[k] - E[k]; u[k] = T[k] - S[k]; }
@@ -659,6 +813,8 @@ static void actor_write(uint32_t scene, const Actor *a)
         }
     }
     if (a->ik > 0.0f) chest_hold(Rw, Pw, a->ik);
+    memcpy(((Actor *)a)->Rw, Rw, sizeof Rw);
+    memcpy(((Actor *)a)->Pw, Pw, sizeof Pw);
     for (i = 0; i < NJ; i++) {
         float M[3][3], T[3];
         uint32_t m = mats + (uint32_t)i * 64u;
@@ -674,6 +830,206 @@ static void actor_write(uint32_t scene, const Actor *a)
             h[0] = T[0] + off[0]; h[1] = T[1] + off[1]; h[2] = T[2] + off[2];
         }
     }
+}
+
+/* ---- the player's head: a coach head attached to the suited body (M12) -------------------- *
+ * A coach package's coachHeadGrp1 is a 29-joint skinned mesh in thorax space: joint 0 is the
+ * thorax (its root), 1 the neck, 2 the head (the same local offsets as the body's joints 10,
+ * 11, 12), the rest the face. Its current matrices are the body's thorax / neck / head world
+ * transforms, and the face joints ride rigidly under theirs, so the game's skinned renderer
+ * draws the head where the suited body's own (hidden) face would be. */
+static void head_joints_read(uint32_t scene, int node_index)
+{
+    uint32_t node = MEM32(scene + 0x28) + (uint32_t)node_index * 0x60u, shape, tf, n, i;
+    s_d.hjoints_ok = 0;
+    if (!MEM32(scene + 0x28) || MEM32(scene + 0x24) <= (uint32_t)node_index) return;
+    shape = MEM32(node + 8);
+    if (!shape) return;
+    n = MEM16(shape + 0x50);
+    tf = MEM32(shape + 0x64);
+    if (n != NHJ || !tf) { DS_LOG("head: %u transforms (want %d), table %08X\n", n, NHJ, tf); return; }
+    for (i = 0; i < NHJ; i++) {
+        uint32_t r = tf + i * 0x70u;
+        memcpy(s_d.hjlocal[i], &MEM32(r + 0x50), 12);
+        s_d.hjparent[i] = (int)MEM32(r + 0x64);
+        if (s_d.hjparent[i] >= (int)i || s_d.hjparent[i] < -1) { DS_LOG("head joint %u parent %d: bad table\n", i, s_d.hjparent[i]); return; }
+    }
+    s_d.hjoints_ok = 1;
+    DS_LOG("head: %d joints read (node %08X shape %08X matrices %08X)\n", NHJ, node, shape, MEM32(node + 0x14));
+}
+
+static void head_write(uint32_t node, const Actor *a)
+{
+    static const int body_of[3] = { 10, 11, 12 };        /* thorax, neck, head */
+    float R[NHJ][3][3], P[NHJ][3], W[3][3], off[3], yaw = a->yaw * 3.14159265f / 180.0f, cy = cosf(yaw), sy = sinf(yaw);
+    uint32_t mats = node ? MEM32(node + 0x14) : 0;
+    int i, r, c;
+    if (!mats || !s_d.hjoints_ok) return;
+    W[0][0] = cy * SCALE; W[0][1] = 0; W[0][2] = sy * SCALE;
+    W[1][0] = 0;          W[1][1] = SCALE; W[1][2] = 0;
+    W[2][0] = -sy * SCALE; W[2][1] = 0; W[2][2] = cy * SCALE;
+    off[0] = a->x; off[1] = STAGE_Y + a->root_y * SCALE; off[2] = a->z;
+    for (i = 0; i < NHJ; i++) {
+        if (i < 3) {
+            memcpy(R[i], a->Rw[body_of[i]], sizeof R[i]);
+            memcpy(P[i], a->Pw[body_of[i]], sizeof P[i]);
+        } else {
+            int p = s_d.hjparent[i] < 0 ? 0 : s_d.hjparent[i];
+            float t[3];
+            memcpy(R[i], R[p], sizeof R[i]);
+            mvec(R[p], s_d.hjlocal[i], t);
+            P[i][0] = P[p][0] + t[0]; P[i][1] = P[p][1] + t[1]; P[i][2] = P[p][2] + t[2];
+        }
+    }
+    for (i = 0; i < NHJ; i++) {
+        float M[3][3], T[3];
+        uint32_t m = mats + (uint32_t)i * 64u;
+        mmul(W, R[i], M);
+        mvec(W, P[i], T);
+        for (r = 0; r < 3; r++) {
+            for (c = 0; c < 3; c++) putf(m + (uint32_t)(r * 16 + c * 4), M[c][r]);
+            putf(m + (uint32_t)(r * 16 + 12), 0.0f);
+        }
+        putf(m + 48, T[0] + off[0]); putf(m + 52, T[1] + off[1]); putf(m + 56, T[2] + off[2]); putf(m + 60, 1.0f);
+    }
+}
+
+/* ---- the player's suit, tie and skin: palette edits in guest memory (M12) ----------------- *
+ * draftply1's textures are P8 with a 1024-byte BGRA palette; the pristine palettes are saved at
+ * load and each pick's look is written from them (the commissioner's scene is untouched). */
+extern uint32_t xbox_ContiguousAllocatedBytes(void);
+static uint32_t phys_va(uint32_t x)
+{
+    if (x & 0x40000000u) return x & 0x03FFFFFFu;                  /* XBOX_PHYS_LOW_TAG */
+    if (x < xbox_ContiguousAllocatedBytes()) return 0x80000000u + x;   /* XBOX_CONTIG_BASE */
+    return x;
+}
+
+static const char *const k_pal_mat[4] = { "coat", "pants", "hand", "neckmaterial" };
+
+static uint32_t pal_addr(int which)
+{
+    uint32_t m = s_d.scene[SC_PLAYER] ? find_mat(s_d.scene[SC_PLAYER], k_pal_mat[which]) : 0, t = m ? MEM32(m + 0x30) : 0;
+    return t ? phys_va(MEM32(t + 8)) : 0;
+}
+
+static void pal_snapshot(void)
+{
+    int w;
+    uint32_t i;
+    s_d.pal_ok = 1;
+    for (w = 0; w < 4; w++) {
+        uint32_t p = pal_addr(w);
+        if (!p) { DS_LOG("palette: no %s texture\n", k_pal_mat[w]); s_d.pal_ok = 0; return; }
+        for (i = 0; i < 1024; i++) s_d.pal_save[w][i] = MEM8(p + i);
+    }
+}
+
+static void rgb_to_hls(float r, float g, float b, float *h, float *l, float *s)
+{
+    float mx = r > g ? (r > b ? r : b) : (g > b ? g : b), mn = r < g ? (r < b ? r : b) : (g < b ? g : b), d = mx - mn;
+    *l = (mx + mn) * 0.5f;
+    if (d < 1e-6f) { *h = 0; *s = 0; return; }
+    *s = *l > 0.5f ? d / (2.0f - mx - mn) : d / (mx + mn);
+    if (mx == r) *h = (g - b) / d + (g < b ? 6.0f : 0.0f);
+    else if (mx == g) *h = (b - r) / d + 2.0f;
+    else *h = (r - g) / d + 4.0f;
+    *h /= 6.0f;
+}
+
+static uint8_t clamp8(float v) { return (uint8_t)(v < 0 ? 0 : v > 255 ? 255 : v + 0.5f); }
+
+static int hex_rgb(const char *s, float rgb[3])
+{
+    unsigned v;
+    if (!s || s[0] != '#' || strlen(s) < 7 || sscanf_s(s + 1, "%6x", &v) != 1) return -1;
+    rgb[0] = (float)((v >> 16) & 255); rgb[1] = (float)((v >> 8) & 255); rgb[2] = (float)(v & 255);
+    return 0;
+}
+
+/* which 0 coat / 1 pants: suit 0 charcoal (as baked) / 1 navy / 2 black; the tie (saturated red
+ * entries of the coat) in the team colour, its shading kept. */
+static void pal_suit(int which, int suit, const float *tie)
+{
+    uint32_t p = pal_addr(which), i;
+    float tie_l = 0;
+    int tie_n = 0;
+    if (!p || !s_d.pal_ok) return;
+    for (i = 0; i < 256; i++) {
+        const uint8_t *e = s_d.pal_save[which] + 4 * i;
+        float h, l, s;
+        rgb_to_hls(e[2] / 255.0f, e[1] / 255.0f, e[0] / 255.0f, &h, &l, &s);
+        if (which == 0 && s > 0.35f && (h < 0.06f || h > 0.92f)) { tie_l += l; tie_n++; }
+    }
+    if (tie_n) tie_l /= (float)tie_n;
+    for (i = 0; i < 256; i++) {
+        const uint8_t *e = s_d.pal_save[which] + 4 * i;
+        float r = e[2], g = e[1], b = e[0], h, l, s;
+        rgb_to_hls(r / 255.0f, g / 255.0f, b / 255.0f, &h, &l, &s);
+        if (which == 0 && tie && s > 0.35f && (h < 0.06f || h > 0.92f)) {
+            float k = tie_l > 0.02f ? l / tie_l : 1.0f;             /* the entry's shade relative to the tie's mean */
+            r = tie[0] * k; g = tie[1] * k; b = tie[2] * k;
+        } else if (s < 0.16f && l < 0.62f) {                        /* the cloth (grey after the builder), the belt */
+            float v = l * 255.0f;
+            if (suit == 1) { r = v * 0.62f; g = v * 0.72f; b = v * 1.45f + 10.0f; }
+            else if (suit == 2) { r = v * 0.5f; g = v * 0.5f; b = v * 0.52f; }
+        }
+        MEM8(p + 4 * i + 0) = clamp8(b); MEM8(p + 4 * i + 1) = clamp8(g); MEM8(p + 4 * i + 2) = clamp8(r);
+        MEM8(p + 4 * i + 3) = e[3];
+    }
+}
+
+/* which 2 hand / 3 neck: the skin entries scaled from their mean to the head's skin colour */
+static void pal_skin(int which, const int *rgb)
+{
+    uint32_t p = pal_addr(which), i;
+    float mean[3] = { 0, 0, 0 }, k[3];
+    int n = 0, c;
+    if (!p || !s_d.pal_ok || !rgb) return;
+    for (i = 0; i < 256; i++) {
+        const uint8_t *e = s_d.pal_save[which] + 4 * i;
+        if (e[2] > e[1] && e[1] >= e[0] * 0.9f && e[2] > 60 && e[2] < 250) { mean[0] += e[2]; mean[1] += e[1]; mean[2] += e[0]; n++; }
+    }
+    if (n < 8) return;
+    for (c = 0; c < 3; c++) { mean[c] /= (float)n; k[c] = mean[c] > 1 ? (float)rgb[c] / mean[c] : 1.0f; }
+    for (i = 0; i < 256; i++) {
+        const uint8_t *e = s_d.pal_save[which] + 4 * i;
+        float r = e[2], g = e[1], b = e[0];
+        if (e[2] > e[1] && e[1] >= e[0] * 0.9f && e[2] > 60) { r *= k[0]; g *= k[1]; b *= k[2]; }
+        MEM8(p + 4 * i + 0) = clamp8(b); MEM8(p + 4 * i + 1) = clamp8(g); MEM8(p + 4 * i + 2) = clamp8(r);
+        MEM8(p + 4 * i + 3) = e[3];
+    }
+}
+
+/* The look of pick i: head, suit, tie, skin (the choice is deterministic: the player's name). */
+static void look_apply(int i)
+{
+    Pick *k = &s_d.picks[i];
+    const TeamLook *t = team_look(k->team);
+    float tie[3] = { 160, 30, 40 }, h, l, s;
+    const int *skin = NULL;
+    static const float k_cloth[3][3] = { { 62, 62, 62 }, { 40, 48, 100 }, { 30, 30, 32 } };   /* charcoal, navy, black as drawn */
+    k->head = head_choose(i);
+    k->suit = (int)((name_hash(k->player) >> 8) % 3u);
+    if (i > s_d.first && k->suit == s_d.picks[i - 1].suit) k->suit = (k->suit + 1) % 3;   /* never the previous pick's suit */
+    if (t && !hex_rgb(t->primary, tie)) {
+        const float *c = k_cloth[k->suit];
+        float d = fabsf(tie[0] - c[0]) + fabsf(tie[1] - c[1]) + fabsf(tie[2] - c[2]);
+        rgb_to_hls(tie[0] / 255.0f, tie[1] / 255.0f, tie[2] / 255.0f, &h, &l, &s);
+        /* a white / grey primary, or one that would vanish against the suit (navy on navy): the secondary */
+        if ((l > 0.82f || s < 0.12f || d < 90.0f) && !hex_rgb(t->secondary, tie)) {}
+        rgb_to_hls(tie[0] / 255.0f, tie[1] / 255.0f, tie[2] / 255.0f, &h, &l, &s);
+        if (l > 0.82f) { tie[0] *= 0.7f; tie[1] *= 0.7f; tie[2] *= 0.7f; }
+    }
+    if (k->head >= 0) skin = s_d.heads[k->head].rgb;
+    s_d.head_cur = k->head;
+    pal_suit(0, k->suit, tie);
+    pal_suit(1, k->suit, NULL);
+    if (skin) { pal_skin(2, skin); pal_skin(3, skin); }
+    DS_LOG("pick %d look: %s, head %s (%s%s), suit %s, tie #%02X%02X%02X%s\n", k->pick, k->player,
+           k->head >= 0 ? s_d.heads[k->head].name : "commissioner's", k->head >= 0 ? s_d.heads[k->head].group : "-",
+           k->tone[0] ? "" : ", no tone in looks csv: any", k->suit == 1 ? "navy" : k->suit == 2 ? "black" : "charcoal",
+           (unsigned)clamp8(tie[0]), (unsigned)clamp8(tie[1]), (unsigned)clamp8(tie[2]), s_d.pal_ok ? "" : " (palettes not found: unchanged)");
 }
 
 /* ---- the jersey prop (the set's STAGE quad, reshaped by the pack builder) ------------------- */
@@ -696,14 +1052,6 @@ static int load_jerseys(void)
     s_d.njerseys = (int)n;
     DS_LOG("jerseys: %u from %s\n", n, path);
     return 0;
-}
-
-extern uint32_t xbox_ContiguousAllocatedBytes(void);
-static uint32_t phys_va(uint32_t x)
-{
-    if (x & 0x40000000u) return x & 0x03FFFFFFu;                  /* XBOX_PHYS_LOW_TAG */
-    if (x < xbox_ContiguousAllocatedBytes()) return 0x80000000u + x;   /* XBOX_CONTIG_BASE */
-    return x;
 }
 
 /* Write pick `pick`'s jersey over the platform texture (P8 128x128, one level). */
@@ -833,14 +1181,30 @@ static void cam_write(void)
 
 /* ---- package ------------------------------------------------------------------------------ */
 
+/* The Draft Show setting: NFL2K5_ERAS_DRAFTSHOW when set, else league.ini draft_show (M12). */
+static int mode_parse(const char *e)
+{
+    return !e || !*e ? 1 : !_stricmp(e, "off") || !strcmp(e, "0") ? 0 : !_stricmp(e, "mine") || !strcmp(e, "2") ? 2 : 1;
+}
+
+int nfl2k5_eras_draftshow_mode_forced(void)
+{
+    const char *e = getenv("NFL2K5_ERAS_DRAFTSHOW");
+    return e && *e;
+}
+
+static int mode_now(void)
+{
+    return nfl2k5_eras_draftshow_mode_forced() ? mode_parse(getenv("NFL2K5_ERAS_DRAFTSHOW")) : mode_parse(nfl2k5_eras_draft_show_saved());
+}
+
 static int init(void)
 {
     int i;
     if (s_d.init) return s_d.mem ? 0 : -1;
     s_d.init = 1;
     { const char *e = getenv("NFL2K5_ERAS_LOG"); s_d.log = e && *e && *e != '0'; }
-    { const char *e = getenv("NFL2K5_ERAS_DRAFTSHOW");
-      s_d.mode = !e || !*e ? 1 : !_stricmp(e, "off") || !strcmp(e, "0") ? 0 : !_stricmp(e, "mine") || !strcmp(e, "2") ? 2 : 1; }
+    s_d.mode = mode_now();
     s_d.size = 16u * 1024u;
     s_d.mem = xbox_HeapAlloc(s_d.size, 16);
     if (!s_d.mem) return -1;
@@ -851,6 +1215,8 @@ static int init(void)
     s_d.w_ctx = d_wstr("ERASDRAFT");
     s_d.w_file = d_wstr("erasdraft.iff");
     for (i = 0; i < SCENES; i++) s_d.w_scene[i] = d_wstr(k_scene[i]);
+    if (!s_d.nheads) load_heads();
+    for (i = 0; i < s_d.nheads; i++) s_d.w_head[i] = d_wstr(s_d.heads[i].name);
     MEM32(s_d.camrec) = d_wstr("erasdraftcam");
     putf(s_d.camrec + 0x50, 35.0f);
     if (!s_d.w_scene[SCENES - 1]) { s_d.mem = 0; return -1; }
@@ -868,9 +1234,19 @@ int nfl2k5_eras_draftshow_ready(void)
     return s_d.ready;
 }
 
-int nfl2k5_eras_draftshow_mode(void) { init(); return s_d.mode; }
+int nfl2k5_eras_draftshow_mode(void) { init(); s_d.mode = mode_now(); return s_d.mode; }
 const char *nfl2k5_eras_draftshow_mode_name(int m) { return m == 0 ? "Off" : m == 2 ? "Your Picks" : "First Round"; }
-void nfl2k5_eras_draftshow_set_mode(int m) { init(); s_d.mode = m < 0 || m > 2 ? 1 : m; }
+int nfl2k5_eras_draftshow_set_mode(int m)
+{
+    static const char *const k_key[3] = { "off", "first", "mine" };
+    init();
+    if (m < 0 || m > 2) m = 1;
+    if (nfl2k5_eras_draftshow_mode_forced()) { DS_LOG("mode: NFL2K5_ERAS_DRAFTSHOW is set: the setting is not changed\n"); return -1; }
+    if (nfl2k5_eras_set_draft_show_saved(k_key[m])) return -1;
+    s_d.mode = m;
+    DS_LOG("mode: %s (league.ini draft_show = %s)\n", nfl2k5_eras_draftshow_mode_name(m), k_key[m]);
+    return 0;
+}
 
 static int load(void)
 {
@@ -885,6 +1261,7 @@ static int load(void)
     gcall(sub_00043F50, s_d.w_ctx, s_d.w_file);
     gcall(sub_000432D0, 0, 0);
     for (i = 0; i < SCENES; i++) s_d.scene[i] = lookup(s_d.w_ctx, FOURCC_SCNE, s_d.w_scene[i]);
+    for (i = 0; i < s_d.nheads; i++) s_d.head_scene[i] = lookup(s_d.w_ctx, FOURCC_SCNE, s_d.w_head[i]);
     g_ebx = save_ebx; g_esi = save_esi; g_edi = save_edi; g_ebp = save_ebp;
     DS_LOG("load: ERASDRAFT draft_menu %08X cutscene %08X commish01 %08X draftply1 %08X; %lu ms\n",
            s_d.scene[0], s_d.scene[1], s_d.scene[2], s_d.scene[3], (unsigned long)(GetTickCount() - t0));
@@ -922,7 +1299,32 @@ static int load(void)
     if (s_d.scene[SC_PLAYER]) {
         uint32_t g = find_mat(s_d.scene[SC_PLAYER], "glasses");
         if (g) MEM32(g + 8) |= 1u;
+        pal_snapshot();
     }
+    /* the heads: only the head node of each coach package, drawn with no frustum test */
+    s_d.hjoints_ok = 0;
+    for (i = 0; i < s_d.nheads; i++) {
+        char nm[32];
+        uint32_t sc = s_d.head_scene[i], n;
+        s_d.head_node[i] = 0;
+        if (!sc) { DS_LOG("head %s: not in erasdraft.iff (rebuild the pack)\n", s_d.heads[i].name); continue; }
+        snprintf(nm, sizeof nm, "%sBodyGrp1", s_d.heads[i].name);
+        if ((n = find_node(sc, nm))) MEM32(n + 0x0C) |= 0x10u;
+        snprintf(nm, sizeof nm, "%sLodGrp1", s_d.heads[i].name);
+        if ((n = find_node(sc, nm))) MEM32(n + 0x0C) |= 0x10u;
+        snprintf(nm, sizeof nm, "%sHeadGrp1", s_d.heads[i].name);
+        s_d.head_node[i] = find_node(sc, nm);
+        if (!s_d.head_node[i]) { DS_LOG("head %s: no node %s\n", s_d.heads[i].name, nm); continue; }
+        MEM32(s_d.head_node[i] + 0x0C) |= 0x4u;
+        if (!s_d.hjoints_ok) head_joints_read(sc, (int)((s_d.head_node[i] - MEM32(sc + 0x28)) / 0x60u));
+    }
+    if (s_d.hjoints_ok && s_d.scene[SC_PLAYER]) {
+        /* the suited body's own face goes: its head is one of the coach heads */
+        uint32_t f = find_mat(s_d.scene[SC_PLAYER], "face");
+        if (f) MEM32(f + 8) |= 1u;
+        DS_LOG("heads: %d coach heads ready; the player's face material hidden\n", s_d.nheads);
+    }
+    s_d.head_cur = -1;
     if (s_d.scene[SC_COMMISH]) joints_read(s_d.scene[SC_COMMISH]);
     gcall(sub_00066B20, s_d.camobj, 0);
     return 0;
@@ -934,7 +1336,31 @@ static void unload(void)
     gcall(sub_000432F0, s_d.w_ctx, 0);
     s_d.loaded = 0;
     memset(s_d.scene, 0, sizeof s_d.scene);
+    memset(s_d.head_scene, 0, sizeof s_d.head_scene);
+    memset(s_d.head_node, 0, sizeof s_d.head_node);
+    s_d.hjoints_ok = s_d.pal_ok = 0;
     DS_LOG("unloaded ERASDRAFT\n");
+}
+
+/* One line at the end naming the picks whose call had no number / team clip (M12 item 7). */
+static void summary_log(void)
+{
+    char line[1024];
+    size_t n = 0;
+    int i, missing = 0;
+    if (s_d.summary_done) return;
+    s_d.summary_done = 1;
+    line[0] = 0;
+    for (i = s_d.first; i <= s_d.last && i < s_d.npicks; i++) {
+        const Pick *k = &s_d.picks[i];
+        if (!k->no_number && !k->no_team) continue;
+        missing++;
+        if (n + 80 < sizeof line)
+            n += (size_t)snprintf(line + n, sizeof line - n, "%s%d %s (%s%s%s)", n ? ", " : "", k->pick, k->team,
+                                  k->no_number ? "number" : "", k->no_number && k->no_team ? " + " : "", k->no_team ? "team" : "");
+    }
+    if (missing) DS_LOG("audio summary: %d pick(s) had no clip to record: %s\n", missing, line);
+    else DS_LOG("audio summary: every pick shown had its number and team clips\n");
 }
 
 /* ---- the show ----------------------------------------------------------------------------- */
@@ -961,12 +1387,14 @@ static void pick_begin(void)
         phase(PH_END);
         post_board("DRAFT_ROUND_SUMMARY");
         cam_go(SH_WIDE, 3.0f);
+        summary_log();
         return;
     }
     s_d.player_on = 0;
     actor_clip(&s_d.commish, "idle", 0.0f, 7.0f, 1.0f, 1, 0.3f);
     s_d.jersey_on = 0;
     jersey_apply(s_d.picks[s_d.cur].pick);
+    look_apply(s_d.cur);
     post_board("DRAFT_BOARD");
     post_pick("DRAFT_ON_CLOCK", s_d.cur);
     cam_go(SH_BOARD, 1.5f);
@@ -983,6 +1411,9 @@ static void show_start(void)
     if ((e = getenv("NFL2K5_ERAS_DRAFTSHOW_PICKS")) && atoi(e) > 0 && s_d.first + atoi(e) - 1 < s_d.last)
         s_d.last = s_d.first + atoi(e) - 1;                       /* test switch: only the first N picks */
     s_d.cur = s_d.first;
+    s_d.mode = mode_now();
+    s_d.summary_done = 0;
+    for (k = 0; k < s_d.npicks; k++) { s_d.picks[k].no_number = s_d.picks[k].no_team = 0; s_d.picks[k].head = -1; }
     if ((e = getenv("NFL2K5_ERAS_DRAFTSHOW_SKIP")) && !_stricmp(e, "mine")) {   /* "Skip to my pick" */
         for (k = s_d.first; k <= s_d.last && !user_pick(k); k++) {}
         if (k <= s_d.last) s_d.cur = k;
@@ -1007,7 +1438,7 @@ static void show_start(void)
 static void next_pick(void)
 {
     au_stop();
-    nfl2k5_presentation_voice_duck(1.0f);
+    duck(1.0f);
     s_d.cur++;
     nfl2k5_presentation_post_json("{\"name\":\"DRAFT_CLEAR\"}");
     pick_begin();
@@ -1027,7 +1458,7 @@ static void tick(float dt)
         /* watched picks: a short beat with the clock running fast (any button ends it) */
         if (s_d.pt > 3.0f || s_d.clock_skip) {
             s_d.clock_skip = 0;
-            nfl2k5_presentation_voice_duck(DUCK_GAME);          /* the menu music under the call */
+            duck(DUCK_GAME);                                    /* the music under the call */
             au_stop();
             s_d.vstep = au_play(CH_CHIME, "pick_is_in_chime.mp3", VOL_CHIME) ? 2 : 0;
             post_pick("DRAFT_PICK_IN", s_d.cur);
@@ -1047,7 +1478,7 @@ static void tick(float dt)
             snprintf(rel, sizeof rel, "numbers\\number_%02d.mp3", k ? k->pick : 1);
             s_d.vstep = au_play(CH_NUMBER, rel, VOL_VOICE) ? 3 : 1;          /* 3: no clip: straight to the team */
             phase(PH_NUMBER);
-            if (s_d.vstep == 3) DS_LOG("audio: no number clip for pick %d: chime, then the team\n", k ? k->pick : 0);
+            if (s_d.vstep == 3) { DS_LOG("audio: no number clip for pick %d: chime, then the team\n", k ? k->pick : 0); if (k) ((Pick *)k)->no_number = 1; }
         }
         break;
     case PH_NUMBER:
@@ -1057,7 +1488,7 @@ static void tick(float dt)
         if (s_d.vstep == 5 && (s_d.vt += dt) >= CLIP_GAP) {
             const char *clip = k ? team_clip(k->team) : NULL;
             s_d.team_clip = clip && !au_play(CH_TEAM, clip, VOL_VOICE);
-            if (!s_d.team_clip) { DS_LOG("audio: no team clip for %s: caption held, then the card\n", k ? k->team : "?"); post_pick("DRAFT_TEAM", s_d.cur); }
+            if (!s_d.team_clip) { DS_LOG("audio: no team clip for %s: caption held, then the card\n", k ? k->team : "?"); post_pick("DRAFT_TEAM", s_d.cur); if (k) ((Pick *)k)->no_team = 1; }
             s_d.vstep = 0;
             phase(PH_TEAM);
         }
@@ -1079,7 +1510,7 @@ static void tick(float dt)
             s_d.player.x = k_player_from[0]; s_d.player.z = k_player_from[1];
             s_d.player.yaw = (float)(atan2(k_player_to[0] - k_player_from[0], k_player_to[1] - k_player_from[1]) * 180.0 / 3.14159265);
             actor_clip(&s_d.player, "walk", 0.4f, 2.4f, 1.5f, 1, 0);
-            nfl2k5_presentation_voice_duck(1.0f);              /* the card beat is over: the music back up */
+            duck(1.0f);                                        /* the card beat is over: the music back up */
             s_d.player_on = 1;
             cam_go(SH_WALK, 1.5f);
             phase(PH_WALK);
@@ -1122,7 +1553,7 @@ static void tick(float dt)
          * the jersey hung from the hands */
         if (s_d.pt > 2.2f && s_d.pt - dt <= 2.2f) {
             actor_clip(&s_d.player, "idle", 1.0f, 6.0f, 1.0f, 1, 0.0f);
-            s_jersey_drop = 0.45f;
+            s_jersey_drop = 0.40f;                   /* M12: the top edge 7 cm above the hands (was 3.5) */
             cam_go(SH_PUSH, 1.6f);
             DS_LOG("pick %d: chest-height hold (authored pose)\n", k ? k->pick : 0);
         }
@@ -1138,6 +1569,7 @@ static void tick(float dt)
     case PH_END:
         break;
     }
+    bed_tick(dt);
     actor_tick(&s_d.commish, dt);
     if (s_d.player_on) actor_tick(&s_d.player, dt);
 }
@@ -1160,7 +1592,7 @@ static void skip_to_mine(void)
     for (k = s_d.cur + 1; k <= s_d.last && !user_pick(k); k++) {}
     DS_LOG("START: from pick %d to %s\n", s_d.picks[s_d.cur].pick, k <= s_d.last ? "the user's next pick" : "the round's end");
     au_stop();
-    nfl2k5_presentation_voice_duck(1.0f);
+    duck(1.0f);
     s_d.commish.yaw = 0;
     s_d.cur = k - 1;
     next_pick();
@@ -1178,6 +1610,7 @@ static void shown(void)
     nfl2k5_eras_path("draft\\show", pkg, sizeof pkg);
     nfl2k5_presentation_frontend_begin(root, pkg, "index.html");
     for (i = 0; i < 4; i++) s_d.pad_prev[i] = MEM32(PAD_WORDS + (uint32_t)i * 0x244u);
+    bed_start();
     if (s_d.phase == PH_OFF) show_start();
 }
 
@@ -1194,6 +1627,8 @@ void nfl2k5_eras_draftshow_event(int msg, uint32_t fsm)
         break;
     case 2:                                      /* destroy */
         au_stop();
+        bed_stop();
+        if (s_d.phase != PH_OFF) summary_log();
         nfl2k5_presentation_frontend_end();
         s_d.shown = 0;
         s_d.phase = PH_OFF;
@@ -1202,6 +1637,7 @@ void nfl2k5_eras_draftshow_event(int msg, uint32_t fsm)
     case 4: shown(); break;
     case 5:                                      /* covered */
         au_stop();
+        bed_stop();
         nfl2k5_presentation_frontend_end();
         s_d.shown = 0;
         break;
@@ -1237,6 +1673,11 @@ void nfl2k5_eras_draftshow_event(int msg, uint32_t fsm)
         if (s_d.player_on && s_d.scene[SC_PLAYER] && !getenv("NFL2K5_ERAS_DRAFTSHOW_NOACTORS")) {
             actor_write(s_d.scene[SC_PLAYER], &s_d.player);
             gcall(sub_0002DE60, s_d.scene[SC_PLAYER], 0);
+            /* his head: the pick's coach head on the body's thorax / neck / head joints */
+            if (s_d.head_cur >= 0 && s_d.head_cur < s_d.nheads && s_d.head_node[s_d.head_cur] && s_d.hjoints_ok) {
+                head_write(s_d.head_node[s_d.head_cur], &s_d.player);
+                gcall(sub_0002DE60, s_d.head_scene[s_d.head_cur], 0);
+            }
         }
         /* the podium, and the jersey between the player's hands (after his matrices) */
         if (s_d.jersey_node) {

@@ -104,6 +104,9 @@ int nfl2k5_eras_game_find(const char *game_id);
 /* M3-office: the Office Look setting ("auto", "1970s" .. "2020s"), written at once. */
 const char *nfl2k5_eras_office_look_saved(void);
 int nfl2k5_eras_set_office_look_saved(const char *look);
+/* M12: the Draft Show setting ("first", "mine", "off"), written at once; "first" while no league is loaded. */
+const char *nfl2k5_eras_draft_show_saved(void);
+int nfl2k5_eras_set_draft_show_saved(const char *mode);
 
 /* Results, from results.csv (re-read by nfl2k5_eras_refresh). */
 void nfl2k5_eras_refresh(void);

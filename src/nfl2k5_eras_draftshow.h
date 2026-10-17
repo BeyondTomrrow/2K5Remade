@@ -15,10 +15,13 @@ int nfl2k5_eras_draftshow_ready(void);          /* erasdraft.iff is in the archi
  * 6 frame, 7 draw, 10 back. */
 void nfl2k5_eras_draftshow_event(int msg, uint32_t fsm);
 void nfl2k5_eras_draftshow_skip(void);           /* the row's A press: next pick */
-/* The "Draft Show" setting: 0 Off, 1 First Round, 2 Your Picks (NFL2K5_ERAS_DRAFTSHOW, default 1). */
+/* The "Draft Show" setting: 0 Off, 1 First Round, 2 Your Picks. NFL2K5_ERAS_DRAFTSHOW (off / first /
+ * mine) when set, else the league's league.ini draft_show (M12), else First Round. set_mode writes
+ * league.ini (0, or -1 when no league is loaded or the switch is set). */
 int nfl2k5_eras_draftshow_mode(void);
 const char *nfl2k5_eras_draftshow_mode_name(int mode);
-void nfl2k5_eras_draftshow_set_mode(int mode);
+int nfl2k5_eras_draftshow_mode_forced(void);   /* 1 while NFL2K5_ERAS_DRAFTSHOW overrides the setting */
+int nfl2k5_eras_draftshow_set_mode(int mode);
 
 #ifdef __cplusplus
 }
