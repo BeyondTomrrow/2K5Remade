@@ -31,6 +31,7 @@
 #include "xbox_memory_layout.h"
 #include "recomp_funcs.h"
 #include "nfl2k5_teams.h"
+#include "nfl2k5_plugin_api.h"
 
 extern uint32_t xbox_HeapAlloc(uint32_t size, uint32_t alignment);
 extern void xbox_path_map_disc_dir(const char *name, const char *host_dir);
@@ -295,9 +296,34 @@ static uint32_t name_crc(const char *name)
     return ~c;
 }
 
+/* One file of the extra pack, and the sink feature modules add theirs through
+ * (src/nfl2k5_plugin_api.h on_archive_extend). */
+typedef struct { char host[MAX_PATH]; char name[96]; uint32_t size, block; } ArcFile;
+typedef struct { ArcFile *files; int *nf; uint32_t *blocks; int first; } ArcSink;
+
+static int arc_sink_add(NfArchiveSink *sink, const char *host_path, const char *archive_name)
+{
+    ArcSink *c = (ArcSink *)sink->ctx;
+    WIN32_FILE_ATTRIBUTE_DATA a;
+    ArcFile *f;
+    int k;
+    if (*c->nf >= 4096 || strlen(archive_name) >= 96 || strlen(host_path) >= MAX_PATH) return 0;
+    for (k = c->first; k < *c->nf; k++)
+        if (!_stricmp(c->files[k].name, archive_name)) return 0;     /* a name once */
+    if (!GetFileAttributesExA(host_path, GetFileExInfoStandard, &a) || (a.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) return 0;
+    f = &c->files[*c->nf];
+    snprintf(f->host, sizeof f->host, "%s", host_path);
+    snprintf(f->name, sizeof f->name, "%s", archive_name);
+    f->size = a.nFileSizeLow;
+    f->block = *c->blocks;
+    *c->blocks += (a.nFileSizeLow + 0x7FF) / 0x800;
+    (*c->nf)++;
+    return 1;
+}
+
 void nfl2k5_archive_extend(void)
 {
-    typedef struct { char host[MAX_PATH]; char name[96]; uint32_t size, block; } F;
+    typedef ArcFile F;
     static F files[4096];
     int nf = 0, k;
     uint32_t blocks = 0, count = MEM32(0xA764F8), packs = MEM32(0xA76500), table = MEM32(0xA76594);
@@ -323,56 +349,13 @@ void nfl2k5_archive_extend(void)
         } while (FindNextFileA(h, &fd));
         FindClose(h);
     }
-    {   /* My NFL Eras stadium packs (docs/eras/research/COLISEUM-IMPORT.md) and office packages
-         * (erasoffice.iff / erasskin.iff, built from the player's disc; docs/eras/ERAS-OFFICE-DESIGN.md
-         * 1.2): stadiums\<name>\files\* then office\files\*.iff of each Eras root, a name once (the
-         * first root has it). The office last, so the other files keep their place in the pack. */
-        extern int nfl2k5_eras_root_count(void);
-        extern char *nfl2k5_eras_root_path(int i, const char *rel, char *out, size_t n);
-        int pass, r, before = nf, before_office = nf;
-        for (pass = 0; pass < 2; pass++) {
-            if (pass == 1) before_office = nf;
-            for (r = 0; r < nfl2k5_eras_root_count(); r++) {
-                WIN32_FIND_DATAA sd, fd;
-                char base[MAX_PATH], pat[MAX_PATH], dir[MAX_PATH];
-                HANDLE hs = INVALID_HANDLE_VALUE;
-                nfl2k5_eras_root_path(r, pass ? "office" : "stadiums", base, sizeof base);
-                if (pass == 0) {
-                    snprintf(pat, sizeof pat, "%s\\*", base);
-                    hs = FindFirstFileA(pat, &sd);
-                    if (hs == INVALID_HANDLE_VALUE) continue;
-                }
-                do {
-                    HANDLE h;
-                    if (pass == 0) {
-                        if (!(sd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) || sd.cFileName[0] == '.') continue;
-                        snprintf(dir, sizeof dir, "%s\\%s\\files", base, sd.cFileName);
-                        snprintf(pat, sizeof pat, "%s\\*", dir);
-                    } else {
-                        snprintf(dir, sizeof dir, "%s\\files", base);
-                        snprintf(pat, sizeof pat, "%s\\*.iff", dir);
-                    }
-                    h = FindFirstFileA(pat, &fd);
-                    if (h == INVALID_HANDLE_VALUE) continue;
-                    do {
-                        int k, dup = 0;
-                        if ((fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) || nf >= 4096 || strlen(fd.cFileName) >= 96) continue;
-                        for (k = before; k < nf && !dup; k++) dup = !_stricmp(files[k].name, fd.cFileName);
-                        if (dup) continue;
-                        snprintf(files[nf].host, sizeof files[nf].host, "%s\\%s", dir, fd.cFileName);
-                        snprintf(files[nf].name, sizeof files[nf].name, "%s", fd.cFileName);
-                        files[nf].size = fd.nFileSizeLow;
-                        files[nf].block = blocks;
-                        blocks += (fd.nFileSizeLow + 0x7FF) / 0x800;
-                        nf++;
-                    } while (FindNextFileA(h, &fd));
-                    FindClose(h);
-                } while (pass == 0 && FindNextFileA(hs, &sd));
-                if (hs != INVALID_HANDLE_VALUE) FindClose(hs);
-            }
-        }
-        if (before_office > before) fprintf(stderr, "[TEAMFILES] My NFL Eras stadiums: %d files\n", before_office - before);
-        if (nf > before_office) fprintf(stderr, "[TEAMFILES] My NFL Eras office: %d files\n", nf - before_office);
+    {   /* feature modules' files (My NFL Eras: its stadium bundles and office packages),
+         * only when the module is on (src/nfl2k5_plugin_host.c) */
+        ArcSink c;
+        NfArchiveSink sink;
+        c.files = files; c.nf = &nf; c.blocks = &blocks; c.first = nf;
+        sink.size = sizeof sink; sink.ctx = &c; sink.add = arc_sink_add;
+        nfl2k5_hook_archive_extend(&sink);
     }
     if (!nf) return;
     {   /* NFL2K5_PRIVATE_PACKS=1 (tests): this copy of the game reads the archive from its

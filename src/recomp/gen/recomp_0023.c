@@ -142449,8 +142449,8 @@ loc_0034C1FC: ;
 loc_0034C201: ;
     ecx = esi;
     edx = 0x515660;
-    /* NFL2K5-GENPATCH:ERAS_RETURN */
-    { extern uint32_t nfl2k5_eras_return_desc(uint32_t); edx = nfl2k5_eras_return_desc(edx); }
+    /* NFL2K5-GENPATCH:HOOK_RETURN */
+    { extern uint32_t nfl2k5_hook_return_desc(uint32_t); edx = nfl2k5_hook_return_desc(edx); }
     POP32(esp, esi);
     g_seh_ebp = ebp; sub_0006E450(); return; /* tail jmp 0x0006E450 */
 

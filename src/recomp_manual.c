@@ -2626,10 +2626,10 @@ recomp_func_t recomp_lookup_manual(uint32_t address)
     /* Rows of the Video Settings screen (src/nfl2k5_video_menu.c). */
     if ((address & 0xFFFF0000u) == 0xFEC00000u)
         return nfl2k5_video_menu_lookup(address);
-    /* My NFL Eras screens (src/nfl2k5_eras_menu.c). */
+    /* Feature modules' screens (My NFL Eras: 0xFEE00000.., src/nfl2k5_eras_menu.c). */
     if ((address & 0xFFF00000u) == 0xFEE00000u) {
-        extern recomp_func_t nfl2k5_eras_menu_lookup(uint32_t address);
-        return nfl2k5_eras_menu_lookup(address);
+        extern recomp_func_t nfl2k5_hook_lookup_va(uint32_t address);
+        return nfl2k5_hook_lookup_va(address);
     }
     switch(address) {
     case 0x0004C3C0u:
@@ -2752,22 +2752,3 @@ void nfl2k5_scorebug_interp_hooks(void)
     if (mask & 16) recomp_interp_add_hook(0x000FD178u, 0x000FD175u, ih_place); /* SCOREBUG_NATIVE_HIDE2, before the loop label */
 }
 
-/* My NFL Eras result capture (src/nfl2k5_eras_capture.c): the gen patches
- * ERAS_GAME_FINAL (sub_000A2910 entry: ecx = home points, edx = away points)
- * and ERAS_MATCH_EXIT (sub_000645D0 entry), for packs that interpret either
- * function. Both callbacks return at once unless a capture is armed. */
-extern void nfl2k5_eras_game_final(uint32_t home_points, uint32_t away_points);
-extern void nfl2k5_eras_match_exit(void);
-static uint32_t ih_eras_final(void) { nfl2k5_eras_game_final(g_ecx, g_edx); return 0; }
-static uint32_t ih_eras_exit(void) { nfl2k5_eras_match_exit(); return 0; }
-/* ERAS_RETURN (M4b): 0x34C208 is the `pop esi` right after `mov edx, 0x515660`
- * in sub_0034C1F0 (XBE bytes), so g_edx can be rewritten before the jmp. */
-extern uint32_t nfl2k5_eras_return_desc(uint32_t edx);
-static uint32_t ih_eras_return(void) { g_edx = nfl2k5_eras_return_desc(g_edx); return 0; }
-
-void nfl2k5_eras_interp_hooks(void)
-{
-    recomp_interp_add_hook(0x000A2910u, 0, ih_eras_final);   /* ERAS_GAME_FINAL */
-    recomp_interp_add_hook(0x000645D0u, 0, ih_eras_exit);    /* ERAS_MATCH_EXIT */
-    recomp_interp_add_hook(0x0034C208u, 0, ih_eras_return);  /* ERAS_RETURN */
-}

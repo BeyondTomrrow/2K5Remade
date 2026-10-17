@@ -78700,8 +78700,8 @@ void sub_000645D0(void)
     ebp = g_seh_ebp; /* fpo_leaf: inherit caller's frame */
 
 loc_000645D0: ;
-    /* NFL2K5-GENPATCH:ERAS_MATCH_EXIT */
-    { extern void nfl2k5_eras_match_exit(void); nfl2k5_eras_match_exit(); }
+    /* NFL2K5-GENPATCH:HOOK_MATCH_EXIT */
+    { extern void nfl2k5_hook_match_exit(void); nfl2k5_hook_match_exit(); }
     PUSH32(esp, 0x000645D5u); RECOMP_ABI_CALL(0x000834F0u, sub_000834F0); /* call 0x000834F0 */
 
 loc_000645D5: ;
