@@ -36,6 +36,13 @@ game assets are distributed with it.
 
 An extracted disc folder must contain `default.xbe` and `vc_53450030`.
 
+## Steam Deck and Linux (Proton)
+
+An optional [setup helper](tools/proton-setup/README.md) installs the Windows
+repack into a separate Proton prefix and adds a Steam shortcut. It uses the
+original ESPN scorebug and Deck-friendly render settings. See the
+[test results and remaining limits](tools/proton-setup/TESTING.md).
+
 ## New features
 
 ### Settings (F1)
