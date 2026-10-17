@@ -1,0 +1,1249 @@
+{
+ "schema": "nfl2k5_eras_lineage_check/v1",
+ "generated_by": "build/eras/lineage_check.py",
+ "season": 1980,
+ "save": "ros1980",
+ "save_sha256": "857ef4d4fd8dac1653d30ab747fb9cdb1fb59a42f803ff8caf8362e7dd73c327",
+ "rule": "every slot name is compared (case, accents, punctuation and spaces ignored) with the franchise's PFR roster for the season; checked when at least 5 match and no other of the four rosters matches as many",
+ "note": "Names only. A match says the slot holds this franchise; it does not verify ratings, bios or that the roster is complete (community PS2 roster, unverified).",
+ "slots": [
+  {
+   "slot": 7,
+   "save_name": "Arizona Cardinals (ARZ)",
+   "franchise": "cardinals",
+   "source": "https://web.archive.org/web/20220514152119/https://www.pro-football-reference.com/teams/crd/1980_roster.htm",
+   "source_file": "roster_crd_1980.html",
+   "source_sha256": "cccab1dbe1fcdf2c9aea55b021f9677e2d3ac00acfa9c0d4d6893b352426353b",
+   "pfr_roster_size": 58,
+   "compared": 53,
+   "matched": 31,
+   "matched_same_number": 27,
+   "control_matches_other_rosters": {
+    "colts": 0,
+    "rams": 0,
+    "oilers_titans": 1
+   },
+   "lineage_status": "checked:https://web.archive.org/web/20220514152119/https://www.pro-football-reference.com/teams/crd/1980_roster.htm",
+   "matched_players": [
+    {
+     "save": "Ken Greene",
+     "save_position": "CB",
+     "save_jersey": 37,
+     "pfr": "Ken Greene",
+     "pfr_position": "DB",
+     "pfr_number": "37"
+    },
+    {
+     "save": "Carl Allen",
+     "save_position": "CB",
+     "save_jersey": 27,
+     "pfr": "Carl Allen",
+     "pfr_position": "DB",
+     "pfr_number": "27"
+    },
+    {
+     "save": "Lee Nelson",
+     "save_position": "CB",
+     "save_jersey": 38,
+     "pfr": "Lee Nelson",
+     "pfr_position": "DB",
+     "pfr_number": "38"
+    },
+    {
+     "save": "Ron Yankowski",
+     "save_position": "DE",
+     "save_jersey": 77,
+     "pfr": "Ron Yankowski",
+     "pfr_position": "DE",
+     "pfr_number": "78"
+    },
+    {
+     "save": "Bob Pollard",
+     "save_position": "DE",
+     "save_jersey": 82,
+     "pfr": "Bob Pollard",
+     "pfr_position": "DE",
+     "pfr_number": "82"
+    },
+    {
+     "save": "Theotis Brown",
+     "save_position": "FB",
+     "save_jersey": 30,
+     "pfr": "Theotis Brown",
+     "pfr_position": "RB",
+     "pfr_number": "33"
+    },
+    {
+     "save": "Wayne Morris",
+     "save_position": "FB",
+     "save_jersey": 24,
+     "pfr": "Wayne Morris",
+     "pfr_position": "RB",
+     "pfr_number": "24"
+    },
+    {
+     "save": "Rod Phillips",
+     "save_position": "FB",
+     "save_jersey": 39,
+     "pfr": "Rod Phillips",
+     "pfr_position": "RB",
+     "pfr_number": "36"
+    },
+    {
+     "save": "Roger Wehrli",
+     "save_position": "FS",
+     "save_jersey": 22,
+     "pfr": "Roger Wehrli",
+     "pfr_position": "DB",
+     "pfr_number": "22"
+    },
+    {
+     "save": "Joe Bostic",
+     "save_position": "G",
+     "save_jersey": 71,
+     "pfr": "Joe Bostic",
+     "pfr_position": "G",
+     "pfr_number": "71"
+    },
+    {
+     "save": "Keith Wortman",
+     "save_position": "G",
+     "save_jersey": 62,
+     "pfr": "Keith Wortman",
+     "pfr_position": "T",
+     "pfr_number": "62"
+    },
+    {
+     "save": "Ottis Anderson",
+     "save_position": "HB",
+     "save_jersey": 32,
+     "pfr": "Ottis Anderson",
+     "pfr_position": "RB",
+     "pfr_number": "32"
+    },
+    {
+     "save": "Mark Arneson",
+     "save_position": "ILB",
+     "save_jersey": 57,
+     "pfr": "Mark Arneson",
+     "pfr_position": "LB",
+     "pfr_number": "57"
+    },
+    {
+     "save": "Calvin Favron",
+     "save_position": "ILB",
+     "save_jersey": 59,
+     "pfr": "Calvin Favron",
+     "pfr_position": "LB",
+     "pfr_number": "59"
+    },
+    {
+     "save": "Eric Williams",
+     "save_position": "ILB",
+     "save_jersey": 55,
+     "pfr": "Eric Williams",
+     "pfr_position": "LLB",
+     "pfr_number": "55"
+    },
+    {
+     "save": "John Barefield",
+     "save_position": "OLB",
+     "save_jersey": 58,
+     "pfr": "John Barefield",
+     "pfr_position": "LB",
+     "pfr_number": "58"
+    },
+    {
+     "save": "Steve Neils",
+     "save_position": "OLB",
+     "save_jersey": 53,
+     "pfr": "Steve Neils",
+     "pfr_position": "LOLB",
+     "pfr_number": "53"
+    },
+    {
+     "save": "Tim Kearney",
+     "save_position": "OLB",
+     "save_jersey": 56,
+     "pfr": "Tim Kearney",
+     "pfr_position": "MLB",
+     "pfr_number": "56"
+    },
+    {
+     "save": "Jim Hart",
+     "save_position": "QB",
+     "save_jersey": 17,
+     "pfr": "Jim Hart",
+     "pfr_position": "QB",
+     "pfr_number": "17"
+    },
+    {
+     "save": "Ken Stone",
+     "save_position": "SS",
+     "save_jersey": 23,
+     "pfr": "Ken Stone",
+     "pfr_position": "DB",
+     "pfr_number": "23"
+    },
+    {
+     "save": "Dan Dierdorf",
+     "save_position": "T",
+     "save_jersey": 72,
+     "pfr": "Dan Dierdorf",
+     "pfr_position": "T",
+     "pfr_number": "72"
+    },
+    {
+     "save": "Brad Oates",
+     "save_position": "T",
+     "save_jersey": 65,
+     "pfr": "Brad Oates",
+     "pfr_position": "T",
+     "pfr_number": "65"
+    },
+    {
+     "save": "George Collins",
+     "save_position": "T",
+     "save_jersey": 66,
+     "pfr": "George Collins",
+     "pfr_position": "T",
+     "pfr_number": "66"
+    },
+    {
+     "save": "Gary Parris",
+     "save_position": "TE",
+     "save_jersey": 80,
+     "pfr": "Gary Parris",
+     "pfr_position": "TE",
+     "pfr_number": "89"
+    },
+    {
+     "save": "Roy Green",
+     "save_position": "WR",
+     "save_jersey": 25,
+     "pfr": "Roy Green",
+     "pfr_position": "WR",
+     "pfr_number": "25"
+    },
+    {
+     "save": "Pat Tilley",
+     "save_position": "WR",
+     "save_jersey": 83,
+     "pfr": "Pat Tilley",
+     "pfr_position": "WR",
+     "pfr_number": "83"
+    },
+    {
+     "save": "Mel Gray",
+     "save_position": "WR",
+     "save_jersey": 85,
+     "pfr": "Mel Gray",
+     "pfr_position": "WR",
+     "pfr_number": "85"
+    },
+    {
+     "save": "Dave Stief",
+     "save_position": "WR",
+     "save_jersey": 84,
+     "pfr": "Dave Stief",
+     "pfr_position": "WR",
+     "pfr_number": "84"
+    },
+    {
+     "save": "Steve Little",
+     "save_position": "WR",
+     "save_jersey": 12,
+     "pfr": "Steve Little",
+     "pfr_position": "K",
+     "pfr_number": "12"
+    },
+    {
+     "save": "Tom Banks",
+     "save_position": "C",
+     "save_jersey": 54,
+     "pfr": "Tom Banks",
+     "pfr_position": "C",
+     "pfr_number": "54"
+    },
+    {
+     "save": "Tom Brahaney",
+     "save_position": "C",
+     "save_jersey": 51,
+     "pfr": "Tom Brahaney",
+     "pfr_position": "C",
+     "pfr_number": "51"
+    }
+   ],
+   "not_on_pfr_roster": [
+    "Perry Smith",
+    "Mike Robinson",
+    "John Zook",
+    "Bob Rozier",
+    "Jim Ramey",
+    "Charlie Davis",
+    "Dave Simons",
+    "Bob Young",
+    "Steve Henry",
+    "Terry Stieve",
+    "Will Harrell",
+    "Thomas Lott",
+    "Don Lathrop",
+    "Kurt Allerman",
+    "Sean Clancy",
+    "Vern Den Herron",
+    "Steve Pisarkiewicz",
+    "Lenvil Berns",
+    "Chris Dieterich",
+    "Richard Osborne",
+    "Bill Murrell",
+    "Jimmy Childs"
+   ]
+  },
+  {
+   "slot": 10,
+   "save_name": "Indianapolis Colts (IND)",
+   "franchise": "colts",
+   "source": "https://web.archive.org/web/20250126220236/https://www.pro-football-reference.com/teams/clt/1980_roster.htm",
+   "source_file": "roster_clt_1980.html",
+   "source_sha256": "482a4d92904cea8aae429a0bc63a8daf41d699b8fb6fd19cff054e56481243fe",
+   "pfr_roster_size": 50,
+   "compared": 53,
+   "matched": 32,
+   "matched_same_number": 26,
+   "control_matches_other_rosters": {
+    "cardinals": 0,
+    "rams": 0,
+    "oilers_titans": 0
+   },
+   "lineage_status": "checked:https://web.archive.org/web/20250126220236/https://www.pro-football-reference.com/teams/clt/1980_roster.htm",
+   "matched_players": [
+    {
+     "save": "Bruce Laird",
+     "save_position": "CB",
+     "save_jersey": 40,
+     "pfr": "Bruce Laird",
+     "pfr_position": "SS",
+     "pfr_number": "40"
+    },
+    {
+     "save": "Fred Cook",
+     "save_position": "DE",
+     "save_jersey": 72,
+     "pfr": "Fred Cook",
+     "pfr_position": "LDE",
+     "pfr_number": "72"
+    },
+    {
+     "save": "Greg Fields",
+     "save_position": "DE",
+     "save_jersey": 79,
+     "pfr": "Greg Fields",
+     "pfr_position": "RDE",
+     "pfr_number": "79"
+    },
+    {
+     "save": "Mike Ozdowski",
+     "save_position": "DE",
+     "save_jersey": 71,
+     "pfr": "Mike Ozdowski",
+     "pfr_position": "RDE",
+     "pfr_number": "71"
+    },
+    {
+     "save": "Joe Ehrmann",
+     "save_position": "DT",
+     "save_jersey": 74,
+     "pfr": "Joe Ehrmann",
+     "pfr_position": "DT",
+     "pfr_number": "76"
+    },
+    {
+     "save": "Herb Orvis",
+     "save_position": "DT",
+     "save_jersey": 88,
+     "pfr": "Herb Orvis",
+     "pfr_position": "RDT",
+     "pfr_number": "88"
+    },
+    {
+     "save": "Jim Krahl",
+     "save_position": "DT",
+     "save_jersey": 74,
+     "pfr": "Jim Krahl",
+     "pfr_position": "DT",
+     "pfr_number": "90"
+    },
+    {
+     "save": "Larry Braziel",
+     "save_position": "FS",
+     "save_jersey": 47,
+     "pfr": "Larry Braziel",
+     "pfr_position": "RCB",
+     "pfr_number": "47"
+    },
+    {
+     "save": "Reggie Pinkney",
+     "save_position": "FS",
+     "save_jersey": 37,
+     "pfr": "Reggie Pinkney",
+     "pfr_position": "DB",
+     "pfr_number": "37"
+    },
+    {
+     "save": "Ken Huff",
+     "save_position": "G",
+     "save_jersey": 62,
+     "pfr": "Ken Huff",
+     "pfr_position": "RG",
+     "pfr_number": "62"
+    },
+    {
+     "save": "Bob VanDuyne",
+     "save_position": "G",
+     "save_jersey": 67,
+     "pfr": "Bob Van Duyne",
+     "pfr_position": "T",
+     "pfr_number": "67"
+    },
+    {
+     "save": "Joe Washington",
+     "save_position": "HB",
+     "save_jersey": 25,
+     "pfr": "Joe Washington",
+     "pfr_position": "RB",
+     "pfr_number": "20"
+    },
+    {
+     "save": "Don McCauley",
+     "save_position": "HB",
+     "save_jersey": 23,
+     "pfr": "Don McCauley",
+     "pfr_position": "RB",
+     "pfr_number": "23"
+    },
+    {
+     "save": "Nesby Glasgow",
+     "save_position": "HB",
+     "save_jersey": 25,
+     "pfr": "Nesby Glasgow",
+     "pfr_position": "FS",
+     "pfr_number": "25"
+    },
+    {
+     "save": "Ben Garry",
+     "save_position": "HB",
+     "save_jersey": 29,
+     "pfr": "Ben Garry",
+     "pfr_position": "RB",
+     "pfr_number": "29"
+    },
+    {
+     "save": "Barry Krauss",
+     "save_position": "ILB",
+     "save_jersey": 55,
+     "pfr": "Barry Krauss",
+     "pfr_position": "LLB/RLB",
+     "pfr_number": "55"
+    },
+    {
+     "save": "Sanders Shiver",
+     "save_position": "ILB",
+     "save_jersey": 54,
+     "pfr": "Sanders Shiver",
+     "pfr_position": "LLB",
+     "pfr_number": "54"
+    },
+    {
+     "save": "Steve Mike-Mayer",
+     "save_position": "K",
+     "save_jersey": 10,
+     "pfr": "Steve Mike-Mayer",
+     "pfr_position": "K",
+     "pfr_number": "5"
+    },
+    {
+     "save": "Ed Simonini",
+     "save_position": "OLB",
+     "save_jersey": 56,
+     "pfr": "Ed Simonini",
+     "pfr_position": "MLB",
+     "pfr_number": "56"
+    },
+    {
+     "save": "Mike Woods",
+     "save_position": "OLB",
+     "save_jersey": 59,
+     "pfr": "Mike Woods",
+     "pfr_position": "RLB",
+     "pfr_number": "59"
+    },
+    {
+     "save": "Bert Jones",
+     "save_position": "QB",
+     "save_jersey": 7,
+     "pfr": "Bert Jones",
+     "pfr_position": "QB",
+     "pfr_number": "7"
+    },
+    {
+     "save": "Greg Landry",
+     "save_position": "QB",
+     "save_jersey": 11,
+     "pfr": "Greg Landry",
+     "pfr_position": "QB",
+     "pfr_number": "11"
+    },
+    {
+     "save": "Lyle Blackwood",
+     "save_position": "SS",
+     "save_jersey": 42,
+     "pfr": "Lyle Blackwood",
+     "pfr_position": "DB",
+     "pfr_number": "44"
+    },
+    {
+     "save": "Wade Griffin",
+     "save_position": "T",
+     "save_jersey": 69,
+     "pfr": "Wade Griffin",
+     "pfr_position": "LT",
+     "pfr_number": "69"
+    },
+    {
+     "save": "Jeff Hart",
+     "save_position": "T",
+     "save_jersey": 68,
+     "pfr": "Jeff Hart",
+     "pfr_position": "RT",
+     "pfr_number": "68"
+    },
+    {
+     "save": "Reese McCall",
+     "save_position": "TE",
+     "save_jersey": 86,
+     "pfr": "Reese McCall",
+     "pfr_position": "TE",
+     "pfr_number": "86"
+    },
+    {
+     "save": "Mack Alston",
+     "save_position": "TE",
+     "save_jersey": 83,
+     "pfr": "Mack Alston",
+     "pfr_position": "TE",
+     "pfr_number": "83"
+    },
+    {
+     "save": "Roger Carr",
+     "save_position": "WR",
+     "save_jersey": 81,
+     "pfr": "Roger Carr",
+     "pfr_position": "WR",
+     "pfr_number": "81"
+    },
+    {
+     "save": "Randy Burke",
+     "save_position": "WR",
+     "save_jersey": 84,
+     "pfr": "Randy Burke",
+     "pfr_position": "WR",
+     "pfr_number": "84"
+    },
+    {
+     "save": "Mike Siani",
+     "save_position": "WR",
+     "save_jersey": 49,
+     "pfr": "Mike Siani",
+     "pfr_position": "WR",
+     "pfr_number": "45"
+    },
+    {
+     "save": "Brian DeRoo",
+     "save_position": "WR",
+     "save_jersey": 87,
+     "pfr": "Brian DeRoo",
+     "pfr_position": "WR",
+     "pfr_number": "87"
+    },
+    {
+     "save": "Ken Mendenhall",
+     "save_position": "C",
+     "save_jersey": 57,
+     "pfr": "Ken Mendenhall",
+     "pfr_position": "C",
+     "pfr_number": "57"
+    }
+   ],
+   "not_on_pfr_roster": [
+    "Norm Thompson",
+    "Doug Nettles",
+    "Mike Jones",
+    "Ron Fernandes",
+    "George Gross",
+    "Roosevelt Leaks",
+    "Don Hardeman",
+    "Ron Baker",
+    "Bob Pratt",
+    "Stan White",
+    "Bob Haslett",
+    "Toni Linhart",
+    "Steve Zabel",
+    "Bucky Dilts",
+    "Clinton Oldham",
+    "Jerry Golsteyn",
+    "Johnny Johnson",
+    "Don Hall",
+    "David Taylor",
+    "Glenn Doughty",
+    "Dwight Stephenson"
+   ]
+  },
+  {
+   "slot": 23,
+   "save_name": "St. Louis Rams (STL)",
+   "franchise": "rams",
+   "source": "https://web.archive.org/web/20241207021645/https://www.pro-football-reference.com/teams/ram/1980_roster.htm",
+   "source_file": "roster_ram_1980.html",
+   "source_sha256": "f4052af75487373b7a022f480952c9875753fe0ffb23df4d0390849c0107635e",
+   "pfr_roster_size": 53,
+   "compared": 53,
+   "matched": 33,
+   "matched_same_number": 30,
+   "control_matches_other_rosters": {
+    "cardinals": 0,
+    "colts": 0,
+    "oilers_titans": 0
+   },
+   "lineage_status": "checked:https://web.archive.org/web/20241207021645/https://www.pro-football-reference.com/teams/ram/1980_roster.htm",
+   "matched_players": [
+    {
+     "save": "Rod Perry",
+     "save_position": "CB",
+     "save_jersey": 49,
+     "pfr": "Rod Perry",
+     "pfr_position": "RCB",
+     "pfr_number": "49"
+    },
+    {
+     "save": "Pat Thomas",
+     "save_position": "CB",
+     "save_jersey": 27,
+     "pfr": "Pat Thomas",
+     "pfr_position": "LCB",
+     "pfr_number": "27"
+    },
+    {
+     "save": "Ivory Sully",
+     "save_position": "CB",
+     "save_jersey": 37,
+     "pfr": "Ivory Sully",
+     "pfr_position": "DB",
+     "pfr_number": "37"
+    },
+    {
+     "save": "Jack Youngblood",
+     "save_position": "DE",
+     "save_jersey": 85,
+     "pfr": "Jack Youngblood",
+     "pfr_position": "LDE",
+     "pfr_number": "85"
+    },
+    {
+     "save": "Fred Dryer",
+     "save_position": "DE",
+     "save_jersey": 89,
+     "pfr": "Fred Dryer",
+     "pfr_position": "RDE",
+     "pfr_number": "89"
+    },
+    {
+     "save": "Reggie Doss",
+     "save_position": "DE",
+     "save_jersey": 71,
+     "pfr": "Reggie Doss",
+     "pfr_position": "DE",
+     "pfr_number": "71"
+    },
+    {
+     "save": "Larry Brooks",
+     "save_position": "DT",
+     "save_jersey": 90,
+     "pfr": "Larry Brooks",
+     "pfr_position": "LDT",
+     "pfr_number": "90"
+    },
+    {
+     "save": "Mike Fanning",
+     "save_position": "DT",
+     "save_jersey": 79,
+     "pfr": "Mike Fanning",
+     "pfr_position": "DT",
+     "pfr_number": "79"
+    },
+    {
+     "save": "Cullen Bryant",
+     "save_position": "FB",
+     "save_jersey": 32,
+     "pfr": "Cullen Bryant",
+     "pfr_position": "FB",
+     "pfr_number": "32"
+    },
+    {
+     "save": "Nolan Cromwell",
+     "save_position": "FS",
+     "save_jersey": 21,
+     "pfr": "Nolan Cromwell",
+     "pfr_position": "FS",
+     "pfr_number": "21"
+    },
+    {
+     "save": "Dennis Harrah",
+     "save_position": "G",
+     "save_jersey": 60,
+     "pfr": "Dennis Harrah",
+     "pfr_position": "RG",
+     "pfr_number": "60"
+    },
+    {
+     "save": "Kent Hill",
+     "save_position": "G",
+     "save_jersey": 72,
+     "pfr": "Kent Hill",
+     "pfr_position": "LG",
+     "pfr_number": "72"
+    },
+    {
+     "save": "Wendell Tyler",
+     "save_position": "HB",
+     "save_jersey": 26,
+     "pfr": "Wendell Tyler",
+     "pfr_position": "RB",
+     "pfr_number": "26"
+    },
+    {
+     "save": "Elvis Peacock",
+     "save_position": "HB",
+     "save_jersey": 20,
+     "pfr": "Elvis Peacock",
+     "pfr_position": "RB",
+     "pfr_number": "34"
+    },
+    {
+     "save": "Eddie Hill",
+     "save_position": "HB",
+     "save_jersey": 31,
+     "pfr": "Eddie Hill",
+     "pfr_position": "RB",
+     "pfr_number": "24"
+    },
+    {
+     "save": "Jack Reynolds",
+     "save_position": "ILB",
+     "save_jersey": 64,
+     "pfr": "Jack Reynolds",
+     "pfr_position": "MLB",
+     "pfr_number": "64"
+    },
+    {
+     "save": "Joe Harris",
+     "save_position": "ILB",
+     "save_jersey": 51,
+     "pfr": "Joe Harris",
+     "pfr_position": "LB",
+     "pfr_number": "51"
+    },
+    {
+     "save": "Greg Westbrooks",
+     "save_position": "ILB",
+     "save_jersey": 52,
+     "pfr": "Greg Westbrooks",
+     "pfr_position": "LB",
+     "pfr_number": "57"
+    },
+    {
+     "save": "Frank Corral",
+     "save_position": "K",
+     "save_jersey": 3,
+     "pfr": "Frank Corral",
+     "pfr_position": "K",
+     "pfr_number": "3"
+    },
+    {
+     "save": "Bob Brudzinski",
+     "save_position": "OLB",
+     "save_jersey": 59,
+     "pfr": "Bob Brudzinski",
+     "pfr_position": "RLB",
+     "pfr_number": "59"
+    },
+    {
+     "save": "Jim Youngblood",
+     "save_position": "OLB",
+     "save_jersey": 53,
+     "pfr": "Jim Youngblood",
+     "pfr_position": "LLB",
+     "pfr_number": "53"
+    },
+    {
+     "save": "George Andrews",
+     "save_position": "OLB",
+     "save_jersey": 52,
+     "pfr": "George Andrews",
+     "pfr_position": "RLB",
+     "pfr_number": "52"
+    },
+    {
+     "save": "Vince Ferragamo",
+     "save_position": "QB",
+     "save_jersey": 15,
+     "pfr": "Vince Ferragamo",
+     "pfr_position": "QB",
+     "pfr_number": "15"
+    },
+    {
+     "save": "Pat Haden",
+     "save_position": "QB",
+     "save_jersey": 11,
+     "pfr": "Pat Haden",
+     "pfr_position": "QB",
+     "pfr_number": "11"
+    },
+    {
+     "save": "Bob Lee",
+     "save_position": "QB",
+     "save_jersey": 19,
+     "pfr": "Bob Lee",
+     "pfr_position": "QB",
+     "pfr_number": "19"
+    },
+    {
+     "save": "Jackie Slater",
+     "save_position": "T",
+     "save_jersey": 78,
+     "pfr": "Jackie Slater",
+     "pfr_position": "RT",
+     "pfr_number": "78"
+    },
+    {
+     "save": "Doug France",
+     "save_position": "T",
+     "save_jersey": 77,
+     "pfr": "Doug France",
+     "pfr_position": "LT",
+     "pfr_number": "77"
+    },
+    {
+     "save": "Terry Nelson",
+     "save_position": "TE",
+     "save_jersey": 83,
+     "pfr": "Terry Nelson",
+     "pfr_position": "TE",
+     "pfr_number": "83"
+    },
+    {
+     "save": "Billy Waddy",
+     "save_position": "WR",
+     "save_jersey": 80,
+     "pfr": "Billy Waddy",
+     "pfr_position": "WR",
+     "pfr_number": "80"
+    },
+    {
+     "save": "Drew Hill",
+     "save_position": "WR",
+     "save_jersey": 87,
+     "pfr": "Drew Hill",
+     "pfr_position": "WR",
+     "pfr_number": "87"
+    },
+    {
+     "save": "Preston Dennard",
+     "save_position": "WR",
+     "save_jersey": 88,
+     "pfr": "Preston Dennard",
+     "pfr_position": "WR",
+     "pfr_number": "88"
+    },
+    {
+     "save": "Willie Miller",
+     "save_position": "WR",
+     "save_jersey": 82,
+     "pfr": "Willie Miller",
+     "pfr_position": "WR",
+     "pfr_number": "82"
+    },
+    {
+     "save": "Rich Saul",
+     "save_position": "C",
+     "save_jersey": 61,
+     "pfr": "Rich Saul",
+     "pfr_position": "C",
+     "pfr_number": "61"
+    }
+   ],
+   "not_on_pfr_roster": [
+    "Jackie Wallace",
+    "Dwayne O'Steen",
+    "Sidney Justin",
+    "Ricky Odom",
+    "Jerry Wilkinson",
+    "Tim Pollard",
+    "Bruce Hicks",
+    "Lawrence McCutcheon",
+    "Jim Jodat",
+    "Ken Clark",
+    "Dave Elmendorf",
+    "Bill Dunstan",
+    "Eddie Brown",
+    "John Williams",
+    "Gordon Gravelle",
+    "Charle Young",
+    "Woodrow Lyons",
+    "Ron Jessie",
+    "Ron Smith",
+    "Dan Ryczek"
+   ]
+  },
+  {
+   "slot": 30,
+   "save_name": "Tennessee Titans (TEN)",
+   "franchise": "oilers_titans",
+   "source": "https://web.archive.org/web/20240526054753/https://www.pro-football-reference.com/teams/oti/1980_roster.htm",
+   "source_file": "roster_oti_1980.html",
+   "source_sha256": "bb7cc7179dd3c99b7ebd22225d800a55f750c0c8406d9798dfbb6e133cee57fa",
+   "pfr_roster_size": 53,
+   "compared": 53,
+   "matched": 38,
+   "matched_same_number": 30,
+   "control_matches_other_rosters": {
+    "cardinals": 0,
+    "colts": 0,
+    "rams": 1
+   },
+   "lineage_status": "checked:https://web.archive.org/web/20240526054753/https://www.pro-football-reference.com/teams/oti/1980_roster.htm",
+   "matched_players": [
+    {
+     "save": "Greg Stemrick",
+     "save_position": "CB",
+     "save_jersey": 27,
+     "pfr": "Greg Stemrick",
+     "pfr_position": "RCB",
+     "pfr_number": "27"
+    },
+    {
+     "save": "J.C. Wilson",
+     "save_position": "CB",
+     "save_jersey": 33,
+     "pfr": "J.C. Wilson",
+     "pfr_position": "LCB",
+     "pfr_number": "33"
+    },
+    {
+     "save": "Elvin Bethea",
+     "save_position": "DE",
+     "save_jersey": 65,
+     "pfr": "Elvin Bethea",
+     "pfr_position": "RDE",
+     "pfr_number": "65"
+    },
+    {
+     "save": "Andy Dorris",
+     "save_position": "DE",
+     "save_jersey": 69,
+     "pfr": "Andy Dorris",
+     "pfr_position": "LDE",
+     "pfr_number": "69"
+    },
+    {
+     "save": "Jesse Baker",
+     "save_position": "DE",
+     "save_jersey": 75,
+     "pfr": "Jesse Baker",
+     "pfr_position": "DE",
+     "pfr_number": "75"
+    },
+    {
+     "save": "Curley Culp",
+     "save_position": "DT",
+     "save_jersey": 77,
+     "pfr": "Curley Culp",
+     "pfr_position": "NT",
+     "pfr_number": "78"
+    },
+    {
+     "save": "Mike Stensrud",
+     "save_position": "DT",
+     "save_jersey": 67,
+     "pfr": "Mike Stensrud",
+     "pfr_position": "DE",
+     "pfr_number": "67"
+    },
+    {
+     "save": "Ken Kennard",
+     "save_position": "DT",
+     "save_jersey": 71,
+     "pfr": "Ken Kennard",
+     "pfr_position": "NT",
+     "pfr_number": "71"
+    },
+    {
+     "save": "Rob Carpenter",
+     "save_position": "FB",
+     "save_jersey": 26,
+     "pfr": "Rob Carpenter",
+     "pfr_position": "RB",
+     "pfr_number": "26"
+    },
+    {
+     "save": "Tim Wilson",
+     "save_position": "FB",
+     "save_jersey": 45,
+     "pfr": "Tim Wilson",
+     "pfr_position": "FB",
+     "pfr_number": "45"
+    },
+    {
+     "save": "Boobie Clark",
+     "save_position": "FB",
+     "save_jersey": 35,
+     "pfr": "Boobie Clark",
+     "pfr_position": "RB",
+     "pfr_number": "42"
+    },
+    {
+     "save": "Vernon Perry",
+     "save_position": "FS",
+     "save_jersey": 32,
+     "pfr": "Vernon Perry",
+     "pfr_position": "SS",
+     "pfr_number": "32"
+    },
+    {
+     "save": "Ed Fisher",
+     "save_position": "G",
+     "save_jersey": 60,
+     "pfr": "Ed Fisher",
+     "pfr_position": "RG",
+     "pfr_number": "60"
+    },
+    {
+     "save": "Conway Hayman",
+     "save_position": "G",
+     "save_jersey": 70,
+     "pfr": "Conway Hayman",
+     "pfr_position": "T",
+     "pfr_number": "70"
+    },
+    {
+     "save": "David Carter",
+     "save_position": "G",
+     "save_jersey": 58,
+     "pfr": "David Carter",
+     "pfr_position": "G",
+     "pfr_number": "58"
+    },
+    {
+     "save": "Earl Campbell",
+     "save_position": "HB",
+     "save_jersey": 34,
+     "pfr": "Earl Campbell",
+     "pfr_position": "RB",
+     "pfr_number": "34"
+    },
+    {
+     "save": "Ronnie Coleman",
+     "save_position": "HB",
+     "save_jersey": 47,
+     "pfr": "Ronnie Coleman",
+     "pfr_position": "RB",
+     "pfr_number": "47"
+    },
+    {
+     "save": "Art Stringer",
+     "save_position": "ILB",
+     "save_jersey": 56,
+     "pfr": "Art Stringer",
+     "pfr_position": "LILB",
+     "pfr_number": "56"
+    },
+    {
+     "save": "Gregg Bingham",
+     "save_position": "ILB",
+     "save_jersey": 54,
+     "pfr": "Gregg Bingham",
+     "pfr_position": "RILB",
+     "pfr_number": "54"
+    },
+    {
+     "save": "Ted Thompson",
+     "save_position": "ILB",
+     "save_jersey": 66,
+     "pfr": "Ted Thompson",
+     "pfr_position": "LB",
+     "pfr_number": "51"
+    },
+    {
+     "save": "Toni Fritsch",
+     "save_position": "K",
+     "save_jersey": 15,
+     "pfr": "Toni Fritsch",
+     "pfr_position": "K",
+     "pfr_number": "16"
+    },
+    {
+     "save": "Robert Brazile",
+     "save_position": "OLB",
+     "save_jersey": 52,
+     "pfr": "Robert Brazile",
+     "pfr_position": "ROLB",
+     "pfr_number": "52"
+    },
+    {
+     "save": "Ted Washington",
+     "save_position": "OLB",
+     "save_jersey": 59,
+     "pfr": "Ted Washington",
+     "pfr_position": "LOLB",
+     "pfr_number": "59"
+    },
+    {
+     "save": "Daryl Hunt",
+     "save_position": "OLB",
+     "save_jersey": 50,
+     "pfr": "Daryl Hunt",
+     "pfr_position": "LILB",
+     "pfr_number": "50"
+    },
+    {
+     "save": "Cliff Parsley",
+     "save_position": "P",
+     "save_jersey": 18,
+     "pfr": "Cliff Parsley",
+     "pfr_position": "P",
+     "pfr_number": "18"
+    },
+    {
+     "save": "Gifford Nielsen",
+     "save_position": "QB",
+     "save_jersey": 14,
+     "pfr": "Gifford Nielsen",
+     "pfr_position": "QB",
+     "pfr_number": "14"
+    },
+    {
+     "save": "Mike Reinfeldt",
+     "save_position": "SS",
+     "save_jersey": 37,
+     "pfr": "Mike Reinfeldt",
+     "pfr_position": "FS",
+     "pfr_number": "37"
+    },
+    {
+     "save": "Carter Hartwig",
+     "save_position": "SS",
+     "save_jersey": 36,
+     "pfr": "Carter Hartwig",
+     "pfr_position": "DB",
+     "pfr_number": "36"
+    },
+    {
+     "save": "Leon Gray",
+     "save_position": "T",
+     "save_jersey": 74,
+     "pfr": "Leon Gray",
+     "pfr_position": "LT",
+     "pfr_number": "74"
+    },
+    {
+     "save": "Morris Towns",
+     "save_position": "T",
+     "save_jersey": 76,
+     "pfr": "Morris Towns",
+     "pfr_position": "RT",
+     "pfr_number": "76"
+    },
+    {
+     "save": "Rich Caster",
+     "save_position": "TE",
+     "save_jersey": 86,
+     "pfr": "Rich Caster",
+     "pfr_position": "TE",
+     "pfr_number": "88"
+    },
+    {
+     "save": "Mike Barber",
+     "save_position": "TE",
+     "save_jersey": 86,
+     "pfr": "Mike Barber",
+     "pfr_position": "TE",
+     "pfr_number": "86"
+    },
+    {
+     "save": "Mike Renfro",
+     "save_position": "WR",
+     "save_jersey": 82,
+     "pfr": "Mike Renfro",
+     "pfr_position": "WR",
+     "pfr_number": "82"
+    },
+    {
+     "save": "Billy Johnson",
+     "save_position": "WR",
+     "save_jersey": 84,
+     "pfr": "Billy Johnson",
+     "pfr_position": "WR",
+     "pfr_number": "84"
+    },
+    {
+     "save": "Ken Burrough",
+     "save_position": "WR",
+     "save_jersey": 0,
+     "pfr": "Ken Burrough",
+     "pfr_position": "WR",
+     "pfr_number": "00"
+    },
+    {
+     "save": "Guido Merkens",
+     "save_position": "WR",
+     "save_jersey": 19,
+     "pfr": "Guido Merkens",
+     "pfr_position": "FS",
+     "pfr_number": "29"
+    },
+    {
+     "save": "Jeff Groth",
+     "save_position": "WR",
+     "save_jersey": 48,
+     "pfr": "Jeff Groth",
+     "pfr_position": "WR",
+     "pfr_number": "81"
+    },
+    {
+     "save": "Carl Mauck",
+     "save_position": "C",
+     "save_jersey": 55,
+     "pfr": "Carl Mauck",
+     "pfr_position": "C",
+     "pfr_number": "55"
+    }
+   ],
+   "not_on_pfr_roster": [
+    "Charles Jefferson",
+    "Willie Alexander",
+    "Bill Currier",
+    "Jim Young",
+    "Steve Baumgartner",
+    "George Reihner",
+    "Tom Randall",
+    "Kenny King",
+    "Rich Ellender",
+    "Jimbo Elrod",
+    "Mike Murphy",
+    "Dan Pastorini",
+    "Wes Phillips",
+    "Conrad Rucker",
+    "Eddie Foster"
+   ]
+  }
+ ]
+}

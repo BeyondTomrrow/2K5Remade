@@ -887,6 +887,12 @@ void nfl2k5_diag_fsm(uint32_t obj, uint32_t desc, int push)
     uint32_t idx = *(const uint32_t *)(m + obj + 0x100u);
     fprintf(stderr, "  [FSMOP] %s obj=%08X idx=%u desc=%08X top=%08X\n", push ? "push" : "pop ",
             obj, idx, desc, idx < 0x20u ? *(const uint32_t *)(m + obj + idx * 8u) : 0);
+    if (!push && idx < 0x20u) {   /* My NFL Eras M2 test: release the staged slots at the Main Menu */
+        extern void nfl2k5_teams_fsm_pop(uint32_t fsm, uint32_t top);
+        extern void nfl2k5_eras_fsm_pop(uint32_t fsm, uint32_t top);   /* M4 clean-up after an Eras game */
+        nfl2k5_teams_fsm_pop(obj, *(const uint32_t *)(m + obj + idx * 8u));
+        nfl2k5_eras_fsm_pop(obj, *(const uint32_t *)(m + obj + idx * 8u));
+    }
     for (int i = 0; i < 8; i++)
         if (g_fsm_obj[i] == obj
                 || InterlockedCompareExchange((volatile LONG *)&g_fsm_obj[i], (LONG)obj, 0) == 0)
@@ -3136,6 +3142,13 @@ int main(int argc, char **argv)
         extern void nfl2k5_scorebug_interp_hooks(void);
         nfl2k5_scorebug_interp_hooks();
     }
+    {   /* My NFL Eras result capture: the same hooks for packs, and the
+         * NFL2K5_ERAS_CAPTURE test switch (src/nfl2k5_eras_capture.c) */
+        extern void nfl2k5_eras_interp_hooks(void);
+        extern void nfl2k5_eras_capture_init(void);
+        nfl2k5_eras_interp_hooks();
+        nfl2k5_eras_capture_init();
+    }
     if (!g_interp_pack && NFL2K5_BASE_CMP(NFL2K5_XBE_SHA256) == 0)   /* retail only: packs bring their own */
         nfl2k5_expand_limits();
     {   /* Options > Controller Setup: the Custom Control layout */
@@ -3267,6 +3280,10 @@ int main(int argc, char **argv)
         CreateThread(NULL, 0, nfl2k5_find_text_thread, (LPVOID)getenv("RECOMP_FIND_TEXT"), 0, NULL);
     if (getenv("NFL2K5_CLOCK_LOG"))
         CreateThread(NULL, 0, nfl2k5_clock_log_thread, NULL, 0, NULL);
+    {   /* M4 halftime-hang study: gen patches WALK_DIAG_* in sub_000561F0 */
+        extern int nfl2k5_walk_diag_on;
+        nfl2k5_walk_diag_on = getenv("NFL2K5_WALK_DIAG") != NULL;
+    }
     {
         const char *short_q = getenv("NFL2K5_QUARTER_SECONDS");
         static float short_q_seconds;
@@ -3798,6 +3815,9 @@ int main(int argc, char **argv)
         /* "Video Settings" in the game's Options menus. */
         extern void nfl2k5_video_menu_install(void);
         nfl2k5_video_menu_install();
+        /* "My NFL Eras" (src/nfl2k5_eras_menu.c): the clean game only. */
+        extern void nfl2k5_eras_menu_install(int retail);
+        nfl2k5_eras_menu_install(!g_interp_pack && NFL2K5_BASE_CMP(NFL2K5_XBE_SHA256) == 0);
     }
     guest_function entry = recomp_lookup(0x00016BD1);
     if (!entry) { fprintf(stderr, "[BOOT] Recompiled entry point missing.\n"); return 4; }

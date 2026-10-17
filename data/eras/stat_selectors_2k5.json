@@ -1,0 +1,7154 @@
+{
+ "schema": "nfl2k5_eras_stat_selectors/v1",
+ "source": {
+  "xbe": "E:\\NFL2K5-PC\\original\\disc\\default.xbe",
+  "sha256": "73105b17a3161c546fea792a1c84ce37f9966a67c416f474cdbfab74b911a4a9",
+  "base_table": "0x00A8A510",
+  "derived_table": "0x00A8B918",
+  "doc": "docs/eras/research/RESULT-CAPTURE.md"
+ },
+ "accessors": {
+  "player": "sub_000CB240: ecx=player record, edx=selector, [esp+4]=scope; result in x87 ST0",
+  "team": "sub_000CB2D0: ecx=match team-data record (0xB30864 home, 0xB30A58 away), edx=selector, [esp+4]=scope; result in x87 ST0"
+ },
+ "scopes": {
+  "0": "this match",
+  "1": "Q1",
+  "2": "Q2",
+  "3": "Q3",
+  "4": "Q4",
+  "5": "OT (inferred)",
+  "6": "1st half",
+  "7": "2nd half",
+  "11": "season"
+ },
+ "base_selectors": [
+  {
+   "selector": 0,
+   "hex": "0x00",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x000C8B90",
+   "team_getter": "0x000C94C0",
+   "history_field": 86,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000001",
+    "0x00000002",
+    "0x000C94E0"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 1,
+   "hex": "0x01",
+   "type": 1,
+   "per_period_scopes": false,
+   "player_getter": "0x0024F800",
+   "team_getter": "0x000C9850",
+   "history_field": 45,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000003",
+    "0x00000000",
+    "0x0024FD10"
+   ],
+   "labels": [
+    "player:Opp Avg@0",
+    "player:Opp Avg@11",
+    "player:Opponent Average Start@11"
+   ]
+  },
+  {
+   "selector": 2,
+   "hex": "0x02",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x0024EE90",
+   "team_getter": "0x000C9C30",
+   "history_field": 48,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 3,
+   "hex": "0x03",
+   "type": 2,
+   "per_period_scopes": true,
+   "player_getter": "0x0024E700",
+   "team_getter": "0x000CAC00",
+   "history_field": 1,
+   "career_field_name": "rushing_attempts",
+   "raw_tail": [
+    "0x00000001",
+    "0x00000001",
+    "0x000C85F0"
+   ],
+   "labels": [
+    "player:Carries@0",
+    "player:Carries@11",
+    "player:1st Half@6",
+    "player:2nd Half@7",
+    "team:Carries@1",
+    "team:Carries@2",
+    "team:Carries@3",
+    "team:Carries@4"
+   ]
+  },
+  {
+   "selector": 4,
+   "hex": "0x04",
+   "type": 2,
+   "per_period_scopes": true,
+   "player_getter": "0x0024E230",
+   "team_getter": "0x000CAB00",
+   "history_field": 7,
+   "career_field_name": "passing_completions",
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:Comp@0",
+    "player:Completions@0",
+    "player:Comp@11",
+    "team:4th@4",
+    "team:Comp/Att@1",
+    "team:Comp/Att@2",
+    "team:Comp/Att@3",
+    "team:Comp/Att@4"
+   ]
+  },
+  {
+   "selector": 5,
+   "hex": "0x05",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x0024F690",
+   "team_getter": "0x000C98C0",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 6,
+   "hex": "0x06",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x0024ECC0",
+   "team_getter": "0x000C9BD0",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 7,
+   "hex": "0x07",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x0024E500",
+   "team_getter": "0x000C96E0",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 8,
+   "hex": "0x08",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x0024ED80",
+   "team_getter": "0x000C9C10",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 9,
+   "hex": "0x09",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x0024E550",
+   "team_getter": "0x000C9710",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 10,
+   "hex": "0x0A",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x000C8780",
+   "team_getter": "0x000C9D40",
+   "history_field": 23,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 11,
+   "hex": "0x0B",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x0024ED40",
+   "team_getter": "0x000C9C00",
+   "history_field": 49,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 12,
+   "hex": "0x0C",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x0024F4B0",
+   "team_getter": "0x000C9E80",
+   "history_field": 29,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:Blk@0",
+    "player:FGs Blocked Today@0",
+    "team:Blk@0"
+   ]
+  },
+  {
+   "selector": 13,
+   "hex": "0x0D",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x0024F2D0",
+   "team_getter": "0x000C9D70",
+   "history_field": 58,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 14,
+   "hex": "0x0E",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": null,
+   "team_getter": "0x000C9330",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000001",
+    "0x000C8600"
+   ],
+   "labels": [
+    "team:First Downs@0",
+    "team:1st Downs This Season@11"
+   ]
+  },
+  {
+   "selector": 15,
+   "hex": "0x0F",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x0024EE10",
+   "team_getter": "0x000C9C20",
+   "history_field": 4,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:Fum@0",
+    "player:Fum@11",
+    "team:Fumbles@0",
+    "team:Fum@0"
+   ]
+  },
+  {
+   "selector": 16,
+   "hex": "0x10",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x0024EE50",
+   "team_getter": "0x000CAA80",
+   "history_field": 5,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "team:Fum@0"
+   ]
+  },
+  {
+   "selector": 17,
+   "hex": "0x11",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x0024F180",
+   "team_getter": "0x000C9CF0",
+   "history_field": 21,
+   "career_field_name": "forced_fumbles",
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:Force Fum@0",
+    "player:Force Fum@11"
+   ]
+  },
+  {
+   "selector": 18,
+   "hex": "0x12",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x0024F1C0",
+   "team_getter": "0x000C9D00",
+   "history_field": 22,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:Fum Rec@0",
+    "player:Fum Rec@11"
+   ]
+  },
+  {
+   "selector": 19,
+   "hex": "0x13",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x0024E610",
+   "team_getter": "0x000C98F0",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 20,
+   "hex": "0x14",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x0024E650",
+   "team_getter": "0x000C98F0",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 21,
+   "hex": "0x15",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x0024DC90",
+   "team_getter": "0x000C99D0",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:Hurries@0"
+   ]
+  },
+  {
+   "selector": 22,
+   "hex": "0x16",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x0024E430",
+   "team_getter": "0x000C99C0",
+   "history_field": 10,
+   "career_field_name": "passing_interceptions",
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:INT@0",
+    "player:Interceptions@0",
+    "player:INT@11",
+    "team:INT@0"
+   ]
+  },
+  {
+   "selector": 23,
+   "hex": "0x17",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x0024F060",
+   "team_getter": "0x000C9C90",
+   "history_field": 20,
+   "career_field_name": "defensive_interceptions",
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:INT@0",
+    "player:Interceptions@0",
+    "player:Interceptions Today@0",
+    "player:INT@11",
+    "team:Interceptions@0",
+    "team:INTs@0"
+   ]
+  },
+  {
+   "selector": 24,
+   "hex": "0x18",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x0024FA50",
+   "team_getter": "0x000C9FB0",
+   "history_field": 37,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:Kick Returns@0"
+   ]
+  },
+  {
+   "selector": 25,
+   "hex": "0x19",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x0024F6D0",
+   "team_getter": "0x000C9ED0",
+   "history_field": 28,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:Kicks@0",
+    "player:Kicks@11"
+   ]
+  },
+  {
+   "selector": 26,
+   "hex": "0x1A",
+   "type": 1,
+   "per_period_scopes": false,
+   "player_getter": "0x0024E8A0",
+   "team_getter": "0x000C9B30",
+   "history_field": 16,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000002",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:Long@0"
+   ]
+  },
+  {
+   "selector": 27,
+   "hex": "0x1B",
+   "type": 1,
+   "per_period_scopes": false,
+   "player_getter": "0x0024EBD0",
+   "team_getter": "0x000C9A00",
+   "history_field": 17,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000002",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:Long@0",
+    "player:Long@11"
+   ]
+  },
+  {
+   "selector": 28,
+   "hex": "0x1C",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x0024F4F0",
+   "team_getter": "0x000C9E90",
+   "history_field": 30,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000002",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:Long@0",
+    "player:Long@11",
+    "player:Longest FG This Season@11"
+   ]
+  },
+  {
+   "selector": 29,
+   "hex": "0x1D",
+   "type": 1,
+   "per_period_scopes": false,
+   "player_getter": "0x0024F0F0",
+   "team_getter": "0x000C9CC0",
+   "history_field": 56,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000002",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 30,
+   "hex": "0x1E",
+   "type": 1,
+   "per_period_scopes": false,
+   "player_getter": "0x0024FAE0",
+   "team_getter": "0x000C9FE0",
+   "history_field": 43,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000002",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:Longest Kick Return This Season@11"
+   ]
+  },
+  {
+   "selector": 31,
+   "hex": "0x1F",
+   "type": 1,
+   "per_period_scopes": false,
+   "player_getter": "0x0024DC00",
+   "team_getter": "0x000C9A00",
+   "history_field": 46,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000002",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:Long@0"
+   ]
+  },
+  {
+   "selector": 32,
+   "hex": "0x20",
+   "type": 1,
+   "per_period_scopes": false,
+   "player_getter": "0x0024F940",
+   "team_getter": "0x000C9F60",
+   "history_field": 36,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000002",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:Long@0",
+    "player:Long@11",
+    "player:Longest Punt This Season@11"
+   ]
+  },
+  {
+   "selector": 33,
+   "hex": "0x21",
+   "type": 1,
+   "per_period_scopes": false,
+   "player_getter": "0x0024EC70",
+   "team_getter": "0x000C9BE0",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 34,
+   "hex": "0x22",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x0024F290",
+   "team_getter": "0x000C9D60",
+   "history_field": 54,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:Tips@0",
+    "team:Pass@0"
+   ]
+  },
+  {
+   "selector": 35,
+   "hex": "0x23",
+   "type": 2,
+   "per_period_scopes": true,
+   "player_getter": "0x0024DF60",
+   "team_getter": "0x000CAA90",
+   "history_field": 6,
+   "career_field_name": "passing_attempts",
+   "raw_tail": [
+    "0x00000001",
+    "0x00000001",
+    "0x000C85E0"
+   ],
+   "labels": [
+    "player:Att@0",
+    "player:Attempts@0",
+    "player:Att@11",
+    "player:1st Half@6",
+    "player:2nd Half@7"
+   ]
+  },
+  {
+   "selector": 36,
+   "hex": "0x24",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": null,
+   "team_getter": "0x000C93E0",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000001",
+    "0x000C86D0"
+   ],
+   "labels": [
+    "team:Penalties@0",
+    "team:Penalties/Game@11"
+   ]
+  },
+  {
+   "selector": 37,
+   "hex": "0x25",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": null,
+   "team_getter": "0x000C9440",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000001",
+    "0x000C85E0"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 38,
+   "hex": "0x26",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": null,
+   "team_getter": "0x000C9450",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000001",
+    "0x000C85F0"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 39,
+   "hex": "0x27",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": null,
+   "team_getter": "0x000C9340",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000001",
+    "0x000C8630"
+   ],
+   "labels": [
+    "team:Att@0",
+    "team:Att@11"
+   ]
+  },
+  {
+   "selector": 40,
+   "hex": "0x28",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": null,
+   "team_getter": "0x000C9360",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000001",
+    "0x000C8650"
+   ],
+   "labels": [
+    "team:Att@0",
+    "team:Att@11"
+   ]
+  },
+  {
+   "selector": 41,
+   "hex": "0x29",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": null,
+   "team_getter": null,
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000003",
+    "0x00000000",
+    "0x000C8B80"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 42,
+   "hex": "0x2A",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x0024FB70",
+   "team_getter": "0x000CA010",
+   "history_field": 40,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:Punt Returns@0"
+   ]
+  },
+  {
+   "selector": 43,
+   "hex": "0x2B",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x0024F860",
+   "team_getter": "0x000C9EF0",
+   "history_field": 32,
+   "career_field_name": "punts",
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:Punts@0",
+    "player:Punts@11"
+   ]
+  },
+  {
+   "selector": 44,
+   "hex": "0x2C",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x0024FA10",
+   "team_getter": "0x000C9FA0",
+   "history_field": 35,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:Blk@0"
+   ]
+  },
+  {
+   "selector": 45,
+   "hex": "0x2D",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x0024F9D0",
+   "team_getter": "0x000C9F90",
+   "history_field": 34,
+   "career_field_name": "punts_inside_20",
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:In 20@0",
+    "player:In 20@11"
+   ]
+  },
+  {
+   "selector": 46,
+   "hex": "0x2E",
+   "type": 2,
+   "per_period_scopes": true,
+   "player_getter": "0x0024E9A0",
+   "team_getter": "0x000CAB00",
+   "history_field": 12,
+   "career_field_name": "receptions",
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:Rec@0",
+    "player:Receptions@0",
+    "player:Rec@11",
+    "player:1st Half@6",
+    "player:2nd Half@7"
+   ]
+  },
+  {
+   "selector": 47,
+   "hex": "0x2F",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x0024EF90",
+   "team_getter": "0x000C9C80",
+   "history_field": 19,
+   "career_field_name": "defensive_sacks_half_units",
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 48,
+   "hex": "0x30",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x0024E470",
+   "team_getter": "0x000C99E0",
+   "history_field": 11,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:Sacks@0"
+   ]
+  },
+  {
+   "selector": 49,
+   "hex": "0x31",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x0024F020",
+   "team_getter": "0x000C9C70",
+   "history_field": 57,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 50,
+   "hex": "0x32",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x0024EED0",
+   "team_getter": "0x000C9C40",
+   "history_field": 18,
+   "career_field_name": "defensive_tackles",
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:Tackles@0",
+    "player:Tackles Today@0",
+    "player:Tackles@11",
+    "team:Tackles@0"
+   ]
+  },
+  {
+   "selector": 51,
+   "hex": "0x33",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x0024EF10",
+   "team_getter": "0x000C9C50",
+   "history_field": 52,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000001",
+    "0x00000001",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 52,
+   "hex": "0x34",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x0024EF50",
+   "team_getter": "0x000C9C60",
+   "history_field": 51,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:For Loss@0"
+   ]
+  },
+  {
+   "selector": 53,
+   "hex": "0x35",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x0024E590",
+   "team_getter": "0x000C98D0",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 54,
+   "hex": "0x36",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x0024E5D0",
+   "team_getter": "0x000C98E0",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 55,
+   "hex": "0x37",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x0024DC50",
+   "team_getter": "0x000C99F0",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 56,
+   "hex": "0x38",
+   "type": 2,
+   "per_period_scopes": true,
+   "player_getter": "0x0024EDC0",
+   "team_getter": "0x000CAA90",
+   "history_field": 50,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 57,
+   "hex": "0x39",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x0024F7B0",
+   "team_getter": "0x000C9EE0",
+   "history_field": 31,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:Touch@0",
+    "player:Touch@11"
+   ]
+  },
+  {
+   "selector": 58,
+   "hex": "0x3A",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x0024F990",
+   "team_getter": "0x000C9F80",
+   "history_field": 71,
+   "career_field_name": "punt_touchbacks",
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:TB@0"
+   ]
+  },
+  {
+   "selector": 59,
+   "hex": "0x3B",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x0024F140",
+   "team_getter": "0x000C9CE0",
+   "history_field": 24,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 60,
+   "hex": "0x3C",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x0024FB30",
+   "team_getter": "0x000CA000",
+   "history_field": 39,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:TDs@0",
+    "team:Returning TDs@0"
+   ]
+  },
+  {
+   "selector": 61,
+   "hex": "0x3D",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x0024F250",
+   "team_getter": "0x000C9D30",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 62,
+   "hex": "0x3E",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x0024ED00",
+   "team_getter": "0x000C9BA0",
+   "history_field": 14,
+   "career_field_name": "receiving_touchdowns",
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:TD@0",
+    "player:Touchdowns@0",
+    "player:TD@11"
+   ]
+  },
+  {
+   "selector": 63,
+   "hex": "0x3F",
+   "type": 2,
+   "per_period_scopes": true,
+   "player_getter": "0x0024E960",
+   "team_getter": "0x000CAC90",
+   "history_field": 3,
+   "career_field_name": "rushing_touchdowns",
+   "raw_tail": [
+    "0x00000001",
+    "0x00000001",
+    "0x000C8750"
+   ],
+   "labels": [
+    "player:TD@0",
+    "player:Touchdowns@0",
+    "player:TD@11",
+    "team:Rushing TDs@0",
+    "team:TD@1",
+    "team:TD@2",
+    "team:TD@3",
+    "team:TD@4"
+   ]
+  },
+  {
+   "selector": 64,
+   "hex": "0x40",
+   "type": 2,
+   "per_period_scopes": true,
+   "player_getter": "0x0024E3E0",
+   "team_getter": "0x000CABC0",
+   "history_field": 9,
+   "career_field_name": "passing_touchdowns",
+   "raw_tail": [
+    "0x00000001",
+    "0x00000001",
+    "0x000C8740"
+   ],
+   "labels": [
+    "player:TD@0",
+    "player:Touchdowns@0",
+    "player:TD@11",
+    "team:TD@1",
+    "team:TD@2",
+    "team:TD@3",
+    "team:TD@4"
+   ]
+  },
+  {
+   "selector": 65,
+   "hex": "0x41",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x0024FC50",
+   "team_getter": "0x000CA060",
+   "history_field": 42,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:TDs@0"
+   ]
+  },
+  {
+   "selector": 66,
+   "hex": "0x42",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": null,
+   "team_getter": "0x000C9820",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000001",
+    "0x000C86F0"
+   ],
+   "labels": [
+    "team:Turnovers@0",
+    "team:Turnovers Per Game@11"
+   ]
+  },
+  {
+   "selector": 67,
+   "hex": "0x43",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": null,
+   "team_getter": "0x000C9420",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x000C8610"
+   ],
+   "labels": [
+    "team:Att@0"
+   ]
+  },
+  {
+   "selector": 68,
+   "hex": "0x44",
+   "type": 1,
+   "per_period_scopes": false,
+   "player_getter": "0x0024EC20",
+   "team_getter": "0x000C9BB0",
+   "history_field": 15,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:YAC@0"
+   ]
+  },
+  {
+   "selector": 69,
+   "hex": "0x45",
+   "type": 1,
+   "per_period_scopes": false,
+   "player_getter": null,
+   "team_getter": "0x000C9780",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000001",
+    "0x000C85D0"
+   ],
+   "labels": [
+    "team:Rushing Yards Allowed@0",
+    "team:Rush@11"
+   ]
+  },
+  {
+   "selector": 70,
+   "hex": "0x46",
+   "type": 1,
+   "per_period_scopes": false,
+   "player_getter": null,
+   "team_getter": "0x000C9730",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000001",
+    "0x000C85C0"
+   ],
+   "labels": [
+    "team:Passing Yards Allowed@0",
+    "team:Pass@11"
+   ]
+  },
+  {
+   "selector": 71,
+   "hex": "0x47",
+   "type": 1,
+   "per_period_scopes": false,
+   "player_getter": "0x0024F200",
+   "team_getter": "0x000C9D10",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:Fum Ret Yds@0"
+   ]
+  },
+  {
+   "selector": 72,
+   "hex": "0x48",
+   "type": 1,
+   "per_period_scopes": false,
+   "player_getter": "0x0024F0A0",
+   "team_getter": "0x000C9CA0",
+   "history_field": 55,
+   "career_field_name": "interception_return_yards",
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:Int Ret Yds@0"
+   ]
+  },
+  {
+   "selector": 73,
+   "hex": "0x49",
+   "type": 1,
+   "per_period_scopes": false,
+   "player_getter": "0x0024EFD0",
+   "team_getter": "0x000C9470",
+   "history_field": 53,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 74,
+   "hex": "0x4A",
+   "type": 1,
+   "per_period_scopes": false,
+   "player_getter": "0x0024F0F0",
+   "team_getter": "0x000C9CC0",
+   "history_field": 56,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000002",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 75,
+   "hex": "0x4B",
+   "type": 1,
+   "per_period_scopes": false,
+   "player_getter": "0x0024FA90",
+   "team_getter": "0x000C9FC0",
+   "history_field": 38,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:Yards@0"
+   ]
+  },
+  {
+   "selector": 76,
+   "hex": "0x4C",
+   "type": 3,
+   "per_period_scopes": true,
+   "player_getter": "0x0024E310",
+   "team_getter": "0x000CAB70",
+   "history_field": 8,
+   "career_field_name": "passing_yards",
+   "raw_tail": [
+    "0x00000001",
+    "0x00000001",
+    "0x000C85A0"
+   ],
+   "labels": [
+    "player:Over 300 Yards Passing Today@0",
+    "player:Over 400 Yards Passing Today@0",
+    "player:Over 500 Yards Passing Today@0",
+    "player:Over 3000 Yards Passing This Season@0",
+    "player:Over 4000 Yards Passing This Season@0",
+    "player:Over 5000 Yards Passing This Season@0",
+    "player:Yds@0",
+    "player:Yards@0",
+    "player:Yds@11",
+    "player:Pass@11",
+    "player:Passing@11",
+    "team:Passing@0",
+    "team:Passing Yards@0",
+    "team:1st Half@0",
+    "team:2nd Half@0",
+    "team:Passing Yards Per Game@11",
+    "team:1st@1",
+    "team:2nd@2",
+    "team:3rd@3"
+   ]
+  },
+  {
+   "selector": 77,
+   "hex": "0x4D",
+   "type": 1,
+   "per_period_scopes": false,
+   "player_getter": "0x0024FBB0",
+   "team_getter": "0x000CA020",
+   "history_field": 41,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:Yards@0"
+   ]
+  },
+  {
+   "selector": 78,
+   "hex": "0x4E",
+   "type": 1,
+   "per_period_scopes": false,
+   "player_getter": "0x0024F8A0",
+   "team_getter": "0x000C9F00",
+   "history_field": 33,
+   "career_field_name": "punting_yards",
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:1st Punt@0"
+   ]
+  },
+  {
+   "selector": 79,
+   "hex": "0x4F",
+   "type": 3,
+   "per_period_scopes": true,
+   "player_getter": "0x0024EB70",
+   "team_getter": "0x000CACD0",
+   "history_field": 13,
+   "career_field_name": "receiving_yards",
+   "raw_tail": [
+    "0x00000001",
+    "0x00000001",
+    "0x000C85A0"
+   ],
+   "labels": [
+    "player:Over 100 Yards Receiving Today@0",
+    "player:Over 200 Yards Receiving Today@0",
+    "player:Over 300 Yards Receiving Today@0",
+    "player:and Receiving@0",
+    "player:Over 1000 Yards Receiving This Season@0",
+    "player:Over 2000 Yards Receiving This Season@0",
+    "player:Over 3000 Yards Receiving This Season@0",
+    "player:Yds@0",
+    "player:Yards@0",
+    "player:Receiving@0",
+    "player:Yds@11",
+    "player:Receiving@11"
+   ]
+  },
+  {
+   "selector": 80,
+   "hex": "0x50",
+   "type": 3,
+   "per_period_scopes": true,
+   "player_getter": "0x0024E800",
+   "team_getter": "0x000CAC40",
+   "history_field": 2,
+   "career_field_name": "rushing_yards",
+   "raw_tail": [
+    "0x00000001",
+    "0x00000001",
+    "0x000C85B0"
+   ],
+   "labels": [
+    "player:Over 100 Yards Rushing Today@0",
+    "player:Over 200 Yards Rushing Today@0",
+    "player:Over 300 Yards Rushing Today@0",
+    "player:100+ Yards Rushing@0",
+    "player:Over 1000 Yards Rushing This Season@0",
+    "player:Over 2000 Yards Rushing This Season@0",
+    "player:Over 3000 Yards Rushing This Season@0",
+    "player:Yds@0",
+    "player:Yards@0",
+    "player:Rushing@0",
+    "player:Yds@11",
+    "player:Rush@11",
+    "player:Rushing@11",
+    "team:Rushing@0",
+    "team:Rushing Yards@0",
+    "team:1st Half@6",
+    "team:2nd Half@7",
+    "team:Rushing Yards Per Game@11",
+    "team:1st@1",
+    "team:2nd@2",
+    "team:3rd@3",
+    "team:4th@4"
+   ]
+  },
+  {
+   "selector": 81,
+   "hex": "0x51",
+   "type": 1,
+   "per_period_scopes": false,
+   "player_getter": "0x0024E4B0",
+   "team_getter": "0x000C93F0",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 82,
+   "hex": "0x52",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x0024FCD0",
+   "team_getter": "0x000C9840",
+   "history_field": 72,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000001",
+    "0x00000001",
+    "0x000C8620"
+   ],
+   "labels": [
+    "team:2pt Conv@0"
+   ]
+  },
+  {
+   "selector": 83,
+   "hex": "0x53",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": null,
+   "team_getter": "0x000C9350",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000001",
+    "0x000C8640"
+   ],
+   "labels": [
+    "team:3rd Dn Conv@0",
+    "team:Made@11"
+   ]
+  },
+  {
+   "selector": 84,
+   "hex": "0x54",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": null,
+   "team_getter": "0x000C9370",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000001",
+    "0x000C8660"
+   ],
+   "labels": [
+    "team:4th Dn Conv@0",
+    "team:Made@11"
+   ]
+  },
+  {
+   "selector": 85,
+   "hex": "0x55",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x0024F470",
+   "team_getter": "0x000C9DA0",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:Made 1st Kick Today@0",
+    "player:Missed 1st Kick Today@0"
+   ]
+  },
+  {
+   "selector": 86,
+   "hex": "0x56",
+   "type": 1,
+   "per_period_scopes": false,
+   "player_getter": "0x0024FC00",
+   "team_getter": "0x000CA040",
+   "history_field": 44,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000002",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:Longest Punt Return This Season@11"
+   ]
+  },
+  {
+   "selector": 87,
+   "hex": "0x57",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x0024F310",
+   "team_getter": "0x000C9D80",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "team:Blk@0"
+   ]
+  },
+  {
+   "selector": 88,
+   "hex": "0x58",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x0024F610",
+   "team_getter": "0x000C9EB0",
+   "history_field": 25,
+   "career_field_name": "extra_points_made",
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:PAT Comp@0"
+   ]
+  },
+  {
+   "selector": 89,
+   "hex": "0x59",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x0024F5D0",
+   "team_getter": "0x000C9EA0",
+   "history_field": 26,
+   "career_field_name": "extra_points_attempted",
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:Att@0"
+   ]
+  },
+  {
+   "selector": 90,
+   "hex": "0x5A",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x0024F650",
+   "team_getter": "0x000C9EC0",
+   "history_field": 27,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:PATs Blocked Today@0"
+   ]
+  },
+  {
+   "selector": 91,
+   "hex": "0x5B",
+   "type": 2,
+   "per_period_scopes": true,
+   "player_getter": "0x0024FF60",
+   "team_getter": "0x000CA3F0",
+   "history_field": 69,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000001",
+    "0x00000001",
+    "0x000C8710"
+   ],
+   "labels": [
+    "team:Pts@0"
+   ]
+  },
+  {
+   "selector": 92,
+   "hex": "0x5C",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": null,
+   "team_getter": "0x000C9430",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000001",
+    "0x000C8720"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 93,
+   "hex": "0x5D",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": null,
+   "team_getter": "0x000C9460",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "team:Possessions@0"
+   ]
+  },
+  {
+   "selector": 94,
+   "hex": "0x5E",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x0024F350",
+   "team_getter": "0x000C9D90",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "team:Blk@0"
+   ]
+  },
+  {
+   "selector": 95,
+   "hex": "0x5F",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": null,
+   "team_getter": "0x00250040",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "team:Time of Possession@0"
+   ]
+  },
+  {
+   "selector": 96,
+   "hex": "0x60",
+   "type": 1,
+   "per_period_scopes": false,
+   "player_getter": "0x0024E850",
+   "team_getter": "0x000C9B10",
+   "history_field": 47,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:After 1st Hit@0"
+   ]
+  },
+  {
+   "selector": 97,
+   "hex": "0x61",
+   "type": 1,
+   "per_period_scopes": false,
+   "player_getter": "0x0024F8F0",
+   "team_getter": "0x000C9F20",
+   "history_field": 70,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 98,
+   "hex": "0x62",
+   "type": 1,
+   "per_period_scopes": false,
+   "player_getter": null,
+   "team_getter": "0x000C97D0",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000001",
+    "0x000C86E0"
+   ],
+   "labels": [
+    "team:Yards@0",
+    "team:Yds/Game@11"
+   ]
+  },
+  {
+   "selector": 99,
+   "hex": "0x63",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x000C96C0",
+   "team_getter": "0x000C94D0",
+   "history_field": 0,
+   "career_field_name": "games",
+   "raw_tail": [
+    "0x00000001",
+    "0x00000001",
+    "0x000C8730"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 100,
+   "hex": "0x64",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": null,
+   "team_getter": "0x000C9410",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000001",
+    "0x000C8700"
+   ],
+   "labels": [
+    "team:Points off Turnovers@0"
+   ]
+  },
+  {
+   "selector": 101,
+   "hex": "0x65",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": null,
+   "team_getter": "0x000CAD10",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 102,
+   "hex": "0x66",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x000C8820",
+   "team_getter": "0x000CA0E0",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 103,
+   "hex": "0x67",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x000C8830",
+   "team_getter": "0x000CA0C0",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 104,
+   "hex": "0x68",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x000C8840",
+   "team_getter": "0x000CA0A0",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 105,
+   "hex": "0x69",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x000C8850",
+   "team_getter": "0x000CA160",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 106,
+   "hex": "0x6A",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x000C8860",
+   "team_getter": "0x000CA140",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 107,
+   "hex": "0x6B",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x000C8870",
+   "team_getter": "0x000CA120",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 108,
+   "hex": "0x6C",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x000C8880",
+   "team_getter": "0x000CA220",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 109,
+   "hex": "0x6D",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x000C8890",
+   "team_getter": "0x000CA210",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 110,
+   "hex": "0x6E",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x000C88A0",
+   "team_getter": "0x000CA200",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 111,
+   "hex": "0x6F",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x000C88B0",
+   "team_getter": "0x000CA1F0",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 112,
+   "hex": "0x70",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x000C88C0",
+   "team_getter": "0x000CA1E0",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 113,
+   "hex": "0x71",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x000C88D0",
+   "team_getter": "0x000CA1D0",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 114,
+   "hex": "0x72",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x000C88E0",
+   "team_getter": "0x000CA1C0",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 115,
+   "hex": "0x73",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x000C88F0",
+   "team_getter": "0x000CA1B0",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 116,
+   "hex": "0x74",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x000C8900",
+   "team_getter": "0x000CA1A0",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 117,
+   "hex": "0x75",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x000C8910",
+   "team_getter": "0x000CA2A0",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:Comp/Att@0"
+   ]
+  },
+  {
+   "selector": 118,
+   "hex": "0x76",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x000C8920",
+   "team_getter": "0x000CA280",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:Comp/Att@0"
+   ]
+  },
+  {
+   "selector": 119,
+   "hex": "0x77",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x000C8930",
+   "team_getter": "0x000CA260",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:Comp/Att@0"
+   ]
+  },
+  {
+   "selector": 120,
+   "hex": "0x78",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x000C8940",
+   "team_getter": "0x000CA320",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 121,
+   "hex": "0x79",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x000C8950",
+   "team_getter": "0x000CA300",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 122,
+   "hex": "0x7A",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x000C8960",
+   "team_getter": "0x000CA2E0",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 123,
+   "hex": "0x7B",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x000C8970",
+   "team_getter": "0x000CA3E0",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 124,
+   "hex": "0x7C",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x000C8980",
+   "team_getter": "0x000CA3D0",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 125,
+   "hex": "0x7D",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x000C8990",
+   "team_getter": "0x000CA3C0",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 126,
+   "hex": "0x7E",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x000C89A0",
+   "team_getter": "0x000CA3B0",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 127,
+   "hex": "0x7F",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x000C89B0",
+   "team_getter": "0x000CA3A0",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 128,
+   "hex": "0x80",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x000C89C0",
+   "team_getter": "0x000CA390",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 129,
+   "hex": "0x81",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x000C89D0",
+   "team_getter": "0x000CA380",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 130,
+   "hex": "0x82",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x000C89E0",
+   "team_getter": "0x000CA370",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 131,
+   "hex": "0x83",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x000C89F0",
+   "team_getter": "0x000CA360",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 132,
+   "hex": "0x84",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x000C8A00",
+   "team_getter": "0x000CA2A0",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 133,
+   "hex": "0x85",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x000C8A10",
+   "team_getter": "0x000CA280",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 134,
+   "hex": "0x86",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x000C8A20",
+   "team_getter": "0x000CA260",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 135,
+   "hex": "0x87",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x000C8A30",
+   "team_getter": "0x000CA320",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 136,
+   "hex": "0x88",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x000C8A40",
+   "team_getter": "0x000CA300",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 137,
+   "hex": "0x89",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x000C8A50",
+   "team_getter": "0x000CA2E0",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 138,
+   "hex": "0x8A",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x000C8A90",
+   "team_getter": "0x000C99B0",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:TD@0"
+   ]
+  },
+  {
+   "selector": 139,
+   "hex": "0x8B",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x000C8AA0",
+   "team_getter": "0x000C99A0",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:TD@0"
+   ]
+  },
+  {
+   "selector": 140,
+   "hex": "0x8C",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x000C8AB0",
+   "team_getter": "0x000C9990",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:TD@0"
+   ]
+  },
+  {
+   "selector": 141,
+   "hex": "0x8D",
+   "type": 1,
+   "per_period_scopes": false,
+   "player_getter": "0x000C8A60",
+   "team_getter": "0x000C9960",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:Left@0"
+   ]
+  },
+  {
+   "selector": 142,
+   "hex": "0x8E",
+   "type": 1,
+   "per_period_scopes": false,
+   "player_getter": "0x000C8A70",
+   "team_getter": "0x000C9940",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:Middle@0"
+   ]
+  },
+  {
+   "selector": 143,
+   "hex": "0x8F",
+   "type": 1,
+   "per_period_scopes": false,
+   "player_getter": "0x000C8A80",
+   "team_getter": "0x000C9920",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:Right@0"
+   ]
+  },
+  {
+   "selector": 144,
+   "hex": "0x90",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x000C8AC0",
+   "team_getter": "0x000C9A60",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:Carries@0"
+   ]
+  },
+  {
+   "selector": 145,
+   "hex": "0x91",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x000C8AD0",
+   "team_getter": "0x000C9A50",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:Carries@0"
+   ]
+  },
+  {
+   "selector": 146,
+   "hex": "0x92",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x000C8AE0",
+   "team_getter": "0x000C9A40",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:Carries@0"
+   ]
+  },
+  {
+   "selector": 147,
+   "hex": "0x93",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x000C8AF0",
+   "team_getter": "0x000C9A30",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:Carries@0"
+   ]
+  },
+  {
+   "selector": 148,
+   "hex": "0x94",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x000C8B00",
+   "team_getter": "0x000C9B90",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:TD@0"
+   ]
+  },
+  {
+   "selector": 149,
+   "hex": "0x95",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x000C8B10",
+   "team_getter": "0x000C9B80",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:TD@0"
+   ]
+  },
+  {
+   "selector": 150,
+   "hex": "0x96",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x000C8B20",
+   "team_getter": "0x000C9B70",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:TD@0"
+   ]
+  },
+  {
+   "selector": 151,
+   "hex": "0x97",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x000C8B30",
+   "team_getter": "0x000C9B60",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:TD@0"
+   ]
+  },
+  {
+   "selector": 152,
+   "hex": "0x98",
+   "type": 1,
+   "per_period_scopes": false,
+   "player_getter": "0x000C8B40",
+   "team_getter": "0x000C9AF0",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:Outside Left@0"
+   ]
+  },
+  {
+   "selector": 153,
+   "hex": "0x99",
+   "type": 1,
+   "per_period_scopes": false,
+   "player_getter": "0x000C8B50",
+   "team_getter": "0x000C9AD0",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:Inside Left@0"
+   ]
+  },
+  {
+   "selector": 154,
+   "hex": "0x9A",
+   "type": 1,
+   "per_period_scopes": false,
+   "player_getter": "0x000C8B60",
+   "team_getter": "0x000C9AB0",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:Inside Right@0"
+   ]
+  },
+  {
+   "selector": 155,
+   "hex": "0x9B",
+   "type": 1,
+   "per_period_scopes": false,
+   "player_getter": "0x000C8B70",
+   "team_getter": "0x000C9A90",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:Outside Right@0"
+   ]
+  },
+  {
+   "selector": 156,
+   "hex": "0x9C",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x0024FDE0",
+   "team_getter": null,
+   "history_field": 74,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 157,
+   "hex": "0x9D",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x0024FE00",
+   "team_getter": null,
+   "history_field": 75,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 158,
+   "hex": "0x9E",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x0024FE20",
+   "team_getter": null,
+   "history_field": 76,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 159,
+   "hex": "0x9F",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x0024FE40",
+   "team_getter": null,
+   "history_field": 77,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 160,
+   "hex": "0xA0",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x0024FE60",
+   "team_getter": null,
+   "history_field": 78,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 161,
+   "hex": "0xA1",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x0024FE80",
+   "team_getter": null,
+   "history_field": 79,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 162,
+   "hex": "0xA2",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x0024FEA0",
+   "team_getter": null,
+   "history_field": 80,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 163,
+   "hex": "0xA3",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x0024FEC0",
+   "team_getter": null,
+   "history_field": 81,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 164,
+   "hex": "0xA4",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x0024FEE0",
+   "team_getter": null,
+   "history_field": 82,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 165,
+   "hex": "0xA5",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x0024FF00",
+   "team_getter": null,
+   "history_field": 83,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 166,
+   "hex": "0xA6",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x0024FF20",
+   "team_getter": null,
+   "history_field": 84,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 167,
+   "hex": "0xA7",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x0024FF40",
+   "team_getter": null,
+   "history_field": 85,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 168,
+   "hex": "0xA8",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x000C8B90",
+   "team_getter": null,
+   "history_field": 73,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000002",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 169,
+   "hex": "0xA9",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x000C87A0",
+   "team_getter": "0x000C9DF0",
+   "history_field": 62,
+   "career_field_name": "field_goals_attempted_1_29",
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 170,
+   "hex": "0xAA",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x000C87B0",
+   "team_getter": "0x000C9DE0",
+   "history_field": 64,
+   "career_field_name": "field_goals_attempted_30_39",
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 171,
+   "hex": "0xAB",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x000C87C0",
+   "team_getter": "0x000C9DD0",
+   "history_field": 66,
+   "career_field_name": "field_goals_attempted_40_49",
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 172,
+   "hex": "0xAC",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x000C87D0",
+   "team_getter": "0x000C9DC0",
+   "history_field": 68,
+   "career_field_name": "field_goals_attempted_50_plus",
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 173,
+   "hex": "0xAD",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x000C87E0",
+   "team_getter": "0x000C9E40",
+   "history_field": 61,
+   "career_field_name": "field_goals_made_1_29",
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:0-29@0"
+   ]
+  },
+  {
+   "selector": 174,
+   "hex": "0xAE",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x000C87F0",
+   "team_getter": "0x000C9E30",
+   "history_field": 63,
+   "career_field_name": "field_goals_made_30_39",
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:30-39@0"
+   ]
+  },
+  {
+   "selector": 175,
+   "hex": "0xAF",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x000C8800",
+   "team_getter": "0x000C9E20",
+   "history_field": 65,
+   "career_field_name": "field_goals_made_40_49",
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:40-49@0"
+   ]
+  },
+  {
+   "selector": 176,
+   "hex": "0xB0",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": "0x000C8810",
+   "team_getter": "0x000C9E10",
+   "history_field": 67,
+   "career_field_name": "field_goals_made_50_plus",
+   "raw_tail": [
+    "0x00000001",
+    "0x00000000",
+    "0x00000000"
+   ],
+   "labels": [
+    "player:50+@0"
+   ]
+  },
+  {
+   "selector": 177,
+   "hex": "0xB1",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": null,
+   "team_getter": "0x000C93A0",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000001",
+    "0x000C8690"
+   ],
+   "labels": [
+    "team:FGs@0",
+    "team:FG@11"
+   ]
+  },
+  {
+   "selector": 178,
+   "hex": "0xB2",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": null,
+   "team_getter": "0x000C9390",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000001",
+    "0x000C8680"
+   ],
+   "labels": [
+    "team:TDs@0",
+    "team:TD@11"
+   ]
+  },
+  {
+   "selector": 179,
+   "hex": "0xB3",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": null,
+   "team_getter": "0x000C9380",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000001",
+    "0x000C8670"
+   ],
+   "labels": [
+    "team:Times@0",
+    "team:Times@11"
+   ]
+  },
+  {
+   "selector": 180,
+   "hex": "0xB4",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": null,
+   "team_getter": "0x000C93D0",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000001",
+    "0x000C86C0"
+   ],
+   "labels": [
+    "team:FGs@0",
+    "team:FG@11"
+   ]
+  },
+  {
+   "selector": 181,
+   "hex": "0xB5",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": null,
+   "team_getter": "0x000C93C0",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000001",
+    "0x000C86B0"
+   ],
+   "labels": [
+    "team:TDs@0",
+    "team:TD@11"
+   ]
+  },
+  {
+   "selector": 182,
+   "hex": "0xB6",
+   "type": 0,
+   "per_period_scopes": false,
+   "player_getter": null,
+   "team_getter": "0x000C93B0",
+   "history_field": null,
+   "career_field_name": null,
+   "raw_tail": [
+    "0x00000000",
+    "0x00000001",
+    "0x000C86A0"
+   ],
+   "labels": [
+    "team:Stands@0",
+    "team:Stands@11"
+   ]
+  }
+ ],
+ "derived_selectors": [
+  {
+   "selector": 184,
+   "hex": "0xB8",
+   "op": 6,
+   "op_meaning": "a*0.5",
+   "inputs": [
+    "0x2F"
+   ],
+   "labels": [
+    "player:Sack@0",
+    "player:Sacks@0",
+    "player:Sacks Today@0",
+    "player:Sacks@11",
+    "team:Sacks@0"
+   ]
+  },
+  {
+   "selector": 185,
+   "hex": "0xB9",
+   "op": 2,
+   "op_meaning": "a/b (average, b as integer)",
+   "inputs": [
+    "0x44",
+    "0x2E"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 186,
+   "hex": "0xBA",
+   "op": 2,
+   "op_meaning": "a/b (average, b as integer)",
+   "inputs": [
+    "0x4E",
+    "0x2B"
+   ],
+   "labels": [
+    "player:Avg@11"
+   ]
+  },
+  {
+   "selector": 187,
+   "hex": "0xBB",
+   "op": 2,
+   "op_meaning": "a/b (average, b as integer)",
+   "inputs": [
+    "0x4B",
+    "0x18"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 188,
+   "hex": "0xBC",
+   "op": 2,
+   "op_meaning": "a/b (average, b as integer)",
+   "inputs": [
+    "0x4D",
+    "0x2A"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 189,
+   "hex": "0xBD",
+   "op": 3,
+   "op_meaning": "a/b (ratio)",
+   "inputs": [
+    "0x04",
+    "0x23"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 190,
+   "hex": "0xBE",
+   "op": 2,
+   "op_meaning": "a/b (average, b as integer)",
+   "inputs": [
+    "0x4C",
+    "0x04"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 191,
+   "hex": "0xBF",
+   "op": 2,
+   "op_meaning": "a/b (average, b as integer)",
+   "inputs": [
+    "0x4E",
+    "0x2B"
+   ],
+   "labels": [
+    "player:Avg@0"
+   ]
+  },
+  {
+   "selector": 192,
+   "hex": "0xC0",
+   "op": 2,
+   "op_meaning": "a/b (average, b as integer)",
+   "inputs": [
+    "0x61",
+    "0x2B"
+   ],
+   "labels": [
+    "player:Avg Net Yds Per Punt@0"
+   ]
+  },
+  {
+   "selector": 193,
+   "hex": "0xC1",
+   "op": 2,
+   "op_meaning": "a/b (average, b as integer)",
+   "inputs": [
+    "0x4C",
+    "0x23"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 194,
+   "hex": "0xC2",
+   "op": 2,
+   "op_meaning": "a/b (average, b as integer)",
+   "inputs": [
+    "0x50",
+    "0x03"
+   ],
+   "labels": [
+    "player:Avg@0",
+    "player:Average@0",
+    "player:Avg@11"
+   ]
+  },
+  {
+   "selector": 195,
+   "hex": "0xC3",
+   "op": 2,
+   "op_meaning": "a/b (average, b as integer)",
+   "inputs": [
+    "0x49",
+    "0xB8"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 196,
+   "hex": "0xC4",
+   "op": 2,
+   "op_meaning": "a/b (average, b as integer)",
+   "inputs": [
+    "0x48",
+    "0x17"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 197,
+   "hex": "0xC5",
+   "op": 2,
+   "op_meaning": "a/b (average, b as integer)",
+   "inputs": [
+    "0x4F",
+    "0x2E"
+   ],
+   "labels": [
+    "player:Avg@0",
+    "player:Average@0",
+    "player:Avg@11"
+   ]
+  },
+  {
+   "selector": 198,
+   "hex": "0xC6",
+   "op": 2,
+   "op_meaning": "a/b (average, b as integer)",
+   "inputs": [
+    "0x60",
+    "0x03"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 199,
+   "hex": "0xC7",
+   "op": 4,
+   "op_meaning": "a+b+c+d",
+   "inputs": [
+    "0xA9",
+    "0xAA",
+    "0xAB",
+    "0xAC"
+   ],
+   "labels": [
+    "player:FGA@0",
+    "player:Att@11"
+   ]
+  },
+  {
+   "selector": 200,
+   "hex": "0xC8",
+   "op": 4,
+   "op_meaning": "a+b+c+d",
+   "inputs": [
+    "0xAD",
+    "0xAE",
+    "0xAF",
+    "0xB0"
+   ],
+   "labels": [
+    "player:FGM@0",
+    "player:FG Made@11"
+   ]
+  },
+  {
+   "selector": 201,
+   "hex": "0xC9",
+   "op": 0,
+   "op_meaning": "a+b",
+   "inputs": [
+    "0xAE",
+    "0xAD"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 202,
+   "hex": "0xCA",
+   "op": 1,
+   "op_meaning": "a-b",
+   "inputs": [
+    "0xA9",
+    "0xAD"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 203,
+   "hex": "0xCB",
+   "op": 1,
+   "op_meaning": "a-b",
+   "inputs": [
+    "0xAA",
+    "0xAE"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 204,
+   "hex": "0xCC",
+   "op": 0,
+   "op_meaning": "a+b",
+   "inputs": [
+    "0xCB",
+    "0xCA"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 205,
+   "hex": "0xCD",
+   "op": 1,
+   "op_meaning": "a-b",
+   "inputs": [
+    "0xAB",
+    "0xAF"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 206,
+   "hex": "0xCE",
+   "op": 1,
+   "op_meaning": "a-b",
+   "inputs": [
+    "0xC7",
+    "0xC8"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 207,
+   "hex": "0xCF",
+   "op": 5,
+   "op_meaning": "passer rating(a..e) via sub_000CA880",
+   "inputs": [
+    "0x23",
+    "0x04",
+    "0x4C",
+    "0x40",
+    "0x16"
+   ],
+   "labels": [
+    "player:QB Rating@11"
+   ]
+  },
+  {
+   "selector": 208,
+   "hex": "0xD0",
+   "op": 0,
+   "op_meaning": "a+b",
+   "inputs": [
+    "0x50",
+    "0x4C"
+   ],
+   "labels": [
+    "player:Total@0",
+    "team:Total@0"
+   ]
+  },
+  {
+   "selector": 209,
+   "hex": "0xD1",
+   "op": 4,
+   "op_meaning": "a+b+c+d",
+   "inputs": [
+    "0x50",
+    "0x4F",
+    "0x4C",
+    "0x00"
+   ],
+   "labels": [
+    "player:Total Yards@11",
+    "player:Total@11"
+   ]
+  },
+  {
+   "selector": 210,
+   "hex": "0xD2",
+   "op": 0,
+   "op_meaning": "a+b",
+   "inputs": [
+    "0x40",
+    "0x3F"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 211,
+   "hex": "0xD3",
+   "op": 0,
+   "op_meaning": "a+b",
+   "inputs": [
+    "0x41",
+    "0x3C"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 212,
+   "hex": "0xD4",
+   "op": 4,
+   "op_meaning": "a+b+c+d",
+   "inputs": [
+    "0xD2",
+    "0x0A",
+    "0xD3",
+    "0x00"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 213,
+   "hex": "0xD5",
+   "op": 4,
+   "op_meaning": "a+b+c+d",
+   "inputs": [
+    "0x40",
+    "0x3F",
+    "0x3E",
+    "0x00"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 214,
+   "hex": "0xD6",
+   "op": 4,
+   "op_meaning": "a+b+c+d",
+   "inputs": [
+    "0xD5",
+    "0x0A",
+    "0xD3",
+    "0x00"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 215,
+   "hex": "0xD7",
+   "op": 3,
+   "op_meaning": "a/b (ratio)",
+   "inputs": [
+    "0xC8",
+    "0xC7"
+   ],
+   "labels": [
+    "player:Pct@11"
+   ]
+  },
+  {
+   "selector": 216,
+   "hex": "0xD8",
+   "op": 3,
+   "op_meaning": "a/b (ratio)",
+   "inputs": [
+    "0x58",
+    "0x59"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 217,
+   "hex": "0xD9",
+   "op": 3,
+   "op_meaning": "a/b (ratio)",
+   "inputs": [
+    "0x35",
+    "0x36"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 218,
+   "hex": "0xDA",
+   "op": 3,
+   "op_meaning": "a/b (ratio)",
+   "inputs": [
+    "0x35",
+    "0x36"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 219,
+   "hex": "0xDB",
+   "op": 0,
+   "op_meaning": "a+b",
+   "inputs": [
+    "0x11",
+    "0x17"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 220,
+   "hex": "0xDC",
+   "op": 3,
+   "op_meaning": "a/b (ratio)",
+   "inputs": [
+    "0x53",
+    "0x27"
+   ],
+   "labels": [
+    "team:Pct@0",
+    "team:3rd Down Pct@11"
+   ]
+  },
+  {
+   "selector": 221,
+   "hex": "0xDD",
+   "op": 3,
+   "op_meaning": "a/b (ratio)",
+   "inputs": [
+    "0x54",
+    "0x28"
+   ],
+   "labels": [
+    "team:Pct@0",
+    "team:4th Down Pct@11"
+   ]
+  },
+  {
+   "selector": 222,
+   "hex": "0xDE",
+   "op": 0,
+   "op_meaning": "a+b",
+   "inputs": [
+    "0x45",
+    "0x46"
+   ],
+   "labels": [
+    "team:Total Yards Allowed@0",
+    "team:Yds Allowed@11"
+   ]
+  },
+  {
+   "selector": 223,
+   "hex": "0xDF",
+   "op": 3,
+   "op_meaning": "a/b (ratio)",
+   "inputs": [
+    "0x52",
+    "0x43"
+   ],
+   "labels": [
+    "team:Pct@0"
+   ]
+  },
+  {
+   "selector": 224,
+   "hex": "0xE0",
+   "op": 0,
+   "op_meaning": "a+b",
+   "inputs": [
+    "0xB1",
+    "0xB2"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 225,
+   "hex": "0xE1",
+   "op": 3,
+   "op_meaning": "a/b (ratio)",
+   "inputs": [
+    "0xB1",
+    "0xB3"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 226,
+   "hex": "0xE2",
+   "op": 3,
+   "op_meaning": "a/b (ratio)",
+   "inputs": [
+    "0xB2",
+    "0xB3"
+   ],
+   "labels": [
+    "team:TD %@0",
+    "team:TD %@11"
+   ]
+  },
+  {
+   "selector": 227,
+   "hex": "0xE3",
+   "op": 3,
+   "op_meaning": "a/b (ratio)",
+   "inputs": [
+    "0xE0",
+    "0xB3"
+   ],
+   "labels": [
+    "team:Pct@0"
+   ]
+  },
+  {
+   "selector": 228,
+   "hex": "0xE4",
+   "op": 0,
+   "op_meaning": "a+b",
+   "inputs": [
+    "0xB4",
+    "0xB5"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 229,
+   "hex": "0xE5",
+   "op": 3,
+   "op_meaning": "a/b (ratio)",
+   "inputs": [
+    "0xB4",
+    "0xB6"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 230,
+   "hex": "0xE6",
+   "op": 3,
+   "op_meaning": "a/b (ratio)",
+   "inputs": [
+    "0xB5",
+    "0xB6"
+   ],
+   "labels": [
+    "team:TD %@0",
+    "team:TD %@11"
+   ]
+  },
+  {
+   "selector": 231,
+   "hex": "0xE7",
+   "op": 3,
+   "op_meaning": "a/b (ratio)",
+   "inputs": [
+    "0xE4",
+    "0xB6"
+   ],
+   "labels": []
+  },
+  {
+   "selector": 232,
+   "hex": "0xE8",
+   "op": 0,
+   "op_meaning": "a+b",
+   "inputs": [
+    "0x26",
+    "0x25"
+   ],
+   "labels": []
+  }
+ ],
+ "stat_screen_labels": [
+  {
+   "record_va": "0x00AE3C60",
+   "label": "Over 300 Yards Passing Today",
+   "entity": "player",
+   "selector": "0x4C",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 0,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE3C80",
+   "label": "Over 400 Yards Passing Today",
+   "entity": "player",
+   "selector": "0x4C",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 4,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE3CA0",
+   "label": "Over 500 Yards Passing Today",
+   "entity": "player",
+   "selector": "0x4C",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 4,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE3CC0",
+   "label": "Over 100 Yards Rushing Today",
+   "entity": "player",
+   "selector": "0x50",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 4,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE3CE0",
+   "label": "Over 200 Yards Rushing Today",
+   "entity": "player",
+   "selector": "0x50",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 4,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE3D00",
+   "label": "Over 300 Yards Rushing Today",
+   "entity": "player",
+   "selector": "0x50",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 4,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE3D20",
+   "label": "Over 100 Yards Receiving Today",
+   "entity": "player",
+   "selector": "0x4F",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 4,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE3D40",
+   "label": "Over 200 Yards Receiving Today",
+   "entity": "player",
+   "selector": "0x4F",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 4,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE3D60",
+   "label": "Over 300 Yards Receiving Today",
+   "entity": "player",
+   "selector": "0x4F",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 4,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE3D80",
+   "label": "100+ Yards Rushing",
+   "entity": "player",
+   "selector": "0x50",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 4,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE3DA0",
+   "label": "and Receiving",
+   "entity": "player",
+   "selector": "0x4F",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 4,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE3DC0",
+   "label": "Over 3000 Yards Passing This Season",
+   "entity": "player",
+   "selector": "0x4C",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 4,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE3DE0",
+   "label": "Over 4000 Yards Passing This Season",
+   "entity": "player",
+   "selector": "0x4C",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 4,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE3E00",
+   "label": "Over 5000 Yards Passing This Season",
+   "entity": "player",
+   "selector": "0x4C",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 4,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE3E20",
+   "label": "Over 1000 Yards Rushing This Season",
+   "entity": "player",
+   "selector": "0x50",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 4,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE3E40",
+   "label": "Over 2000 Yards Rushing This Season",
+   "entity": "player",
+   "selector": "0x50",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 4,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE3E60",
+   "label": "Over 3000 Yards Rushing This Season",
+   "entity": "player",
+   "selector": "0x50",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 4,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE3E80",
+   "label": "Over 1000 Yards Receiving This Season",
+   "entity": "player",
+   "selector": "0x4F",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 4,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE3EA0",
+   "label": "Over 2000 Yards Receiving This Season",
+   "entity": "player",
+   "selector": "0x4F",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 4,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE3EC0",
+   "label": "Over 3000 Yards Receiving This Season",
+   "entity": "player",
+   "selector": "0x4F",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 4,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE3EE0",
+   "label": "Yds",
+   "entity": "player",
+   "selector": "0x4C",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 4,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE3F00",
+   "label": "Yards",
+   "entity": "player",
+   "selector": "0x4C",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE3F20",
+   "label": "Att",
+   "entity": "player",
+   "selector": "0x23",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE3F40",
+   "label": "Attempts",
+   "entity": "player",
+   "selector": "0x23",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE3F60",
+   "label": "Comp",
+   "entity": "player",
+   "selector": "0x04",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE3F80",
+   "label": "Completions",
+   "entity": "player",
+   "selector": "0x04",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE3FA0",
+   "label": "TD",
+   "entity": "player",
+   "selector": "0x40",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE3FC0",
+   "label": "Touchdowns",
+   "entity": "player",
+   "selector": "0x40",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE3FE0",
+   "label": "INT",
+   "entity": "player",
+   "selector": "0x16",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE4000",
+   "label": "Interceptions",
+   "entity": "player",
+   "selector": "0x16",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE4020",
+   "label": "Long",
+   "entity": "player",
+   "selector": "0x1F",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE4040",
+   "label": "1st Punt",
+   "entity": "player",
+   "selector": "0x4E",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE4060",
+   "label": "Punts",
+   "entity": "player",
+   "selector": "0x2B",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 4,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE4080",
+   "label": "Avg",
+   "entity": "player",
+   "selector": "0xBF",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE40A0",
+   "label": "Long",
+   "entity": "player",
+   "selector": "0x20",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 4,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE40C0",
+   "label": "In 20",
+   "entity": "player",
+   "selector": "0x2D",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 4,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE40E0",
+   "label": "TB",
+   "entity": "player",
+   "selector": "0x3A",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE4100",
+   "label": "Blk",
+   "entity": "player",
+   "selector": "0x2C",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE4120",
+   "label": "Rec",
+   "entity": "player",
+   "selector": "0x2E",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE4140",
+   "label": "Receptions",
+   "entity": "player",
+   "selector": "0x2E",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE4160",
+   "label": "Yds",
+   "entity": "player",
+   "selector": "0x4F",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE4180",
+   "label": "Yards",
+   "entity": "player",
+   "selector": "0x4F",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE41A0",
+   "label": "Receiving",
+   "entity": "player",
+   "selector": "0x4F",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE41C0",
+   "label": "Avg",
+   "entity": "player",
+   "selector": "0xC5",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE41E0",
+   "label": "Average",
+   "entity": "player",
+   "selector": "0xC5",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 9,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE4200",
+   "label": "TD",
+   "entity": "player",
+   "selector": "0x3E",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 9,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE4220",
+   "label": "Touchdowns",
+   "entity": "player",
+   "selector": "0x3E",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE4240",
+   "label": "YAC",
+   "entity": "player",
+   "selector": "0x44",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE4260",
+   "label": "Carries",
+   "entity": "player",
+   "selector": "0x03",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE4280",
+   "label": "Yds",
+   "entity": "player",
+   "selector": "0x50",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE42A0",
+   "label": "Yards",
+   "entity": "player",
+   "selector": "0x50",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE42C0",
+   "label": "Rushing",
+   "entity": "player",
+   "selector": "0x50",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE42E0",
+   "label": "Avg",
+   "entity": "player",
+   "selector": "0xC2",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE4300",
+   "label": "Average",
+   "entity": "player",
+   "selector": "0xC2",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 9,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE4320",
+   "label": "TD",
+   "entity": "player",
+   "selector": "0x3F",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 9,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE4340",
+   "label": "Touchdowns",
+   "entity": "player",
+   "selector": "0x3F",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE4360",
+   "label": "Long",
+   "entity": "player",
+   "selector": "0x1A",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE4380",
+   "label": "Fum",
+   "entity": "player",
+   "selector": "0x0F",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE43A0",
+   "label": "After 1st Hit",
+   "entity": "player",
+   "selector": "0x60",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE43C0",
+   "label": "Total",
+   "entity": "player",
+   "selector": "0xD0",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE43E0",
+   "label": "Punt Returns",
+   "entity": "player",
+   "selector": "0x2A",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE4400",
+   "label": "Yards",
+   "entity": "player",
+   "selector": "0x4D",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE4420",
+   "label": "TDs",
+   "entity": "player",
+   "selector": "0x41",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE4440",
+   "label": "Kick Returns",
+   "entity": "player",
+   "selector": "0x18",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE4460",
+   "label": "Yards",
+   "entity": "player",
+   "selector": "0x4B",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE4480",
+   "label": "TDs",
+   "entity": "player",
+   "selector": "0x3C",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE44A0",
+   "label": "Avg Net Yds Per Punt",
+   "entity": "player",
+   "selector": "0xC0",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE44C0",
+   "label": "For Loss",
+   "entity": "player",
+   "selector": "0x34",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 4,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE44E0",
+   "label": "Tackles",
+   "entity": "player",
+   "selector": "0x32",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE4500",
+   "label": "Tackles Today",
+   "entity": "player",
+   "selector": "0x32",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE4520",
+   "label": "INT",
+   "entity": "player",
+   "selector": "0x17",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE4540",
+   "label": "Interceptions",
+   "entity": "player",
+   "selector": "0x17",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE4560",
+   "label": "Interceptions Today",
+   "entity": "player",
+   "selector": "0x17",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE4580",
+   "label": "Sack",
+   "entity": "player",
+   "selector": "0xB8",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE45A0",
+   "label": "Sacks",
+   "entity": "player",
+   "selector": "0xB8",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE45C0",
+   "label": "Sacks Today",
+   "entity": "player",
+   "selector": "0xB8",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE45E0",
+   "label": "Sacks",
+   "entity": "player",
+   "selector": "0x30",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE4600",
+   "label": "Hurries",
+   "entity": "player",
+   "selector": "0x15",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE4620",
+   "label": "Fum Rec",
+   "entity": "player",
+   "selector": "0x12",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE4640",
+   "label": "Force Fum",
+   "entity": "player",
+   "selector": "0x11",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE4660",
+   "label": "Fum Ret Yds",
+   "entity": "player",
+   "selector": "0x47",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE4680",
+   "label": "Int Ret Yds",
+   "entity": "player",
+   "selector": "0x48",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE46A0",
+   "label": "Tips",
+   "entity": "player",
+   "selector": "0x22",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE46C0",
+   "label": "Made 1st Kick Today",
+   "entity": "player",
+   "selector": "0x55",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE46E0",
+   "label": "Missed 1st Kick Today",
+   "entity": "player",
+   "selector": "0x55",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 4,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE4700",
+   "label": "FGM",
+   "entity": "player",
+   "selector": "0xC8",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 4,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE4720",
+   "label": "FGA",
+   "entity": "player",
+   "selector": "0xC7",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE4740",
+   "label": "Long",
+   "entity": "player",
+   "selector": "0x1C",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE4760",
+   "label": "Blk",
+   "entity": "player",
+   "selector": "0x0C",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE4780",
+   "label": "FGs Blocked Today",
+   "entity": "player",
+   "selector": "0x0C",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE47A0",
+   "label": "PAT Comp",
+   "entity": "player",
+   "selector": "0x58",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE47C0",
+   "label": "Att",
+   "entity": "player",
+   "selector": "0x59",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE47E0",
+   "label": "PATs Blocked Today",
+   "entity": "player",
+   "selector": "0x5A",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE4800",
+   "label": "0-29",
+   "entity": "player",
+   "selector": "0xAD",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE4820",
+   "label": "30-39",
+   "entity": "player",
+   "selector": "0xAE",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE4840",
+   "label": "40-49",
+   "entity": "player",
+   "selector": "0xAF",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE4860",
+   "label": "50+",
+   "entity": "player",
+   "selector": "0xB0",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE4880",
+   "label": "Kicks",
+   "entity": "player",
+   "selector": "0x19",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE48A0",
+   "label": "Touch",
+   "entity": "player",
+   "selector": "0x39",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE48C0",
+   "label": "Opp Avg",
+   "entity": "player",
+   "selector": "0x01",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE48E0",
+   "label": "Long",
+   "entity": "player",
+   "selector": "0x1B",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 7,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE4960",
+   "label": "Tackles",
+   "entity": "player",
+   "selector": "0x32",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 0,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE4980",
+   "label": "Sacks",
+   "entity": "player",
+   "selector": "0xB8",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE49A0",
+   "label": "INT",
+   "entity": "player",
+   "selector": "0x17",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE49C0",
+   "label": "Fum Rec",
+   "entity": "player",
+   "selector": "0x12",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE49E0",
+   "label": "Force Fum",
+   "entity": "player",
+   "selector": "0x11",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE4A00",
+   "label": "FG Made",
+   "entity": "player",
+   "selector": "0xC8",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE4A20",
+   "label": "Att",
+   "entity": "player",
+   "selector": "0xC7",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE4A40",
+   "label": "Long",
+   "entity": "player",
+   "selector": "0x1C",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE4A60",
+   "label": "Longest FG This Season",
+   "entity": "player",
+   "selector": "0x1C",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE4A80",
+   "label": "Pct",
+   "entity": "player",
+   "selector": "0xD7",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 4,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE4AA0",
+   "label": "Kicks",
+   "entity": "player",
+   "selector": "0x19",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 10,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE4AC0",
+   "label": "Touch",
+   "entity": "player",
+   "selector": "0x39",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE4AE0",
+   "label": "Opp Avg",
+   "entity": "player",
+   "selector": "0x01",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE4B00",
+   "label": "Opponent Average Start",
+   "entity": "player",
+   "selector": "0x01",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 7,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE4B20",
+   "label": "Comp",
+   "entity": "player",
+   "selector": "0x04",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 7,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE4B40",
+   "label": "Att",
+   "entity": "player",
+   "selector": "0x23",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE4B60",
+   "label": "Yds",
+   "entity": "player",
+   "selector": "0x4C",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE4B80",
+   "label": "Pass",
+   "entity": "player",
+   "selector": "0x4C",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE4BA0",
+   "label": "Passing",
+   "entity": "player",
+   "selector": "0x4C",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE4BC0",
+   "label": "TD",
+   "entity": "player",
+   "selector": "0x40",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE4BE0",
+   "label": "INT",
+   "entity": "player",
+   "selector": "0x16",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE4C00",
+   "label": "Total Yards",
+   "entity": "player",
+   "selector": "0xD1",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE4C20",
+   "label": "Total",
+   "entity": "player",
+   "selector": "0xD1",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE4C40",
+   "label": "Yds",
+   "entity": "player",
+   "selector": "0x50",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE4C60",
+   "label": "Rush",
+   "entity": "player",
+   "selector": "0x50",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE4C80",
+   "label": "Rushing",
+   "entity": "player",
+   "selector": "0x50",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE4CA0",
+   "label": "QB Rating",
+   "entity": "player",
+   "selector": "0xCF",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE4CC0",
+   "label": "Punts",
+   "entity": "player",
+   "selector": "0x2B",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE4CE0",
+   "label": "Avg",
+   "entity": "player",
+   "selector": "0xBA",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE4D00",
+   "label": "Long",
+   "entity": "player",
+   "selector": "0x20",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE4D20",
+   "label": "Longest Punt This Season",
+   "entity": "player",
+   "selector": "0x20",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE4D40",
+   "label": "In 20",
+   "entity": "player",
+   "selector": "0x2D",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 4,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE4D60",
+   "label": "Rec",
+   "entity": "player",
+   "selector": "0x2E",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE4D80",
+   "label": "Yds",
+   "entity": "player",
+   "selector": "0x4F",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE4DA0",
+   "label": "Receiving",
+   "entity": "player",
+   "selector": "0x4F",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE4DC0",
+   "label": "Avg",
+   "entity": "player",
+   "selector": "0xC5",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE4DE0",
+   "label": "TD",
+   "entity": "player",
+   "selector": "0x3E",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 9,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE4E00",
+   "label": "Long",
+   "entity": "player",
+   "selector": "0x1B",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE4E20",
+   "label": "Carries",
+   "entity": "player",
+   "selector": "0x03",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE4E40",
+   "label": "Avg",
+   "entity": "player",
+   "selector": "0xC2",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE4E60",
+   "label": "TD",
+   "entity": "player",
+   "selector": "0x3F",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 9,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE4E80",
+   "label": "Fum",
+   "entity": "player",
+   "selector": "0x0F",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE4EA0",
+   "label": "Longest Punt Return This Season",
+   "entity": "player",
+   "selector": "0x56",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE4EC0",
+   "label": "Longest Kick Return This Season",
+   "entity": "player",
+   "selector": "0x1E",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE4EE0",
+   "label": "Left",
+   "entity": "player",
+   "selector": "0x8D",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE4F00",
+   "label": "Middle",
+   "entity": "player",
+   "selector": "0x8E",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE4F20",
+   "label": "Right",
+   "entity": "player",
+   "selector": "0x8F",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE4F40",
+   "label": "Comp/Att",
+   "entity": "player",
+   "selector": "0x75",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": "0x66",
+   "scope2": 0,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE4F60",
+   "label": "Comp/Att",
+   "entity": "player",
+   "selector": "0x76",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": "0x67",
+   "scope2": 0,
+   "fmt_dword": 8,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE4F80",
+   "label": "Comp/Att",
+   "entity": "player",
+   "selector": "0x77",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": "0x68",
+   "scope2": 0,
+   "fmt_dword": 8,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE4FA0",
+   "label": "TD",
+   "entity": "player",
+   "selector": "0x8A",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 8,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE4FC0",
+   "label": "TD",
+   "entity": "player",
+   "selector": "0x8B",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE4FE0",
+   "label": "TD",
+   "entity": "player",
+   "selector": "0x8C",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5000",
+   "label": "Outside Left",
+   "entity": "player",
+   "selector": "0x98",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5020",
+   "label": "Inside Left",
+   "entity": "player",
+   "selector": "0x99",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5040",
+   "label": "Inside Right",
+   "entity": "player",
+   "selector": "0x9A",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5060",
+   "label": "Outside Right",
+   "entity": "player",
+   "selector": "0x9B",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5080",
+   "label": "Carries",
+   "entity": "player",
+   "selector": "0x90",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE50A0",
+   "label": "Carries",
+   "entity": "player",
+   "selector": "0x91",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE50C0",
+   "label": "Carries",
+   "entity": "player",
+   "selector": "0x92",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE50E0",
+   "label": "Carries",
+   "entity": "player",
+   "selector": "0x93",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5100",
+   "label": "TD",
+   "entity": "player",
+   "selector": "0x94",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5120",
+   "label": "TD",
+   "entity": "player",
+   "selector": "0x95",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5140",
+   "label": "TD",
+   "entity": "player",
+   "selector": "0x96",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5160",
+   "label": "TD",
+   "entity": "player",
+   "selector": "0x97",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5180",
+   "label": "1st Half",
+   "entity": "player",
+   "selector": "0x23",
+   "scope": 6,
+   "scope_meaning": "1st half",
+   "selector2": "0x4C",
+   "scope2": 6,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE51A0",
+   "label": "2nd Half",
+   "entity": "player",
+   "selector": "0x23",
+   "scope": 7,
+   "scope_meaning": "2nd half",
+   "selector2": "0x4C",
+   "scope2": 7,
+   "fmt_dword": 8,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE51C0",
+   "label": "1st Half",
+   "entity": "player",
+   "selector": "0x03",
+   "scope": 6,
+   "scope_meaning": "1st half",
+   "selector2": "0x50",
+   "scope2": 6,
+   "fmt_dword": 8,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE51E0",
+   "label": "2nd Half",
+   "entity": "player",
+   "selector": "0x03",
+   "scope": 7,
+   "scope_meaning": "2nd half",
+   "selector2": "0x50",
+   "scope2": 7,
+   "fmt_dword": 8,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5200",
+   "label": "1st Half",
+   "entity": "player",
+   "selector": "0x2E",
+   "scope": 6,
+   "scope_meaning": "1st half",
+   "selector2": "0x4F",
+   "scope2": 6,
+   "fmt_dword": 8,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5220",
+   "label": "2nd Half",
+   "entity": "player",
+   "selector": "0x2E",
+   "scope": 7,
+   "scope_meaning": "2nd half",
+   "selector2": "0x4F",
+   "scope2": 7,
+   "fmt_dword": 8,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5240",
+   "label": "First Downs",
+   "entity": "team",
+   "selector": "0x0E",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 8,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5260",
+   "label": "Possessions",
+   "entity": "team",
+   "selector": "0x5D",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5280",
+   "label": "Time of Possession",
+   "entity": "team",
+   "selector": "0x5F",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE52A0",
+   "label": "Pts",
+   "entity": "team",
+   "selector": "0x5B",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 5,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE52C0",
+   "label": "Fumbles",
+   "entity": "team",
+   "selector": "0x0F",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE52E0",
+   "label": "Fum",
+   "entity": "team",
+   "selector": "0x0F",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5300",
+   "label": "Interceptions",
+   "entity": "team",
+   "selector": "0x17",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5320",
+   "label": "INTs",
+   "entity": "team",
+   "selector": "0x17",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5340",
+   "label": "2pt Conv",
+   "entity": "team",
+   "selector": "0x52",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5360",
+   "label": "Att",
+   "entity": "team",
+   "selector": "0x43",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5380",
+   "label": "Pct",
+   "entity": "team",
+   "selector": "0xDF",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE53A0",
+   "label": "3rd Dn Conv",
+   "entity": "team",
+   "selector": "0x53",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 10,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE53C0",
+   "label": "Att",
+   "entity": "team",
+   "selector": "0x27",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE53E0",
+   "label": "Pct",
+   "entity": "team",
+   "selector": "0xDC",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5400",
+   "label": "4th Dn Conv",
+   "entity": "team",
+   "selector": "0x54",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 10,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5420",
+   "label": "Att",
+   "entity": "team",
+   "selector": "0x28",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5440",
+   "label": "Pct",
+   "entity": "team",
+   "selector": "0xDD",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5460",
+   "label": "Tackles",
+   "entity": "team",
+   "selector": "0x32",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 10,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5480",
+   "label": "Rushing Yards Allowed",
+   "entity": "team",
+   "selector": "0x45",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE54A0",
+   "label": "Passing Yards Allowed",
+   "entity": "team",
+   "selector": "0x46",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE54C0",
+   "label": "Total Yards Allowed",
+   "entity": "team",
+   "selector": "0xDE",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE54E0",
+   "label": "Passing",
+   "entity": "team",
+   "selector": "0x4C",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5500",
+   "label": "Passing Yards",
+   "entity": "team",
+   "selector": "0x4C",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5520",
+   "label": "Rushing",
+   "entity": "team",
+   "selector": "0x50",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5540",
+   "label": "Rushing Yards",
+   "entity": "team",
+   "selector": "0x50",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5560",
+   "label": "Total",
+   "entity": "team",
+   "selector": "0xD0",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5580",
+   "label": "Penalties",
+   "entity": "team",
+   "selector": "0x24",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE55A0",
+   "label": "Yards",
+   "entity": "team",
+   "selector": "0x62",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE55C0",
+   "label": "Turnovers",
+   "entity": "team",
+   "selector": "0x42",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE55E0",
+   "label": "Fum",
+   "entity": "team",
+   "selector": "0x10",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5600",
+   "label": "INT",
+   "entity": "team",
+   "selector": "0x16",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5620",
+   "label": "Rushing TDs",
+   "entity": "team",
+   "selector": "0x3F",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5640",
+   "label": "1st Half",
+   "entity": "team",
+   "selector": "0x50",
+   "scope": 6,
+   "scope_meaning": "1st half",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5660",
+   "label": "2nd Half",
+   "entity": "team",
+   "selector": "0x50",
+   "scope": 7,
+   "scope_meaning": "2nd half",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5680",
+   "label": "1st Half",
+   "entity": "team",
+   "selector": "0x4C",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE56A0",
+   "label": "2nd Half",
+   "entity": "team",
+   "selector": "0x4C",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE56C0",
+   "label": "Times",
+   "entity": "team",
+   "selector": "0xB3",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE56E0",
+   "label": "TDs",
+   "entity": "team",
+   "selector": "0xB2",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5700",
+   "label": "FGs",
+   "entity": "team",
+   "selector": "0xB1",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5720",
+   "label": "Pct",
+   "entity": "team",
+   "selector": "0xE3",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5740",
+   "label": "TD %",
+   "entity": "team",
+   "selector": "0xE2",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 10,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5760",
+   "label": "Stands",
+   "entity": "team",
+   "selector": "0xB6",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 10,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5780",
+   "label": "TDs",
+   "entity": "team",
+   "selector": "0xB5",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE57A0",
+   "label": "FGs",
+   "entity": "team",
+   "selector": "0xB4",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE57C0",
+   "label": "TD %",
+   "entity": "team",
+   "selector": "0xE6",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE57E0",
+   "label": "Blk",
+   "entity": "team",
+   "selector": "0x0C",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 10,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5800",
+   "label": "Pass",
+   "entity": "team",
+   "selector": "0x22",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5820",
+   "label": "Blk",
+   "entity": "team",
+   "selector": "0x5E",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5840",
+   "label": "Blk",
+   "entity": "team",
+   "selector": "0x57",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5860",
+   "label": "3rd Down Pct",
+   "entity": "team",
+   "selector": "0xDC",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5880",
+   "label": "Made",
+   "entity": "team",
+   "selector": "0x53",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE58A0",
+   "label": "Att",
+   "entity": "team",
+   "selector": "0x27",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE58C0",
+   "label": "4th Down Pct",
+   "entity": "team",
+   "selector": "0xDD",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE58E0",
+   "label": "Made",
+   "entity": "team",
+   "selector": "0x54",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE5900",
+   "label": "Att",
+   "entity": "team",
+   "selector": "0x28",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE5920",
+   "label": "1st Downs This Season",
+   "entity": "team",
+   "selector": "0x0E",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE5940",
+   "label": "Times",
+   "entity": "team",
+   "selector": "0xB3",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE5960",
+   "label": "TD",
+   "entity": "team",
+   "selector": "0xB2",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE5980",
+   "label": "FG",
+   "entity": "team",
+   "selector": "0xB1",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE59A0",
+   "label": "TD %",
+   "entity": "team",
+   "selector": "0xE2",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE59C0",
+   "label": "Stands",
+   "entity": "team",
+   "selector": "0xB6",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 10,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE59E0",
+   "label": "TD",
+   "entity": "team",
+   "selector": "0xB5",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE5A00",
+   "label": "FG",
+   "entity": "team",
+   "selector": "0xB4",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE5A20",
+   "label": "TD %",
+   "entity": "team",
+   "selector": "0xE6",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE5A40",
+   "label": "Turnovers Per Game",
+   "entity": "team",
+   "selector": "0x42",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": "0x63",
+   "scope2": 11,
+   "fmt_dword": 10,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE5A60",
+   "label": "Penalties/Game",
+   "entity": "team",
+   "selector": "0x24",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": "0x63",
+   "scope2": 11,
+   "fmt_dword": 11,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE5A80",
+   "label": "Yds/Game",
+   "entity": "team",
+   "selector": "0x62",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": "0x63",
+   "scope2": 11,
+   "fmt_dword": 11,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE5AA0",
+   "label": "Yds Allowed",
+   "entity": "team",
+   "selector": "0xDE",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": "0x63",
+   "scope2": 11,
+   "fmt_dword": 11,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE5AC0",
+   "label": "Pass",
+   "entity": "team",
+   "selector": "0x46",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": "0x63",
+   "scope2": 11,
+   "fmt_dword": 11,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE5AE0",
+   "label": "Rush",
+   "entity": "team",
+   "selector": "0x45",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": "0x63",
+   "scope2": 11,
+   "fmt_dword": 11,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE5B00",
+   "label": "Passing Yards Per Game",
+   "entity": "team",
+   "selector": "0x4C",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": "0x63",
+   "scope2": 11,
+   "fmt_dword": 11,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE5B20",
+   "label": "Rushing Yards Per Game",
+   "entity": "team",
+   "selector": "0x50",
+   "scope": 11,
+   "scope_meaning": "season",
+   "selector2": "0x63",
+   "scope2": 11,
+   "fmt_dword": 11,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE5B40",
+   "label": "1st",
+   "entity": "team",
+   "selector": "0x4C",
+   "scope": 1,
+   "scope_meaning": "Q1",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 11,
+   "kind_dword": 1
+  },
+  {
+   "record_va": "0x00AE5B60",
+   "label": "2nd",
+   "entity": "team",
+   "selector": "0x4C",
+   "scope": 2,
+   "scope_meaning": "Q2",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5B80",
+   "label": "3rd",
+   "entity": "team",
+   "selector": "0x4C",
+   "scope": 3,
+   "scope_meaning": "Q3",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5BA0",
+   "label": "4th",
+   "entity": "team",
+   "selector": "0x04",
+   "scope": 4,
+   "scope_meaning": "Q4",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5BC0",
+   "label": "Comp/Att",
+   "entity": "team",
+   "selector": "0x04",
+   "scope": 1,
+   "scope_meaning": "Q1",
+   "selector2": "0x23",
+   "scope2": 1,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5BE0",
+   "label": "Comp/Att",
+   "entity": "team",
+   "selector": "0x04",
+   "scope": 2,
+   "scope_meaning": "Q2",
+   "selector2": "0x23",
+   "scope2": 2,
+   "fmt_dword": 8,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5C00",
+   "label": "Comp/Att",
+   "entity": "team",
+   "selector": "0x04",
+   "scope": 3,
+   "scope_meaning": "Q3",
+   "selector2": "0x23",
+   "scope2": 3,
+   "fmt_dword": 8,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5C20",
+   "label": "Comp/Att",
+   "entity": "team",
+   "selector": "0x04",
+   "scope": 4,
+   "scope_meaning": "Q4",
+   "selector2": "0x23",
+   "scope2": 4,
+   "fmt_dword": 8,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5C40",
+   "label": "TD",
+   "entity": "team",
+   "selector": "0x40",
+   "scope": 1,
+   "scope_meaning": "Q1",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 8,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5C60",
+   "label": "TD",
+   "entity": "team",
+   "selector": "0x40",
+   "scope": 2,
+   "scope_meaning": "Q2",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5C80",
+   "label": "TD",
+   "entity": "team",
+   "selector": "0x40",
+   "scope": 3,
+   "scope_meaning": "Q3",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5CA0",
+   "label": "TD",
+   "entity": "team",
+   "selector": "0x40",
+   "scope": 4,
+   "scope_meaning": "Q4",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5CC0",
+   "label": "1st",
+   "entity": "team",
+   "selector": "0x50",
+   "scope": 1,
+   "scope_meaning": "Q1",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5CE0",
+   "label": "2nd",
+   "entity": "team",
+   "selector": "0x50",
+   "scope": 2,
+   "scope_meaning": "Q2",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5D00",
+   "label": "3rd",
+   "entity": "team",
+   "selector": "0x50",
+   "scope": 3,
+   "scope_meaning": "Q3",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5D20",
+   "label": "4th",
+   "entity": "team",
+   "selector": "0x50",
+   "scope": 4,
+   "scope_meaning": "Q4",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5D40",
+   "label": "Carries",
+   "entity": "team",
+   "selector": "0x03",
+   "scope": 1,
+   "scope_meaning": "Q1",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5D60",
+   "label": "Carries",
+   "entity": "team",
+   "selector": "0x03",
+   "scope": 2,
+   "scope_meaning": "Q2",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5D80",
+   "label": "Carries",
+   "entity": "team",
+   "selector": "0x03",
+   "scope": 3,
+   "scope_meaning": "Q3",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5DA0",
+   "label": "Carries",
+   "entity": "team",
+   "selector": "0x03",
+   "scope": 4,
+   "scope_meaning": "Q4",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5DC0",
+   "label": "TD",
+   "entity": "team",
+   "selector": "0x3F",
+   "scope": 1,
+   "scope_meaning": "Q1",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5DE0",
+   "label": "TD",
+   "entity": "team",
+   "selector": "0x3F",
+   "scope": 2,
+   "scope_meaning": "Q2",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5E00",
+   "label": "TD",
+   "entity": "team",
+   "selector": "0x3F",
+   "scope": 3,
+   "scope_meaning": "Q3",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5E20",
+   "label": "TD",
+   "entity": "team",
+   "selector": "0x3F",
+   "scope": 4,
+   "scope_meaning": "Q4",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5E40",
+   "label": "Points off Turnovers",
+   "entity": "team",
+   "selector": "0x64",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5E60",
+   "label": "Sacks",
+   "entity": "team",
+   "selector": "0xB8",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": null,
+   "scope2": null,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  },
+  {
+   "record_va": "0x00AE5E80",
+   "label": "Returning TDs",
+   "entity": "team",
+   "selector": "0x3C",
+   "scope": 0,
+   "scope_meaning": "this match",
+   "selector2": "0x41",
+   "scope2": 0,
+   "fmt_dword": 3,
+   "kind_dword": 0
+  }
+ ]
+}

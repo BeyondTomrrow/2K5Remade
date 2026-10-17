@@ -346,10 +346,15 @@ bool looks_like_small_sheet(const uint32_t *p)
 extern "C" int nfl2k5_texpack_active(void);
 extern "C" const uint32_t *nfl2k5_texpack_find(uint32_t fmt, uint32_t w, uint32_t h, uint32_t content,
                                                const uint32_t *orig, uint32_t *ow, uint32_t *oh);
+extern "C" int nfl2k5_texpack_era_on(void);
+extern "C" uint32_t nfl2k5_texpack_gen(void);
 int wants(uint32_t fmt, uint32_t w, uint32_t h)
 {
     if ((fmt == 0x0C && w == 256 && h == 256) || (fmt == 0x0B && ((w == 128 && h == 128) || (w == 64 && h == 64))))
         return 3;
+    // My NFL Eras office (era context set): every paletted shape follows gen(),
+    // so office textures upload again when the era or the context changes.
+    if (fmt == 0x0B && nfl2k5_texpack_era_on()) return 3;
     return nfl2k5_texpack_active() ? 1 : 0;
 }
 
@@ -367,6 +372,8 @@ uint32_t gen()
                  (uint32_t)(nfl2k5_cs_highlight() + 2) * 15485863u ^ nfl2k5_cs_gen() * 2654435761u;
     if (port >= 0) g ^= (uint32_t)(nfl2k5_controls_port_dev(port) + 2) * 104729u;
     if (style == 2) for (int b = 0; b < 12; b++) g = g * 31u + (uint32_t)nfl2k5_controls_key(b);
+    g ^= nfl2k5_texpack_gen() * 0x85EBCA6Bu;      // the Eras office era context
+    if (g != last && getenv("NFL2K5_ERAS_TEXLOG")) fprintf(stderr, "[ART] gen %08X -> %08X (texpack gen %u)\n", last, g, nfl2k5_texpack_gen());
     last = g;
     at = now ? now : 1;
     return g;

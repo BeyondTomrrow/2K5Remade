@@ -1,0 +1,5825 @@
+{
+ "schema": "nfl2k5_eras_league_seasons/v1",
+ "generated_by": "build/eras/league_history.py",
+ "scope": "NFL regular seasons 1970-1980: teams, conferences, divisions, records, postseason",
+ "conventions": {
+  "id": "stable franchise id (see franchise_events_1970_2025.json)",
+  "city/name": "as Pro-Football-Reference lists the team that season",
+  "abbreviation": "project display convention, not a historical claim",
+  "team order": "final standings order within the division: the order PFR lists, except four ties the NFL's official standings break differently (1974 AFC East, 1976 NFC West, 1977 AFC East, 1977 AFC Central), which follow the NFL Record & Fact Book (see order_note on those divisions)",
+  "finish": "division_winner / wild_card / null, from PFR standings marks",
+  "season": "the season year; the Super Bowl is played the following January"
+ },
+ "seasons": [
+  {
+   "season": 1970,
+   "team_count": 26,
+   "games": 14,
+   "playoff_teams": 8,
+   "playoff_format": {
+    "teams_per_conference": 4,
+    "division_winners_per_conference": 3,
+    "wild_cards_per_conference": 1,
+    "byes_per_conference": 0,
+    "rounds": [
+     "Divisional playoffs",
+     "Conference championships",
+     "Super Bowl"
+    ],
+    "qualification": "Three division winners plus the non-division winner with the best record in each conference (Pro Football Hall of Fame).",
+    "home_field": "Predetermined rotation among divisions, regardless of record (Pro Football Hall of Fame: the rotation was dropped in 1975).",
+    "same_division_rule": "A wild card could not meet its own division winner in the divisional round (NFL Record & Fact Book: from 1970 to 1989 two teams from the same division could not meet before the conference championship game; consistent with every PFR divisional matchup 1970-1977).",
+    "sources": [
+     "https://www.profootballhof.com/news/wild-card-golden-nuggets",
+     "https://web.archive.org/web/20130925182142/http://static.nfl.com/static/content/public/image/history/pdfs/History/Past_Standings_2011.pdf",
+     "https://en.wikipedia.org/wiki/NFL_playoffs"
+    ]
+   },
+   "championship": {
+    "name": "Super Bowl V",
+    "number": 5,
+    "date": "1971-01-17",
+    "site": "Orange Bowl, Miami",
+    "winner": "colts",
+    "loser": "cowboys",
+    "winner_name": "Baltimore Colts",
+    "loser_name": "Dallas Cowboys",
+    "score": "16-13",
+    "sources": [
+     "https://www.pro-football-reference.com/years/1970/",
+     "https://www.espn.com/nfl/superbowl/history/winners"
+    ]
+   },
+   "conference_championships": [
+    "AFC Championship Game",
+    "NFC Championship Game"
+   ],
+   "conferences": [
+    {
+     "name": "AFC",
+     "divisions": [
+      {
+       "name": "AFC East",
+       "teams": [
+        {
+         "id": "colts",
+         "city": "Baltimore",
+         "name": "Colts",
+         "abbreviation": "BAL",
+         "pfr_code": "clt",
+         "record": {
+          "w": 11,
+          "l": 2,
+          "t": 1
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "dolphins",
+         "city": "Miami",
+         "name": "Dolphins",
+         "abbreviation": "MIA",
+         "pfr_code": "mia",
+         "record": {
+          "w": 10,
+          "l": 4,
+          "t": 0
+         },
+         "finish": "wild_card"
+        },
+        {
+         "id": "jets",
+         "city": "New York",
+         "name": "Jets",
+         "abbreviation": "NYJ",
+         "pfr_code": "nyj",
+         "record": {
+          "w": 4,
+          "l": 10,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "bills",
+         "city": "Buffalo",
+         "name": "Bills",
+         "abbreviation": "BUF",
+         "pfr_code": "buf",
+         "record": {
+          "w": 3,
+          "l": 10,
+          "t": 1
+         },
+         "finish": null
+        },
+        {
+         "id": "patriots",
+         "city": "Boston",
+         "name": "Patriots",
+         "abbreviation": "BOS",
+         "pfr_code": "nwe",
+         "record": {
+          "w": 2,
+          "l": 12,
+          "t": 0
+         },
+         "finish": null
+        }
+       ]
+      },
+      {
+       "name": "AFC Central",
+       "teams": [
+        {
+         "id": "bengals",
+         "city": "Cincinnati",
+         "name": "Bengals",
+         "abbreviation": "CIN",
+         "pfr_code": "cin",
+         "record": {
+          "w": 8,
+          "l": 6,
+          "t": 0
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "browns",
+         "city": "Cleveland",
+         "name": "Browns",
+         "abbreviation": "CLE",
+         "pfr_code": "cle",
+         "record": {
+          "w": 7,
+          "l": 7,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "steelers",
+         "city": "Pittsburgh",
+         "name": "Steelers",
+         "abbreviation": "PIT",
+         "pfr_code": "pit",
+         "record": {
+          "w": 5,
+          "l": 9,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "oilers_titans",
+         "city": "Houston",
+         "name": "Oilers",
+         "abbreviation": "HOU",
+         "pfr_code": "oti",
+         "record": {
+          "w": 3,
+          "l": 10,
+          "t": 1
+         },
+         "finish": null
+        }
+       ]
+      },
+      {
+       "name": "AFC West",
+       "teams": [
+        {
+         "id": "raiders",
+         "city": "Oakland",
+         "name": "Raiders",
+         "abbreviation": "OAK",
+         "pfr_code": "rai",
+         "record": {
+          "w": 8,
+          "l": 4,
+          "t": 2
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "chiefs",
+         "city": "Kansas City",
+         "name": "Chiefs",
+         "abbreviation": "KC",
+         "pfr_code": "kan",
+         "record": {
+          "w": 7,
+          "l": 5,
+          "t": 2
+         },
+         "finish": null
+        },
+        {
+         "id": "chargers",
+         "city": "San Diego",
+         "name": "Chargers",
+         "abbreviation": "SD",
+         "pfr_code": "sdg",
+         "record": {
+          "w": 5,
+          "l": 6,
+          "t": 3
+         },
+         "finish": null
+        },
+        {
+         "id": "broncos",
+         "city": "Denver",
+         "name": "Broncos",
+         "abbreviation": "DEN",
+         "pfr_code": "den",
+         "record": {
+          "w": 5,
+          "l": 8,
+          "t": 1
+         },
+         "finish": null
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "NFC",
+     "divisions": [
+      {
+       "name": "NFC East",
+       "teams": [
+        {
+         "id": "cowboys",
+         "city": "Dallas",
+         "name": "Cowboys",
+         "abbreviation": "DAL",
+         "pfr_code": "dal",
+         "record": {
+          "w": 10,
+          "l": 4,
+          "t": 0
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "giants",
+         "city": "New York",
+         "name": "Giants",
+         "abbreviation": "NYG",
+         "pfr_code": "nyg",
+         "record": {
+          "w": 9,
+          "l": 5,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "cardinals",
+         "city": "St. Louis",
+         "name": "Cardinals",
+         "abbreviation": "STL",
+         "pfr_code": "crd",
+         "record": {
+          "w": 8,
+          "l": 5,
+          "t": 1
+         },
+         "finish": null
+        },
+        {
+         "id": "washington",
+         "city": "Washington",
+         "name": "Redskins",
+         "abbreviation": "WAS",
+         "pfr_code": "was",
+         "record": {
+          "w": 6,
+          "l": 8,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "eagles",
+         "city": "Philadelphia",
+         "name": "Eagles",
+         "abbreviation": "PHI",
+         "pfr_code": "phi",
+         "record": {
+          "w": 3,
+          "l": 10,
+          "t": 1
+         },
+         "finish": null
+        }
+       ]
+      },
+      {
+       "name": "NFC Central",
+       "teams": [
+        {
+         "id": "vikings",
+         "city": "Minnesota",
+         "name": "Vikings",
+         "abbreviation": "MIN",
+         "pfr_code": "min",
+         "record": {
+          "w": 12,
+          "l": 2,
+          "t": 0
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "lions",
+         "city": "Detroit",
+         "name": "Lions",
+         "abbreviation": "DET",
+         "pfr_code": "det",
+         "record": {
+          "w": 10,
+          "l": 4,
+          "t": 0
+         },
+         "finish": "wild_card"
+        },
+        {
+         "id": "packers",
+         "city": "Green Bay",
+         "name": "Packers",
+         "abbreviation": "GB",
+         "pfr_code": "gnb",
+         "record": {
+          "w": 6,
+          "l": 8,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "bears",
+         "city": "Chicago",
+         "name": "Bears",
+         "abbreviation": "CHI",
+         "pfr_code": "chi",
+         "record": {
+          "w": 6,
+          "l": 8,
+          "t": 0
+         },
+         "finish": null
+        }
+       ]
+      },
+      {
+       "name": "NFC West",
+       "teams": [
+        {
+         "id": "49ers",
+         "city": "San Francisco",
+         "name": "49ers",
+         "abbreviation": "SF",
+         "pfr_code": "sfo",
+         "record": {
+          "w": 10,
+          "l": 3,
+          "t": 1
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "rams",
+         "city": "Los Angeles",
+         "name": "Rams",
+         "abbreviation": "LA",
+         "pfr_code": "ram",
+         "record": {
+          "w": 9,
+          "l": 4,
+          "t": 1
+         },
+         "finish": null
+        },
+        {
+         "id": "falcons",
+         "city": "Atlanta",
+         "name": "Falcons",
+         "abbreviation": "ATL",
+         "pfr_code": "atl",
+         "record": {
+          "w": 4,
+          "l": 8,
+          "t": 2
+         },
+         "finish": null
+        },
+        {
+         "id": "saints",
+         "city": "New Orleans",
+         "name": "Saints",
+         "abbreviation": "NO",
+         "pfr_code": "nor",
+         "record": {
+          "w": 2,
+          "l": 11,
+          "t": 1
+         },
+         "finish": null
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "postseason": [
+    {
+     "round": "Divisional playoffs",
+     "date": "1970-12-26",
+     "winner": "Baltimore Colts",
+     "loser": "Cincinnati Bengals",
+     "winner_id": "colts",
+     "loser_id": "bengals",
+     "pts_win": 17,
+     "pts_lose": 0,
+     "site": "winner_home"
+    },
+    {
+     "round": "Divisional playoffs",
+     "date": "1970-12-26",
+     "winner": "Dallas Cowboys",
+     "loser": "Detroit Lions",
+     "winner_id": "cowboys",
+     "loser_id": "lions",
+     "pts_win": 5,
+     "pts_lose": 0,
+     "site": "winner_home"
+    },
+    {
+     "round": "Divisional playoffs",
+     "date": "1970-12-27",
+     "winner": "Oakland Raiders",
+     "loser": "Miami Dolphins",
+     "winner_id": "raiders",
+     "loser_id": "dolphins",
+     "pts_win": 21,
+     "pts_lose": 14,
+     "site": "winner_home"
+    },
+    {
+     "round": "Divisional playoffs",
+     "date": "1970-12-27",
+     "winner": "San Francisco 49ers",
+     "loser": "Minnesota Vikings",
+     "winner_id": "49ers",
+     "loser_id": "vikings",
+     "pts_win": 17,
+     "pts_lose": 14,
+     "site": "loser_home"
+    },
+    {
+     "round": "Conference championships",
+     "date": "1971-01-03",
+     "winner": "Baltimore Colts",
+     "loser": "Oakland Raiders",
+     "winner_id": "colts",
+     "loser_id": "raiders",
+     "pts_win": 27,
+     "pts_lose": 17,
+     "site": "winner_home"
+    },
+    {
+     "round": "Conference championships",
+     "date": "1971-01-03",
+     "winner": "Dallas Cowboys",
+     "loser": "San Francisco 49ers",
+     "winner_id": "cowboys",
+     "loser_id": "49ers",
+     "pts_win": 17,
+     "pts_lose": 10,
+     "site": "loser_home"
+    },
+    {
+     "round": "Super Bowl",
+     "date": "1971-01-17",
+     "winner": "Baltimore Colts",
+     "loser": "Dallas Cowboys",
+     "winner_id": "colts",
+     "loser_id": "cowboys",
+     "pts_win": 16,
+     "pts_lose": 13,
+     "site": "neutral"
+    }
+   ],
+   "sources": [
+    "https://www.pro-football-reference.com/years/1970/",
+    "https://web.archive.org/web/20241216073052/https://www.pro-football-reference.com/years/1970/",
+    "https://en.wikipedia.org/wiki/1970_NFL_season"
+   ]
+  },
+  {
+   "season": 1971,
+   "team_count": 26,
+   "games": 14,
+   "playoff_teams": 8,
+   "playoff_format": {
+    "teams_per_conference": 4,
+    "division_winners_per_conference": 3,
+    "wild_cards_per_conference": 1,
+    "byes_per_conference": 0,
+    "rounds": [
+     "Divisional playoffs",
+     "Conference championships",
+     "Super Bowl"
+    ],
+    "qualification": "Three division winners plus the non-division winner with the best record in each conference (Pro Football Hall of Fame).",
+    "home_field": "Predetermined rotation among divisions, regardless of record (Pro Football Hall of Fame: the rotation was dropped in 1975).",
+    "same_division_rule": "A wild card could not meet its own division winner in the divisional round (NFL Record & Fact Book: from 1970 to 1989 two teams from the same division could not meet before the conference championship game; consistent with every PFR divisional matchup 1970-1977).",
+    "sources": [
+     "https://www.profootballhof.com/news/wild-card-golden-nuggets",
+     "https://web.archive.org/web/20130925182142/http://static.nfl.com/static/content/public/image/history/pdfs/History/Past_Standings_2011.pdf",
+     "https://en.wikipedia.org/wiki/NFL_playoffs"
+    ]
+   },
+   "championship": {
+    "name": "Super Bowl VI",
+    "number": 6,
+    "date": "1972-01-16",
+    "site": "Tulane Stadium, New Orleans",
+    "winner": "cowboys",
+    "loser": "dolphins",
+    "winner_name": "Dallas Cowboys",
+    "loser_name": "Miami Dolphins",
+    "score": "24-3",
+    "sources": [
+     "https://www.pro-football-reference.com/years/1971/",
+     "https://www.espn.com/nfl/superbowl/history/winners"
+    ]
+   },
+   "conference_championships": [
+    "AFC Championship Game",
+    "NFC Championship Game"
+   ],
+   "conferences": [
+    {
+     "name": "AFC",
+     "divisions": [
+      {
+       "name": "AFC East",
+       "teams": [
+        {
+         "id": "dolphins",
+         "city": "Miami",
+         "name": "Dolphins",
+         "abbreviation": "MIA",
+         "pfr_code": "mia",
+         "record": {
+          "w": 10,
+          "l": 3,
+          "t": 1
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "colts",
+         "city": "Baltimore",
+         "name": "Colts",
+         "abbreviation": "BAL",
+         "pfr_code": "clt",
+         "record": {
+          "w": 10,
+          "l": 4,
+          "t": 0
+         },
+         "finish": "wild_card"
+        },
+        {
+         "id": "patriots",
+         "city": "New England",
+         "name": "Patriots",
+         "abbreviation": "NE",
+         "pfr_code": "nwe",
+         "record": {
+          "w": 6,
+          "l": 8,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "jets",
+         "city": "New York",
+         "name": "Jets",
+         "abbreviation": "NYJ",
+         "pfr_code": "nyj",
+         "record": {
+          "w": 6,
+          "l": 8,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "bills",
+         "city": "Buffalo",
+         "name": "Bills",
+         "abbreviation": "BUF",
+         "pfr_code": "buf",
+         "record": {
+          "w": 1,
+          "l": 13,
+          "t": 0
+         },
+         "finish": null
+        }
+       ]
+      },
+      {
+       "name": "AFC Central",
+       "teams": [
+        {
+         "id": "browns",
+         "city": "Cleveland",
+         "name": "Browns",
+         "abbreviation": "CLE",
+         "pfr_code": "cle",
+         "record": {
+          "w": 9,
+          "l": 5,
+          "t": 0
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "steelers",
+         "city": "Pittsburgh",
+         "name": "Steelers",
+         "abbreviation": "PIT",
+         "pfr_code": "pit",
+         "record": {
+          "w": 6,
+          "l": 8,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "oilers_titans",
+         "city": "Houston",
+         "name": "Oilers",
+         "abbreviation": "HOU",
+         "pfr_code": "oti",
+         "record": {
+          "w": 4,
+          "l": 9,
+          "t": 1
+         },
+         "finish": null
+        },
+        {
+         "id": "bengals",
+         "city": "Cincinnati",
+         "name": "Bengals",
+         "abbreviation": "CIN",
+         "pfr_code": "cin",
+         "record": {
+          "w": 4,
+          "l": 10,
+          "t": 0
+         },
+         "finish": null
+        }
+       ]
+      },
+      {
+       "name": "AFC West",
+       "teams": [
+        {
+         "id": "chiefs",
+         "city": "Kansas City",
+         "name": "Chiefs",
+         "abbreviation": "KC",
+         "pfr_code": "kan",
+         "record": {
+          "w": 10,
+          "l": 3,
+          "t": 1
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "raiders",
+         "city": "Oakland",
+         "name": "Raiders",
+         "abbreviation": "OAK",
+         "pfr_code": "rai",
+         "record": {
+          "w": 8,
+          "l": 4,
+          "t": 2
+         },
+         "finish": null
+        },
+        {
+         "id": "chargers",
+         "city": "San Diego",
+         "name": "Chargers",
+         "abbreviation": "SD",
+         "pfr_code": "sdg",
+         "record": {
+          "w": 6,
+          "l": 8,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "broncos",
+         "city": "Denver",
+         "name": "Broncos",
+         "abbreviation": "DEN",
+         "pfr_code": "den",
+         "record": {
+          "w": 4,
+          "l": 9,
+          "t": 1
+         },
+         "finish": null
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "NFC",
+     "divisions": [
+      {
+       "name": "NFC East",
+       "teams": [
+        {
+         "id": "cowboys",
+         "city": "Dallas",
+         "name": "Cowboys",
+         "abbreviation": "DAL",
+         "pfr_code": "dal",
+         "record": {
+          "w": 11,
+          "l": 3,
+          "t": 0
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "washington",
+         "city": "Washington",
+         "name": "Redskins",
+         "abbreviation": "WAS",
+         "pfr_code": "was",
+         "record": {
+          "w": 9,
+          "l": 4,
+          "t": 1
+         },
+         "finish": "wild_card"
+        },
+        {
+         "id": "eagles",
+         "city": "Philadelphia",
+         "name": "Eagles",
+         "abbreviation": "PHI",
+         "pfr_code": "phi",
+         "record": {
+          "w": 6,
+          "l": 7,
+          "t": 1
+         },
+         "finish": null
+        },
+        {
+         "id": "cardinals",
+         "city": "St. Louis",
+         "name": "Cardinals",
+         "abbreviation": "STL",
+         "pfr_code": "crd",
+         "record": {
+          "w": 4,
+          "l": 9,
+          "t": 1
+         },
+         "finish": null
+        },
+        {
+         "id": "giants",
+         "city": "New York",
+         "name": "Giants",
+         "abbreviation": "NYG",
+         "pfr_code": "nyg",
+         "record": {
+          "w": 4,
+          "l": 10,
+          "t": 0
+         },
+         "finish": null
+        }
+       ]
+      },
+      {
+       "name": "NFC Central",
+       "teams": [
+        {
+         "id": "vikings",
+         "city": "Minnesota",
+         "name": "Vikings",
+         "abbreviation": "MIN",
+         "pfr_code": "min",
+         "record": {
+          "w": 11,
+          "l": 3,
+          "t": 0
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "lions",
+         "city": "Detroit",
+         "name": "Lions",
+         "abbreviation": "DET",
+         "pfr_code": "det",
+         "record": {
+          "w": 7,
+          "l": 6,
+          "t": 1
+         },
+         "finish": null
+        },
+        {
+         "id": "bears",
+         "city": "Chicago",
+         "name": "Bears",
+         "abbreviation": "CHI",
+         "pfr_code": "chi",
+         "record": {
+          "w": 6,
+          "l": 8,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "packers",
+         "city": "Green Bay",
+         "name": "Packers",
+         "abbreviation": "GB",
+         "pfr_code": "gnb",
+         "record": {
+          "w": 4,
+          "l": 8,
+          "t": 2
+         },
+         "finish": null
+        }
+       ]
+      },
+      {
+       "name": "NFC West",
+       "teams": [
+        {
+         "id": "49ers",
+         "city": "San Francisco",
+         "name": "49ers",
+         "abbreviation": "SF",
+         "pfr_code": "sfo",
+         "record": {
+          "w": 9,
+          "l": 5,
+          "t": 0
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "rams",
+         "city": "Los Angeles",
+         "name": "Rams",
+         "abbreviation": "LA",
+         "pfr_code": "ram",
+         "record": {
+          "w": 8,
+          "l": 5,
+          "t": 1
+         },
+         "finish": null
+        },
+        {
+         "id": "falcons",
+         "city": "Atlanta",
+         "name": "Falcons",
+         "abbreviation": "ATL",
+         "pfr_code": "atl",
+         "record": {
+          "w": 7,
+          "l": 6,
+          "t": 1
+         },
+         "finish": null
+        },
+        {
+         "id": "saints",
+         "city": "New Orleans",
+         "name": "Saints",
+         "abbreviation": "NO",
+         "pfr_code": "nor",
+         "record": {
+          "w": 4,
+          "l": 8,
+          "t": 2
+         },
+         "finish": null
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "postseason": [
+    {
+     "round": "Divisional playoffs",
+     "date": "1971-12-25",
+     "winner": "Dallas Cowboys",
+     "loser": "Minnesota Vikings",
+     "winner_id": "cowboys",
+     "loser_id": "vikings",
+     "pts_win": 20,
+     "pts_lose": 12,
+     "site": "loser_home"
+    },
+    {
+     "round": "Divisional playoffs",
+     "date": "1971-12-25",
+     "winner": "Miami Dolphins",
+     "loser": "Kansas City Chiefs",
+     "winner_id": "dolphins",
+     "loser_id": "chiefs",
+     "pts_win": 27,
+     "pts_lose": 24,
+     "site": "loser_home"
+    },
+    {
+     "round": "Divisional playoffs",
+     "date": "1971-12-26",
+     "winner": "Baltimore Colts",
+     "loser": "Cleveland Browns",
+     "winner_id": "colts",
+     "loser_id": "browns",
+     "pts_win": 20,
+     "pts_lose": 3,
+     "site": "loser_home"
+    },
+    {
+     "round": "Divisional playoffs",
+     "date": "1971-12-26",
+     "winner": "San Francisco 49ers",
+     "loser": "Washington Redskins",
+     "winner_id": "49ers",
+     "loser_id": "washington",
+     "pts_win": 24,
+     "pts_lose": 20,
+     "site": "winner_home"
+    },
+    {
+     "round": "Conference championships",
+     "date": "1972-01-02",
+     "winner": "Dallas Cowboys",
+     "loser": "San Francisco 49ers",
+     "winner_id": "cowboys",
+     "loser_id": "49ers",
+     "pts_win": 14,
+     "pts_lose": 3,
+     "site": "winner_home"
+    },
+    {
+     "round": "Conference championships",
+     "date": "1972-01-02",
+     "winner": "Miami Dolphins",
+     "loser": "Baltimore Colts",
+     "winner_id": "dolphins",
+     "loser_id": "colts",
+     "pts_win": 21,
+     "pts_lose": 0,
+     "site": "winner_home"
+    },
+    {
+     "round": "Super Bowl",
+     "date": "1972-01-16",
+     "winner": "Dallas Cowboys",
+     "loser": "Miami Dolphins",
+     "winner_id": "cowboys",
+     "loser_id": "dolphins",
+     "pts_win": 24,
+     "pts_lose": 3,
+     "site": "neutral"
+    }
+   ],
+   "sources": [
+    "https://www.pro-football-reference.com/years/1971/",
+    "https://web.archive.org/web/20241214192159/https://www.pro-football-reference.com/years/1971/",
+    "https://en.wikipedia.org/wiki/1971_NFL_season"
+   ]
+  },
+  {
+   "season": 1972,
+   "team_count": 26,
+   "games": 14,
+   "playoff_teams": 8,
+   "playoff_format": {
+    "teams_per_conference": 4,
+    "division_winners_per_conference": 3,
+    "wild_cards_per_conference": 1,
+    "byes_per_conference": 0,
+    "rounds": [
+     "Divisional playoffs",
+     "Conference championships",
+     "Super Bowl"
+    ],
+    "qualification": "Three division winners plus the non-division winner with the best record in each conference (Pro Football Hall of Fame).",
+    "home_field": "Predetermined rotation among divisions, regardless of record (Pro Football Hall of Fame: the rotation was dropped in 1975).",
+    "same_division_rule": "A wild card could not meet its own division winner in the divisional round (NFL Record & Fact Book: from 1970 to 1989 two teams from the same division could not meet before the conference championship game; consistent with every PFR divisional matchup 1970-1977).",
+    "sources": [
+     "https://www.profootballhof.com/news/wild-card-golden-nuggets",
+     "https://web.archive.org/web/20130925182142/http://static.nfl.com/static/content/public/image/history/pdfs/History/Past_Standings_2011.pdf",
+     "https://en.wikipedia.org/wiki/NFL_playoffs"
+    ]
+   },
+   "championship": {
+    "name": "Super Bowl VII",
+    "number": 7,
+    "date": "1973-01-14",
+    "site": "Los Angeles Memorial Coliseum",
+    "winner": "dolphins",
+    "loser": "washington",
+    "winner_name": "Miami Dolphins",
+    "loser_name": "Washington Redskins",
+    "score": "14-7",
+    "sources": [
+     "https://www.pro-football-reference.com/years/1972/",
+     "https://www.espn.com/nfl/superbowl/history/winners"
+    ]
+   },
+   "conference_championships": [
+    "AFC Championship Game",
+    "NFC Championship Game"
+   ],
+   "conferences": [
+    {
+     "name": "AFC",
+     "divisions": [
+      {
+       "name": "AFC East",
+       "teams": [
+        {
+         "id": "dolphins",
+         "city": "Miami",
+         "name": "Dolphins",
+         "abbreviation": "MIA",
+         "pfr_code": "mia",
+         "record": {
+          "w": 14,
+          "l": 0,
+          "t": 0
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "jets",
+         "city": "New York",
+         "name": "Jets",
+         "abbreviation": "NYJ",
+         "pfr_code": "nyj",
+         "record": {
+          "w": 7,
+          "l": 7,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "colts",
+         "city": "Baltimore",
+         "name": "Colts",
+         "abbreviation": "BAL",
+         "pfr_code": "clt",
+         "record": {
+          "w": 5,
+          "l": 9,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "bills",
+         "city": "Buffalo",
+         "name": "Bills",
+         "abbreviation": "BUF",
+         "pfr_code": "buf",
+         "record": {
+          "w": 4,
+          "l": 9,
+          "t": 1
+         },
+         "finish": null
+        },
+        {
+         "id": "patriots",
+         "city": "New England",
+         "name": "Patriots",
+         "abbreviation": "NE",
+         "pfr_code": "nwe",
+         "record": {
+          "w": 3,
+          "l": 11,
+          "t": 0
+         },
+         "finish": null
+        }
+       ]
+      },
+      {
+       "name": "AFC Central",
+       "teams": [
+        {
+         "id": "steelers",
+         "city": "Pittsburgh",
+         "name": "Steelers",
+         "abbreviation": "PIT",
+         "pfr_code": "pit",
+         "record": {
+          "w": 11,
+          "l": 3,
+          "t": 0
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "browns",
+         "city": "Cleveland",
+         "name": "Browns",
+         "abbreviation": "CLE",
+         "pfr_code": "cle",
+         "record": {
+          "w": 10,
+          "l": 4,
+          "t": 0
+         },
+         "finish": "wild_card"
+        },
+        {
+         "id": "bengals",
+         "city": "Cincinnati",
+         "name": "Bengals",
+         "abbreviation": "CIN",
+         "pfr_code": "cin",
+         "record": {
+          "w": 8,
+          "l": 6,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "oilers_titans",
+         "city": "Houston",
+         "name": "Oilers",
+         "abbreviation": "HOU",
+         "pfr_code": "oti",
+         "record": {
+          "w": 1,
+          "l": 13,
+          "t": 0
+         },
+         "finish": null
+        }
+       ]
+      },
+      {
+       "name": "AFC West",
+       "teams": [
+        {
+         "id": "raiders",
+         "city": "Oakland",
+         "name": "Raiders",
+         "abbreviation": "OAK",
+         "pfr_code": "rai",
+         "record": {
+          "w": 10,
+          "l": 3,
+          "t": 1
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "chiefs",
+         "city": "Kansas City",
+         "name": "Chiefs",
+         "abbreviation": "KC",
+         "pfr_code": "kan",
+         "record": {
+          "w": 8,
+          "l": 6,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "broncos",
+         "city": "Denver",
+         "name": "Broncos",
+         "abbreviation": "DEN",
+         "pfr_code": "den",
+         "record": {
+          "w": 5,
+          "l": 9,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "chargers",
+         "city": "San Diego",
+         "name": "Chargers",
+         "abbreviation": "SD",
+         "pfr_code": "sdg",
+         "record": {
+          "w": 4,
+          "l": 9,
+          "t": 1
+         },
+         "finish": null
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "NFC",
+     "divisions": [
+      {
+       "name": "NFC East",
+       "teams": [
+        {
+         "id": "washington",
+         "city": "Washington",
+         "name": "Redskins",
+         "abbreviation": "WAS",
+         "pfr_code": "was",
+         "record": {
+          "w": 11,
+          "l": 3,
+          "t": 0
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "cowboys",
+         "city": "Dallas",
+         "name": "Cowboys",
+         "abbreviation": "DAL",
+         "pfr_code": "dal",
+         "record": {
+          "w": 10,
+          "l": 4,
+          "t": 0
+         },
+         "finish": "wild_card"
+        },
+        {
+         "id": "giants",
+         "city": "New York",
+         "name": "Giants",
+         "abbreviation": "NYG",
+         "pfr_code": "nyg",
+         "record": {
+          "w": 8,
+          "l": 6,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "cardinals",
+         "city": "St. Louis",
+         "name": "Cardinals",
+         "abbreviation": "STL",
+         "pfr_code": "crd",
+         "record": {
+          "w": 4,
+          "l": 9,
+          "t": 1
+         },
+         "finish": null
+        },
+        {
+         "id": "eagles",
+         "city": "Philadelphia",
+         "name": "Eagles",
+         "abbreviation": "PHI",
+         "pfr_code": "phi",
+         "record": {
+          "w": 2,
+          "l": 11,
+          "t": 1
+         },
+         "finish": null
+        }
+       ]
+      },
+      {
+       "name": "NFC Central",
+       "teams": [
+        {
+         "id": "packers",
+         "city": "Green Bay",
+         "name": "Packers",
+         "abbreviation": "GB",
+         "pfr_code": "gnb",
+         "record": {
+          "w": 10,
+          "l": 4,
+          "t": 0
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "lions",
+         "city": "Detroit",
+         "name": "Lions",
+         "abbreviation": "DET",
+         "pfr_code": "det",
+         "record": {
+          "w": 8,
+          "l": 5,
+          "t": 1
+         },
+         "finish": null
+        },
+        {
+         "id": "vikings",
+         "city": "Minnesota",
+         "name": "Vikings",
+         "abbreviation": "MIN",
+         "pfr_code": "min",
+         "record": {
+          "w": 7,
+          "l": 7,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "bears",
+         "city": "Chicago",
+         "name": "Bears",
+         "abbreviation": "CHI",
+         "pfr_code": "chi",
+         "record": {
+          "w": 4,
+          "l": 9,
+          "t": 1
+         },
+         "finish": null
+        }
+       ]
+      },
+      {
+       "name": "NFC West",
+       "teams": [
+        {
+         "id": "49ers",
+         "city": "San Francisco",
+         "name": "49ers",
+         "abbreviation": "SF",
+         "pfr_code": "sfo",
+         "record": {
+          "w": 8,
+          "l": 5,
+          "t": 1
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "falcons",
+         "city": "Atlanta",
+         "name": "Falcons",
+         "abbreviation": "ATL",
+         "pfr_code": "atl",
+         "record": {
+          "w": 7,
+          "l": 7,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "rams",
+         "city": "Los Angeles",
+         "name": "Rams",
+         "abbreviation": "LA",
+         "pfr_code": "ram",
+         "record": {
+          "w": 6,
+          "l": 7,
+          "t": 1
+         },
+         "finish": null
+        },
+        {
+         "id": "saints",
+         "city": "New Orleans",
+         "name": "Saints",
+         "abbreviation": "NO",
+         "pfr_code": "nor",
+         "record": {
+          "w": 2,
+          "l": 11,
+          "t": 1
+         },
+         "finish": null
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "postseason": [
+    {
+     "round": "Divisional playoffs",
+     "date": "1972-12-23",
+     "winner": "Dallas Cowboys",
+     "loser": "San Francisco 49ers",
+     "winner_id": "cowboys",
+     "loser_id": "49ers",
+     "pts_win": 30,
+     "pts_lose": 28,
+     "site": "loser_home"
+    },
+    {
+     "round": "Divisional playoffs",
+     "date": "1972-12-23",
+     "winner": "Pittsburgh Steelers",
+     "loser": "Oakland Raiders",
+     "winner_id": "steelers",
+     "loser_id": "raiders",
+     "pts_win": 13,
+     "pts_lose": 7,
+     "site": "winner_home"
+    },
+    {
+     "round": "Divisional playoffs",
+     "date": "1972-12-24",
+     "winner": "Miami Dolphins",
+     "loser": "Cleveland Browns",
+     "winner_id": "dolphins",
+     "loser_id": "browns",
+     "pts_win": 20,
+     "pts_lose": 14,
+     "site": "winner_home"
+    },
+    {
+     "round": "Divisional playoffs",
+     "date": "1972-12-24",
+     "winner": "Washington Redskins",
+     "loser": "Green Bay Packers",
+     "winner_id": "washington",
+     "loser_id": "packers",
+     "pts_win": 16,
+     "pts_lose": 3,
+     "site": "winner_home"
+    },
+    {
+     "round": "Conference championships",
+     "date": "1972-12-31",
+     "winner": "Miami Dolphins",
+     "loser": "Pittsburgh Steelers",
+     "winner_id": "dolphins",
+     "loser_id": "steelers",
+     "pts_win": 21,
+     "pts_lose": 17,
+     "site": "loser_home"
+    },
+    {
+     "round": "Conference championships",
+     "date": "1972-12-31",
+     "winner": "Washington Redskins",
+     "loser": "Dallas Cowboys",
+     "winner_id": "washington",
+     "loser_id": "cowboys",
+     "pts_win": 26,
+     "pts_lose": 3,
+     "site": "winner_home"
+    },
+    {
+     "round": "Super Bowl",
+     "date": "1973-01-14",
+     "winner": "Miami Dolphins",
+     "loser": "Washington Redskins",
+     "winner_id": "dolphins",
+     "loser_id": "washington",
+     "pts_win": 14,
+     "pts_lose": 7,
+     "site": "neutral"
+    }
+   ],
+   "sources": [
+    "https://www.pro-football-reference.com/years/1972/",
+    "https://web.archive.org/web/20241226123148/https://www.pro-football-reference.com/years/1972/",
+    "https://en.wikipedia.org/wiki/1972_NFL_season"
+   ]
+  },
+  {
+   "season": 1973,
+   "team_count": 26,
+   "games": 14,
+   "playoff_teams": 8,
+   "playoff_format": {
+    "teams_per_conference": 4,
+    "division_winners_per_conference": 3,
+    "wild_cards_per_conference": 1,
+    "byes_per_conference": 0,
+    "rounds": [
+     "Divisional playoffs",
+     "Conference championships",
+     "Super Bowl"
+    ],
+    "qualification": "Three division winners plus the non-division winner with the best record in each conference (Pro Football Hall of Fame).",
+    "home_field": "Predetermined rotation among divisions, regardless of record (Pro Football Hall of Fame: the rotation was dropped in 1975).",
+    "same_division_rule": "A wild card could not meet its own division winner in the divisional round (NFL Record & Fact Book: from 1970 to 1989 two teams from the same division could not meet before the conference championship game; consistent with every PFR divisional matchup 1970-1977).",
+    "sources": [
+     "https://www.profootballhof.com/news/wild-card-golden-nuggets",
+     "https://web.archive.org/web/20130925182142/http://static.nfl.com/static/content/public/image/history/pdfs/History/Past_Standings_2011.pdf",
+     "https://en.wikipedia.org/wiki/NFL_playoffs"
+    ]
+   },
+   "championship": {
+    "name": "Super Bowl VIII",
+    "number": 8,
+    "date": "1974-01-13",
+    "site": "Rice Stadium, Houston",
+    "winner": "dolphins",
+    "loser": "vikings",
+    "winner_name": "Miami Dolphins",
+    "loser_name": "Minnesota Vikings",
+    "score": "24-7",
+    "sources": [
+     "https://www.pro-football-reference.com/years/1973/",
+     "https://www.espn.com/nfl/superbowl/history/winners"
+    ]
+   },
+   "conference_championships": [
+    "AFC Championship Game",
+    "NFC Championship Game"
+   ],
+   "conferences": [
+    {
+     "name": "AFC",
+     "divisions": [
+      {
+       "name": "AFC East",
+       "teams": [
+        {
+         "id": "dolphins",
+         "city": "Miami",
+         "name": "Dolphins",
+         "abbreviation": "MIA",
+         "pfr_code": "mia",
+         "record": {
+          "w": 12,
+          "l": 2,
+          "t": 0
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "bills",
+         "city": "Buffalo",
+         "name": "Bills",
+         "abbreviation": "BUF",
+         "pfr_code": "buf",
+         "record": {
+          "w": 9,
+          "l": 5,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "patriots",
+         "city": "New England",
+         "name": "Patriots",
+         "abbreviation": "NE",
+         "pfr_code": "nwe",
+         "record": {
+          "w": 5,
+          "l": 9,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "jets",
+         "city": "New York",
+         "name": "Jets",
+         "abbreviation": "NYJ",
+         "pfr_code": "nyj",
+         "record": {
+          "w": 4,
+          "l": 10,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "colts",
+         "city": "Baltimore",
+         "name": "Colts",
+         "abbreviation": "BAL",
+         "pfr_code": "clt",
+         "record": {
+          "w": 4,
+          "l": 10,
+          "t": 0
+         },
+         "finish": null
+        }
+       ]
+      },
+      {
+       "name": "AFC Central",
+       "teams": [
+        {
+         "id": "bengals",
+         "city": "Cincinnati",
+         "name": "Bengals",
+         "abbreviation": "CIN",
+         "pfr_code": "cin",
+         "record": {
+          "w": 10,
+          "l": 4,
+          "t": 0
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "steelers",
+         "city": "Pittsburgh",
+         "name": "Steelers",
+         "abbreviation": "PIT",
+         "pfr_code": "pit",
+         "record": {
+          "w": 10,
+          "l": 4,
+          "t": 0
+         },
+         "finish": "wild_card"
+        },
+        {
+         "id": "browns",
+         "city": "Cleveland",
+         "name": "Browns",
+         "abbreviation": "CLE",
+         "pfr_code": "cle",
+         "record": {
+          "w": 7,
+          "l": 5,
+          "t": 2
+         },
+         "finish": null
+        },
+        {
+         "id": "oilers_titans",
+         "city": "Houston",
+         "name": "Oilers",
+         "abbreviation": "HOU",
+         "pfr_code": "oti",
+         "record": {
+          "w": 1,
+          "l": 13,
+          "t": 0
+         },
+         "finish": null
+        }
+       ]
+      },
+      {
+       "name": "AFC West",
+       "teams": [
+        {
+         "id": "raiders",
+         "city": "Oakland",
+         "name": "Raiders",
+         "abbreviation": "OAK",
+         "pfr_code": "rai",
+         "record": {
+          "w": 9,
+          "l": 4,
+          "t": 1
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "chiefs",
+         "city": "Kansas City",
+         "name": "Chiefs",
+         "abbreviation": "KC",
+         "pfr_code": "kan",
+         "record": {
+          "w": 7,
+          "l": 5,
+          "t": 2
+         },
+         "finish": null
+        },
+        {
+         "id": "broncos",
+         "city": "Denver",
+         "name": "Broncos",
+         "abbreviation": "DEN",
+         "pfr_code": "den",
+         "record": {
+          "w": 7,
+          "l": 5,
+          "t": 2
+         },
+         "finish": null
+        },
+        {
+         "id": "chargers",
+         "city": "San Diego",
+         "name": "Chargers",
+         "abbreviation": "SD",
+         "pfr_code": "sdg",
+         "record": {
+          "w": 2,
+          "l": 11,
+          "t": 1
+         },
+         "finish": null
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "NFC",
+     "divisions": [
+      {
+       "name": "NFC East",
+       "teams": [
+        {
+         "id": "cowboys",
+         "city": "Dallas",
+         "name": "Cowboys",
+         "abbreviation": "DAL",
+         "pfr_code": "dal",
+         "record": {
+          "w": 10,
+          "l": 4,
+          "t": 0
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "washington",
+         "city": "Washington",
+         "name": "Redskins",
+         "abbreviation": "WAS",
+         "pfr_code": "was",
+         "record": {
+          "w": 10,
+          "l": 4,
+          "t": 0
+         },
+         "finish": "wild_card"
+        },
+        {
+         "id": "eagles",
+         "city": "Philadelphia",
+         "name": "Eagles",
+         "abbreviation": "PHI",
+         "pfr_code": "phi",
+         "record": {
+          "w": 5,
+          "l": 8,
+          "t": 1
+         },
+         "finish": null
+        },
+        {
+         "id": "cardinals",
+         "city": "St. Louis",
+         "name": "Cardinals",
+         "abbreviation": "STL",
+         "pfr_code": "crd",
+         "record": {
+          "w": 4,
+          "l": 9,
+          "t": 1
+         },
+         "finish": null
+        },
+        {
+         "id": "giants",
+         "city": "New York",
+         "name": "Giants",
+         "abbreviation": "NYG",
+         "pfr_code": "nyg",
+         "record": {
+          "w": 2,
+          "l": 11,
+          "t": 1
+         },
+         "finish": null
+        }
+       ]
+      },
+      {
+       "name": "NFC Central",
+       "teams": [
+        {
+         "id": "vikings",
+         "city": "Minnesota",
+         "name": "Vikings",
+         "abbreviation": "MIN",
+         "pfr_code": "min",
+         "record": {
+          "w": 12,
+          "l": 2,
+          "t": 0
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "lions",
+         "city": "Detroit",
+         "name": "Lions",
+         "abbreviation": "DET",
+         "pfr_code": "det",
+         "record": {
+          "w": 6,
+          "l": 7,
+          "t": 1
+         },
+         "finish": null
+        },
+        {
+         "id": "packers",
+         "city": "Green Bay",
+         "name": "Packers",
+         "abbreviation": "GB",
+         "pfr_code": "gnb",
+         "record": {
+          "w": 5,
+          "l": 7,
+          "t": 2
+         },
+         "finish": null
+        },
+        {
+         "id": "bears",
+         "city": "Chicago",
+         "name": "Bears",
+         "abbreviation": "CHI",
+         "pfr_code": "chi",
+         "record": {
+          "w": 3,
+          "l": 11,
+          "t": 0
+         },
+         "finish": null
+        }
+       ]
+      },
+      {
+       "name": "NFC West",
+       "teams": [
+        {
+         "id": "rams",
+         "city": "Los Angeles",
+         "name": "Rams",
+         "abbreviation": "LA",
+         "pfr_code": "ram",
+         "record": {
+          "w": 12,
+          "l": 2,
+          "t": 0
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "falcons",
+         "city": "Atlanta",
+         "name": "Falcons",
+         "abbreviation": "ATL",
+         "pfr_code": "atl",
+         "record": {
+          "w": 9,
+          "l": 5,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "49ers",
+         "city": "San Francisco",
+         "name": "49ers",
+         "abbreviation": "SF",
+         "pfr_code": "sfo",
+         "record": {
+          "w": 5,
+          "l": 9,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "saints",
+         "city": "New Orleans",
+         "name": "Saints",
+         "abbreviation": "NO",
+         "pfr_code": "nor",
+         "record": {
+          "w": 5,
+          "l": 9,
+          "t": 0
+         },
+         "finish": null
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "postseason": [
+    {
+     "round": "Divisional playoffs",
+     "date": "1973-12-22",
+     "winner": "Minnesota Vikings",
+     "loser": "Washington Redskins",
+     "winner_id": "vikings",
+     "loser_id": "washington",
+     "pts_win": 27,
+     "pts_lose": 20,
+     "site": "winner_home"
+    },
+    {
+     "round": "Divisional playoffs",
+     "date": "1973-12-22",
+     "winner": "Oakland Raiders",
+     "loser": "Pittsburgh Steelers",
+     "winner_id": "raiders",
+     "loser_id": "steelers",
+     "pts_win": 33,
+     "pts_lose": 14,
+     "site": "winner_home"
+    },
+    {
+     "round": "Divisional playoffs",
+     "date": "1973-12-23",
+     "winner": "Dallas Cowboys",
+     "loser": "Los Angeles Rams",
+     "winner_id": "cowboys",
+     "loser_id": "rams",
+     "pts_win": 27,
+     "pts_lose": 16,
+     "site": "winner_home"
+    },
+    {
+     "round": "Divisional playoffs",
+     "date": "1973-12-23",
+     "winner": "Miami Dolphins",
+     "loser": "Cincinnati Bengals",
+     "winner_id": "dolphins",
+     "loser_id": "bengals",
+     "pts_win": 34,
+     "pts_lose": 16,
+     "site": "winner_home"
+    },
+    {
+     "round": "Conference championships",
+     "date": "1973-12-30",
+     "winner": "Miami Dolphins",
+     "loser": "Oakland Raiders",
+     "winner_id": "dolphins",
+     "loser_id": "raiders",
+     "pts_win": 27,
+     "pts_lose": 10,
+     "site": "winner_home"
+    },
+    {
+     "round": "Conference championships",
+     "date": "1973-12-30",
+     "winner": "Minnesota Vikings",
+     "loser": "Dallas Cowboys",
+     "winner_id": "vikings",
+     "loser_id": "cowboys",
+     "pts_win": 27,
+     "pts_lose": 10,
+     "site": "loser_home"
+    },
+    {
+     "round": "Super Bowl",
+     "date": "1974-01-13",
+     "winner": "Miami Dolphins",
+     "loser": "Minnesota Vikings",
+     "winner_id": "dolphins",
+     "loser_id": "vikings",
+     "pts_win": 24,
+     "pts_lose": 7,
+     "site": "neutral"
+    }
+   ],
+   "sources": [
+    "https://www.pro-football-reference.com/years/1973/",
+    "https://web.archive.org/web/20241225204902/https://www.pro-football-reference.com/years/1973/",
+    "https://en.wikipedia.org/wiki/1973_NFL_season"
+   ]
+  },
+  {
+   "season": 1974,
+   "team_count": 26,
+   "games": 14,
+   "playoff_teams": 8,
+   "playoff_format": {
+    "teams_per_conference": 4,
+    "division_winners_per_conference": 3,
+    "wild_cards_per_conference": 1,
+    "byes_per_conference": 0,
+    "rounds": [
+     "Divisional playoffs",
+     "Conference championships",
+     "Super Bowl"
+    ],
+    "qualification": "Three division winners plus the non-division winner with the best record in each conference (Pro Football Hall of Fame).",
+    "home_field": "Predetermined rotation among divisions, regardless of record (Pro Football Hall of Fame: the rotation was dropped in 1975).",
+    "same_division_rule": "A wild card could not meet its own division winner in the divisional round (NFL Record & Fact Book: from 1970 to 1989 two teams from the same division could not meet before the conference championship game; consistent with every PFR divisional matchup 1970-1977).",
+    "sources": [
+     "https://www.profootballhof.com/news/wild-card-golden-nuggets",
+     "https://web.archive.org/web/20130925182142/http://static.nfl.com/static/content/public/image/history/pdfs/History/Past_Standings_2011.pdf",
+     "https://en.wikipedia.org/wiki/NFL_playoffs"
+    ]
+   },
+   "championship": {
+    "name": "Super Bowl IX",
+    "number": 9,
+    "date": "1975-01-12",
+    "site": "Tulane Stadium, New Orleans",
+    "winner": "steelers",
+    "loser": "vikings",
+    "winner_name": "Pittsburgh Steelers",
+    "loser_name": "Minnesota Vikings",
+    "score": "16-6",
+    "sources": [
+     "https://www.pro-football-reference.com/years/1974/",
+     "https://www.espn.com/nfl/superbowl/history/winners"
+    ]
+   },
+   "conference_championships": [
+    "AFC Championship Game",
+    "NFC Championship Game"
+   ],
+   "conferences": [
+    {
+     "name": "AFC",
+     "divisions": [
+      {
+       "name": "AFC East",
+       "teams": [
+        {
+         "id": "dolphins",
+         "city": "Miami",
+         "name": "Dolphins",
+         "abbreviation": "MIA",
+         "pfr_code": "mia",
+         "record": {
+          "w": 11,
+          "l": 3,
+          "t": 0
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "bills",
+         "city": "Buffalo",
+         "name": "Bills",
+         "abbreviation": "BUF",
+         "pfr_code": "buf",
+         "record": {
+          "w": 9,
+          "l": 5,
+          "t": 0
+         },
+         "finish": "wild_card"
+        },
+        {
+         "id": "jets",
+         "city": "New York",
+         "name": "Jets",
+         "abbreviation": "NYJ",
+         "pfr_code": "nyj",
+         "record": {
+          "w": 7,
+          "l": 7,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "patriots",
+         "city": "New England",
+         "name": "Patriots",
+         "abbreviation": "NE",
+         "pfr_code": "nwe",
+         "record": {
+          "w": 7,
+          "l": 7,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "colts",
+         "city": "Baltimore",
+         "name": "Colts",
+         "abbreviation": "BAL",
+         "pfr_code": "clt",
+         "record": {
+          "w": 2,
+          "l": 12,
+          "t": 0
+         },
+         "finish": null
+        }
+       ],
+       "order_note": "N.Y. Jets finished ahead of New England on better conference record (5-6 to 4-7); PFR lists New England first. Order follows the NFL Record & Fact Book.",
+       "order_sources": [
+        "https://web.archive.org/web/20130925182142/http://static.nfl.com/static/content/public/image/history/pdfs/History/Past_Standings_2011.pdf",
+        "https://www.pro-football-reference.com/years/1974/"
+       ]
+      },
+      {
+       "name": "AFC Central",
+       "teams": [
+        {
+         "id": "steelers",
+         "city": "Pittsburgh",
+         "name": "Steelers",
+         "abbreviation": "PIT",
+         "pfr_code": "pit",
+         "record": {
+          "w": 10,
+          "l": 3,
+          "t": 1
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "oilers_titans",
+         "city": "Houston",
+         "name": "Oilers",
+         "abbreviation": "HOU",
+         "pfr_code": "oti",
+         "record": {
+          "w": 7,
+          "l": 7,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "bengals",
+         "city": "Cincinnati",
+         "name": "Bengals",
+         "abbreviation": "CIN",
+         "pfr_code": "cin",
+         "record": {
+          "w": 7,
+          "l": 7,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "browns",
+         "city": "Cleveland",
+         "name": "Browns",
+         "abbreviation": "CLE",
+         "pfr_code": "cle",
+         "record": {
+          "w": 4,
+          "l": 10,
+          "t": 0
+         },
+         "finish": null
+        }
+       ]
+      },
+      {
+       "name": "AFC West",
+       "teams": [
+        {
+         "id": "raiders",
+         "city": "Oakland",
+         "name": "Raiders",
+         "abbreviation": "OAK",
+         "pfr_code": "rai",
+         "record": {
+          "w": 12,
+          "l": 2,
+          "t": 0
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "broncos",
+         "city": "Denver",
+         "name": "Broncos",
+         "abbreviation": "DEN",
+         "pfr_code": "den",
+         "record": {
+          "w": 7,
+          "l": 6,
+          "t": 1
+         },
+         "finish": null
+        },
+        {
+         "id": "chiefs",
+         "city": "Kansas City",
+         "name": "Chiefs",
+         "abbreviation": "KC",
+         "pfr_code": "kan",
+         "record": {
+          "w": 5,
+          "l": 9,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "chargers",
+         "city": "San Diego",
+         "name": "Chargers",
+         "abbreviation": "SD",
+         "pfr_code": "sdg",
+         "record": {
+          "w": 5,
+          "l": 9,
+          "t": 0
+         },
+         "finish": null
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "NFC",
+     "divisions": [
+      {
+       "name": "NFC East",
+       "teams": [
+        {
+         "id": "cardinals",
+         "city": "St. Louis",
+         "name": "Cardinals",
+         "abbreviation": "STL",
+         "pfr_code": "crd",
+         "record": {
+          "w": 10,
+          "l": 4,
+          "t": 0
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "washington",
+         "city": "Washington",
+         "name": "Redskins",
+         "abbreviation": "WAS",
+         "pfr_code": "was",
+         "record": {
+          "w": 10,
+          "l": 4,
+          "t": 0
+         },
+         "finish": "wild_card"
+        },
+        {
+         "id": "cowboys",
+         "city": "Dallas",
+         "name": "Cowboys",
+         "abbreviation": "DAL",
+         "pfr_code": "dal",
+         "record": {
+          "w": 8,
+          "l": 6,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "eagles",
+         "city": "Philadelphia",
+         "name": "Eagles",
+         "abbreviation": "PHI",
+         "pfr_code": "phi",
+         "record": {
+          "w": 7,
+          "l": 7,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "giants",
+         "city": "New York",
+         "name": "Giants",
+         "abbreviation": "NYG",
+         "pfr_code": "nyg",
+         "record": {
+          "w": 2,
+          "l": 12,
+          "t": 0
+         },
+         "finish": null
+        }
+       ]
+      },
+      {
+       "name": "NFC Central",
+       "teams": [
+        {
+         "id": "vikings",
+         "city": "Minnesota",
+         "name": "Vikings",
+         "abbreviation": "MIN",
+         "pfr_code": "min",
+         "record": {
+          "w": 10,
+          "l": 4,
+          "t": 0
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "lions",
+         "city": "Detroit",
+         "name": "Lions",
+         "abbreviation": "DET",
+         "pfr_code": "det",
+         "record": {
+          "w": 7,
+          "l": 7,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "packers",
+         "city": "Green Bay",
+         "name": "Packers",
+         "abbreviation": "GB",
+         "pfr_code": "gnb",
+         "record": {
+          "w": 6,
+          "l": 8,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "bears",
+         "city": "Chicago",
+         "name": "Bears",
+         "abbreviation": "CHI",
+         "pfr_code": "chi",
+         "record": {
+          "w": 4,
+          "l": 10,
+          "t": 0
+         },
+         "finish": null
+        }
+       ]
+      },
+      {
+       "name": "NFC West",
+       "teams": [
+        {
+         "id": "rams",
+         "city": "Los Angeles",
+         "name": "Rams",
+         "abbreviation": "LA",
+         "pfr_code": "ram",
+         "record": {
+          "w": 10,
+          "l": 4,
+          "t": 0
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "49ers",
+         "city": "San Francisco",
+         "name": "49ers",
+         "abbreviation": "SF",
+         "pfr_code": "sfo",
+         "record": {
+          "w": 6,
+          "l": 8,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "saints",
+         "city": "New Orleans",
+         "name": "Saints",
+         "abbreviation": "NO",
+         "pfr_code": "nor",
+         "record": {
+          "w": 5,
+          "l": 9,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "falcons",
+         "city": "Atlanta",
+         "name": "Falcons",
+         "abbreviation": "ATL",
+         "pfr_code": "atl",
+         "record": {
+          "w": 3,
+          "l": 11,
+          "t": 0
+         },
+         "finish": null
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "postseason": [
+    {
+     "round": "Divisional playoffs",
+     "date": "1974-12-21",
+     "winner": "Minnesota Vikings",
+     "loser": "St. Louis Cardinals",
+     "winner_id": "vikings",
+     "loser_id": "cardinals",
+     "pts_win": 30,
+     "pts_lose": 14,
+     "site": "winner_home"
+    },
+    {
+     "round": "Divisional playoffs",
+     "date": "1974-12-21",
+     "winner": "Oakland Raiders",
+     "loser": "Miami Dolphins",
+     "winner_id": "raiders",
+     "loser_id": "dolphins",
+     "pts_win": 28,
+     "pts_lose": 26,
+     "site": "winner_home"
+    },
+    {
+     "round": "Divisional playoffs",
+     "date": "1974-12-22",
+     "winner": "Pittsburgh Steelers",
+     "loser": "Buffalo Bills",
+     "winner_id": "steelers",
+     "loser_id": "bills",
+     "pts_win": 32,
+     "pts_lose": 14,
+     "site": "winner_home"
+    },
+    {
+     "round": "Divisional playoffs",
+     "date": "1974-12-22",
+     "winner": "Los Angeles Rams",
+     "loser": "Washington Redskins",
+     "winner_id": "rams",
+     "loser_id": "washington",
+     "pts_win": 19,
+     "pts_lose": 10,
+     "site": "winner_home"
+    },
+    {
+     "round": "Conference championships",
+     "date": "1974-12-29",
+     "winner": "Minnesota Vikings",
+     "loser": "Los Angeles Rams",
+     "winner_id": "vikings",
+     "loser_id": "rams",
+     "pts_win": 14,
+     "pts_lose": 10,
+     "site": "winner_home"
+    },
+    {
+     "round": "Conference championships",
+     "date": "1974-12-29",
+     "winner": "Pittsburgh Steelers",
+     "loser": "Oakland Raiders",
+     "winner_id": "steelers",
+     "loser_id": "raiders",
+     "pts_win": 24,
+     "pts_lose": 13,
+     "site": "loser_home"
+    },
+    {
+     "round": "Super Bowl",
+     "date": "1975-01-12",
+     "winner": "Pittsburgh Steelers",
+     "loser": "Minnesota Vikings",
+     "winner_id": "steelers",
+     "loser_id": "vikings",
+     "pts_win": 16,
+     "pts_lose": 6,
+     "site": "neutral"
+    }
+   ],
+   "sources": [
+    "https://www.pro-football-reference.com/years/1974/",
+    "https://web.archive.org/web/20241220100804/https://www.pro-football-reference.com/years/1974/",
+    "https://web.archive.org/web/20130925182142/http://static.nfl.com/static/content/public/image/history/pdfs/History/Past_Standings_2011.pdf",
+    "https://en.wikipedia.org/wiki/1974_NFL_season"
+   ]
+  },
+  {
+   "season": 1975,
+   "team_count": 26,
+   "games": 14,
+   "playoff_teams": 8,
+   "playoff_format": {
+    "teams_per_conference": 4,
+    "division_winners_per_conference": 3,
+    "wild_cards_per_conference": 1,
+    "byes_per_conference": 0,
+    "rounds": [
+     "Divisional playoffs",
+     "Conference championships",
+     "Super Bowl"
+    ],
+    "qualification": "Three division winners plus the non-division winner with the best record in each conference (Pro Football Hall of Fame).",
+    "home_field": "Seeded by record; the rotation used 1970-1974 was dropped in 1975 (Pro Football Hall of Fame).",
+    "same_division_rule": "A wild card could not meet its own division winner in the divisional round (NFL Record & Fact Book: from 1970 to 1989 two teams from the same division could not meet before the conference championship game; consistent with every PFR divisional matchup 1970-1977).",
+    "sources": [
+     "https://www.profootballhof.com/news/wild-card-golden-nuggets",
+     "https://web.archive.org/web/20130925182142/http://static.nfl.com/static/content/public/image/history/pdfs/History/Past_Standings_2011.pdf",
+     "https://en.wikipedia.org/wiki/NFL_playoffs"
+    ]
+   },
+   "championship": {
+    "name": "Super Bowl X",
+    "number": 10,
+    "date": "1976-01-18",
+    "site": "Orange Bowl, Miami",
+    "winner": "steelers",
+    "loser": "cowboys",
+    "winner_name": "Pittsburgh Steelers",
+    "loser_name": "Dallas Cowboys",
+    "score": "21-17",
+    "sources": [
+     "https://www.pro-football-reference.com/years/1975/",
+     "https://www.espn.com/nfl/superbowl/history/winners"
+    ]
+   },
+   "conference_championships": [
+    "AFC Championship Game",
+    "NFC Championship Game"
+   ],
+   "conferences": [
+    {
+     "name": "AFC",
+     "divisions": [
+      {
+       "name": "AFC East",
+       "teams": [
+        {
+         "id": "colts",
+         "city": "Baltimore",
+         "name": "Colts",
+         "abbreviation": "BAL",
+         "pfr_code": "clt",
+         "record": {
+          "w": 10,
+          "l": 4,
+          "t": 0
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "dolphins",
+         "city": "Miami",
+         "name": "Dolphins",
+         "abbreviation": "MIA",
+         "pfr_code": "mia",
+         "record": {
+          "w": 10,
+          "l": 4,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "bills",
+         "city": "Buffalo",
+         "name": "Bills",
+         "abbreviation": "BUF",
+         "pfr_code": "buf",
+         "record": {
+          "w": 8,
+          "l": 6,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "jets",
+         "city": "New York",
+         "name": "Jets",
+         "abbreviation": "NYJ",
+         "pfr_code": "nyj",
+         "record": {
+          "w": 3,
+          "l": 11,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "patriots",
+         "city": "New England",
+         "name": "Patriots",
+         "abbreviation": "NE",
+         "pfr_code": "nwe",
+         "record": {
+          "w": 3,
+          "l": 11,
+          "t": 0
+         },
+         "finish": null
+        }
+       ]
+      },
+      {
+       "name": "AFC Central",
+       "teams": [
+        {
+         "id": "steelers",
+         "city": "Pittsburgh",
+         "name": "Steelers",
+         "abbreviation": "PIT",
+         "pfr_code": "pit",
+         "record": {
+          "w": 12,
+          "l": 2,
+          "t": 0
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "bengals",
+         "city": "Cincinnati",
+         "name": "Bengals",
+         "abbreviation": "CIN",
+         "pfr_code": "cin",
+         "record": {
+          "w": 11,
+          "l": 3,
+          "t": 0
+         },
+         "finish": "wild_card"
+        },
+        {
+         "id": "oilers_titans",
+         "city": "Houston",
+         "name": "Oilers",
+         "abbreviation": "HOU",
+         "pfr_code": "oti",
+         "record": {
+          "w": 10,
+          "l": 4,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "browns",
+         "city": "Cleveland",
+         "name": "Browns",
+         "abbreviation": "CLE",
+         "pfr_code": "cle",
+         "record": {
+          "w": 3,
+          "l": 11,
+          "t": 0
+         },
+         "finish": null
+        }
+       ]
+      },
+      {
+       "name": "AFC West",
+       "teams": [
+        {
+         "id": "raiders",
+         "city": "Oakland",
+         "name": "Raiders",
+         "abbreviation": "OAK",
+         "pfr_code": "rai",
+         "record": {
+          "w": 11,
+          "l": 3,
+          "t": 0
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "broncos",
+         "city": "Denver",
+         "name": "Broncos",
+         "abbreviation": "DEN",
+         "pfr_code": "den",
+         "record": {
+          "w": 6,
+          "l": 8,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "chiefs",
+         "city": "Kansas City",
+         "name": "Chiefs",
+         "abbreviation": "KC",
+         "pfr_code": "kan",
+         "record": {
+          "w": 5,
+          "l": 9,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "chargers",
+         "city": "San Diego",
+         "name": "Chargers",
+         "abbreviation": "SD",
+         "pfr_code": "sdg",
+         "record": {
+          "w": 2,
+          "l": 12,
+          "t": 0
+         },
+         "finish": null
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "NFC",
+     "divisions": [
+      {
+       "name": "NFC East",
+       "teams": [
+        {
+         "id": "cardinals",
+         "city": "St. Louis",
+         "name": "Cardinals",
+         "abbreviation": "STL",
+         "pfr_code": "crd",
+         "record": {
+          "w": 11,
+          "l": 3,
+          "t": 0
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "cowboys",
+         "city": "Dallas",
+         "name": "Cowboys",
+         "abbreviation": "DAL",
+         "pfr_code": "dal",
+         "record": {
+          "w": 10,
+          "l": 4,
+          "t": 0
+         },
+         "finish": "wild_card"
+        },
+        {
+         "id": "washington",
+         "city": "Washington",
+         "name": "Redskins",
+         "abbreviation": "WAS",
+         "pfr_code": "was",
+         "record": {
+          "w": 8,
+          "l": 6,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "giants",
+         "city": "New York",
+         "name": "Giants",
+         "abbreviation": "NYG",
+         "pfr_code": "nyg",
+         "record": {
+          "w": 5,
+          "l": 9,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "eagles",
+         "city": "Philadelphia",
+         "name": "Eagles",
+         "abbreviation": "PHI",
+         "pfr_code": "phi",
+         "record": {
+          "w": 4,
+          "l": 10,
+          "t": 0
+         },
+         "finish": null
+        }
+       ]
+      },
+      {
+       "name": "NFC Central",
+       "teams": [
+        {
+         "id": "vikings",
+         "city": "Minnesota",
+         "name": "Vikings",
+         "abbreviation": "MIN",
+         "pfr_code": "min",
+         "record": {
+          "w": 12,
+          "l": 2,
+          "t": 0
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "lions",
+         "city": "Detroit",
+         "name": "Lions",
+         "abbreviation": "DET",
+         "pfr_code": "det",
+         "record": {
+          "w": 7,
+          "l": 7,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "bears",
+         "city": "Chicago",
+         "name": "Bears",
+         "abbreviation": "CHI",
+         "pfr_code": "chi",
+         "record": {
+          "w": 4,
+          "l": 10,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "packers",
+         "city": "Green Bay",
+         "name": "Packers",
+         "abbreviation": "GB",
+         "pfr_code": "gnb",
+         "record": {
+          "w": 4,
+          "l": 10,
+          "t": 0
+         },
+         "finish": null
+        }
+       ]
+      },
+      {
+       "name": "NFC West",
+       "teams": [
+        {
+         "id": "rams",
+         "city": "Los Angeles",
+         "name": "Rams",
+         "abbreviation": "LA",
+         "pfr_code": "ram",
+         "record": {
+          "w": 12,
+          "l": 2,
+          "t": 0
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "49ers",
+         "city": "San Francisco",
+         "name": "49ers",
+         "abbreviation": "SF",
+         "pfr_code": "sfo",
+         "record": {
+          "w": 5,
+          "l": 9,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "falcons",
+         "city": "Atlanta",
+         "name": "Falcons",
+         "abbreviation": "ATL",
+         "pfr_code": "atl",
+         "record": {
+          "w": 4,
+          "l": 10,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "saints",
+         "city": "New Orleans",
+         "name": "Saints",
+         "abbreviation": "NO",
+         "pfr_code": "nor",
+         "record": {
+          "w": 2,
+          "l": 12,
+          "t": 0
+         },
+         "finish": null
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "postseason": [
+    {
+     "round": "Divisional playoffs",
+     "date": "1975-12-27",
+     "winner": "Pittsburgh Steelers",
+     "loser": "Baltimore Colts",
+     "winner_id": "steelers",
+     "loser_id": "colts",
+     "pts_win": 28,
+     "pts_lose": 10,
+     "site": "winner_home"
+    },
+    {
+     "round": "Divisional playoffs",
+     "date": "1975-12-27",
+     "winner": "Los Angeles Rams",
+     "loser": "St. Louis Cardinals",
+     "winner_id": "rams",
+     "loser_id": "cardinals",
+     "pts_win": 35,
+     "pts_lose": 23,
+     "site": "winner_home"
+    },
+    {
+     "round": "Divisional playoffs",
+     "date": "1975-12-28",
+     "winner": "Dallas Cowboys",
+     "loser": "Minnesota Vikings",
+     "winner_id": "cowboys",
+     "loser_id": "vikings",
+     "pts_win": 17,
+     "pts_lose": 14,
+     "site": "loser_home"
+    },
+    {
+     "round": "Divisional playoffs",
+     "date": "1975-12-28",
+     "winner": "Oakland Raiders",
+     "loser": "Cincinnati Bengals",
+     "winner_id": "raiders",
+     "loser_id": "bengals",
+     "pts_win": 31,
+     "pts_lose": 28,
+     "site": "winner_home"
+    },
+    {
+     "round": "Conference championships",
+     "date": "1976-01-04",
+     "winner": "Dallas Cowboys",
+     "loser": "Los Angeles Rams",
+     "winner_id": "cowboys",
+     "loser_id": "rams",
+     "pts_win": 37,
+     "pts_lose": 7,
+     "site": "loser_home"
+    },
+    {
+     "round": "Conference championships",
+     "date": "1976-01-04",
+     "winner": "Pittsburgh Steelers",
+     "loser": "Oakland Raiders",
+     "winner_id": "steelers",
+     "loser_id": "raiders",
+     "pts_win": 16,
+     "pts_lose": 10,
+     "site": "winner_home"
+    },
+    {
+     "round": "Super Bowl",
+     "date": "1976-01-18",
+     "winner": "Pittsburgh Steelers",
+     "loser": "Dallas Cowboys",
+     "winner_id": "steelers",
+     "loser_id": "cowboys",
+     "pts_win": 21,
+     "pts_lose": 17,
+     "site": "neutral"
+    }
+   ],
+   "sources": [
+    "https://www.pro-football-reference.com/years/1975/",
+    "https://web.archive.org/web/20241222195329/https://www.pro-football-reference.com/years/1975/",
+    "https://en.wikipedia.org/wiki/1975_NFL_season"
+   ]
+  },
+  {
+   "season": 1976,
+   "team_count": 28,
+   "games": 14,
+   "playoff_teams": 8,
+   "playoff_format": {
+    "teams_per_conference": 4,
+    "division_winners_per_conference": 3,
+    "wild_cards_per_conference": 1,
+    "byes_per_conference": 0,
+    "rounds": [
+     "Divisional playoffs",
+     "Conference championships",
+     "Super Bowl"
+    ],
+    "qualification": "Three division winners plus the non-division winner with the best record in each conference (Pro Football Hall of Fame).",
+    "home_field": "Seeded by record; the rotation used 1970-1974 was dropped in 1975 (Pro Football Hall of Fame).",
+    "same_division_rule": "A wild card could not meet its own division winner in the divisional round (NFL Record & Fact Book: from 1970 to 1989 two teams from the same division could not meet before the conference championship game; consistent with every PFR divisional matchup 1970-1977).",
+    "sources": [
+     "https://www.profootballhof.com/news/wild-card-golden-nuggets",
+     "https://web.archive.org/web/20130925182142/http://static.nfl.com/static/content/public/image/history/pdfs/History/Past_Standings_2011.pdf",
+     "https://en.wikipedia.org/wiki/NFL_playoffs"
+    ]
+   },
+   "championship": {
+    "name": "Super Bowl XI",
+    "number": 11,
+    "date": "1977-01-09",
+    "site": "Rose Bowl, Pasadena, Calif.",
+    "winner": "raiders",
+    "loser": "vikings",
+    "winner_name": "Oakland Raiders",
+    "loser_name": "Minnesota Vikings",
+    "score": "32-14",
+    "sources": [
+     "https://www.pro-football-reference.com/years/1976/",
+     "https://www.espn.com/nfl/superbowl/history/winners"
+    ]
+   },
+   "conference_championships": [
+    "AFC Championship Game",
+    "NFC Championship Game"
+   ],
+   "conferences": [
+    {
+     "name": "AFC",
+     "divisions": [
+      {
+       "name": "AFC East",
+       "teams": [
+        {
+         "id": "colts",
+         "city": "Baltimore",
+         "name": "Colts",
+         "abbreviation": "BAL",
+         "pfr_code": "clt",
+         "record": {
+          "w": 11,
+          "l": 3,
+          "t": 0
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "patriots",
+         "city": "New England",
+         "name": "Patriots",
+         "abbreviation": "NE",
+         "pfr_code": "nwe",
+         "record": {
+          "w": 11,
+          "l": 3,
+          "t": 0
+         },
+         "finish": "wild_card"
+        },
+        {
+         "id": "dolphins",
+         "city": "Miami",
+         "name": "Dolphins",
+         "abbreviation": "MIA",
+         "pfr_code": "mia",
+         "record": {
+          "w": 6,
+          "l": 8,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "jets",
+         "city": "New York",
+         "name": "Jets",
+         "abbreviation": "NYJ",
+         "pfr_code": "nyj",
+         "record": {
+          "w": 3,
+          "l": 11,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "bills",
+         "city": "Buffalo",
+         "name": "Bills",
+         "abbreviation": "BUF",
+         "pfr_code": "buf",
+         "record": {
+          "w": 2,
+          "l": 12,
+          "t": 0
+         },
+         "finish": null
+        }
+       ]
+      },
+      {
+       "name": "AFC Central",
+       "teams": [
+        {
+         "id": "steelers",
+         "city": "Pittsburgh",
+         "name": "Steelers",
+         "abbreviation": "PIT",
+         "pfr_code": "pit",
+         "record": {
+          "w": 10,
+          "l": 4,
+          "t": 0
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "bengals",
+         "city": "Cincinnati",
+         "name": "Bengals",
+         "abbreviation": "CIN",
+         "pfr_code": "cin",
+         "record": {
+          "w": 10,
+          "l": 4,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "browns",
+         "city": "Cleveland",
+         "name": "Browns",
+         "abbreviation": "CLE",
+         "pfr_code": "cle",
+         "record": {
+          "w": 9,
+          "l": 5,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "oilers_titans",
+         "city": "Houston",
+         "name": "Oilers",
+         "abbreviation": "HOU",
+         "pfr_code": "oti",
+         "record": {
+          "w": 5,
+          "l": 9,
+          "t": 0
+         },
+         "finish": null
+        }
+       ]
+      },
+      {
+       "name": "AFC West",
+       "teams": [
+        {
+         "id": "raiders",
+         "city": "Oakland",
+         "name": "Raiders",
+         "abbreviation": "OAK",
+         "pfr_code": "rai",
+         "record": {
+          "w": 13,
+          "l": 1,
+          "t": 0
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "broncos",
+         "city": "Denver",
+         "name": "Broncos",
+         "abbreviation": "DEN",
+         "pfr_code": "den",
+         "record": {
+          "w": 9,
+          "l": 5,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "chargers",
+         "city": "San Diego",
+         "name": "Chargers",
+         "abbreviation": "SD",
+         "pfr_code": "sdg",
+         "record": {
+          "w": 6,
+          "l": 8,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "chiefs",
+         "city": "Kansas City",
+         "name": "Chiefs",
+         "abbreviation": "KC",
+         "pfr_code": "kan",
+         "record": {
+          "w": 5,
+          "l": 9,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "buccaneers",
+         "city": "Tampa Bay",
+         "name": "Buccaneers",
+         "abbreviation": "TB",
+         "pfr_code": "tam",
+         "record": {
+          "w": 0,
+          "l": 14,
+          "t": 0
+         },
+         "finish": null
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "NFC",
+     "divisions": [
+      {
+       "name": "NFC East",
+       "teams": [
+        {
+         "id": "cowboys",
+         "city": "Dallas",
+         "name": "Cowboys",
+         "abbreviation": "DAL",
+         "pfr_code": "dal",
+         "record": {
+          "w": 11,
+          "l": 3,
+          "t": 0
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "washington",
+         "city": "Washington",
+         "name": "Redskins",
+         "abbreviation": "WAS",
+         "pfr_code": "was",
+         "record": {
+          "w": 10,
+          "l": 4,
+          "t": 0
+         },
+         "finish": "wild_card"
+        },
+        {
+         "id": "cardinals",
+         "city": "St. Louis",
+         "name": "Cardinals",
+         "abbreviation": "STL",
+         "pfr_code": "crd",
+         "record": {
+          "w": 10,
+          "l": 4,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "eagles",
+         "city": "Philadelphia",
+         "name": "Eagles",
+         "abbreviation": "PHI",
+         "pfr_code": "phi",
+         "record": {
+          "w": 4,
+          "l": 10,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "giants",
+         "city": "New York",
+         "name": "Giants",
+         "abbreviation": "NYG",
+         "pfr_code": "nyg",
+         "record": {
+          "w": 3,
+          "l": 11,
+          "t": 0
+         },
+         "finish": null
+        }
+       ]
+      },
+      {
+       "name": "NFC Central",
+       "teams": [
+        {
+         "id": "vikings",
+         "city": "Minnesota",
+         "name": "Vikings",
+         "abbreviation": "MIN",
+         "pfr_code": "min",
+         "record": {
+          "w": 11,
+          "l": 2,
+          "t": 1
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "bears",
+         "city": "Chicago",
+         "name": "Bears",
+         "abbreviation": "CHI",
+         "pfr_code": "chi",
+         "record": {
+          "w": 7,
+          "l": 7,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "lions",
+         "city": "Detroit",
+         "name": "Lions",
+         "abbreviation": "DET",
+         "pfr_code": "det",
+         "record": {
+          "w": 6,
+          "l": 8,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "packers",
+         "city": "Green Bay",
+         "name": "Packers",
+         "abbreviation": "GB",
+         "pfr_code": "gnb",
+         "record": {
+          "w": 5,
+          "l": 9,
+          "t": 0
+         },
+         "finish": null
+        }
+       ]
+      },
+      {
+       "name": "NFC West",
+       "teams": [
+        {
+         "id": "rams",
+         "city": "Los Angeles",
+         "name": "Rams",
+         "abbreviation": "LA",
+         "pfr_code": "ram",
+         "record": {
+          "w": 10,
+          "l": 3,
+          "t": 1
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "49ers",
+         "city": "San Francisco",
+         "name": "49ers",
+         "abbreviation": "SF",
+         "pfr_code": "sfo",
+         "record": {
+          "w": 8,
+          "l": 6,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "saints",
+         "city": "New Orleans",
+         "name": "Saints",
+         "abbreviation": "NO",
+         "pfr_code": "nor",
+         "record": {
+          "w": 4,
+          "l": 10,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "falcons",
+         "city": "Atlanta",
+         "name": "Falcons",
+         "abbreviation": "ATL",
+         "pfr_code": "atl",
+         "record": {
+          "w": 4,
+          "l": 10,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "seahawks",
+         "city": "Seattle",
+         "name": "Seahawks",
+         "abbreviation": "SEA",
+         "pfr_code": "sea",
+         "record": {
+          "w": 2,
+          "l": 12,
+          "t": 0
+         },
+         "finish": null
+        }
+       ],
+       "order_note": "New Orleans finished ahead of Atlanta on head-to-head point differential (27 points); PFR lists Atlanta first. Order follows the NFL Record & Fact Book.",
+       "order_sources": [
+        "https://web.archive.org/web/20130925182142/http://static.nfl.com/static/content/public/image/history/pdfs/History/Past_Standings_2011.pdf",
+        "https://www.pro-football-reference.com/years/1976/"
+       ]
+      }
+     ]
+    }
+   ],
+   "postseason": [
+    {
+     "round": "Divisional playoffs",
+     "date": "1976-12-18",
+     "winner": "Minnesota Vikings",
+     "loser": "Washington Redskins",
+     "winner_id": "vikings",
+     "loser_id": "washington",
+     "pts_win": 35,
+     "pts_lose": 20,
+     "site": "winner_home"
+    },
+    {
+     "round": "Divisional playoffs",
+     "date": "1976-12-18",
+     "winner": "Oakland Raiders",
+     "loser": "New England Patriots",
+     "winner_id": "raiders",
+     "loser_id": "patriots",
+     "pts_win": 24,
+     "pts_lose": 21,
+     "site": "winner_home"
+    },
+    {
+     "round": "Divisional playoffs",
+     "date": "1976-12-19",
+     "winner": "Pittsburgh Steelers",
+     "loser": "Baltimore Colts",
+     "winner_id": "steelers",
+     "loser_id": "colts",
+     "pts_win": 40,
+     "pts_lose": 14,
+     "site": "loser_home"
+    },
+    {
+     "round": "Divisional playoffs",
+     "date": "1976-12-19",
+     "winner": "Los Angeles Rams",
+     "loser": "Dallas Cowboys",
+     "winner_id": "rams",
+     "loser_id": "cowboys",
+     "pts_win": 14,
+     "pts_lose": 12,
+     "site": "loser_home"
+    },
+    {
+     "round": "Conference championships",
+     "date": "1976-12-26",
+     "winner": "Minnesota Vikings",
+     "loser": "Los Angeles Rams",
+     "winner_id": "vikings",
+     "loser_id": "rams",
+     "pts_win": 24,
+     "pts_lose": 13,
+     "site": "winner_home"
+    },
+    {
+     "round": "Conference championships",
+     "date": "1976-12-26",
+     "winner": "Oakland Raiders",
+     "loser": "Pittsburgh Steelers",
+     "winner_id": "raiders",
+     "loser_id": "steelers",
+     "pts_win": 24,
+     "pts_lose": 7,
+     "site": "winner_home"
+    },
+    {
+     "round": "Super Bowl",
+     "date": "1977-01-09",
+     "winner": "Oakland Raiders",
+     "loser": "Minnesota Vikings",
+     "winner_id": "raiders",
+     "loser_id": "vikings",
+     "pts_win": 32,
+     "pts_lose": 14,
+     "site": "neutral"
+    }
+   ],
+   "sources": [
+    "https://www.pro-football-reference.com/years/1976/",
+    "https://web.archive.org/web/20241212115756/https://www.pro-football-reference.com/years/1976/",
+    "https://web.archive.org/web/20130925182142/http://static.nfl.com/static/content/public/image/history/pdfs/History/Past_Standings_2011.pdf",
+    "https://en.wikipedia.org/wiki/1976_NFL_season"
+   ]
+  },
+  {
+   "season": 1977,
+   "team_count": 28,
+   "games": 14,
+   "playoff_teams": 8,
+   "playoff_format": {
+    "teams_per_conference": 4,
+    "division_winners_per_conference": 3,
+    "wild_cards_per_conference": 1,
+    "byes_per_conference": 0,
+    "rounds": [
+     "Divisional playoffs",
+     "Conference championships",
+     "Super Bowl"
+    ],
+    "qualification": "Three division winners plus the non-division winner with the best record in each conference (Pro Football Hall of Fame).",
+    "home_field": "Seeded by record; the rotation used 1970-1974 was dropped in 1975 (Pro Football Hall of Fame).",
+    "same_division_rule": "A wild card could not meet its own division winner in the divisional round (NFL Record & Fact Book: from 1970 to 1989 two teams from the same division could not meet before the conference championship game; consistent with every PFR divisional matchup 1970-1977).",
+    "sources": [
+     "https://www.profootballhof.com/news/wild-card-golden-nuggets",
+     "https://web.archive.org/web/20130925182142/http://static.nfl.com/static/content/public/image/history/pdfs/History/Past_Standings_2011.pdf",
+     "https://en.wikipedia.org/wiki/NFL_playoffs"
+    ]
+   },
+   "championship": {
+    "name": "Super Bowl XII",
+    "number": 12,
+    "date": "1978-01-15",
+    "site": "Superdome, New Orleans",
+    "winner": "cowboys",
+    "loser": "broncos",
+    "winner_name": "Dallas Cowboys",
+    "loser_name": "Denver Broncos",
+    "score": "27-10",
+    "sources": [
+     "https://www.pro-football-reference.com/years/1977/",
+     "https://www.espn.com/nfl/superbowl/history/winners"
+    ]
+   },
+   "conference_championships": [
+    "AFC Championship Game",
+    "NFC Championship Game"
+   ],
+   "conferences": [
+    {
+     "name": "AFC",
+     "divisions": [
+      {
+       "name": "AFC East",
+       "teams": [
+        {
+         "id": "colts",
+         "city": "Baltimore",
+         "name": "Colts",
+         "abbreviation": "BAL",
+         "pfr_code": "clt",
+         "record": {
+          "w": 10,
+          "l": 4,
+          "t": 0
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "dolphins",
+         "city": "Miami",
+         "name": "Dolphins",
+         "abbreviation": "MIA",
+         "pfr_code": "mia",
+         "record": {
+          "w": 10,
+          "l": 4,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "patriots",
+         "city": "New England",
+         "name": "Patriots",
+         "abbreviation": "NE",
+         "pfr_code": "nwe",
+         "record": {
+          "w": 9,
+          "l": 5,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "jets",
+         "city": "New York",
+         "name": "Jets",
+         "abbreviation": "NYJ",
+         "pfr_code": "nyj",
+         "record": {
+          "w": 3,
+          "l": 11,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "bills",
+         "city": "Buffalo",
+         "name": "Bills",
+         "abbreviation": "BUF",
+         "pfr_code": "buf",
+         "record": {
+          "w": 3,
+          "l": 11,
+          "t": 0
+         },
+         "finish": null
+        }
+       ],
+       "order_note": "N.Y. Jets finished ahead of Buffalo on head-to-head point differential (1 point); PFR lists Buffalo first. Order follows the NFL Record & Fact Book.",
+       "order_sources": [
+        "https://web.archive.org/web/20130925182142/http://static.nfl.com/static/content/public/image/history/pdfs/History/Past_Standings_2011.pdf",
+        "https://www.pro-football-reference.com/years/1977/"
+       ]
+      },
+      {
+       "name": "AFC Central",
+       "teams": [
+        {
+         "id": "steelers",
+         "city": "Pittsburgh",
+         "name": "Steelers",
+         "abbreviation": "PIT",
+         "pfr_code": "pit",
+         "record": {
+          "w": 9,
+          "l": 5,
+          "t": 0
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "oilers_titans",
+         "city": "Houston",
+         "name": "Oilers",
+         "abbreviation": "HOU",
+         "pfr_code": "oti",
+         "record": {
+          "w": 8,
+          "l": 6,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "bengals",
+         "city": "Cincinnati",
+         "name": "Bengals",
+         "abbreviation": "CIN",
+         "pfr_code": "cin",
+         "record": {
+          "w": 8,
+          "l": 6,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "browns",
+         "city": "Cleveland",
+         "name": "Browns",
+         "abbreviation": "CLE",
+         "pfr_code": "cle",
+         "record": {
+          "w": 6,
+          "l": 8,
+          "t": 0
+         },
+         "finish": null
+        }
+       ],
+       "order_note": "Houston finished ahead of Cincinnati on head-to-head point differential (2 points); PFR lists Cincinnati first. Order follows the NFL Record & Fact Book.",
+       "order_sources": [
+        "https://web.archive.org/web/20130925182142/http://static.nfl.com/static/content/public/image/history/pdfs/History/Past_Standings_2011.pdf",
+        "https://www.pro-football-reference.com/years/1977/"
+       ]
+      },
+      {
+       "name": "AFC West",
+       "teams": [
+        {
+         "id": "broncos",
+         "city": "Denver",
+         "name": "Broncos",
+         "abbreviation": "DEN",
+         "pfr_code": "den",
+         "record": {
+          "w": 12,
+          "l": 2,
+          "t": 0
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "raiders",
+         "city": "Oakland",
+         "name": "Raiders",
+         "abbreviation": "OAK",
+         "pfr_code": "rai",
+         "record": {
+          "w": 11,
+          "l": 3,
+          "t": 0
+         },
+         "finish": "wild_card"
+        },
+        {
+         "id": "chargers",
+         "city": "San Diego",
+         "name": "Chargers",
+         "abbreviation": "SD",
+         "pfr_code": "sdg",
+         "record": {
+          "w": 7,
+          "l": 7,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "seahawks",
+         "city": "Seattle",
+         "name": "Seahawks",
+         "abbreviation": "SEA",
+         "pfr_code": "sea",
+         "record": {
+          "w": 5,
+          "l": 9,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "chiefs",
+         "city": "Kansas City",
+         "name": "Chiefs",
+         "abbreviation": "KC",
+         "pfr_code": "kan",
+         "record": {
+          "w": 2,
+          "l": 12,
+          "t": 0
+         },
+         "finish": null
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "NFC",
+     "divisions": [
+      {
+       "name": "NFC East",
+       "teams": [
+        {
+         "id": "cowboys",
+         "city": "Dallas",
+         "name": "Cowboys",
+         "abbreviation": "DAL",
+         "pfr_code": "dal",
+         "record": {
+          "w": 12,
+          "l": 2,
+          "t": 0
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "washington",
+         "city": "Washington",
+         "name": "Redskins",
+         "abbreviation": "WAS",
+         "pfr_code": "was",
+         "record": {
+          "w": 9,
+          "l": 5,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "cardinals",
+         "city": "St. Louis",
+         "name": "Cardinals",
+         "abbreviation": "STL",
+         "pfr_code": "crd",
+         "record": {
+          "w": 7,
+          "l": 7,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "eagles",
+         "city": "Philadelphia",
+         "name": "Eagles",
+         "abbreviation": "PHI",
+         "pfr_code": "phi",
+         "record": {
+          "w": 5,
+          "l": 9,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "giants",
+         "city": "New York",
+         "name": "Giants",
+         "abbreviation": "NYG",
+         "pfr_code": "nyg",
+         "record": {
+          "w": 5,
+          "l": 9,
+          "t": 0
+         },
+         "finish": null
+        }
+       ]
+      },
+      {
+       "name": "NFC Central",
+       "teams": [
+        {
+         "id": "vikings",
+         "city": "Minnesota",
+         "name": "Vikings",
+         "abbreviation": "MIN",
+         "pfr_code": "min",
+         "record": {
+          "w": 9,
+          "l": 5,
+          "t": 0
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "bears",
+         "city": "Chicago",
+         "name": "Bears",
+         "abbreviation": "CHI",
+         "pfr_code": "chi",
+         "record": {
+          "w": 9,
+          "l": 5,
+          "t": 0
+         },
+         "finish": "wild_card"
+        },
+        {
+         "id": "lions",
+         "city": "Detroit",
+         "name": "Lions",
+         "abbreviation": "DET",
+         "pfr_code": "det",
+         "record": {
+          "w": 6,
+          "l": 8,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "packers",
+         "city": "Green Bay",
+         "name": "Packers",
+         "abbreviation": "GB",
+         "pfr_code": "gnb",
+         "record": {
+          "w": 4,
+          "l": 10,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "buccaneers",
+         "city": "Tampa Bay",
+         "name": "Buccaneers",
+         "abbreviation": "TB",
+         "pfr_code": "tam",
+         "record": {
+          "w": 2,
+          "l": 12,
+          "t": 0
+         },
+         "finish": null
+        }
+       ]
+      },
+      {
+       "name": "NFC West",
+       "teams": [
+        {
+         "id": "rams",
+         "city": "Los Angeles",
+         "name": "Rams",
+         "abbreviation": "LA",
+         "pfr_code": "ram",
+         "record": {
+          "w": 10,
+          "l": 4,
+          "t": 0
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "falcons",
+         "city": "Atlanta",
+         "name": "Falcons",
+         "abbreviation": "ATL",
+         "pfr_code": "atl",
+         "record": {
+          "w": 7,
+          "l": 7,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "49ers",
+         "city": "San Francisco",
+         "name": "49ers",
+         "abbreviation": "SF",
+         "pfr_code": "sfo",
+         "record": {
+          "w": 5,
+          "l": 9,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "saints",
+         "city": "New Orleans",
+         "name": "Saints",
+         "abbreviation": "NO",
+         "pfr_code": "nor",
+         "record": {
+          "w": 3,
+          "l": 11,
+          "t": 0
+         },
+         "finish": null
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "postseason": [
+    {
+     "round": "Divisional playoffs",
+     "date": "1977-12-24",
+     "winner": "Denver Broncos",
+     "loser": "Pittsburgh Steelers",
+     "winner_id": "broncos",
+     "loser_id": "steelers",
+     "pts_win": 34,
+     "pts_lose": 21,
+     "site": "winner_home"
+    },
+    {
+     "round": "Divisional playoffs",
+     "date": "1977-12-24",
+     "winner": "Oakland Raiders",
+     "loser": "Baltimore Colts",
+     "winner_id": "raiders",
+     "loser_id": "colts",
+     "pts_win": 37,
+     "pts_lose": 31,
+     "site": "loser_home"
+    },
+    {
+     "round": "Divisional playoffs",
+     "date": "1977-12-26",
+     "winner": "Dallas Cowboys",
+     "loser": "Chicago Bears",
+     "winner_id": "cowboys",
+     "loser_id": "bears",
+     "pts_win": 37,
+     "pts_lose": 7,
+     "site": "winner_home"
+    },
+    {
+     "round": "Divisional playoffs",
+     "date": "1977-12-26",
+     "winner": "Minnesota Vikings",
+     "loser": "Los Angeles Rams",
+     "winner_id": "vikings",
+     "loser_id": "rams",
+     "pts_win": 14,
+     "pts_lose": 7,
+     "site": "loser_home"
+    },
+    {
+     "round": "Conference championships",
+     "date": "1978-01-01",
+     "winner": "Dallas Cowboys",
+     "loser": "Minnesota Vikings",
+     "winner_id": "cowboys",
+     "loser_id": "vikings",
+     "pts_win": 23,
+     "pts_lose": 6,
+     "site": "winner_home"
+    },
+    {
+     "round": "Conference championships",
+     "date": "1978-01-01",
+     "winner": "Denver Broncos",
+     "loser": "Oakland Raiders",
+     "winner_id": "broncos",
+     "loser_id": "raiders",
+     "pts_win": 20,
+     "pts_lose": 17,
+     "site": "winner_home"
+    },
+    {
+     "round": "Super Bowl",
+     "date": "1978-01-15",
+     "winner": "Dallas Cowboys",
+     "loser": "Denver Broncos",
+     "winner_id": "cowboys",
+     "loser_id": "broncos",
+     "pts_win": 27,
+     "pts_lose": 10,
+     "site": "neutral"
+    }
+   ],
+   "sources": [
+    "https://www.pro-football-reference.com/years/1977/",
+    "https://web.archive.org/web/20241225053002/https://www.pro-football-reference.com/years/1977/",
+    "https://web.archive.org/web/20130925182142/http://static.nfl.com/static/content/public/image/history/pdfs/History/Past_Standings_2011.pdf",
+    "https://en.wikipedia.org/wiki/1977_NFL_season"
+   ]
+  },
+  {
+   "season": 1978,
+   "team_count": 28,
+   "games": 16,
+   "playoff_teams": 10,
+   "playoff_format": {
+    "teams_per_conference": 5,
+    "division_winners_per_conference": 3,
+    "wild_cards_per_conference": 2,
+    "byes_per_conference": 3,
+    "rounds": [
+     "Wild Card playoffs",
+     "Divisional playoffs",
+     "Conference championships",
+     "Super Bowl"
+    ],
+    "qualification": "Three division winners plus two wild cards per conference; the two wild cards play each other in the first round (Pro Football Hall of Fame).",
+    "home_field": "Seeded by record; the higher-seeded wild card hosts the Wild Card game (Wikipedia cross-check). PFR game sites agree wherever the two wild cards had different records. The two equal-record cases were settled by tiebreakers, per the NFL Record & Fact Book: 1978 NFC, Atlanta was first wild card over Philadelphia (both 9-7) on record against common opponents (5-2 to 5-3); 1980 AFC, Oakland was first wild card over Houston (both 11-5) on conference record (9-3 to 7-5). The general tiebreak procedure was not researched.",
+    "same_division_rule": "Teams from the same division could not meet in the divisional round (NFL Record & Fact Book: from 1970 to 1989 two teams from the same division could not meet before the conference championship game; consistent with every PFR divisional matchup 1978-1980).",
+    "sources": [
+     "https://www.profootballhof.com/news/wild-card-golden-nuggets",
+     "https://web.archive.org/web/20130925182142/http://static.nfl.com/static/content/public/image/history/pdfs/History/Past_Standings_2011.pdf",
+     "https://en.wikipedia.org/wiki/NFL_playoffs"
+    ]
+   },
+   "championship": {
+    "name": "Super Bowl XIII",
+    "number": 13,
+    "date": "1979-01-21",
+    "site": "Orange Bowl, Miami",
+    "winner": "steelers",
+    "loser": "cowboys",
+    "winner_name": "Pittsburgh Steelers",
+    "loser_name": "Dallas Cowboys",
+    "score": "35-31",
+    "sources": [
+     "https://www.pro-football-reference.com/years/1978/",
+     "https://www.espn.com/nfl/superbowl/history/winners"
+    ]
+   },
+   "conference_championships": [
+    "AFC Championship Game",
+    "NFC Championship Game"
+   ],
+   "conferences": [
+    {
+     "name": "AFC",
+     "divisions": [
+      {
+       "name": "AFC East",
+       "teams": [
+        {
+         "id": "patriots",
+         "city": "New England",
+         "name": "Patriots",
+         "abbreviation": "NE",
+         "pfr_code": "nwe",
+         "record": {
+          "w": 11,
+          "l": 5,
+          "t": 0
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "dolphins",
+         "city": "Miami",
+         "name": "Dolphins",
+         "abbreviation": "MIA",
+         "pfr_code": "mia",
+         "record": {
+          "w": 11,
+          "l": 5,
+          "t": 0
+         },
+         "finish": "wild_card"
+        },
+        {
+         "id": "jets",
+         "city": "New York",
+         "name": "Jets",
+         "abbreviation": "NYJ",
+         "pfr_code": "nyj",
+         "record": {
+          "w": 8,
+          "l": 8,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "bills",
+         "city": "Buffalo",
+         "name": "Bills",
+         "abbreviation": "BUF",
+         "pfr_code": "buf",
+         "record": {
+          "w": 5,
+          "l": 11,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "colts",
+         "city": "Baltimore",
+         "name": "Colts",
+         "abbreviation": "BAL",
+         "pfr_code": "clt",
+         "record": {
+          "w": 5,
+          "l": 11,
+          "t": 0
+         },
+         "finish": null
+        }
+       ]
+      },
+      {
+       "name": "AFC Central",
+       "teams": [
+        {
+         "id": "steelers",
+         "city": "Pittsburgh",
+         "name": "Steelers",
+         "abbreviation": "PIT",
+         "pfr_code": "pit",
+         "record": {
+          "w": 14,
+          "l": 2,
+          "t": 0
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "oilers_titans",
+         "city": "Houston",
+         "name": "Oilers",
+         "abbreviation": "HOU",
+         "pfr_code": "oti",
+         "record": {
+          "w": 10,
+          "l": 6,
+          "t": 0
+         },
+         "finish": "wild_card"
+        },
+        {
+         "id": "browns",
+         "city": "Cleveland",
+         "name": "Browns",
+         "abbreviation": "CLE",
+         "pfr_code": "cle",
+         "record": {
+          "w": 8,
+          "l": 8,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "bengals",
+         "city": "Cincinnati",
+         "name": "Bengals",
+         "abbreviation": "CIN",
+         "pfr_code": "cin",
+         "record": {
+          "w": 4,
+          "l": 12,
+          "t": 0
+         },
+         "finish": null
+        }
+       ]
+      },
+      {
+       "name": "AFC West",
+       "teams": [
+        {
+         "id": "broncos",
+         "city": "Denver",
+         "name": "Broncos",
+         "abbreviation": "DEN",
+         "pfr_code": "den",
+         "record": {
+          "w": 10,
+          "l": 6,
+          "t": 0
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "raiders",
+         "city": "Oakland",
+         "name": "Raiders",
+         "abbreviation": "OAK",
+         "pfr_code": "rai",
+         "record": {
+          "w": 9,
+          "l": 7,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "seahawks",
+         "city": "Seattle",
+         "name": "Seahawks",
+         "abbreviation": "SEA",
+         "pfr_code": "sea",
+         "record": {
+          "w": 9,
+          "l": 7,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "chargers",
+         "city": "San Diego",
+         "name": "Chargers",
+         "abbreviation": "SD",
+         "pfr_code": "sdg",
+         "record": {
+          "w": 9,
+          "l": 7,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "chiefs",
+         "city": "Kansas City",
+         "name": "Chiefs",
+         "abbreviation": "KC",
+         "pfr_code": "kan",
+         "record": {
+          "w": 4,
+          "l": 12,
+          "t": 0
+         },
+         "finish": null
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "NFC",
+     "divisions": [
+      {
+       "name": "NFC East",
+       "teams": [
+        {
+         "id": "cowboys",
+         "city": "Dallas",
+         "name": "Cowboys",
+         "abbreviation": "DAL",
+         "pfr_code": "dal",
+         "record": {
+          "w": 12,
+          "l": 4,
+          "t": 0
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "eagles",
+         "city": "Philadelphia",
+         "name": "Eagles",
+         "abbreviation": "PHI",
+         "pfr_code": "phi",
+         "record": {
+          "w": 9,
+          "l": 7,
+          "t": 0
+         },
+         "finish": "wild_card"
+        },
+        {
+         "id": "washington",
+         "city": "Washington",
+         "name": "Redskins",
+         "abbreviation": "WAS",
+         "pfr_code": "was",
+         "record": {
+          "w": 8,
+          "l": 8,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "cardinals",
+         "city": "St. Louis",
+         "name": "Cardinals",
+         "abbreviation": "STL",
+         "pfr_code": "crd",
+         "record": {
+          "w": 6,
+          "l": 10,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "giants",
+         "city": "New York",
+         "name": "Giants",
+         "abbreviation": "NYG",
+         "pfr_code": "nyg",
+         "record": {
+          "w": 6,
+          "l": 10,
+          "t": 0
+         },
+         "finish": null
+        }
+       ]
+      },
+      {
+       "name": "NFC Central",
+       "teams": [
+        {
+         "id": "vikings",
+         "city": "Minnesota",
+         "name": "Vikings",
+         "abbreviation": "MIN",
+         "pfr_code": "min",
+         "record": {
+          "w": 8,
+          "l": 7,
+          "t": 1
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "packers",
+         "city": "Green Bay",
+         "name": "Packers",
+         "abbreviation": "GB",
+         "pfr_code": "gnb",
+         "record": {
+          "w": 8,
+          "l": 7,
+          "t": 1
+         },
+         "finish": null
+        },
+        {
+         "id": "lions",
+         "city": "Detroit",
+         "name": "Lions",
+         "abbreviation": "DET",
+         "pfr_code": "det",
+         "record": {
+          "w": 7,
+          "l": 9,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "bears",
+         "city": "Chicago",
+         "name": "Bears",
+         "abbreviation": "CHI",
+         "pfr_code": "chi",
+         "record": {
+          "w": 7,
+          "l": 9,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "buccaneers",
+         "city": "Tampa Bay",
+         "name": "Buccaneers",
+         "abbreviation": "TB",
+         "pfr_code": "tam",
+         "record": {
+          "w": 5,
+          "l": 11,
+          "t": 0
+         },
+         "finish": null
+        }
+       ]
+      },
+      {
+       "name": "NFC West",
+       "teams": [
+        {
+         "id": "rams",
+         "city": "Los Angeles",
+         "name": "Rams",
+         "abbreviation": "LA",
+         "pfr_code": "ram",
+         "record": {
+          "w": 12,
+          "l": 4,
+          "t": 0
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "falcons",
+         "city": "Atlanta",
+         "name": "Falcons",
+         "abbreviation": "ATL",
+         "pfr_code": "atl",
+         "record": {
+          "w": 9,
+          "l": 7,
+          "t": 0
+         },
+         "finish": "wild_card"
+        },
+        {
+         "id": "saints",
+         "city": "New Orleans",
+         "name": "Saints",
+         "abbreviation": "NO",
+         "pfr_code": "nor",
+         "record": {
+          "w": 7,
+          "l": 9,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "49ers",
+         "city": "San Francisco",
+         "name": "49ers",
+         "abbreviation": "SF",
+         "pfr_code": "sfo",
+         "record": {
+          "w": 2,
+          "l": 14,
+          "t": 0
+         },
+         "finish": null
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "postseason": [
+    {
+     "round": "Wild Card playoffs",
+     "date": "1978-12-24",
+     "winner": "Atlanta Falcons",
+     "loser": "Philadelphia Eagles",
+     "winner_id": "falcons",
+     "loser_id": "eagles",
+     "pts_win": 14,
+     "pts_lose": 13,
+     "site": "winner_home"
+    },
+    {
+     "round": "Wild Card playoffs",
+     "date": "1978-12-24",
+     "winner": "Houston Oilers",
+     "loser": "Miami Dolphins",
+     "winner_id": "oilers_titans",
+     "loser_id": "dolphins",
+     "pts_win": 17,
+     "pts_lose": 9,
+     "site": "loser_home"
+    },
+    {
+     "round": "Divisional playoffs",
+     "date": "1978-12-30",
+     "winner": "Dallas Cowboys",
+     "loser": "Atlanta Falcons",
+     "winner_id": "cowboys",
+     "loser_id": "falcons",
+     "pts_win": 27,
+     "pts_lose": 20,
+     "site": "winner_home"
+    },
+    {
+     "round": "Divisional playoffs",
+     "date": "1978-12-30",
+     "winner": "Pittsburgh Steelers",
+     "loser": "Denver Broncos",
+     "winner_id": "steelers",
+     "loser_id": "broncos",
+     "pts_win": 33,
+     "pts_lose": 10,
+     "site": "winner_home"
+    },
+    {
+     "round": "Divisional playoffs",
+     "date": "1978-12-31",
+     "winner": "Los Angeles Rams",
+     "loser": "Minnesota Vikings",
+     "winner_id": "rams",
+     "loser_id": "vikings",
+     "pts_win": 34,
+     "pts_lose": 10,
+     "site": "winner_home"
+    },
+    {
+     "round": "Divisional playoffs",
+     "date": "1978-12-31",
+     "winner": "Houston Oilers",
+     "loser": "New England Patriots",
+     "winner_id": "oilers_titans",
+     "loser_id": "patriots",
+     "pts_win": 31,
+     "pts_lose": 14,
+     "site": "loser_home"
+    },
+    {
+     "round": "Conference championships",
+     "date": "1979-01-07",
+     "winner": "Dallas Cowboys",
+     "loser": "Los Angeles Rams",
+     "winner_id": "cowboys",
+     "loser_id": "rams",
+     "pts_win": 28,
+     "pts_lose": 0,
+     "site": "loser_home"
+    },
+    {
+     "round": "Conference championships",
+     "date": "1979-01-07",
+     "winner": "Pittsburgh Steelers",
+     "loser": "Houston Oilers",
+     "winner_id": "steelers",
+     "loser_id": "oilers_titans",
+     "pts_win": 34,
+     "pts_lose": 5,
+     "site": "winner_home"
+    },
+    {
+     "round": "Super Bowl",
+     "date": "1979-01-21",
+     "winner": "Pittsburgh Steelers",
+     "loser": "Dallas Cowboys",
+     "winner_id": "steelers",
+     "loser_id": "cowboys",
+     "pts_win": 35,
+     "pts_lose": 31,
+     "site": "neutral"
+    }
+   ],
+   "sources": [
+    "https://www.pro-football-reference.com/years/1978/",
+    "https://web.archive.org/web/20241212151126/https://www.pro-football-reference.com/years/1978/",
+    "https://en.wikipedia.org/wiki/1978_NFL_season"
+   ]
+  },
+  {
+   "season": 1979,
+   "team_count": 28,
+   "games": 16,
+   "playoff_teams": 10,
+   "playoff_format": {
+    "teams_per_conference": 5,
+    "division_winners_per_conference": 3,
+    "wild_cards_per_conference": 2,
+    "byes_per_conference": 3,
+    "rounds": [
+     "Wild Card playoffs",
+     "Divisional playoffs",
+     "Conference championships",
+     "Super Bowl"
+    ],
+    "qualification": "Three division winners plus two wild cards per conference; the two wild cards play each other in the first round (Pro Football Hall of Fame).",
+    "home_field": "Seeded by record; the higher-seeded wild card hosts the Wild Card game (Wikipedia cross-check). PFR game sites agree wherever the two wild cards had different records. The two equal-record cases were settled by tiebreakers, per the NFL Record & Fact Book: 1978 NFC, Atlanta was first wild card over Philadelphia (both 9-7) on record against common opponents (5-2 to 5-3); 1980 AFC, Oakland was first wild card over Houston (both 11-5) on conference record (9-3 to 7-5). The general tiebreak procedure was not researched.",
+    "same_division_rule": "Teams from the same division could not meet in the divisional round (NFL Record & Fact Book: from 1970 to 1989 two teams from the same division could not meet before the conference championship game; consistent with every PFR divisional matchup 1978-1980).",
+    "sources": [
+     "https://www.profootballhof.com/news/wild-card-golden-nuggets",
+     "https://web.archive.org/web/20130925182142/http://static.nfl.com/static/content/public/image/history/pdfs/History/Past_Standings_2011.pdf",
+     "https://en.wikipedia.org/wiki/NFL_playoffs"
+    ]
+   },
+   "championship": {
+    "name": "Super Bowl XIV",
+    "number": 14,
+    "date": "1980-01-20",
+    "site": "Rose Bowl, Pasadena, Calif.",
+    "winner": "steelers",
+    "loser": "rams",
+    "winner_name": "Pittsburgh Steelers",
+    "loser_name": "Los Angeles Rams",
+    "score": "31-19",
+    "sources": [
+     "https://www.pro-football-reference.com/years/1979/",
+     "https://www.espn.com/nfl/superbowl/history/winners"
+    ]
+   },
+   "conference_championships": [
+    "AFC Championship Game",
+    "NFC Championship Game"
+   ],
+   "conferences": [
+    {
+     "name": "AFC",
+     "divisions": [
+      {
+       "name": "AFC East",
+       "teams": [
+        {
+         "id": "dolphins",
+         "city": "Miami",
+         "name": "Dolphins",
+         "abbreviation": "MIA",
+         "pfr_code": "mia",
+         "record": {
+          "w": 10,
+          "l": 6,
+          "t": 0
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "patriots",
+         "city": "New England",
+         "name": "Patriots",
+         "abbreviation": "NE",
+         "pfr_code": "nwe",
+         "record": {
+          "w": 9,
+          "l": 7,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "jets",
+         "city": "New York",
+         "name": "Jets",
+         "abbreviation": "NYJ",
+         "pfr_code": "nyj",
+         "record": {
+          "w": 8,
+          "l": 8,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "bills",
+         "city": "Buffalo",
+         "name": "Bills",
+         "abbreviation": "BUF",
+         "pfr_code": "buf",
+         "record": {
+          "w": 7,
+          "l": 9,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "colts",
+         "city": "Baltimore",
+         "name": "Colts",
+         "abbreviation": "BAL",
+         "pfr_code": "clt",
+         "record": {
+          "w": 5,
+          "l": 11,
+          "t": 0
+         },
+         "finish": null
+        }
+       ]
+      },
+      {
+       "name": "AFC Central",
+       "teams": [
+        {
+         "id": "steelers",
+         "city": "Pittsburgh",
+         "name": "Steelers",
+         "abbreviation": "PIT",
+         "pfr_code": "pit",
+         "record": {
+          "w": 12,
+          "l": 4,
+          "t": 0
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "oilers_titans",
+         "city": "Houston",
+         "name": "Oilers",
+         "abbreviation": "HOU",
+         "pfr_code": "oti",
+         "record": {
+          "w": 11,
+          "l": 5,
+          "t": 0
+         },
+         "finish": "wild_card"
+        },
+        {
+         "id": "browns",
+         "city": "Cleveland",
+         "name": "Browns",
+         "abbreviation": "CLE",
+         "pfr_code": "cle",
+         "record": {
+          "w": 9,
+          "l": 7,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "bengals",
+         "city": "Cincinnati",
+         "name": "Bengals",
+         "abbreviation": "CIN",
+         "pfr_code": "cin",
+         "record": {
+          "w": 4,
+          "l": 12,
+          "t": 0
+         },
+         "finish": null
+        }
+       ]
+      },
+      {
+       "name": "AFC West",
+       "teams": [
+        {
+         "id": "chargers",
+         "city": "San Diego",
+         "name": "Chargers",
+         "abbreviation": "SD",
+         "pfr_code": "sdg",
+         "record": {
+          "w": 12,
+          "l": 4,
+          "t": 0
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "broncos",
+         "city": "Denver",
+         "name": "Broncos",
+         "abbreviation": "DEN",
+         "pfr_code": "den",
+         "record": {
+          "w": 10,
+          "l": 6,
+          "t": 0
+         },
+         "finish": "wild_card"
+        },
+        {
+         "id": "seahawks",
+         "city": "Seattle",
+         "name": "Seahawks",
+         "abbreviation": "SEA",
+         "pfr_code": "sea",
+         "record": {
+          "w": 9,
+          "l": 7,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "raiders",
+         "city": "Oakland",
+         "name": "Raiders",
+         "abbreviation": "OAK",
+         "pfr_code": "rai",
+         "record": {
+          "w": 9,
+          "l": 7,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "chiefs",
+         "city": "Kansas City",
+         "name": "Chiefs",
+         "abbreviation": "KC",
+         "pfr_code": "kan",
+         "record": {
+          "w": 7,
+          "l": 9,
+          "t": 0
+         },
+         "finish": null
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "NFC",
+     "divisions": [
+      {
+       "name": "NFC East",
+       "teams": [
+        {
+         "id": "cowboys",
+         "city": "Dallas",
+         "name": "Cowboys",
+         "abbreviation": "DAL",
+         "pfr_code": "dal",
+         "record": {
+          "w": 11,
+          "l": 5,
+          "t": 0
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "eagles",
+         "city": "Philadelphia",
+         "name": "Eagles",
+         "abbreviation": "PHI",
+         "pfr_code": "phi",
+         "record": {
+          "w": 11,
+          "l": 5,
+          "t": 0
+         },
+         "finish": "wild_card"
+        },
+        {
+         "id": "washington",
+         "city": "Washington",
+         "name": "Redskins",
+         "abbreviation": "WAS",
+         "pfr_code": "was",
+         "record": {
+          "w": 10,
+          "l": 6,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "giants",
+         "city": "New York",
+         "name": "Giants",
+         "abbreviation": "NYG",
+         "pfr_code": "nyg",
+         "record": {
+          "w": 6,
+          "l": 10,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "cardinals",
+         "city": "St. Louis",
+         "name": "Cardinals",
+         "abbreviation": "STL",
+         "pfr_code": "crd",
+         "record": {
+          "w": 5,
+          "l": 11,
+          "t": 0
+         },
+         "finish": null
+        }
+       ]
+      },
+      {
+       "name": "NFC Central",
+       "teams": [
+        {
+         "id": "buccaneers",
+         "city": "Tampa Bay",
+         "name": "Buccaneers",
+         "abbreviation": "TB",
+         "pfr_code": "tam",
+         "record": {
+          "w": 10,
+          "l": 6,
+          "t": 0
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "bears",
+         "city": "Chicago",
+         "name": "Bears",
+         "abbreviation": "CHI",
+         "pfr_code": "chi",
+         "record": {
+          "w": 10,
+          "l": 6,
+          "t": 0
+         },
+         "finish": "wild_card"
+        },
+        {
+         "id": "vikings",
+         "city": "Minnesota",
+         "name": "Vikings",
+         "abbreviation": "MIN",
+         "pfr_code": "min",
+         "record": {
+          "w": 7,
+          "l": 9,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "packers",
+         "city": "Green Bay",
+         "name": "Packers",
+         "abbreviation": "GB",
+         "pfr_code": "gnb",
+         "record": {
+          "w": 5,
+          "l": 11,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "lions",
+         "city": "Detroit",
+         "name": "Lions",
+         "abbreviation": "DET",
+         "pfr_code": "det",
+         "record": {
+          "w": 2,
+          "l": 14,
+          "t": 0
+         },
+         "finish": null
+        }
+       ]
+      },
+      {
+       "name": "NFC West",
+       "teams": [
+        {
+         "id": "rams",
+         "city": "Los Angeles",
+         "name": "Rams",
+         "abbreviation": "LA",
+         "pfr_code": "ram",
+         "record": {
+          "w": 9,
+          "l": 7,
+          "t": 0
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "saints",
+         "city": "New Orleans",
+         "name": "Saints",
+         "abbreviation": "NO",
+         "pfr_code": "nor",
+         "record": {
+          "w": 8,
+          "l": 8,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "falcons",
+         "city": "Atlanta",
+         "name": "Falcons",
+         "abbreviation": "ATL",
+         "pfr_code": "atl",
+         "record": {
+          "w": 6,
+          "l": 10,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "49ers",
+         "city": "San Francisco",
+         "name": "49ers",
+         "abbreviation": "SF",
+         "pfr_code": "sfo",
+         "record": {
+          "w": 2,
+          "l": 14,
+          "t": 0
+         },
+         "finish": null
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "postseason": [
+    {
+     "round": "Wild Card playoffs",
+     "date": "1979-12-23",
+     "winner": "Houston Oilers",
+     "loser": "Denver Broncos",
+     "winner_id": "oilers_titans",
+     "loser_id": "broncos",
+     "pts_win": 13,
+     "pts_lose": 7,
+     "site": "winner_home"
+    },
+    {
+     "round": "Wild Card playoffs",
+     "date": "1979-12-23",
+     "winner": "Philadelphia Eagles",
+     "loser": "Chicago Bears",
+     "winner_id": "eagles",
+     "loser_id": "bears",
+     "pts_win": 27,
+     "pts_lose": 17,
+     "site": "winner_home"
+    },
+    {
+     "round": "Divisional playoffs",
+     "date": "1979-12-29",
+     "winner": "Tampa Bay Buccaneers",
+     "loser": "Philadelphia Eagles",
+     "winner_id": "buccaneers",
+     "loser_id": "eagles",
+     "pts_win": 24,
+     "pts_lose": 17,
+     "site": "winner_home"
+    },
+    {
+     "round": "Divisional playoffs",
+     "date": "1979-12-29",
+     "winner": "Houston Oilers",
+     "loser": "San Diego Chargers",
+     "winner_id": "oilers_titans",
+     "loser_id": "chargers",
+     "pts_win": 17,
+     "pts_lose": 14,
+     "site": "loser_home"
+    },
+    {
+     "round": "Divisional playoffs",
+     "date": "1979-12-30",
+     "winner": "Pittsburgh Steelers",
+     "loser": "Miami Dolphins",
+     "winner_id": "steelers",
+     "loser_id": "dolphins",
+     "pts_win": 34,
+     "pts_lose": 14,
+     "site": "winner_home"
+    },
+    {
+     "round": "Divisional playoffs",
+     "date": "1979-12-30",
+     "winner": "Los Angeles Rams",
+     "loser": "Dallas Cowboys",
+     "winner_id": "rams",
+     "loser_id": "cowboys",
+     "pts_win": 21,
+     "pts_lose": 19,
+     "site": "loser_home"
+    },
+    {
+     "round": "Conference championships",
+     "date": "1980-01-06",
+     "winner": "Pittsburgh Steelers",
+     "loser": "Houston Oilers",
+     "winner_id": "steelers",
+     "loser_id": "oilers_titans",
+     "pts_win": 27,
+     "pts_lose": 13,
+     "site": "winner_home"
+    },
+    {
+     "round": "Conference championships",
+     "date": "1980-01-06",
+     "winner": "Los Angeles Rams",
+     "loser": "Tampa Bay Buccaneers",
+     "winner_id": "rams",
+     "loser_id": "buccaneers",
+     "pts_win": 9,
+     "pts_lose": 0,
+     "site": "loser_home"
+    },
+    {
+     "round": "Super Bowl",
+     "date": "1980-01-20",
+     "winner": "Pittsburgh Steelers",
+     "loser": "Los Angeles Rams",
+     "winner_id": "steelers",
+     "loser_id": "rams",
+     "pts_win": 31,
+     "pts_lose": 19,
+     "site": "neutral"
+    }
+   ],
+   "sources": [
+    "https://www.pro-football-reference.com/years/1979/",
+    "https://web.archive.org/web/20241224153653/https://www.pro-football-reference.com/years/1979/",
+    "https://en.wikipedia.org/wiki/1979_NFL_season"
+   ]
+  },
+  {
+   "season": 1980,
+   "team_count": 28,
+   "games": 16,
+   "playoff_teams": 10,
+   "playoff_format": {
+    "teams_per_conference": 5,
+    "division_winners_per_conference": 3,
+    "wild_cards_per_conference": 2,
+    "byes_per_conference": 3,
+    "rounds": [
+     "Wild Card playoffs",
+     "Divisional playoffs",
+     "Conference championships",
+     "Super Bowl"
+    ],
+    "qualification": "Three division winners plus two wild cards per conference; the two wild cards play each other in the first round (Pro Football Hall of Fame).",
+    "home_field": "Seeded by record; the higher-seeded wild card hosts the Wild Card game (Wikipedia cross-check). PFR game sites agree wherever the two wild cards had different records. The two equal-record cases were settled by tiebreakers, per the NFL Record & Fact Book: 1978 NFC, Atlanta was first wild card over Philadelphia (both 9-7) on record against common opponents (5-2 to 5-3); 1980 AFC, Oakland was first wild card over Houston (both 11-5) on conference record (9-3 to 7-5). The general tiebreak procedure was not researched.",
+    "same_division_rule": "Teams from the same division could not meet in the divisional round (NFL Record & Fact Book: from 1970 to 1989 two teams from the same division could not meet before the conference championship game; consistent with every PFR divisional matchup 1978-1980).",
+    "sources": [
+     "https://www.profootballhof.com/news/wild-card-golden-nuggets",
+     "https://web.archive.org/web/20130925182142/http://static.nfl.com/static/content/public/image/history/pdfs/History/Past_Standings_2011.pdf",
+     "https://en.wikipedia.org/wiki/NFL_playoffs"
+    ]
+   },
+   "championship": {
+    "name": "Super Bowl XV",
+    "number": 15,
+    "date": "1981-01-25",
+    "site": "Superdome, New Orleans",
+    "winner": "raiders",
+    "loser": "eagles",
+    "winner_name": "Oakland Raiders",
+    "loser_name": "Philadelphia Eagles",
+    "score": "27-10",
+    "sources": [
+     "https://www.pro-football-reference.com/years/1980/",
+     "https://www.espn.com/nfl/superbowl/history/winners"
+    ]
+   },
+   "conference_championships": [
+    "AFC Championship Game",
+    "NFC Championship Game"
+   ],
+   "conferences": [
+    {
+     "name": "AFC",
+     "divisions": [
+      {
+       "name": "AFC East",
+       "teams": [
+        {
+         "id": "bills",
+         "city": "Buffalo",
+         "name": "Bills",
+         "abbreviation": "BUF",
+         "pfr_code": "buf",
+         "record": {
+          "w": 11,
+          "l": 5,
+          "t": 0
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "patriots",
+         "city": "New England",
+         "name": "Patriots",
+         "abbreviation": "NE",
+         "pfr_code": "nwe",
+         "record": {
+          "w": 10,
+          "l": 6,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "dolphins",
+         "city": "Miami",
+         "name": "Dolphins",
+         "abbreviation": "MIA",
+         "pfr_code": "mia",
+         "record": {
+          "w": 8,
+          "l": 8,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "colts",
+         "city": "Baltimore",
+         "name": "Colts",
+         "abbreviation": "BAL",
+         "pfr_code": "clt",
+         "record": {
+          "w": 7,
+          "l": 9,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "jets",
+         "city": "New York",
+         "name": "Jets",
+         "abbreviation": "NYJ",
+         "pfr_code": "nyj",
+         "record": {
+          "w": 4,
+          "l": 12,
+          "t": 0
+         },
+         "finish": null
+        }
+       ]
+      },
+      {
+       "name": "AFC Central",
+       "teams": [
+        {
+         "id": "browns",
+         "city": "Cleveland",
+         "name": "Browns",
+         "abbreviation": "CLE",
+         "pfr_code": "cle",
+         "record": {
+          "w": 11,
+          "l": 5,
+          "t": 0
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "oilers_titans",
+         "city": "Houston",
+         "name": "Oilers",
+         "abbreviation": "HOU",
+         "pfr_code": "oti",
+         "record": {
+          "w": 11,
+          "l": 5,
+          "t": 0
+         },
+         "finish": "wild_card"
+        },
+        {
+         "id": "steelers",
+         "city": "Pittsburgh",
+         "name": "Steelers",
+         "abbreviation": "PIT",
+         "pfr_code": "pit",
+         "record": {
+          "w": 9,
+          "l": 7,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "bengals",
+         "city": "Cincinnati",
+         "name": "Bengals",
+         "abbreviation": "CIN",
+         "pfr_code": "cin",
+         "record": {
+          "w": 6,
+          "l": 10,
+          "t": 0
+         },
+         "finish": null
+        }
+       ]
+      },
+      {
+       "name": "AFC West",
+       "teams": [
+        {
+         "id": "chargers",
+         "city": "San Diego",
+         "name": "Chargers",
+         "abbreviation": "SD",
+         "pfr_code": "sdg",
+         "record": {
+          "w": 11,
+          "l": 5,
+          "t": 0
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "raiders",
+         "city": "Oakland",
+         "name": "Raiders",
+         "abbreviation": "OAK",
+         "pfr_code": "rai",
+         "record": {
+          "w": 11,
+          "l": 5,
+          "t": 0
+         },
+         "finish": "wild_card"
+        },
+        {
+         "id": "chiefs",
+         "city": "Kansas City",
+         "name": "Chiefs",
+         "abbreviation": "KC",
+         "pfr_code": "kan",
+         "record": {
+          "w": 8,
+          "l": 8,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "broncos",
+         "city": "Denver",
+         "name": "Broncos",
+         "abbreviation": "DEN",
+         "pfr_code": "den",
+         "record": {
+          "w": 8,
+          "l": 8,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "seahawks",
+         "city": "Seattle",
+         "name": "Seahawks",
+         "abbreviation": "SEA",
+         "pfr_code": "sea",
+         "record": {
+          "w": 4,
+          "l": 12,
+          "t": 0
+         },
+         "finish": null
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "NFC",
+     "divisions": [
+      {
+       "name": "NFC East",
+       "teams": [
+        {
+         "id": "eagles",
+         "city": "Philadelphia",
+         "name": "Eagles",
+         "abbreviation": "PHI",
+         "pfr_code": "phi",
+         "record": {
+          "w": 12,
+          "l": 4,
+          "t": 0
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "cowboys",
+         "city": "Dallas",
+         "name": "Cowboys",
+         "abbreviation": "DAL",
+         "pfr_code": "dal",
+         "record": {
+          "w": 12,
+          "l": 4,
+          "t": 0
+         },
+         "finish": "wild_card"
+        },
+        {
+         "id": "washington",
+         "city": "Washington",
+         "name": "Redskins",
+         "abbreviation": "WAS",
+         "pfr_code": "was",
+         "record": {
+          "w": 6,
+          "l": 10,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "cardinals",
+         "city": "St. Louis",
+         "name": "Cardinals",
+         "abbreviation": "STL",
+         "pfr_code": "crd",
+         "record": {
+          "w": 5,
+          "l": 11,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "giants",
+         "city": "New York",
+         "name": "Giants",
+         "abbreviation": "NYG",
+         "pfr_code": "nyg",
+         "record": {
+          "w": 4,
+          "l": 12,
+          "t": 0
+         },
+         "finish": null
+        }
+       ]
+      },
+      {
+       "name": "NFC Central",
+       "teams": [
+        {
+         "id": "vikings",
+         "city": "Minnesota",
+         "name": "Vikings",
+         "abbreviation": "MIN",
+         "pfr_code": "min",
+         "record": {
+          "w": 9,
+          "l": 7,
+          "t": 0
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "lions",
+         "city": "Detroit",
+         "name": "Lions",
+         "abbreviation": "DET",
+         "pfr_code": "det",
+         "record": {
+          "w": 9,
+          "l": 7,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "bears",
+         "city": "Chicago",
+         "name": "Bears",
+         "abbreviation": "CHI",
+         "pfr_code": "chi",
+         "record": {
+          "w": 7,
+          "l": 9,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "buccaneers",
+         "city": "Tampa Bay",
+         "name": "Buccaneers",
+         "abbreviation": "TB",
+         "pfr_code": "tam",
+         "record": {
+          "w": 5,
+          "l": 10,
+          "t": 1
+         },
+         "finish": null
+        },
+        {
+         "id": "packers",
+         "city": "Green Bay",
+         "name": "Packers",
+         "abbreviation": "GB",
+         "pfr_code": "gnb",
+         "record": {
+          "w": 5,
+          "l": 10,
+          "t": 1
+         },
+         "finish": null
+        }
+       ]
+      },
+      {
+       "name": "NFC West",
+       "teams": [
+        {
+         "id": "falcons",
+         "city": "Atlanta",
+         "name": "Falcons",
+         "abbreviation": "ATL",
+         "pfr_code": "atl",
+         "record": {
+          "w": 12,
+          "l": 4,
+          "t": 0
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "rams",
+         "city": "Los Angeles",
+         "name": "Rams",
+         "abbreviation": "LA",
+         "pfr_code": "ram",
+         "record": {
+          "w": 11,
+          "l": 5,
+          "t": 0
+         },
+         "finish": "wild_card"
+        },
+        {
+         "id": "49ers",
+         "city": "San Francisco",
+         "name": "49ers",
+         "abbreviation": "SF",
+         "pfr_code": "sfo",
+         "record": {
+          "w": 6,
+          "l": 10,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "saints",
+         "city": "New Orleans",
+         "name": "Saints",
+         "abbreviation": "NO",
+         "pfr_code": "nor",
+         "record": {
+          "w": 1,
+          "l": 15,
+          "t": 0
+         },
+         "finish": null
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "postseason": [
+    {
+     "round": "Wild Card playoffs",
+     "date": "1980-12-28",
+     "winner": "Dallas Cowboys",
+     "loser": "Los Angeles Rams",
+     "winner_id": "cowboys",
+     "loser_id": "rams",
+     "pts_win": 34,
+     "pts_lose": 13,
+     "site": "winner_home"
+    },
+    {
+     "round": "Wild Card playoffs",
+     "date": "1980-12-28",
+     "winner": "Oakland Raiders",
+     "loser": "Houston Oilers",
+     "winner_id": "raiders",
+     "loser_id": "oilers_titans",
+     "pts_win": 27,
+     "pts_lose": 7,
+     "site": "winner_home"
+    },
+    {
+     "round": "Divisional playoffs",
+     "date": "1981-01-03",
+     "winner": "Philadelphia Eagles",
+     "loser": "Minnesota Vikings",
+     "winner_id": "eagles",
+     "loser_id": "vikings",
+     "pts_win": 31,
+     "pts_lose": 16,
+     "site": "winner_home"
+    },
+    {
+     "round": "Divisional playoffs",
+     "date": "1981-01-03",
+     "winner": "San Diego Chargers",
+     "loser": "Buffalo Bills",
+     "winner_id": "chargers",
+     "loser_id": "bills",
+     "pts_win": 20,
+     "pts_lose": 14,
+     "site": "winner_home"
+    },
+    {
+     "round": "Divisional playoffs",
+     "date": "1981-01-04",
+     "winner": "Dallas Cowboys",
+     "loser": "Atlanta Falcons",
+     "winner_id": "cowboys",
+     "loser_id": "falcons",
+     "pts_win": 30,
+     "pts_lose": 27,
+     "site": "loser_home"
+    },
+    {
+     "round": "Divisional playoffs",
+     "date": "1981-01-04",
+     "winner": "Oakland Raiders",
+     "loser": "Cleveland Browns",
+     "winner_id": "raiders",
+     "loser_id": "browns",
+     "pts_win": 14,
+     "pts_lose": 12,
+     "site": "loser_home"
+    },
+    {
+     "round": "Conference championships",
+     "date": "1981-01-11",
+     "winner": "Philadelphia Eagles",
+     "loser": "Dallas Cowboys",
+     "winner_id": "eagles",
+     "loser_id": "cowboys",
+     "pts_win": 20,
+     "pts_lose": 7,
+     "site": "winner_home"
+    },
+    {
+     "round": "Conference championships",
+     "date": "1981-01-11",
+     "winner": "Oakland Raiders",
+     "loser": "San Diego Chargers",
+     "winner_id": "raiders",
+     "loser_id": "chargers",
+     "pts_win": 34,
+     "pts_lose": 27,
+     "site": "loser_home"
+    },
+    {
+     "round": "Super Bowl",
+     "date": "1981-01-25",
+     "winner": "Oakland Raiders",
+     "loser": "Philadelphia Eagles",
+     "winner_id": "raiders",
+     "loser_id": "eagles",
+     "pts_win": 27,
+     "pts_lose": 10,
+     "site": "neutral"
+    }
+   ],
+   "sources": [
+    "https://www.pro-football-reference.com/years/1980/",
+    "https://web.archive.org/web/20241219080443/https://www.pro-football-reference.com/years/1980/",
+    "https://en.wikipedia.org/wiki/1980_NFL_season"
+   ]
+  }
+ ]
+}

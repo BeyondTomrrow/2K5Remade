@@ -35552,11 +35552,15 @@ void sub_000561F0(void)
     (void)_fa; (void)_fb; (void)_fas; (void)_fbs;
 
 loc_000561F0: ;
+    /* NFL2K5-GENPATCH:WALK_DIAG_ENTER */
+    { extern int nfl2k5_walk_diag_on; extern void nfl2k5_walk_enter(uint32_t, uint32_t, uint32_t, uint32_t); if (nfl2k5_walk_diag_on) nfl2k5_walk_enter(ecx, edx, esi, esp); }
     _fb = (uint32_t)(0x10) & 0xFFFFFFFFu; _fbs = (int32_t)(int32_t)(_fb); /* add source, before the write */
     ecx = ecx + 0x10;
     _fa = (uint32_t)(ecx) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* add result */
 
 loc_000561F3: ;
+    /* NFL2K5-GENPATCH:WALK_DIAG_STEP */
+    { extern int nfl2k5_walk_diag_on; extern void nfl2k5_walk_step(uint32_t); if (nfl2k5_walk_diag_on) nfl2k5_walk_step(ecx); }
     eax = ecx;
     PUSH32(esp, 0x000561FAu); RECOMP_ABI_CALL(0x00056100u, sub_00056100); /* call 0x00056100 */
 
@@ -78696,6 +78700,8 @@ void sub_000645D0(void)
     ebp = g_seh_ebp; /* fpo_leaf: inherit caller's frame */
 
 loc_000645D0: ;
+    /* NFL2K5-GENPATCH:ERAS_MATCH_EXIT */
+    { extern void nfl2k5_eras_match_exit(void); nfl2k5_eras_match_exit(); }
     PUSH32(esp, 0x000645D5u); RECOMP_ABI_CALL(0x000834F0u, sub_000834F0); /* call 0x000834F0 */
 
 loc_000645D5: ;

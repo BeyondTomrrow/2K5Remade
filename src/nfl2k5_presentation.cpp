@@ -311,6 +311,8 @@ static std::string read_team_code(uint32_t va)
     return out;
 }
 
+static void eras_side_abbr(int side, std::string &abbr);   /* M9, below the team lookup */
+
 static bool read_state(GameState &g)
 {
     g = GameState();
@@ -328,6 +330,7 @@ static bool read_state(GameState &g)
         g.t[s].score = (int)rd32(sc);
         g.t[s].timeouts = (int)rd32(sc + 4);
         g.t[s].abbr = read_team_code(k_playbook_name[s]);
+        eras_side_abbr(s, g.t[s].abbr);     /* M9: an Eras game names its staged teams, never the playbook's 2004 club */
         if (g.t[s].score < 0 || g.t[s].score > 250 || g.t[s].timeouts < 0 || g.t[s].timeouts > 9) return false;
     }
     uint32_t p = rd32(0x00E60280u);
@@ -403,8 +406,84 @@ static void load_teams()
     fprintf(stderr, "[PRES] %zu team entries from mods/teams\n", s_teams.size());
 }
 
+/* ======================================================================
+ * My NFL Eras identity (M9, docs/eras/results/M9-era-looks.md)
+ *
+ * While an Eras game is launched (src/nfl2k5_eras_launch.c calls
+ * nfl2k5_presentation_eras_begin / _end), each side's team comes from
+ *   mods\eras\teams\<season>\<eras id>\team.json (+ logos\scorebug.png)
+ * keyed by the staged Eras team of that side, never by the 2004 abbreviation
+ * the playbook name carries (BAL is the Colts there, HOU the Oilers). The
+ * Presentation API gets season / decade / week, and mods\eras\presentations.ini
+ * may pick a package for the season; the user's own selection is put back at
+ * the end and is never saved over. Outside Eras nothing here is used.
+ * ====================================================================== */
+struct ErasPres {
+    bool on = false;
+    int season = 0, week = 0;
+    std::string id[2];
+    TeamInfo team[2];          /* [AWAY], [HOME] */
+    std::string playbook[2];   /* what the playbook name said (logged once) */
+    bool logged = false;
+};
+static std::mutex s_eras_lock;
+static ErasPres s_eras;
+static std::atomic<int> s_eras_on{ 0 };
+
+static bool eras_team_load(int season, const std::string &id, TeamInfo &t)
+{
+    std::string dir = "mods/eras/teams/" + std::to_string(season) + "/" + id;
+    JVal j;
+    t = TeamInfo();
+    if (!load_json(dir + "/team.json", j)) return false;
+    t.abbr = j.str("abbreviation", id.c_str());
+    t.city = j.str("city");
+    t.name = j.str("name", t.abbr.c_str());
+    t.record = j.str("record");
+    if (const JVal *c = j.get("colors")) {
+        parse_hex(c->str("primary"), t.primary);
+        parse_hex(c->str("secondary"), t.secondary);
+        parse_hex(c->str("text", "#FFFFFF"), t.text);
+    }
+    std::string logo = "logos/scorebug.png";
+    if (const JVal *l = j.get("logos")) logo = l->str("scorebug", logo.c_str());
+    if (file_exists(dir + "/" + logo)) t.logo = dir + "/" + logo;
+    return true;
+}
+
+static void eras_side_abbr(int side, std::string &abbr)
+{
+    if (!s_eras_on.load()) return;
+    std::lock_guard<std::mutex> lock(s_eras_lock);
+    if (!s_eras.on || s_eras.team[side].abbr.empty()) return;
+    if (!s_eras.logged && !abbr.empty()) {
+        s_eras.playbook[side] = abbr;
+        if (!s_eras.playbook[AWAY].empty() && !s_eras.playbook[HOME].empty()) {
+            s_eras.logged = true;
+            fprintf(stderr, "[PRES] eras: playbook codes away %s / home %s -> Eras %s (%s %s) / %s (%s %s)\n",
+                    s_eras.playbook[AWAY].c_str(), s_eras.playbook[HOME].c_str(),
+                    s_eras.id[AWAY].c_str(), s_eras.team[AWAY].city.c_str(), s_eras.team[AWAY].name.c_str(),
+                    s_eras.id[HOME].c_str(), s_eras.team[HOME].city.c_str(), s_eras.team[HOME].name.c_str());
+        }
+    }
+    abbr = s_eras.team[side].abbr;
+}
+
+/* The Eras team whose (Eras) abbreviation this is, while an Eras game runs. */
+static bool eras_team_info(const std::string &abbr, TeamInfo &out)
+{
+    if (!s_eras_on.load()) return false;
+    std::lock_guard<std::mutex> lock(s_eras_lock);
+    if (!s_eras.on) return false;
+    for (int s = 0; s < 2; s++)
+        if (!s_eras.team[s].abbr.empty() && upper(s_eras.team[s].abbr) == upper(abbr)) { out = s_eras.team[s]; return true; }
+    return false;
+}
+
 static TeamInfo team_info(const std::string &abbr)
 {
+    TeamInfo eras;
+    if (eras_team_info(abbr, eras)) return eras;
     auto it = s_teams.find(upper(abbr));
     if (it != s_teams.end()) return it->second;
     TeamInfo t;
@@ -560,16 +639,24 @@ static void load_packages()
 static const char *k_ini = "mods\\presentation.ini";
 extern "C" char *xbox_user_path(const char *rel, char *out, size_t n);   /* per-user folder (kernel_path.c) */
 
+/* M9: the player's own selection while an Eras game uses the package from
+ * mods\eras\presentations.ini (-1: no Eras package is on). Saved settings
+ * always carry the player's own selection. */
+static std::atomic<int> s_eras_saved_pkg{ -1 };
+static int s_eras_saved_intro = 1, s_eras_saved_outro = 1;
+
 static void save_settings()
 {
     char ipath[MAX_PATH];
     FILE *f = fopen(xbox_user_path(k_ini, ipath, sizeof ipath), "w");
     if (!f) return;
     int pk = s_sel_pkg;
+    int intro = s_sel_intro, outro = s_sel_outro;
+    if (s_eras_saved_pkg >= 0) { pk = s_eras_saved_pkg; intro = s_eras_saved_intro; outro = s_eras_saved_outro; }
     fprintf(f, "; Broadcast presentation (Coach Match Up > Presentation edits this)\n");
     fprintf(f, "package = %s\nintro = %d\noutro = %d\nanimations = %d\ntheme_volume = %d\ncustom_commentary = %d\ncommentary_dir = %s\n",
             pk > 0 && pk < (int)s_pkgs.size() ? s_pkgs[pk].name.c_str() : "ESPN (Original)",
-            (int)s_sel_intro, (int)s_sel_outro, (int)s_sel_anim, (int)s_sel_vol * 10,
+            intro, outro, (int)s_sel_anim, (int)s_sel_vol * 10,
             (int)s_sel_commentary, s_commentary_dir.c_str());
     fclose(f);
 }
@@ -669,6 +756,7 @@ extern "C" void nfl2k5_pres_set(int what, int v)
     switch (what) {
     case 0:
         pregame_replacement_reset();
+        s_eras_saved_pkg = -1;     /* M9: the player's own pick replaces an Eras package and is saved */
         s_sel_pkg = v;
         s_sel_intro = std::min(1, nfl2k5_pres_values(1) - 1);    /* first theme of the new package */
         s_sel_outro = std::min(1, nfl2k5_pres_values(2) - 1);
@@ -680,6 +768,113 @@ extern "C" void nfl2k5_pres_set(int what, int v)
     case 5: s_sel_commentary = v; break;
     }
     save_settings();
+}
+
+/* ---- M9: My NFL Eras package choice and identity ----------------------- */
+
+/* mods\eras\presentations.ini: "<season> = pkg", "<first>-<last> = pkg" or
+ * "<decade>s = pkg"; the most specific key wins. The package is named by its
+ * folder under mods\presentations or by its display name. -1 = none installed. */
+static int eras_ini_package(int season, std::string &why)
+{
+    FILE *f = fopen("mods\\eras\\presentations.ini", "r");
+    char line[512];
+    int best = -1, best_rank = 0;
+    if (!f) { why = "no mods\\eras\\presentations.ini"; return -1; }
+    why = "no line for the season";
+    while (fgets(line, sizeof line, f)) {
+        char key[64], val[400];
+        if (line[0] == ';' || line[0] == '#' || line[0] == '[') continue;
+        if (sscanf(line, " %63[^= \t] = %399[^\r\n;]", key, val) != 2) continue;
+        std::string v = val;
+        while (!v.empty() && (v.back() == ' ' || v.back() == '\t')) v.pop_back();
+        int a = 0, b = 0, rank = 0;
+        char tail[8] = "";
+        if (sscanf(key, "%d-%d", &a, &b) == 2) rank = season >= a && season <= b ? 2 : 0;
+        else if (sscanf(key, "%d%7s", &a, tail) == 2 && (tail[0] == 's' || tail[0] == 'S') && !tail[1]) rank = season / 10 * 10 == a ? 1 : 0;
+        else if (sscanf(key, "%d", &a) == 1 && std::to_string(a) == key) rank = season == a ? 3 : 0;
+        if (rank <= best_rank) continue;
+        int found = -1;
+        for (size_t i = 1; i < s_pkgs.size(); i++) {
+            const std::string &d = s_pkgs[i].dir;
+            std::string folder = d.substr(d.find_last_of('/') + 1);
+            if (_stricmp(folder.c_str(), v.c_str()) == 0 || _stricmp(s_pkgs[i].name.c_str(), v.c_str()) == 0) { found = (int)i; break; }
+        }
+        if (found < 0) { why = "package '" + v + "' (" + key + ") is not installed"; continue; }
+        best = found; best_rank = rank; why = std::string(key) + " = " + v;
+    }
+    fclose(f);
+    return best;
+}
+
+extern "C" void nfl2k5_presentation_eras_begin(int season, int week, const char *home_id, const char *away_id)
+{
+    ErasPres e;
+    e.on = true;
+    e.season = season;
+    e.week = week;
+    e.id[HOME] = home_id ? home_id : "";
+    e.id[AWAY] = away_id ? away_id : "";
+    for (int s = 0; s < 2; s++)
+        if (!eras_team_load(season, e.id[s], e.team[s]))
+            fprintf(stderr, "[PRES] eras: no mods/eras/teams/%d/%s/team.json; the %s side uses the normal lookup\n",
+                    season, e.id[s].c_str(), s == AWAY ? "away" : "home");
+    {
+        std::lock_guard<std::mutex> lock(s_eras_lock);
+        s_eras = e;
+    }
+    s_eras_on = 1;
+    std::string why;
+    int pk = eras_ini_package(season, why);
+    if (pk > 0 && pk != s_sel_pkg) {
+        if (s_eras_saved_pkg < 0) {
+            s_eras_saved_pkg = (int)s_sel_pkg;
+            s_eras_saved_intro = s_sel_intro;
+            s_eras_saved_outro = s_sel_outro;
+        }
+        pregame_replacement_reset();
+        s_sel_pkg = pk;
+        s_sel_intro = std::min(1, nfl2k5_pres_values(1) - 1);
+        s_sel_outro = std::min(1, nfl2k5_pres_values(2) - 1);
+    }
+    fprintf(stderr, "[PRES] eras game: season %d week %d, away %s (%s %s, logo %s), home %s (%s %s, logo %s); package \"%s\" (%s)\n",
+            season, week, e.id[AWAY].c_str(), e.team[AWAY].city.c_str(), e.team[AWAY].name.c_str(),
+            e.team[AWAY].logo.empty() ? "none" : e.team[AWAY].logo.c_str(),
+            e.id[HOME].c_str(), e.team[HOME].city.c_str(), e.team[HOME].name.c_str(),
+            e.team[HOME].logo.empty() ? "none" : e.team[HOME].logo.c_str(),
+            nfl2k5_pres_package_name(s_sel_pkg), pk > 0 ? why.c_str() : ("player's selection kept: " + why).c_str());
+}
+
+extern "C" void nfl2k5_presentation_eras_end(void)
+{
+    if (!s_eras_on.load()) return;
+    s_eras_on = 0;
+    {
+        std::lock_guard<std::mutex> lock(s_eras_lock);
+        s_eras = ErasPres();
+    }
+    int saved = s_eras_saved_pkg.exchange(-1);
+    if (saved >= 0) {
+        pregame_replacement_reset();
+        s_sel_pkg = saved;
+        s_sel_intro = s_eras_saved_intro;
+        s_sel_outro = s_eras_saved_outro;
+    }
+    fprintf(stderr, "[PRES] eras game over: normal team lookup; package \"%s\"%s\n",
+            nfl2k5_pres_package_name(s_sel_pkg), saved >= 0 ? " (the player's selection again)" : "");
+}
+
+/* season / decade / week for the Presentation API (null outside an Eras game) */
+static std::string eras_api_fields()
+{
+    int season = 0, week = 0;
+    if (s_eras_on.load()) {
+        std::lock_guard<std::mutex> lock(s_eras_lock);
+        if (s_eras.on) { season = s_eras.season; week = s_eras.week; }
+    }
+    if (!season) return ",\"league\":null,\"season\":null,\"decade\":null,\"week\":null";
+    return ",\"league\":\"eras\",\"season\":" + std::to_string(season) + ",\"decade\":\"" + std::to_string(season / 10 * 10) +
+           "s\",\"week\":" + (week > 0 ? std::to_string(week) : std::string("null"));
 }
 
 /* ======================================================================
@@ -2429,8 +2624,10 @@ static std::string json_color(const D2D1_COLOR_F &c)
 /* mods/teams/SF/logos/scorebug.png -> https://teams.local/SF/logos/scorebug.png */
 static std::string team_asset_url(const std::string &path)
 {
-    const std::string prefix = "mods/teams/";
+    const std::string prefix = "mods/teams/", eras = "mods/eras/teams/";
     if (path.compare(0, prefix.size(), prefix) == 0) return "https://teams.local/" + path.substr(prefix.size());
+    /* M9: mods/eras/teams/1980/colts/logos/scorebug.png -> https://erateams.local/1980/colts/logos/scorebug.png */
+    if (path.compare(0, eras.size(), eras) == 0) return "https://erateams.local/" + path.substr(eras.size());
     return "";
 }
 
@@ -2532,6 +2729,7 @@ static std::string html_state_json(const GameState &g, const HtmlContext &cx)
     j += ",\"side\":null,\"text\":" + json_str(ball_position(g)) + "}";
     j += ",\"redZone\":null";
     j += ",\"possession\":" + (g.poss == 1 ? std::string("\"away\"") : g.poss == 2 ? std::string("\"home\"") : std::string("null"));
+    j += eras_api_fields();   /* M9: league, season, decade, week */
     for (int side = 0; side < 2; side++) {
         TeamInfo t = team_info(g.t[side].abbr);
         j += ",\"" + std::string(side_name(side)) + "\":{";
@@ -3290,6 +3488,7 @@ static int html_hud(const XboxHudFrame *f, XboxHudImage *img, const GameState &g
         c.entry = pkg.entry;
         c.root_dir = "mods/presentations";
         c.teams_dir = "mods/teams";
+        c.eras_teams_dir = "mods/eras/teams";   /* M9: https://erateams.local/ */
         c.portraits_dir = nfl2k5_portraits_dir();
         nfl2k5_portraits_warm();
         c.canvas_width = cw;

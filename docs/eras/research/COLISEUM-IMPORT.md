@@ -348,3 +348,150 @@ teams (`col2-qts.png`, Steelers at Cowboys), and the game opens at Texas Stadium
 
 Note: col1 was stopped by killing the process, so `col1-home`'s league still says `launched = ...` (the next
 start of that sandbox logs the "not cleaned up" line and clears it; sandbox only).
+
+## Team-neutral v2 (2026-10-16)
+
+Goal: whichever team is at home, nothing in the Coliseum says San Diego or Chargers. The v1 bundles were cloned from
+the retail s24 (QUALCOMM) bundles, so they carried:
+* "SAN DIEGO" end zones and a Chargers helmet at midfield;
+* "Let's Go CHARGERS" and Chargers-player fan banners;
+* CHARGERS goal-post pads;
+* Mission Valley's hills and trolley behind the stands.
+
+### How retail 2K5 dresses a field (default.xbe)
+
+* **End zones and midfield are baked into each stadium's `field` scene.** The s24 `field` SCNE has these materials:
+  * `endzone_N_L/M/R` and `endzone_S_L/M/R`: the two ends share three 256x128 P8 textures ("SAN DIEGO");
+  * `center_logo`: 256x256, the Chargers helmet;
+  * `playoff_logo`, `AFC_shield`, `NFC_shield` and `numbers`.
+* **The only runtime override is keyed by the stadium row, not by the home team.**
+  * 0x62BE0 formats the bundle name `%s%c%c.iff` (0xE610A0) from row +0x0C. It then formats `ct%s%c.iff`
+    (0xE610B8) from **row +0x14** plus the weather letter (buffer 0xB306F0).
+  * The binder at 0x9C5DE..0x9C66B walks the pair table at 0x4F0090: `center_logo`/`center_logo`,
+    `endzone_N_L`/`endzone_north_left` ... `endzone_S_R`/`endzone_south_right`. It looks each texture name up as a
+    loaded TXTR (`sub_000449E0`, type `TXTR`). When it finds one, it stores it in the field material's +0x30.
+  * Row +0x14 is "" for all 43 NFL and special rows. It is "95".."99" and "51".."85" for the fictional
+    (created-team) rows. The disc has exactly `ct33`, `ct50..85` and `ct95..99`, each in d/r/s (126 files).
+  * So for an NFL stadium `ctd.iff` is never found and the baked art stays. A memory dump in game confirms the
+    two names: `s60dd.iff` and `ctd.iff`.
+  * The pack row is a copy of QUALCOMM's 0x7C bytes, so its +0x14 is "" as well.
+* 170 other disc files also carry north end-zone textures (`endzone_north_left/middle/right`), next to TXTRs
+  `p011..` and `coachshirt`. Their name format was not identified.
+  * Nothing in the v1 game swapped the field with them: the Vikings played on "SAN DIEGO" all game.
+  * So they are presentation or cut-scene assets, not a home-team field path.
+* `pad_north` and `pad_south` (goal-post pads, "CHARGERS") are loose TXTRs of the stadium bundle. They are bound by
+  name through the goal-post path.
+* **`banner_home_team`, `banner_away_team`, `banner_home_player` and `banner_corp` are not dynamic.**
+  * default.xbe has no such strings. It has only the front-end `banner_h_01..` and `banner_v_01..`.
+  * They are ordinary stadium-scene materials. Their art is whatever the bundle carries. In s24 that is:
+    * "Let's Go CHARGERS" and a Chargers helmet;
+    * "Jam 'em Jammer" and "Flutie Flakes";
+    * "Drop 'Em Donnie", "Flight Dwight", "Winning is a Brees" and "The New L.T.".
+  * The v1 note "the game puts the teams' art there" was wrong. That is why the USC tarps and the field-level rails
+    showed Chargers banners.
+  * `banner_corp` is the generic sponsor atlas (ESPN Videogames, Riddell, Sega, Gatorade, NFL.com...), not team art.
+
+So option (a), routing through a home-team mechanism, does not exist for retail rows without code.
+
+A possible code route for later:
+* give the pack row its own +0x14 prefix (a `"ct"` key in stadium.json, set by `nfl2k5_teams_stadium_pack`);
+* ship `ct<prefix>{d,r,s}.iff` with the seven field textures (and the pads);
+* or have the Eras launcher pick a per-home-team prefix.
+
+Not done here, because no `src/` change was allowed.
+
+### What v2 does (option b, neutral art): `tools/eras/stadiums/coliseum_neutral.py`
+
+`coliseum_build.py` calls it for every variant. `--retail-art` keeps the v1 behaviour.
+
+The art is painted once for the dry look. It is carried to rain and snow with a per-channel linear fit of retail s24
+dry -> variant on the same texture, which is how retail darkens or whitens it. Day, afternoon and night share the dry
+art, as in retail.
+
+* **End zones**: "LOS ANGELES" in white block letters (Impact) with a dark keyline and no underline bar.
+  * The letters sit on the retail grass: s24 N_L's bare columns 0..79, mirrored and tiled.
+  * Both ends change, because they share the textures.
+* **Midfield**: no logo. `center_logo` is fully transparent; it is alpha-tested, so nothing is drawn.
+* The **field scene is patched in place**: only texel and palette bytes change, and every system byte and offset
+  stays retail. A re-serialized field was tried first and dropped as an unnecessary risk.
+* **Goal-post pads**:
+  * the CHARGERS column (x 55..70) is refilled from x 35..50;
+  * the ESPN tag is kept and the pad is desaturated to slate;
+  * they are written as uncompressed TXTR chunks (header +0x10 = 0), the way retail stores `detail_normal`.
+* **Fan banners** (`banner_home_team`, `banner_away_team`, `banner_home_player`):
+  * the retail sheets keep their shapes and folds, with the old lettering lifted off;
+  * new hand-lettered neutral slogans: "LET'S GO L.A.!", "DE-FENSE!", "WELCOME TO L.A.", "BEAT 'EM!", "TOUCH-DOWN!",
+    "WE LOVE FOOTBALL", "#1 FANS", "COLISEUM CROWD";
+  * these cover the peristyle-end tarps (USC Sign01/02, EdgeWall03) and the field-level rails;
+  * `banner_corp` (sponsors) is unchanged.
+* **Backdrop**: NCAA 07's USC stadium has no cityscape. Its sky is the shared STADATA dome (0x1A/0x1D/0x1E), clouds
+  only. So a neutral LA basin strip replaces s24's `hill` texture:
+  * the texture is the 2.4 km ring wall, rows 0..55, tiled along U;
+  * it shows a hazy San Gabriel-style ridge, brown foothills, a low city band with a few mid-rises, a tree line and
+    palms;
+  * it is seamless in U and toned halfway to the retail hills;
+  * the trolley sprite (rows 64..127) is now transparent, so the San Diego trolley is gone;
+  * the parking-lot and office billboards (`LIGHT_building1/2`) are generic and kept.
+* Untouched after a check:
+  * `yardfront`/`yardside` (orange markers), benches, Gatorade, towels and the trunk are generic;
+  * `chargerlogo`, `score_sign`, `chargerswall*` and `charger_flag*` are only on the removed Qualcomm bowl and stay
+    8x8.
+
+Decoded check (v1 vs v2, every variant): the chunk lists are identical and every SCNE/TXTR system byte is identical.
+Only texture bytes differ: field 221 KB, cityscape 23 KB, stadium 90 KB, and 22.5 KB for each pad.
+
+Outputs:
+* Bundles: `data/eras/stadiums/coliseum/build/s60{d,a,n}{d,r,s}.iff`. s60dd is 1,494,064 bytes. `build_report.json`
+  has `field`, `pads`, `banners` and `skyline` for each variant.
+* Previews from `render_preview.py`, which has two new views, `flyover` and `midfield`. The playoff banner and the
+  conference shields are skipped in the preview.
+  * `data/eras/stadiums/coliseum/preview/s60dd_{blimp,endzone,sideline,high_sideline,peristyle,flyover,midfield}.png`
+  * `s60nd_{blimp,endzone,flyover}.png`
+  * `s60ar_{endzone,flyover}.png`
+  * `s60ds_{flyover,midfield}.png`
+* Pack: rebuilt (`coliseum_test_team.py pack`) and installed (`install-pack`). `mods\eras\stadiums\LA_Coliseum`
+  holds the v2 files. The test-team kit (`coliseum_test_team.py build`) was refreshed too.
+* Contact sheet: `logs\eras\coliseum-v2-sheet.png`. It shows before/after, night, snow and rain, the built
+  textures, and the in-game status.
+
+### In-game check: blocked by the current build (not attributed to v2)
+
+Driver: `tools/eras/stadiums/coliseum_eras_test.ps1`.
+* It runs in background mode, muted.
+* It uses its own exe copy, `build\Release\NFL2K5_coliseum.exe`, which is deleted after each run.
+* It has its own press file and a sandbox user folder, and it stops only its own PID.
+* `-SetEnv` passes extra variables, e.g. `NFL2K5_MEMDUMP=B306D0:60`.
+
+teams.csv: the Vikings' `stadium` was set to LA MEMORIAL COLISEUM for the runs, then restored from the backup.
+SHA-256 before and after: `19ff397eb4ccbca0f35e26890973db6a5724007bbecf57d99b93bb2d2caeb268`; `cmp` reports the files
+identical. The other workflow's NFL2K5.exe ran at the same time and was not touched.
+
+Each run went Main Menu -> My NFL Eras -> New League -> Play: Falcons at Vikings -> Start Game, CPU vs CPU. Every run
+logged `[TEAMS] Eras stadium pack LA_Coliseum ... in row 811CE7F0 (LOCO ARENA)`.
+
+| run | bundles | result |
+|---|---|---|
+| colv2 | v2 (field re-serialized) | load stalls: `[GGL] STALL`, black screen with a texture strip |
+| colv3, colv4 | v2 (field in place; pads compressed / uncompressed) | past the load and the game plays, but no field, stadium or sky is drawn (players on black) |
+| colv5, colv8 | **v1 (the bundles that worked in col1)** | the same load stall as colv2 |
+| colv7 | v2, all nine names = s60dd (memdump confirms `s60dd.iff`) | the same load stall, owner `sub_004262F0+0xCD0` |
+| colv6 | retail Quick Game, Lions at Cowboys | normal (Texas Stadium drawn) |
+
+Why this does not point at v2:
+* the v1 control stalls the same way on this build (exe of 09:23; col1 used an earlier build);
+* the other workflow was changing the Eras launch path and `nfl2k5_team_files.c` during these runs;
+* v2 differs from v1 only in texture bytes.
+
+So the in-game look of v2 is **unverified**. The stall is a build-side regression of the Eras stadium path. The "no
+environment" result could not be compared with v1, because v1 never got past the load on this build. Before relying
+on the in-game look, re-run `coliseum_eras_test.ps1` on a settled build, with the v1 bundles from git as a control.
+
+### Still open
+
+* In-game confirmation of v2 (above).
+* Per-home-team end zones need code (the `ct` prefix route above).
+* The backdrop is procedural. It has no downtown towers, because a tiled skyline would repeat; real LA art would be
+  new art.
+* `banner_corp` keeps the 2004 sponsors (ESPN Videogames, Sega...). They are anachronistic for 1946-1994 but not
+  team-specific.
+* Snow end zones are the dry art lightened by the fit; retail snow also adds speckle noise.

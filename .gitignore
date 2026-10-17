@@ -57,3 +57,15 @@ mods/eras/teams/**/*.jpg
 # My NFL Eras stadium packs: bundles and previews built from the player's NFL 2K5 / NCAA 07 discs (never commit)
 /data/eras/stadiums/
 mods/eras/stadiums/*/files/
+# My NFL Eras: build inputs and derived data that are never committed
+# (community roster saves and ratings, retail-disc dumps, user photos; docs/eras/MOD-PACK-DESIGN.md 8)
+/data/eras/community_rosters/
+/data/eras/ps2_saves/
+/data/eras/ps2_max/
+/data/eras/ps2_psu/
+/data/eras/historic_teams_2k5.json
+/data/eras/runtime/*/rosters/
+/data/eras/runtime/*/depth/
+/data/eras/runtime/*.prev-*/
+mods/eras/offices/*/reference/
+mods/eras/offices/1980s/computer_monitor.png

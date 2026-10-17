@@ -686,6 +686,33 @@ PATCHES = [
     ("CACHE_EXTRA_READ", "sub_000442F0", "PUSH32(esp, 0x000443A3u); RECOMP_ABI_CALL(0x00048FF0u, sub_00048FF0); /* call 0x00048FF0 */", "before", """\
     { extern int nfl2k5_cache_extra_read(uint32_t, uint32_t); int _r; RECOMP_REGS_OUT(); _r = nfl2k5_cache_extra_read(esi, edx); RECOMP_REGS_IN(); if (_r) { esp += 20; eax = 1; goto loc_000443A3; } }
 """),
+    # My NFL Eras result capture (src/nfl2k5_eras_capture.c). sub_000A2910 is the
+    # final whistle: only the state-0x0A entry callback sub_000AED90 reaches it,
+    # with ecx = home points, edx = away points, and [0xE602B8] still the old
+    # state. sub_000645D0 is match exit (franchise commit in modes 5-7). Both
+    # return at once unless a capture is armed (docs/eras/research/RESULT-CAPTURE.md).
+    ("ERAS_GAME_FINAL", "sub_000A2910", "loc_000A2910: ;", "after", """\
+    { extern void nfl2k5_eras_game_final(uint32_t, uint32_t); nfl2k5_eras_game_final(ecx, edx); }
+"""),
+    ("ERAS_MATCH_EXIT", "sub_000645D0", "loc_000645D0: ;", "after", """\
+    { extern void nfl2k5_eras_match_exit(void); nfl2k5_eras_match_exit(); }
+"""),
+    # My NFL Eras M4b (src/nfl2k5_eras_launch.c): after a game, Coach Match Up's
+    # msg 3 (sub_0034C1F0) pops to the Main Menu 0x515660. When an Eras game was
+    # launched and the League screen is on the FSM stack, pop to it instead;
+    # otherwise edx is left as it is. Reads memory only (no guest calls).
+    ("ERAS_RETURN", "sub_0034C1F0", "edx = 0x515660;", "after", """\
+    { extern uint32_t nfl2k5_eras_return_desc(uint32_t); edx = nfl2k5_eras_return_desc(edx); }
+"""),
+    # M4 review, the halftime hang (src/nfl2k5_eras_launch.c): NFL2K5_WALK_DIAG=1
+    # keeps sub_000561F0's arguments per call and logs a walk that never ends.
+    # Off by default: one load and a branch.
+    ("WALK_DIAG_ENTER", "sub_000561F0", "loc_000561F0: ;", "after", """\
+    { extern int nfl2k5_walk_diag_on; extern void nfl2k5_walk_enter(uint32_t, uint32_t, uint32_t, uint32_t); if (nfl2k5_walk_diag_on) nfl2k5_walk_enter(ecx, edx, esi, esp); }
+"""),
+    ("WALK_DIAG_STEP", "sub_000561F0", "loc_000561F3: ;", "after", """\
+    { extern int nfl2k5_walk_diag_on; extern void nfl2k5_walk_step(uint32_t); if (nfl2k5_walk_diag_on) nfl2k5_walk_step(ecx); }
+"""),
 ]
 
 

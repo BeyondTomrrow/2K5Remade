@@ -21,7 +21,7 @@ setting, chosen so a dome never stands in for an open-air park.
 import json
 from pathlib import Path
 
-ROOT = Path(r'E:\NFL2K5-PC')
+ROOT = Path(__file__).resolve().parents[2]
 
 # (franchise, stadium, city, first, last, roof, surface_era, ingame, match, note, check)
 # last = None means still in use in 2025. 'roof': open / dome / retractable / skylight.

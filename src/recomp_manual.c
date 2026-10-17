@@ -36,11 +36,22 @@ static uint32_t nfl2k5_qb_rd32(uint32_t address)
     return value;
 }
 
-static int nfl2k5_guest_player_stat(uint32_t player, uint32_t field, int *out)
+/* One call of a title stat accessor, sub_000CB240 (player record) or
+ * sub_000CB2D0 (match team-data record 0xB30864 / 0xB30A58): ecx = entity,
+ * edx = selector, one stack word = scope (0 match, 1-4 quarters, 5 OT,
+ * 6/7 halves, 11 season), ret 4, result in ST0. Every guest register, the
+ * lazy flags and the x87/XMM state are preserved, so a gen patch may call
+ * this anywhere on the guest thread (My NFL Eras' result capture,
+ * src/nfl2k5_eras_capture.c). The pushed return address is a real call site
+ * of the same accessor (Gamecast 0x3216D4; franchise commit 0x1353A6). */
+int nfl2k5_guest_stat(uint32_t fn_va, void (*fn)(void), uint32_t entity, uint32_t selector,
+                      uint32_t scope, double *out)
 {
     uint32_t save_eax = g_eax, save_ebx = g_ebx, save_ecx = g_ecx, save_edx = g_edx;
     uint32_t save_esi = g_esi, save_edi = g_edi, save_ebp = g_ebp, save_esp = g_esp;
     uint32_t save_seh_ebp = g_seh_ebp;
+    uint32_t save_rf_kind = g_rf_kind, save_rf_a = g_rf_a, save_rf_b = g_rf_b, save_rf_cf = g_rf_cf;
+    int32_t save_rf_as = g_rf_as, save_rf_bs = g_rf_bs;
     int save_fp_top = g_fp_top, save_fp_cmp = g_fp_cmp, save_df = g_df;
     uint16_t save_fp_cc = g_fp_cc, save_fp_control = g_fp_control_word;
     double save_fp_stack[8];
@@ -50,28 +61,57 @@ static int nfl2k5_guest_player_stat(uint32_t player, uint32_t field, int *out)
     int valid;
     static unsigned abi_errors;
 
+    if (!fn || (fn_va != 0x000CB240u && fn_va != 0x000CB2D0u)) return 0;
     memcpy(save_fp_stack, g_fp_stack, sizeof save_fp_stack);
-    g_ecx = player;
-    g_edx = field;
-    PUSH32(g_esp, 0u);          /* Gamecast's actual current-match scope. */
-    PUSH32(g_esp, 0x003216D9u); /* Synthetic call frame, not a stack argument. */
-    RECOMP_ABI_CALL(0x000CB240u, sub_000CB240);
+    g_ecx = entity;
+    g_edx = selector;
+    PUSH32(g_esp, scope);
+    /* Synthetic call frame, not a stack argument. */
+    PUSH32(g_esp, fn_va == 0x000CB240u ? 0x003216D9u : 0x001353ABu);
+    RECOMP_ABI_CALL(fn_va, fn);
     value = g_fp_stack[g_fp_top & 7];
     valid = g_esp == save_esp && g_fp_top == ((save_fp_top + 7) & 7) &&
-            isfinite(value) && value >= -10000.0 && value <= 10000.0;
-    if (!valid && abi_errors++ < 4)
-        fprintf(stderr, "[LIVE-QB-ABI] field=%X esp=%08X expected=%08X fp=%d expected=%d value=%.3f\n",
-                field, g_esp, save_esp, g_fp_top, (save_fp_top + 7) & 7, value);
+            isfinite(value) && value >= -1.0e7 && value <= 1.0e7;
+    if (!valid && abi_errors++ < 8)
+        fprintf(stderr, "[GUEST-STAT-ABI] fn=%05X entity=%08X sel=%X scope=%u esp=%08X expected=%08X fp=%d expected=%d value=%.3f\n",
+                fn_va, entity, selector, scope, g_esp, save_esp, g_fp_top, (save_fp_top + 7) & 7, value);
     g_eax = save_eax; g_ebx = save_ebx; g_ecx = save_ecx; g_edx = save_edx;
     g_esi = save_esi; g_edi = save_edi; g_ebp = save_ebp; g_esp = save_esp;
     g_seh_ebp = save_seh_ebp; g_df = save_df;
+    g_rf_kind = save_rf_kind; g_rf_a = save_rf_a; g_rf_b = save_rf_b; g_rf_cf = save_rf_cf;
+    g_rf_as = save_rf_as; g_rf_bs = save_rf_bs;
     memcpy(g_fp_stack, save_fp_stack, sizeof save_fp_stack);
     g_fp_top = save_fp_top; g_fp_cmp = save_fp_cmp; g_fp_cc = save_fp_cc;
     g_fp_control_word = save_fp_control;
     g_xmm0 = save_xmm[0]; g_xmm1 = save_xmm[1]; g_xmm2 = save_xmm[2]; g_xmm3 = save_xmm[3];
     g_xmm4 = save_xmm[4]; g_xmm5 = save_xmm[5]; g_xmm6 = save_xmm[6]; g_xmm7 = save_xmm[7];
-    if (valid) *out = (int)(value >= 0 ? value + 0.5 : value - 0.5);
+    if (valid) *out = value;
     return valid;
+}
+
+int nfl2k5_guest_player_stat_scope(uint32_t player, uint32_t selector, uint32_t scope, double *out)
+{
+    return nfl2k5_guest_stat(0x000CB240u, sub_000CB240, player, selector, scope, out);
+}
+
+int nfl2k5_guest_team_stat(uint32_t team, uint32_t selector, uint32_t scope, double *out)
+{
+    return nfl2k5_guest_stat(0x000CB2D0u, sub_000CB2D0, team, selector, scope, out);
+}
+
+static int nfl2k5_guest_player_stat(uint32_t player, uint32_t field, int *out)
+{
+    double value = 0.0;
+    static unsigned range_errors;
+    /* Gamecast's actual current-match scope. */
+    if (!nfl2k5_guest_stat(0x000CB240u, sub_000CB240, player, field, 0u, &value)) return 0;
+    if (value < -10000.0 || value > 10000.0) {
+        if (range_errors++ < 4)
+            fprintf(stderr, "[LIVE-QB-ABI] field=%X value=%.3f out of range\n", field, value);
+        return 0;
+    }
+    *out = (int)(value >= 0 ? value + 0.5 : value - 0.5);
+    return 1;
 }
 
 /* Ask the title's current depth chart for the first QB slot. 61CB0/61CD0
@@ -2586,6 +2626,11 @@ recomp_func_t recomp_lookup_manual(uint32_t address)
     /* Rows of the Video Settings screen (src/nfl2k5_video_menu.c). */
     if ((address & 0xFFFF0000u) == 0xFEC00000u)
         return nfl2k5_video_menu_lookup(address);
+    /* My NFL Eras screens (src/nfl2k5_eras_menu.c). */
+    if ((address & 0xFFF00000u) == 0xFEE00000u) {
+        extern recomp_func_t nfl2k5_eras_menu_lookup(uint32_t address);
+        return nfl2k5_eras_menu_lookup(address);
+    }
     switch(address) {
     case 0x0004C3C0u:
         return nfl2k5_io_completion;
@@ -2705,4 +2750,24 @@ void nfl2k5_scorebug_interp_hooks(void)
     if (mask & 4) recomp_interp_add_hook(0x000FCE70u, 0, ih_qb);              /* LIVE_QB_SAMPLE */
     if (mask & 8) recomp_interp_add_hook(0x000FCFA7u, 0, ih_native);          /* SCOREBUG_NATIVE_HOOK */
     if (mask & 16) recomp_interp_add_hook(0x000FD178u, 0x000FD175u, ih_place); /* SCOREBUG_NATIVE_HIDE2, before the loop label */
+}
+
+/* My NFL Eras result capture (src/nfl2k5_eras_capture.c): the gen patches
+ * ERAS_GAME_FINAL (sub_000A2910 entry: ecx = home points, edx = away points)
+ * and ERAS_MATCH_EXIT (sub_000645D0 entry), for packs that interpret either
+ * function. Both callbacks return at once unless a capture is armed. */
+extern void nfl2k5_eras_game_final(uint32_t home_points, uint32_t away_points);
+extern void nfl2k5_eras_match_exit(void);
+static uint32_t ih_eras_final(void) { nfl2k5_eras_game_final(g_ecx, g_edx); return 0; }
+static uint32_t ih_eras_exit(void) { nfl2k5_eras_match_exit(); return 0; }
+/* ERAS_RETURN (M4b): 0x34C208 is the `pop esi` right after `mov edx, 0x515660`
+ * in sub_0034C1F0 (XBE bytes), so g_edx can be rewritten before the jmp. */
+extern uint32_t nfl2k5_eras_return_desc(uint32_t edx);
+static uint32_t ih_eras_return(void) { g_edx = nfl2k5_eras_return_desc(g_edx); return 0; }
+
+void nfl2k5_eras_interp_hooks(void)
+{
+    recomp_interp_add_hook(0x000A2910u, 0, ih_eras_final);   /* ERAS_GAME_FINAL */
+    recomp_interp_add_hook(0x000645D0u, 0, ih_eras_exit);    /* ERAS_MATCH_EXIT */
+    recomp_interp_add_hook(0x0034C208u, 0, ih_eras_return);  /* ERAS_RETURN */
 }

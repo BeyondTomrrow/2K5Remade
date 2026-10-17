@@ -30,7 +30,13 @@ VIEWS = {
     "blimp": dict(eye=(-24000, 17000, -21000), target=(0, 0, 1500), fov=48),
     "peristyle": dict(eye=(2500, 600, 3000), target=(-1500, 3200, 14000), fov=66),
     "high_sideline": dict(eye=(9000, 5200, 0), target=(-2000, 1000, 0), fov=70),
+    "flyover": dict(eye=(0, 9000, -27000), target=(0, 2500, 20000), fov=60),       # the backdrop over the rim
+    "midfield": dict(eye=(-5200, 3600, -2600), target=(0, 0, 600), fov=60),         # 50-yard line, end zone
 }
+
+
+# field overlays not seen in regular-season games in game (the playoff banner and conference shields)
+PLAYOFF_ONLY = {"playoff_logo", "AFC_shield", "NFC_shield"}
 
 
 def crowd_texture():
@@ -62,6 +68,8 @@ def scene_triangles(sc, skip_shapes=()):
         uv = np.stack([q[:, 0] / 32767.0 * su + ou, q[:, 1] / 32767.0 * sv + ov], axis=1)
         for sm in s.submeshes:
             mat = sc.materials[sm.material]
+            if mat.name in PLAYOFF_ONLY:
+                continue
             tris = []
             for mode, ix in S.decode_words(sm.words):
                 if mode == S.TRIANGLE_STRIP:

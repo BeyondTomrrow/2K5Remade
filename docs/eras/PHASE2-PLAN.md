@@ -519,6 +519,53 @@ exactly those players.
 > user's photos override them (no "photos only" rule). Default decisions: walk straight
 > into the office (no lobby); the 1980 slice uses the 1980s office.
 
+> **M3-OFFICE BUILT (2026-10-16; results `docs/eras/results/M3-office.md`).** The user
+> ratified the split ("It needs a menu like franchise with its office ... COPY it and make
+> custom offices based on the 70s-2025"). The league screen is now the 3D office copy
+> (`src/nfl2k5_eras_office.c`, package `erasoffice.iff` / `erasskin.iff` from
+> `tools/eras/build-office-pack.py`), with six era looks (1970s-2020s; the 1980s office has an
+> IBM PC 5150). The launch, ERAS_RETURN and clean-up hooks moved with
+> `nfl2k5_eras_menu_header(1)`, which now returns the office. T3.0-T3.12 and an M4 regression
+> were run; see the results file for what passed and the defects. Decisions taken by default
+> (user away): no lobby; the 1980 slice uses the 1980s office; props an era did not have are
+> hidden; made textures by default; user photos override from `mods\eras\offices\<era>\`.
+> One design inference was refuted: the office packages are freed before a match (kept
+> loaded, the pre-game load stalled) and loaded again on the way back.
+>
+> The note below is kept as history.
+>
+> **PROPOSED, NOT RATIFIED (implementer proposal 2026-10-16, awaiting the orchestrator or
+> the user): plain-menu shell as an interim M3; the office is NOT dropped.** This note was
+> written by the M3 implementer, not by the user or the orchestrator. **M3 is NOT complete**:
+> its exit criteria are the office tests T3.0-T3.12 of `ERAS-OFFICE-DESIGN.md` §3, which are
+> not built or run. What is built and tested is this section's plain-menu version (results:
+> `docs/eras/results/M3.md`, status partial). The proposal is that the office (M3a-M3d) becomes
+> its own milestone, **M3-office**, run on top of this base (it replaces the hub and League
+> screens; the league save, Your Team, Schedule and Standings screens stay). Later milestones
+> must not treat the office requirement as settled or waived. If, and only if, the proposal is
+> ratified and M4 runs before M3-office:
+>
+> * **M4 targets the plain League screen** (`EM_LEAGUE` in `src/nfl2k5_eras_menu.c`): the
+>   launch is League row 0 (type 9), ERAS_RETURN returns to the League header (read at run
+>   time), and the M4a clean-up runs in the League screen's msg 3. When M3-office lands, these
+>   three hooks move to the office screen as `ERAS-OFFICE-DESIGN.md` §3 "M4 changes" says.
+> * `office_look`, `glances`, `ambience` are added to `league.ini` by M3-office **without** a
+>   format bump (unknown keys are already kept on rewrite).
+>
+> Accepted deviations from the table below (recorded in M3.md):
+>
+> * No help bars (header `+0x0C` = 0). The "not yet available" line is the Play Next Game
+>   row relabelling itself; the standings note is the last row ("Rosters: unverified
+>   community" / "Unofficial order"); the hub and League screens carry a "Rosters:
+>   unverified community roster" row.
+> * Division header rows are not greyed (greyed settings rows draw their label invisibly on
+>   the light row background); they show "W-L-T  PF-PA" as their value instead.
+> * The Main Menu row is inserted **after The Crib** (index 3), not after Game Modes: the
+>   celebrity-phone icon is drawn beside the third visible row, so The Crib must stay at
+>   index 2. 8 rows at flags `0x02` scroll; no fallback to Game Modes was needed.
+> * New League over an existing league asks first: the first A relabels the row to
+>   "Replace league? Press A again", the second moves the old league aside.
+
 Goal: My NFL Eras exists in the game's own menus and can create, show and reload a 1980
 league.
 
@@ -583,6 +630,16 @@ researched.
 **Exit:** T3.1 (or the user's fallback choice), T3.2-T3.4 pass.
 
 ### M4: launch, capture, commit, standings
+
+> **Built and tested 2026-10-16** (`docs/eras/results/M4.md`). T4.1-T4.3 pass with M4b
+> (ERAS_RETURN). The code is in `src/nfl2k5_eras_launch.c`. It targets the plain League
+> screen (`EM_LEAGUE`) because M3-office is not built. Deviations from the text below:
+> * The clean-up runs from the front-end FSM pop (the League screen, the hub or the Main
+>   Menu on top), and again from the League and hub msg 3. `nfl2k5_eras_return_desc`
+>   never cleans up itself, because 0x55D088's msg 2 runs after it.
+> * The home stadium is looked up by name among the roster's stadium records, from
+>   `teams.csv` `stadium`.
+> * A crash between launch and clean-up is noticed through `league.ini` `launched`.
 
 Goal: the full loop from the League screen.
 
@@ -781,3 +838,77 @@ for now.
   `src/main.c` (lines 1181-1210, 3144, 3807), `src/interp/x86_interp.c` (lines 300, 339-346),
   `tools/apply-gen-patches.py`, `tools/drive-quickgame.ps1`, `tools/drive-menu.ps1`,
   `config/game.cmake`.
+
+## Later (user requests 2026-10-16, answered, not scheduled)
+
+* **League Setup:** Start Year 1966-2025 with era presets; History Mode (Historical Automatic /
+  Commissioner Approval / Alternate History); Rosters; draft potential Hidden/Scouted/Shown; era
+  rules on/off; quarter length/difficulty/injuries; seasons; Team Select with era names/stadiums
+  and Watch only; Review page. Years without data show "coming soon". 1980 is the template.
+* **Front Office screens (Eras' own, never Franchise's):** Depth Chart (stage the team in a spare
+  slot, open the game's own depth screen, write back), Roster, Trades (later: CPU trade calls),
+  season end/playoffs, Draft, Contracts with era rules (no FA before 1989, Plan B 1989-92, FA 1993,
+  cap 1994), news, leaders, history book.
+* **Senior Bowl:** North vs South of that year's prospects staged into USER1/USER2, play/watch/sim;
+  at Ladd-Peebles Stadium (NCAA 07 "GMAC Bowl, Mobile", same import route as the Coliseum);
+  performance moves draft stock and reveals potential. Real rosters where documented.
+* **Draft show:** ESPN studio scene copied as a draft stage + HTML presentation cards ("on the
+  clock", "the pick is in", name card with college stats); college highlights as a stat card,
+  user-supplied video clips per player, later the player in his NCAA 07 college uniform.
+  Options: Full First Round / First Pick + Your Picks / Your Picks Only / Off; skip to my pick.
+* **1980s office computer:** IBM PC 5150 look (user photo `mods\eras\offices\1980s\reference\ibm_pc_5150.jpg`).
+
+**User rule for screens that can't be copied (2026-10-16):** "you gotta make it look real good now
+don't slack". Trades, Free Agents, Contracts, Leaders (and Standings if the 4-division layout can't
+take 1980's 3) are built ON the retail UI pieces, not as plain lists: the generic spreadsheet engine
+(`sub_001749D0`, own sheet/page/column tables, see FRANCHISE-SCREEN-COPY.md), the native player
+cards (as on the depth chart), team helmets/logos, the ESPN header and backgrounds, the same fonts,
+colours, button hints and sounds. Each one is compared side by side with the Franchise screen it
+replaces before it ships; screenshots go to the user.
+
+**Trade phone calls (user, 2026-10-16):** copy The Crib's celebrity phone-call alert (menu-row phone
+icon, ring, call screen) for Eras CPU trade offers: icon on the office / My NFL Eras row, the same
+ring, an Eras copy of the call screen with the calling team's helmet/GM and the offer, Accept /
+Decline / Counter into the Eras trade screen. Research: docs/eras/research/CRIB-PHONE-CALLS.md.
+Built after the Trades screen.
+
+**Era select screen (user, 2026-10-16):** one card per decade: 1970s, 1980s, 1990s, 2000s, 2010s,
+2020s (not named eras). 2K5-styled (ESPN header bar, angled silver-edged hero panel, red highlight,
+angled cards, ESPN ticker of real facts, 2K5 button hints); a Start Year picker inside the decade;
+leads to League Setup, then that decade's office. Mockup: build/eras/eraselect/eraselect.html
+(rendered eraselect-decades.png). Hero/card photos come from the user.
+**Decade narration (user, 2026-10-16):** each decade card has a voice-over clip
+(`mods\eras\eraselect\voice\<decade>.mp3`; 1980s.mp3 supplied, 26 s, ElevenLabs "American Male Older").
+It plays when that decade is highlighted, ONCE per visit to the screen: highlighting it again does
+not replay it. Moving to another decade stops the playing clip. Menu music ducks under it.
+(Default chosen: "once" resets when the player leaves the screen and comes back.)
+
+**Everything follows the season (user, 2026-10-16: "everything 1980 until it changes").** Every
+team-facing thing is keyed by season and switches on the real date in later seasons: team names /
+cities / abbreviations (e.g. Oakland -> Los Angeles Raiders 1982), stadium (stadiums_1966_2025.json),
+uniform style / helmet / logos / card badges / scorebug logo (new team_looks_<years>.json per
+team: style number per season from the disc's style year labels + cited sources; ERA-LOGOS.md has
+1980), head coaches (per season, mid-season changes), rosters/depth (per season), league rules.
+User-supplied art: mods\eras\teams\<season>\<team>\ (1980 Bengals helmet logo supplied 2026-10-16).
+
+**Era-appropriate scorebugs (user, 2026-10-16).** Scorebugs will be per era (HTML presentation
+packages, like mods/presentations/NBC_SNF). Needed so they show the right teams:
+1. Eras team identity for the presentation: today src/nfl2k5_presentation.cpp load_teams() keys
+   mods/teams/<ABBR>/team.json by 2004 abbreviation (BAL -> Ravens). During an Eras game, look up
+   mods\eras\teams\<season>\<team id>\team.json (city, name, abbr, colours, logos\scorebug.png) first,
+   keyed by the staged Eras team, never by the 2004 abbreviation; fall back to disc art (ERA-LOGOS.md).
+2. Presentation API gets season fields (season, decade, week, maybe network) so a package can
+   style itself per era.
+3. Package choice per season: mods\eras\presentations.ini (decade or season range -> package name,
+   optional per-network entries), with the player's own choice able to override; retail/SOFTDRINK
+   selection untouched outside Eras.
+
+**Draft decisions (user, 2026-10-16):**
+* Never-rated real picks (133 of 332 in 1981) get LOW, clearly flagged estimated ratings from
+  draft round + real career (never played / bust -> low). Flag `estimated` on every such player.
+* **Sleepers ("the next Brady"):** each draft class, N (default 5) players drawn from the low-rated /
+  late-round / estimated pool get a hidden star potential. Alternate History only (Historical
+  seasons keep real careers). Seeded per league so the sleepers stay fixed for that league;
+  revealed only through development/scouting. League Setup option: Sleepers Off / 1-10 (default 5).
+* Draft show: DRAFT-SHOW-FEASIBILITY.md route (draft_menu stage + trophy podium, commish01 as
+  commissioner and as the suited player, coin-toss walk, overhead jersey hold, HTML pick card).

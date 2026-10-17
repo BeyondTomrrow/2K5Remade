@@ -1,0 +1,29 @@
+id,city,name,abbr,conference,division,template_entry,template_id,roster_file,community_slot,lineage_status,stadium,stadium_match,stadium_historical,style
+colts,Baltimore,Colts,BAL,AFC,AFC East,24,BAL_1970,rosters/colts.csv,10,checked:https://web.archive.org/web/20250126220236/https://www.pro-football-reference.com/teams/clt/1980_roster.htm,M&T BANK STADIUM,standin,Memorial Stadium,5
+bills,Buffalo,Bills,BUF,AFC,AFC East,9,BUF_1990,rosters/bills.csv,3,direct,RALPH WILSON STADIUM,exact,Rich Stadium / Ralph Wilson Stadium / New Era Field / Bills Stadium / Highmark Stadium (old),4
+dolphins,Miami,Dolphins,MIA,AFC,AFC East,29,MIA_1984,rosters/dolphins.csv,12,direct,MIAMI ORANGE BOWL,exact,Miami Orange Bowl,3
+patriots,New England,Patriots,NE,AFC,AFC East,51,NE_1985,rosters/patriots.csv,21,direct,GILLETTE STADIUM,standin,Schaefer / Sullivan / Foxboro Stadium,6
+jets,New York,Jets,NYJ,AFC,AFC East,40,NYJ_1968,rosters/jets.csv,17,direct,JETS STADIUM,standin,Shea Stadium,3
+bengals,Cincinnati,Bengals,CIN,AFC,AFC Central,6,CIN_1981,rosters/bengals.csv,2,direct,PAUL BROWN STADIUM,standin,Riverfront Stadium / Cinergy Field,3
+browns,Cleveland,Browns,CLE,AFC,AFC Central,14,CLE_1986,rosters/browns.csv,5,direct,CLEVELAND STADIUM,standin,Cleveland Municipal Stadium,1
+oilers_titans,Houston,Oilers,HOU,AFC,AFC Central,45,HOU_1979,rosters/oilers_titans.csv,30,checked:https://web.archive.org/web/20240526054753/https://www.pro-football-reference.com/teams/oti/1980_roster.htm,RELIANT STADIUM,standin,Astrodome,2
+steelers,Pittsburgh,Steelers,PIT,AFC,AFC Central,68,PIT_1978,rosters/steelers.csv,28,direct,HEINZ FIELD,standin,Three Rivers Stadium,1
+broncos,Denver,Broncos,DEN,AFC,AFC West,10,DEN_1977,rosters/broncos.csv,4,direct,INVESCO FIELD,standin,Bears Stadium / Mile High Stadium,2
+chiefs,Kansas City,Chiefs,KC,AFC,AFC West,22,KC_1969,rosters/chiefs.csv,9,direct,ARROWHEAD STADIUM,exact,Arrowhead Stadium,4
+raiders,Oakland,Raiders,OAK,AFC,AFC West,55,OAK_1976,rosters/raiders.csv,22,direct,NETWORK ASSOCIATES,exact,Oakland-Alameda County Coliseum,0
+chargers,San Diego,Chargers,SD,AFC,AFC West,20,SD_1980,rosters/chargers.csv,8,direct,QUALCOMM STADIUM,exact,San Diego Stadium / Jack Murphy / Qualcomm Stadium,4
+seahawks,Seattle,Seahawks,SEA,AFC,AFC West,65,SEA_1984,rosters/seahawks.csv,27,direct,EDWARD JONES DOME,standin,Kingdome,2
+cowboys,Dallas,Cowboys,DAL,NFC,NFC East,26,DAL_1977,rosters/cowboys.csv,11,direct,TEXAS STADIUM,exact,Texas Stadium,3
+giants,New York,Giants,NYG,NFC,NFC East,36,NYG_1986,rosters/giants.csv,15,direct,GIANTS STADIUM,exact,Giants Stadium,3
+eagles,Philadelphia,Eagles,PHI,NFC,NFC East,31,PHI_1980,rosters/eagles.csv,13,direct,LINCOLN FINANCIAL FIELD,standin,Veterans Stadium,5
+cardinals,St. Louis,Cardinals,STL,NFC,NFC East,18,STL_1975,rosters/cardinals.csv,7,checked:https://web.archive.org/web/20220514152119/https://www.pro-football-reference.com/teams/crd/1980_roster.htm,ARROWHEAD STADIUM,standin,Busch Memorial Stadium,3
+washington,Washington,Redskins,WAS,NFC,NFC East,60,WAS_1982,rosters/washington.csv,25,direct,WASHINGTON FIELD,standin,D.C. Stadium / RFK Stadium,2
+bears,Chicago,Bears,CHI,NFC,NFC Central,5,CHI_1985,rosters/bears.csv,1,direct,CHICAGO FIELD,standin,Soldier Field,1
+lions,Detroit,Lions,DET,NFC,NFC Central,43,DET_1991,rosters/lions.csv,18,direct,FORD FIELD,standin,Pontiac Silverdome,3
+packers,Green Bay,Packers,GB,NFC,NFC Central,46,GB_1966,rosters/packers.csv,19,direct,LAMBEAU FIELD,exact,Lambeau Field (City Stadium),2
+vikings,Minnesota,Vikings,MIN,NFC,NFC Central,73,MIN_1973,rosters/vikings.csv,31,direct,LAMBEAU FIELD,standin,Metropolitan Stadium,2
+buccaneers,Tampa Bay,Buccaneers,TB,NFC,NFC Central,15,TB_1979,rosters/buccaneers.csv,6,direct,TAMPA BAY STADIUM,standin,Tampa Stadium,3
+falcons,Atlanta,Falcons,ATL,NFC,NFC West,33,ATL_1980,rosters/falcons.csv,14,direct,ARROWHEAD STADIUM,standin,Atlanta Stadium / Atlanta-Fulton County Stadium,6
+rams,Los Angeles,Rams,LA,NFC,NFC West,57,LA_1979,rosters/rams.csv,23,checked:https://web.archive.org/web/20241207021645/https://www.pro-football-reference.com/teams/ram/1980_roster.htm,QUALCOMM STADIUM,standin,Anaheim Stadium,4
+saints,New Orleans,Saints,NO,NFC,NFC West,63,NO_1991,rosters/saints.csv,26,direct,LOUISIANA SUPER DOME,exact,Louisiana Superdome / Caesars Superdome,5
+49ers,San Francisco,49ers,SF,NFC,NFC West,0,SF_1981,rosters/49ers.csv,0,direct,SAN FRANCISCO PARK,exact,Candlestick Park / 3Com Park / Monster Park,3

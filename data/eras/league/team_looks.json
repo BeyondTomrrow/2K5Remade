@@ -1,0 +1,230 @@
+{
+ "schema": "team -> list of {from_season, to_season, style, source}: the disc uniform style (team +0x192, 0..14) a franchise wears in those seasons. A season with no entry keeps the historic template's own style. Only spans where the disc year label and a cited source agree are listed; only 1980 is playable today.",
+ "built_by": "hand data from docs/eras/research/ERA-LOGOS.md (2026-10-16); read by build/eras/make_runtime_package.py (teams.csv style column)",
+ "teams": {
+  "colts": [
+   {
+    "from_season": 1980,
+    "to_season": 1980,
+    "style": 5,
+    "source": "disc style 5 (disc label 1968-70); SL 1978 helmet: https://www.sportslogos.net/logos/view/k1u3w6ligllz1nyimydsgrnnv/Baltimore-Colts-Logo/1978/Helmet; docs/eras/research/ERA-LOGOS.md; the template BAL_1970 already uses style 5"
+   }
+  ],
+  "bills": [
+   {
+    "from_season": 1980,
+    "to_season": 1980,
+    "style": 4,
+    "source": "disc style 4 (disc label 1976-83); SL 1976 helmet: https://www.sportslogos.net/logos/view/f7huooayam1gfabojobkiloar/Buffalo-Bills-Logo/1976/Helmet; WP https://en.wikipedia.org/wiki/Logos_and_uniforms_of_the_Buffalo_Bills; docs/eras/research/ERA-LOGOS.md; replaces the template BUF_1990 style 2"
+   }
+  ],
+  "dolphins": [
+   {
+    "from_season": 1980,
+    "to_season": 1980,
+    "style": 3,
+    "source": "disc style 3 (disc label 1979-80); SL 1980 helmet: https://www.sportslogos.net/logos/view/730fsmec2n5yzsfmny1kffeh6/Miami-Dolphins-Logo/1980/Helmet; docs/eras/research/ERA-LOGOS.md; the template MIA_1984 already uses style 3"
+   }
+  ],
+  "patriots": [
+   {
+    "from_season": 1980,
+    "to_season": 1980,
+    "style": 6,
+    "source": "disc style 6 (disc label 1975-81); SL 1971 helmet: https://www.sportslogos.net/logos/view/pmghrhemwcxu7q9an5v7d0nkw/New-England-Patriots-Logo/1971/Helmet; WP https://en.wikipedia.org/wiki/New_England_Patriots; docs/eras/research/ERA-LOGOS.md; replaces the template NE_1985 style 5"
+   }
+  ],
+  "jets": [
+   {
+    "from_season": 1980,
+    "to_season": 1980,
+    "style": 3,
+    "source": "disc style 3 (disc label 1978-85); SL 1978 helmet: https://www.sportslogos.net/logos/view/e4ifghvyj68fzhwhzgj7iz3od/New-York-Jets-Logo/1978/Helmet; WP https://en.wikipedia.org/wiki/Logos_and_uniforms_of_the_New_York_Jets; docs/eras/research/ERA-LOGOS.md; replaces the template NYJ_1968 style 4"
+   }
+  ],
+  "bengals": [
+   {
+    "from_season": 1980,
+    "to_season": 1980,
+    "style": 3,
+    "source": "disc style 3 (disc label 1968-78 (label; the art is the 1980 helmet)); SL 1980 helmet: https://www.sportslogos.net/logos/view/h9ybj5xf8ceimhhd9f90idoac/Cincinnati-Bengals-Logo/1980/Helmet; https://www.bengals.com/uniforms/1980-before-the-stripes; docs/eras/research/ERA-LOGOS.md; replaces the template CIN_1981 style 1"
+   }
+  ],
+  "browns": [
+   {
+    "from_season": 1980,
+    "to_season": 1980,
+    "style": 1,
+    "source": "disc style 1 (disc label 1983-84); SL 1975 helmet: https://www.sportslogos.net/logos/view/fwyhhhxkag7yfrgrghsewnglt/Cleveland-Browns-Logo/1975/Helmet; docs/eras/research/ERA-LOGOS.md; the template CLE_1986 already uses style 1"
+   }
+  ],
+  "oilers_titans": [
+   {
+    "from_season": 1980,
+    "to_season": 1980,
+    "style": 2,
+    "source": "disc style 2 (disc label 1974-75); SL 1975 helmet: https://www.sportslogos.net/logos/view/576/Houston-Oilers-Logo/1975/Helmet; SL 1981: https://www.sportslogos.net/logos/view/577/Houston-Oilers-Logo/1981/Helmet; docs/eras/research/ERA-LOGOS.md; the template HOU_1979 already uses style 2"
+   }
+  ],
+  "steelers": [
+   {
+    "from_season": 1980,
+    "to_season": 1980,
+    "style": 1,
+    "source": "disc style 1 (disc label 1968-76); SL 1977: https://www.sportslogos.net/logos/view/972/Pittsburgh-Steelers-Logo/1977/Helmet; docs/eras/research/ERA-LOGOS.md; the template PIT_1978 already uses style 1"
+   }
+  ],
+  "broncos": [
+   {
+    "from_season": 1980,
+    "to_season": 1980,
+    "style": 2,
+    "source": "disc style 2 (disc label 1969-73); SL 1980 home: https://www.sportslogos.net/logos/view/epifqfe9c5tixf4h8hy7vbmgy/Denver-Broncos-Logo/1980/Home-Uniform; docs/eras/research/ERA-LOGOS.md; the template DEN_1977 already uses style 2"
+   }
+  ],
+  "chiefs": [
+   {
+    "from_season": 1980,
+    "to_season": 1980,
+    "style": 4,
+    "source": "disc style 4 (disc label (template)); SL 1974: https://www.sportslogos.net/logos/view/mbtef36mxmdxosrpvl4hf3e8i/Kansas-City-Chiefs-Logo/1974/Helmet; docs/eras/research/ERA-LOGOS.md; the template KC_1969 already uses style 4"
+   }
+  ],
+  "raiders": [
+   {
+    "from_season": 1980,
+    "to_season": 1980,
+    "style": 0,
+    "source": "disc style 0 (disc label (unchanged)); SL 1964: https://www.sportslogos.net/logos/view/f9q5ot20if84eyjqjdgy1h4gw/Oakland-Raiders-Logo/1964/Helmet; docs/eras/research/ERA-LOGOS.md; the template OAK_1976 already uses style 0"
+   }
+  ],
+  "chargers": [
+   {
+    "from_season": 1980,
+    "to_season": 1980,
+    "style": 4,
+    "source": "disc style 4 (disc label 1978-79); SL 1974: https://www.sportslogos.net/logos/view/z4b8kq38uw5aof6eb9kll9hug/San-Diego-Chargers-Logo/1974/Helmet; docs/eras/research/ERA-LOGOS.md; the template SD_1980 already uses style 4"
+   }
+  ],
+  "seahawks": [
+   {
+    "from_season": 1980,
+    "to_season": 1980,
+    "style": 2,
+    "source": "disc style 2 (disc label 1976-82); SL 1976: https://www.sportslogos.net/logos/view/18099701976/Seattle-Seahawks-Logo/1976/Helmet; docs/eras/research/ERA-LOGOS.md; replaces the template SEA_1984 style 1"
+   }
+  ],
+  "cowboys": [
+   {
+    "from_season": 1980,
+    "to_season": 1980,
+    "style": 3,
+    "source": "disc style 3 (disc label 1977-80); SL 1977: https://www.sportslogos.net/logos/view/o1wgfvp4km9109vj1p4fkq212/Dallas-Cowboys-Logo/1977/Helmet; docs/eras/research/ERA-LOGOS.md; the template DAL_1977 already uses style 3"
+   }
+  ],
+  "giants": [
+   {
+    "from_season": 1980,
+    "to_season": 1980,
+    "style": 3,
+    "source": "disc style 3 (disc label 1976-80); WP https://en.wikipedia.org/wiki/Logos_and_uniforms_of_the_New_York_Giants; SL 1976: https://www.sportslogos.net/logos/view/wht7ewlnxvejpqh8axa0bhtyi/New-York-Giants-Logo/1976/Helmet; docs/eras/research/ERA-LOGOS.md; replaces the template NYG_1986 style 2"
+   }
+  ],
+  "eagles": [
+   {
+    "from_season": 1980,
+    "to_season": 1980,
+    "style": 5,
+    "source": "disc style 5 (disc label 1979-80); SL 1974 helmet: https://www.sportslogos.net/logos/view/uw1whwij2ph1judzpgfotkoyj/Philadelphia-Eagles-Logo/1974/Helmet; docs/eras/research/ERA-LOGOS.md; the template PHI_1980 already uses style 5"
+   }
+  ],
+  "cardinals": [
+   {
+    "from_season": 1980,
+    "to_season": 1980,
+    "style": 3,
+    "source": "disc style 3 (disc label 1971-72); SL 1960: https://www.sportslogos.net/logos/view/36jfqw30f7uckxe3e2myp5ofr/St-Louis-Cardinals-Logo/1960/Helmet; docs/eras/research/ERA-LOGOS.md; the template STL_1975 already uses style 3"
+   }
+  ],
+  "washington": [
+   {
+    "from_season": 1980,
+    "to_season": 1980,
+    "style": 2,
+    "source": "disc style 2 (disc label 1982); SL 1978: https://www.sportslogos.net/logos/view/1065/Washington-Redskins-Logo/1978/Helmet; docs/eras/research/ERA-LOGOS.md; the template WAS_1982 already uses style 2"
+   }
+  ],
+  "bears": [
+   {
+    "from_season": 1980,
+    "to_season": 1980,
+    "style": 1,
+    "source": "disc style 1 (disc label 1974-82); SL 1973: https://www.sportslogos.net/logos/view/rfj55oyfob8zsrubdjyvetcna/Chicago-Bears-Logo/1973/Helmet; docs/eras/research/ERA-LOGOS.md; the template CHI_1985 already uses style 1"
+   }
+  ],
+  "lions": [
+   {
+    "from_season": 1980,
+    "to_season": 1980,
+    "style": 3,
+    "source": "disc style 3 (disc label 1980-93); SL 1970: https://www.sportslogos.net/logos/view/e0ffv95gmh18txqrzfhwrk6dp/Detroit-Lions-Logo/1970/Helmet; docs/eras/research/ERA-LOGOS.md; the template DET_1991 already uses style 3"
+   }
+  ],
+  "packers": [
+   {
+    "from_season": 1980,
+    "to_season": 1980,
+    "style": 2,
+    "source": "disc style 2 (disc label 1983-84); SL 1980 helmet: https://www.sportslogos.net/logos/view/559/Green-Bay-Packers-Logo/1980/Helmet; docs/eras/research/ERA-LOGOS.md; replaces the template GB_1966 style 3"
+   }
+  ],
+  "vikings": [
+   {
+    "from_season": 1980,
+    "to_season": 1980,
+    "style": 2,
+    "source": "disc style 2 (disc label 1980-84); SL 1980 helmet: https://www.sportslogos.net/logos/view/17231951980/Minnesota-Vikings-Logo/1980/Helmet; docs/eras/research/ERA-LOGOS.md; replaces the template MIN_1973 style 3"
+   }
+  ],
+  "buccaneers": [
+   {
+    "from_season": 1980,
+    "to_season": 1980,
+    "style": 3,
+    "source": "disc style 3 (disc label 1976-91); SL 1976: https://www.sportslogos.net/logos/view/17696191976/Tampa-Bay-Buccaneers-Logo/1976/Helmet; docs/eras/research/ERA-LOGOS.md; the template TB_1979 already uses style 3"
+   }
+  ],
+  "falcons": [
+   {
+    "from_season": 1980,
+    "to_season": 1980,
+    "style": 6,
+    "source": "disc style 6 (disc label 1978-79); SL 1976: https://www.sportslogos.net/logos/view/2h5gltkmz9ku66ynff8jkedzp/Atlanta-Falcons-Logo/1976/Helmet; docs/eras/research/ERA-LOGOS.md; the template ATL_1980 already uses style 6"
+   }
+  ],
+  "rams": [
+   {
+    "from_season": 1980,
+    "to_season": 1980,
+    "style": 4,
+    "source": "disc style 4 (disc label 1978-79); SL 1973: https://www.sportslogos.net/logos/view/865/Los-Angeles-Rams-Logo/1973/Helmet; docs/eras/research/ERA-LOGOS.md; the template LA_1979 already uses style 4"
+   }
+  ],
+  "saints": [
+   {
+    "from_season": 1980,
+    "to_season": 1980,
+    "style": 5,
+    "source": "disc style 5 (disc label 1976-82); SL 1976: https://www.sportslogos.net/logos/view/911/New-Orleans-Saints-Logo/1976/Helmet; docs/eras/research/ERA-LOGOS.md; replaces the template NO_1991 style 4"
+   }
+  ],
+  "49ers": [
+   {
+    "from_season": 1980,
+    "to_season": 1980,
+    "style": 3,
+    "source": "disc style 3 (disc label 1964-95); SL 1964: https://www.sportslogos.net/logos/view/jzh5fu3cy78v1o3u1m024pp0b/San-Francisco-49ers-Logo/1964/Helmet; docs/eras/research/ERA-LOGOS.md; the template SF_1981 already uses style 3"
+   }
+  ]
+ }
+}

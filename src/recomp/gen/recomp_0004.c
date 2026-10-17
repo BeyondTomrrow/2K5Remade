@@ -65019,6 +65019,8 @@ void sub_000A2910(void)
     ebp = g_seh_ebp; /* fpo_leaf: inherit caller's frame */
 
 loc_000A2910: ;
+    /* NFL2K5-GENPATCH:ERAS_GAME_FINAL */
+    { extern void nfl2k5_eras_game_final(uint32_t, uint32_t); nfl2k5_eras_game_final(ecx, edx); }
     _fa = (uint32_t)(MEM32(0xE5FF80)) & 0xFFFFFFFFu; _fb = (uint32_t)(4) & 0xFFFFFFFFu;
     _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp MEM32(0xE5FF80), 4 (32-bit) */
     PUSH32(esp, esi);

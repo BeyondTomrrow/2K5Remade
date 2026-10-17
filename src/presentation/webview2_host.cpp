@@ -323,6 +323,9 @@ private:
             if (!config_.teams_dir.empty())
                 wv3->SetVirtualHostNameToFolderMapping(L"teams.local", full_path(config_.teams_dir).c_str(),
                                                        COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_ALLOW);
+            if (!config_.eras_teams_dir.empty())
+                wv3->SetVirtualHostNameToFolderMapping(L"erateams.local", full_path(config_.eras_teams_dir).c_str(),
+                                                       COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_ALLOW);
             if (!config_.portraits_dir.empty()) {
                 CreateDirectoryW(full_path("cache").c_str(), nullptr);
                 CreateDirectoryW(full_path(config_.portraits_dir).c_str(), nullptr);
