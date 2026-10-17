@@ -1,0 +1,89 @@
+/* My NFL Eras draft show: ESPN NFL 2K5 look (the era-select mockup's palette and type). */
+:root {
+  --red: #c41a1a; --red2: #7d0b0b; --gold: #e0a43a; --orange: #d9631c; --silver: #c9ced6;
+  --glass: rgba(6, 10, 24, .86); --blue: #0f1d45; --team: #c41a1a; --team2: #e0a43a;
+  --cond: 'Saira Condensed', 'Bahnschrift SemiCondensed', 'Bahnschrift', 'Arial Narrow', sans-serif;
+  --semi: 'Saira Semi Condensed', 'Bahnschrift SemiCondensed', 'Bahnschrift', sans-serif;
+  --wide: 'Michroma', 'Bahnschrift', 'Segoe UI', sans-serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1920px; height: 1080px; overflow: hidden; background: transparent; color: #fff; font-family: var(--cond); }
+body.demo { background: #20242c; }
+
+/* every element starts hidden and slides in */
+.bug, .lower, .board, .slam, .announce, .card, .photo-strip, .ticker { position: absolute; opacity: 0; transition: opacity .35s, transform .45s cubic-bezier(.2, .8, .2, 1); }
+.on { opacity: 1 !important; transform: none !important; }
+
+/* top-left draft bug */
+.bug { left: 70px; top: 52px; width: 760px; height: 70px; transform: translateX(-40px); }
+.bug .rim { position: absolute; left: 0; top: 12px; width: 640px; height: 52px; background: linear-gradient(90deg, var(--red), var(--orange) 60%, var(--gold)); transform: skewX(-18deg); box-shadow: 0 4px 10px rgba(0,0,0,.6); }
+.bug .plate { position: absolute; left: 10px; top: 6px; width: 620px; height: 52px; background: linear-gradient(#141821, #05070c); transform: skewX(-18deg); border: 1px solid #2b3140; }
+.bug .plate { font: 400 26px/52px var(--wide); letter-spacing: 2px; padding-left: 30px; color: #e8e8e8; text-shadow: 0 2px 0 #000; }
+.bug .plate b { font-weight: 400; color: #fff; -webkit-text-stroke: 1px #fff; }
+.bug .plate span { font: 800 26px/52px var(--semi); color: var(--gold); margin-left: 18px; letter-spacing: 3px; }
+.bug .espn { position: absolute; left: 650px; top: 10px; height: 52px; padding: 0 16px; background: var(--red); transform: skewX(-18deg); font: 800 italic 30px/52px var(--semi); letter-spacing: 1px; border: 2px solid #fff; box-shadow: 0 3px 8px rgba(0,0,0,.6); }
+
+/* lower third: on the clock */
+.lower { left: 150px; bottom: 150px; width: 1180px; height: 170px; transform: translateY(40px); }
+.lower::before { content: ''; position: absolute; inset: 0; background: var(--glass); border: 2px solid #3a4258; border-left: 10px solid var(--team); transform: skewX(-12deg); box-shadow: 0 8px 24px rgba(0,0,0,.7); }
+.lower .logo { position: absolute; left: 30px; top: 10px; width: 150px; height: 150px; }
+.lower .logo img { width: 150px; height: 150px; object-fit: contain; filter: drop-shadow(0 4px 6px #000); }
+.lower .txt { position: absolute; left: 210px; top: 14px; }
+.lower .kick { display: inline-block; font: 800 30px var(--semi); letter-spacing: 6px; color: #fff; background: linear-gradient(var(--red), var(--red2)); padding: 0 18px; transform: skewX(-12deg); animation: pulse 1.2s infinite; }
+.lower .team { font: 800 64px/1.1 var(--cond); letter-spacing: 2px; text-shadow: 0 3px 0 #000; margin-top: 4px; }
+.lower .sub { font: 700 28px var(--cond); letter-spacing: 4px; color: var(--silver); }
+.lower .timer { position: absolute; right: 30px; top: 40px; width: 190px; height: 90px; background: #000; border: 2px solid var(--gold); transform: skewX(-12deg); text-align: center; font: 400 46px/86px var(--wide); color: #ffd36a; text-shadow: 0 0 10px rgba(255,180,60,.6); }
+@keyframes pulse { 50% { filter: brightness(1.45); } }
+
+/* draft board (right) */
+.board { right: 90px; top: 150px; width: 620px; transform: translateX(60px); background: var(--glass); border: 2px solid #3a4258; border-top: 6px solid var(--red); box-shadow: 0 8px 24px rgba(0,0,0,.7); }
+.board .head { font: 800 30px/56px var(--semi); letter-spacing: 3px; padding-left: 22px; background: linear-gradient(#1c2232, #0b0e17); color: var(--gold); }
+.board .head span { color: #fff; margin-right: 12px; }
+.board ol { list-style: none; padding: 6px 0 10px; }
+.board li { display: flex; align-items: center; height: 46px; padding: 0 18px; font: 700 26px var(--cond); letter-spacing: 1px; border-bottom: 1px solid rgba(255,255,255,.07); }
+.board li .n { width: 50px; color: var(--gold); font-weight: 800; }
+.board li img { width: 38px; height: 38px; object-fit: contain; margin-right: 12px; }
+.board li .t { width: 170px; color: var(--silver); }
+.board li .p { flex: 1; color: #fff; white-space: nowrap; overflow: hidden; }
+.board li.cur { background: linear-gradient(90deg, rgba(196,26,26,.85), rgba(196,26,26,.15)); }
+.board li.cur .p { color: #ffd36a; }
+
+/* THE PICK IS IN */
+.slam { left: 0; right: 0; top: 410px; height: 200px; transform: scale(1.25); }
+.slam .bar { position: absolute; left: 240px; right: 240px; top: 40px; height: 120px; background: linear-gradient(var(--red), var(--red2)); border-top: 4px solid var(--gold); border-bottom: 4px solid var(--gold); transform: skewX(-14deg); box-shadow: 0 10px 40px rgba(0,0,0,.8); text-align: center; }
+.slam .bar i { display: inline-block; transform: skewX(14deg); font: 400 70px/120px var(--wide); font-style: normal; letter-spacing: 6px; -webkit-text-stroke: 1.5px #fff; text-shadow: 0 4px 0 #000; }
+
+/* announcement */
+.announce { left: 150px; right: 150px; bottom: 170px; text-align: left; transform: translateY(30px); }
+.announce .line { display: inline-block; font: 800 44px/1.25 var(--semi); letter-spacing: 3px; background: var(--glass); padding: 4px 26px; border-left: 8px solid var(--gold); transform: skewX(-10deg); text-shadow: 0 3px 0 #000; }
+.announce .big { display: block; width: max-content; margin-top: 10px; font: 800 64px/1.2 var(--cond); border-left-color: var(--team); }
+
+/* the pick card */
+.card { left: 150px; bottom: 120px; width: 1300px; height: 300px; transform: translateY(60px); }
+.card .strip { position: absolute; left: 0; top: 0; height: 58px; padding: 0 30px; background: linear-gradient(var(--red), var(--red2)); border: 2px solid var(--gold); transform: skewX(-14deg); font: 800 34px/54px var(--semi); letter-spacing: 4px; box-shadow: 0 6px 16px rgba(0,0,0,.7); }
+.card .strip b { font: 400 30px/54px var(--wide); -webkit-text-stroke: .8px #fff; letter-spacing: 2px; }
+.card .strip em { font-style: normal; color: var(--gold); margin: 0 16px; }
+.card .body { position: absolute; left: 0; top: 66px; width: 1300px; height: 230px; }
+.card .body::before { content: ''; position: absolute; inset: 0; background: var(--glass); border: 2px solid #3a4258; transform: skewX(-14deg); box-shadow: 0 10px 30px rgba(0,0,0,.75); }
+.card .logo { position: absolute; left: 40px; top: 15px; width: 200px; height: 200px; }
+.card .logo img { width: 200px; height: 200px; object-fit: contain; filter: drop-shadow(0 5px 8px #000); }
+.card .who { position: absolute; left: 280px; top: 12px; }
+.card .name { font: 800 100px/1.05 var(--cond); letter-spacing: 3px; text-shadow: 0 5px 0 #000; }
+.card .meta { font: 800 40px var(--semi); letter-spacing: 4px; color: var(--silver); }
+.card .meta em { font-style: normal; color: var(--gold); margin: 0 14px; }
+.card .to { font: 700 34px var(--cond); letter-spacing: 3px; color: var(--team2); margin-top: 2px; }
+.card .accent { position: absolute; right: -10px; top: 66px; width: 26px; height: 230px; background: linear-gradient(var(--team), var(--team2)); transform: skewX(-14deg); }
+
+/* photo-op strip and flash bulbs */
+.photo-strip { left: 150px; bottom: 120px; height: 84px; padding: 0 32px; background: var(--glass); border-left: 10px solid var(--team); transform: translateX(-60px); box-shadow: 0 6px 18px rgba(0,0,0,.7); }
+.photo-strip b { font: 800 56px/84px var(--cond); letter-spacing: 3px; margin-right: 24px; }
+.photo-strip span { font: 700 30px/84px var(--cond); letter-spacing: 3px; color: var(--silver); }
+.flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
+.flash.go { animation: flash .9s ease-out; }
+@keyframes flash { 0% { opacity: .85; } 12% { opacity: 0; } 30% { opacity: .55; } 42% { opacity: 0; } 70% { opacity: .35; } 100% { opacity: 0; } }
+
+/* ticker */
+.ticker { left: 0; right: 0; bottom: 34px; height: 46px; display: flex; align-items: center; overflow: hidden; background: linear-gradient(#1b1b1b, #000); border-top: 3px solid var(--red); border-bottom: 1px solid #333; transform: translateY(20px); }
+.ticker .lg { flex: none; height: 46px; padding: 0 22px; background: var(--red); font: 400 22px/46px var(--wide); letter-spacing: 2px; }
+.ticker .tx { white-space: nowrap; padding-left: 26px; font: 700 26px var(--cond); letter-spacing: 2px; color: #f3f3f3; }
+.ticker .tx em { font-style: normal; color: var(--gold); margin: 0 16px; }

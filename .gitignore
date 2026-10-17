@@ -71,3 +71,5 @@ mods/eras/offices/*/reference/
 mods/eras/offices/1980s/computer_monitor.png
 # My NFL Eras tools: this PC's folders (tools/eras/eras_settings.py)
 /eras-tools.ini
+# Draft show: poses and jerseys built from the player's disc (tools/eras/draftshow/build-draftshow-pack.py)
+mods/eras/draft/files/

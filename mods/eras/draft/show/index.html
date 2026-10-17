@@ -1,0 +1,61 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>My NFL Eras - Draft Show</title>
+<!-- My NFL Eras draft show overlay (docs/eras/results/M11-draftshow.md). Shown by the game's
+     presentation layer in its front-end mode over the 3D Draft room; events come from
+     src/nfl2k5_eras_draftshow.c. Opened in a browser it plays a demo of pick 1. -->
+<link href="https://fonts.googleapis.com/css2?family=Michroma&family=Saira+Condensed:wght@500;700;800&family=Saira+Semi+Condensed:wght@600;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="show.css">
+</head>
+<body>
+<div id="bug" class="bug">
+  <div class="rim"></div>
+  <div class="plate"><b>1981</b> NFL DRAFT <span id="bug-round">ROUND 1</span></div>
+  <div class="espn">ESPN</div>
+</div>
+
+<div id="clock" class="lower clock">
+  <div class="logo"><img id="clock-logo" alt=""></div>
+  <div class="txt">
+    <div class="kick">ON THE CLOCK</div>
+    <div class="team" id="clock-team">NEW ORLEANS SAINTS</div>
+    <div class="sub" id="clock-sub">ROUND 1 &middot; PICK 1</div>
+  </div>
+  <div class="timer"><span id="clock-time">15:00</span></div>
+</div>
+
+<div id="board" class="board">
+  <div class="head"><span>1981 NFL DRAFT</span> ROUND 1</div>
+  <ol id="board-list"></ol>
+</div>
+
+<div id="pickin" class="slam"><div class="bar"><i>THE PICK IS IN</i></div></div>
+
+<div id="announce" class="announce">
+  <div class="line" id="announce-1">WITH THE 1ST PICK IN THE 1981 NFL DRAFT,</div>
+  <div class="line big" id="announce-2"></div>
+</div>
+
+<div id="card" class="card">
+  <div class="strip"><b>1981 NFL DRAFT</b><em>&middot;</em>ROUND <span id="card-round">1</span><em>&middot;</em>PICK <span id="card-pick">1</span></div>
+  <div class="body">
+    <div class="logo"><img id="card-logo" alt=""></div>
+    <div class="who">
+      <div class="name" id="card-name">GEORGE ROGERS</div>
+      <div class="meta"><span id="card-pos">RB</span><em>&middot;</em><span id="card-college">SOUTH CAROLINA</span></div>
+      <div class="to" id="card-team">NEW ORLEANS SAINTS</div>
+    </div>
+  </div>
+  <div class="accent" id="card-accent"></div>
+</div>
+
+<div id="photo" class="photo-strip"><b id="photo-name">GEORGE ROGERS</b><span id="photo-team">NEW ORLEANS SAINTS &middot; NO. 1 OVERALL</span></div>
+<div id="flash" class="flash"></div>
+
+<div id="ticker" class="ticker"><div class="lg">DRAFT</div><div class="tx" id="ticker-tx">THE 1981 NFL DRAFT IS UNDER WAY</div></div>
+
+<script src="show.js"></script>
+</body>
+</html>

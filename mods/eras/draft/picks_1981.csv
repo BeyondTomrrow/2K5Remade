@@ -1,0 +1,333 @@
+round,pick,team,pfr_team,player,pos,college
+1,1,saints,NOR,George Rogers,RB,South Carolina
+1,2,giants,NYG,Lawrence Taylor,LB,North Carolina
+1,3,jets,NYJ,Freeman McNeil,RB,UCLA
+1,4,seahawks,SEA,Kenny Easley,DB,UCLA
+1,5,cardinals,STL,E.J. Junior,LB,Alabama
+1,6,packers,GNB,Rich Campbell,QB,California
+1,7,buccaneers,TAM,Hugh Green,LB,Pittsburgh
+1,8,49ers,SFO,Ronnie Lott,DB,USC
+1,9,rams,RAM,Mel Owens,LB,Michigan
+1,10,bengals,CIN,David Verser,WR,Kansas
+1,11,bears,CHI,Keith Van Horne,T,USC
+1,12,colts,BAL,Randy McMillan,RB,Pittsburgh
+1,13,dolphins,MIA,David Overstreet,RB,Oklahoma
+1,14,chiefs,KAN,Willie Scott,TE,South Carolina
+1,15,broncos,DEN,Dennis Smith,DB,USC
+1,16,lions,DET,Mark Nichols,WR,San Jose St.
+1,17,steelers,PIT,Keith Gary,DE,Oklahoma
+1,18,colts,BAL,Donnell Thompson,DE,North Carolina
+1,19,patriots,NWE,Brian Holloway,T,Stanford
+1,20,washington,WAS,Mark May,G,Pittsburgh
+1,21,raiders,OAK,Ted Watts,DB,Texas Tech
+1,22,browns,CLE,Hanford Dixon,DB,Southern Miss
+1,23,raiders,OAK,Curt Marsh,G,Washington
+1,24,chargers,SDG,James Brooks,RB,Auburn
+1,25,falcons,ATL,Bobby Butler,DB,Florida St.
+1,26,cowboys,DAL,Howard Richards,G,Missouri
+1,27,eagles,PHI,Leonard Mitchell,DE,Houston
+1,28,bills,BUF,Booker Moore,RB,Penn St.
+2,29,saints,NOR,Russell Gary,DB,Nebraska
+2,30,jets,NYJ,Marion Barber Jr.,RB,Minnesota
+2,31,seahawks,SEA,David Hughes,RB,Boise St.
+2,32,giants,NYG,Dave Young,TE,Purdue
+2,33,cardinals,STL,Neil Lomax,QB,Portland St.
+2,34,buccaneers,TAM,James Wilder,RB,Missouri
+2,35,packers,GNB,Gary Lewis,TE,Texas-Arlington
+2,36,49ers,SFO,John Harty,NT,Iowa
+2,37,bengals,CIN,Cris Collinsworth,WR,Florida
+2,38,bears,CHI,Mike Singletary,LB,Baylor
+2,39,vikings,MIN,Mardye McDole,WR,Mississippi St.
+2,40,49ers,SFO,Eric Wright,DB,Missouri
+2,41,chiefs,KAN,Joe Delaney,RB,Northwestern St. (LA)
+2,42,broncos,DEN,Clay Brown,TE,BYU
+2,43,rams,RAM,Jim Collins,LB,Syracuse
+2,44,steelers,PIT,Anthony Washington,DB,Fresno St.
+2,45,vikings,MIN,Robin Sendlein,LB,Texas
+2,46,lions,DET,Curtis Green,DE,Alabama St.
+2,47,patriots,NWE,Tony Collins,RB,East Carolina
+2,48,raiders,OAK,Howie Long,DE,Villanova
+2,49,bills,BUF,Chris Williams,DB,LSU
+2,50,bills,BUF,Byron Franklin,WR,Auburn
+2,51,saints,NOR,Rickey Jackson,LB,Pittsburgh
+2,52,vikings,MIN,Jarvis Redwine,RB,Nebraska
+2,53,cowboys,DAL,Doug Donley,WR,Ohio St.
+2,54,falcons,ATL,Lyman White,LB,LSU
+2,55,eagles,PHI,Dean Miraldi,T,Utah
+2,56,dolphins,MIA,Andra Franklin,RB,Nebraska
+3,57,saints,NOR,Frank Warren,DE,Auburn
+3,58,seahawks,SEA,Bill Dugan,G,Penn St.
+3,59,giants,NYG,John Mistler,WR,Arizona St.
+3,60,jets,NYJ,Ben Rudolph,DT,Long Beach St.
+3,61,cardinals,STL,Jeff Griffin,DB,Utah
+3,62,packers,GNB,Ray Stachowicz,P,Michigan St.
+3,63,rams,RAM,Greg Meisner,NT,Pittsburgh
+3,64,bengals,CIN,John Simmons,DB,SMU
+3,65,49ers,SFO,Carlton Williamson,DB,Pittsburgh
+3,66,rams,RAM,Robert Cobb,DE,Arizona
+3,67,bears,CHI,Ken Margerum,WR,Stanford
+3,68,colts,BAL,Randy Van Divier,T,Washington
+3,69,washington,WAS,Russ Grimm,G,Pittsburgh
+3,70,chiefs,KAN,Marvin Harvey,TE,Southern Miss
+3,71,saints,NOR,Hoby Brenner,TE,USC
+3,72,lions,DET,Don Greco,G,Western Illinois
+3,73,steelers,PIT,Rick Donnalley,C,North Carolina
+3,74,vikings,MIN,Tim Irwin,T,Tennessee
+3,75,chiefs,KAN,Roger Taylor,T,Oklahoma St.
+3,76,bills,BUF,Mike Mosley,WR,Texas A&M
+3,77,chargers,SDG,Irvin Phillips,DB,Arkansas Tech
+3,78,chiefs,KAN,Lloyd Burruss,DB,Maryland
+3,79,oilers_titans,HOU,Mike Holston,WR,Morgan St.
+3,80,falcons,ATL,Scott Woerner,DB,Georgia
+3,81,cowboys,DAL,Glen Titensor,G,BYU
+3,82,eagles,PHI,Greg LaFleur,TE,LSU
+3,83,bills,BUF,Robert Geathers,DT,South Carolina St.
+4,84,dolphins,MIA,Sam Greene,WR,UNLV
+4,85,giants,NYG,Cliff Chatman,RB,Central Oklahoma
+4,86,jets,NYJ,Al Washington,LB,Ohio St.
+4,87,seahawks,SEA,Scott Phillips,WR,BYU
+4,88,cardinals,STL,Steve Rhodes,WR,Oklahoma
+4,89,buccaneers,TAM,John Holt,DB,West Texas A&M
+4,90,washington,WAS,Tom Flick,QB,Washington
+4,91,cowboys,DAL,Scott Pelluer,LB,Washington St.
+4,92,browns,CLE,Mike Robinson,DE,Arizona
+4,93,bengals,CIN,Guy Frazier,LB,Wyoming
+4,94,colts,BAL,Tim Sherwin,TE,Boston Col.
+4,95,bears,CHI,Todd Bell,DB,Ohio St.
+4,96,dolphins,MIA,Brad Wright,QB,New Mexico
+4,97,chiefs,KAN,Ron Washington,WR,Arizona St.
+4,98,broncos,DEN,Mark Herrmann,QB,Purdue
+4,99,lions,DET,Tracy Porter,WR,LSU
+4,100,steelers,PIT,Robbie Martin,WR,Cal Poly-San Luis Obispo
+4,101,vikings,MIN,John Swain,DB,Miami (FL)
+4,102,patriots,NWE,Don Blackmon,LB,Tulsa
+4,103,chargers,SDG,Amos Lawrence,RB,North Carolina
+4,104,rams,RAM,George Lilja,G,Michigan
+4,105,packers,GNB,Richard Turner,NT,Oklahoma
+4,106,oilers_titans,HOU,Nick Eyre,T,BYU
+4,107,chargers,SDG,Eric Sievers,TE,Maryland
+4,108,cowboys,DAL,Derrie Nelson,LB,Nebraska
+4,109,falcons,ATL,John Scully,G,Notre Dame
+4,110,eagles,PHI,Calvin Murray,RB,Ohio St.
+4,111,raiders,OAK,Johnny Robinson,NT,Louisiana Tech
+5,112,saints,NOR,Louis Oubre,G,Oklahoma
+5,113,jets,NYJ,Tyrone Keys,DE,Mississippi St.
+5,114,seahawks,SEA,Edwin Bailey,G,South Carolina St.
+5,115,giants,NYG,Bill Neill,NT,Pittsburgh
+5,116,cardinals,STL,John Gillen,LB,Illinois
+5,117,packers,GNB,Byron Braggs,DE,Alabama
+5,118,raiders,OAK,James Davis,DB,Southern
+5,119,washington,WAS,Dexter Manley,DE,Oklahoma St.
+5,120,bengals,CIN,Benjie Pryor,TE,Pittsburgh
+5,121,49ers,SFO,Lynn Thomas,DB,Pittsburgh
+5,122,49ers,SFO,Arrington Jones,RB,Winston-Salem St.
+5,123,vikings,MIN,Wendell Ray,DE,Missouri
+5,124,chiefs,KAN,Todd Thomas,C,North Dakota
+5,125,broncos,DEN,Ken Lanier,T,Florida St.
+5,126,dolphins,MIA,Ken Poole,DE,La-Monroe
+5,127,steelers,PIT,Ricky Martin,WR,New Mexico
+5,128,saints,NOR,Jerry Boyarsky,NT,Pittsburgh
+5,129,lions,DET,Larry Lee,G,UCLA
+5,130,patriots,NWE,Steve Clark,DE,Kansas St.
+5,131,chargers,SDG,Keith Ferguson,DE,Ohio St.
+5,132,washington,WAS,Gary Sayre,G,Cameron
+5,133,oilers_titans,HOU,Delbert Fowler,LB,West Virginia
+5,134,browns,CLE,Steve Cox,P,Arkansas
+5,135,bills,BUF,Calvin Clark,DE,Purdue
+5,136,falcons,ATL,Eric Sanders,T,Nevada
+5,137,cowboys,DAL,Danny Spradlin,LB,Tennessee
+5,138,dolphins,MIA,Tommy Vigorito,RB,Virginia
+6,139,saints,NOR,Nat Hudson,G,Georgia
+6,140,seahawks,SEA,Steve Durham,DE,Clemson
+6,141,chargers,SDG,Andrew Gissinger,T,Syracuse
+6,142,jets,NYJ,John Woodring,LB,Brown
+6,143,cardinals,STL,Dave Ahrens,LB,Wisconsin
+6,144,saints,NOR,Johnnie Poe,DB,Missouri
+6,145,giants,NYG,Melvin Hoover,WR,Arizona St.
+6,146,bengals,CIN,Rex Robinson,K,Georgia
+6,147,49ers,SFO,Pete Kugler,NT,Penn St.
+6,148,washington,WAS,Larry Kubin,LB,Penn St.
+6,149,colts,BAL,Bubba Green,DT,North Carolina St.
+6,150,bears,CHI,Reuben Henderson,DB,San Diego St.
+6,151,broncos,DEN,Alvin Lewis,RB,Colorado St.
+6,152,dolphins,MIA,Mack Moore,DE,Texas A&M
+6,153,chiefs,KAN,Dock Luckie,DT,Florida
+6,154,dolphins,MIA,Fulton Walker,DB,West Virginia
+6,155,lions,DET,Sam Johnson,DB,Maryland
+6,156,steelers,PIT,Bryan Hinkle,LB,Oregon
+6,157,patriots,NWE,Ron Wooten,G,North Carolina
+6,158,rams,RAM,William Daniels,DT,Alabama St.
+6,159,oilers_titans,HOU,Bill Kay,DB,Purdue
+6,160,browns,CLE,Ron Simmons,DT,Florida St.
+6,161,bills,BUF,Robert Holt,WR,Baylor
+6,162,chargers,SDG,Bobby Duckworth,WR,Arkansas
+6,163,cowboys,DAL,Vince Skillings,DB,Ohio St.
+6,164,falcons,ATL,Harry Stanback,DE,North Carolina
+6,165,giants,NYG,Edward O'Neal,RB,Tuskegee
+6,166,saints,NOR,Glen Redd,LB,BYU
+7,167,saints,NOR,Kevin Williams,WR,USC
+7,168,giants,NYG,Louis Jackson,RB,Cal Poly-San Luis Obispo
+7,169,jets,NYJ,Kenny Neil,DE,Iowa St.
+7,170,seahawks,SEA,Ron Johnson,WR,Long Beach St.
+7,171,cardinals,STL,Kevin Donnalley,DB,North Dakota St.
+7,172,packers,GNB,Bill Whitaker,DB,Missouri
+7,173,cowboys,DAL,Ron Fellows,DB,Missouri
+7,174,eagles,PHI,Alan Duncan,K,Tennessee
+7,175,rams,RAM,Ron Battle,TE,North Texas
+7,176,bengals,CIN,Jeff Schuh,LB,Minnesota
+7,177,bears,CHI,Jeff Fisher,DB,USC
+7,178,colts,BAL,Obed Ariri,K,Clemson
+7,179,dolphins,MIA,Mike Daum,T,Cal Poly-San Luis Obispo
+7,180,chiefs,KAN,Billy Jackson,RB,Alabama
+7,181,broncos,DEN,Steve Busick,LB,USC
+7,182,lions,DET,Lee Spivey,T,SMU
+7,183,steelers,PIT,David Little,LB,Florida
+7,184,vikings,MIN,Don Shaver,RB,Kutztown (PA)
+7,185,patriots,NWE,Ken Toler,WR,Mississippi
+7,186,seahawks,SEA,Brad Scovill,TE,Penn St.
+7,187,browns,CLE,Eddie Johnson,LB,Louisville
+7,188,bills,BUF,Steve Doolittle,LB,Colorado
+7,189,chargers,SDG,Pete Holohan,TE,Notre Dame
+7,190,rams,RAM,Mike Clark,DE,Florida
+7,191,cowboys,DAL,Ken Miller,DB,Eastern Michigan
+7,192,eagles,PHI,Doak Field,LB,Baylor
+7,193,oilers_titans,HOU,Don Washington,DB,Texas A&M-Kingsville
+8,194,patriots,NWE,Ken Naber,K,Stanford
+8,195,jets,NYJ,Lloyd Jones,WR,BYU
+8,196,seahawks,SEA,Eric Lane,RB,BYU
+8,197,giants,NYG,John Powers,G,Michigan
+8,198,cardinals,STL,Mike Fisher,WR,Baylor
+8,199,buccaneers,TAM,Denver Johnson,T,Tulsa
+8,200,packers,GNB,Larry Werts,LB,Jackson St.
+8,201,washington,WAS,Charlie Brown,WR,South Carolina St.
+8,202,bengals,CIN,Bobby Kemp,DB,Cal State-Fullerton
+8,203,49ers,SFO,Garry White,RB,Minnesota
+8,204,colts,BAL,Ken Sitton,DB,Oklahoma
+8,205,bears,CHI,Scott Zettek,DT,Notre Dame
+8,206,chiefs,KAN,David Dorn,WR,Rutgers
+8,207,giants,NYG,Mark Reed,QB,Minnesota St.-Moorhead
+8,208,dolphins,MIA,William Judson,DB,South Carolina St.
+8,209,steelers,PIT,Frank Wilson,TE,Rice
+8,210,vikings,MIN,Wade Wilson,QB,East Texas A&M
+8,211,lions,DET,Bob Niziolek,TE,Colorado
+8,212,patriots,NWE,Lin Dawson,TE,North Carolina St.
+8,213,jets,NYJ,J.C. Watts,DB,Oklahoma
+8,214,saints,NOR,Gene Gladys,LB,Penn St.
+8,215,saints,NOR,Kevin Evans,DB,Arkansas
+8,216,rams,RAM,Art Plunkett,T,UNLV
+8,217,oilers_titans,HOU,Willie Tullis,DB,Troy
+8,218,cowboys,DAL,Paul Piurowski,LB,Florida St.
+8,219,falcons,ATL,Clifford Toney,DB,Auburn
+8,220,colts,BAL,Hosea Taylor,DE,Houston
+8,221,giants,NYG,Billy Ard,G,Wake Forest
+9,222,saints,NOR,Toussaint Tyler,RB,Washington
+9,223,seahawks,SEA,Jim Stone,RB,Notre Dame
+9,224,giants,NYG,Byron Hunt,LB,SMU
+9,225,jets,NYJ,Admiral Dewey Larry,DB,UNLV
+9,226,cardinals,STL,Stump Mitchell,RB,The Citadel
+9,227,packers,GNB,Tim Huffman,G,Notre Dame
+9,228,buccaneers,TAM,Mike Ford,QB,SMU
+9,229,bengals,CIN,Jim Hannula,T,Northern Illinois
+9,230,bengals,CIN,Samoa Samoa,RB,Washington St.
+9,231,washington,WAS,Darryl Grant,DT,Rice
+9,232,bears,CHI,Frank Ditta,G,Baylor
+9,233,colts,BAL,Tim Gooch,DT,Kentucky
+9,234,broncos,DEN,Rusty Olsen,DE,Washington
+9,235,dolphins,MIA,John Noonan,WR,Nebraska
+9,236,seahawks,SEA,Jim Whatley,WR,Washington St.
+9,237,chiefs,KAN,Anthony Vereen,DB,Southeastern Louisiana
+9,238,lions,DET,Hugh Jernigan,DB,Arkansas
+9,239,steelers,PIT,James Hunter,NT,USC
+9,240,lions,DET,David Martin,DB,Villanova
+9,241,bills,BUF,Robb Riddick,RB,Millersville
+9,242,rams,RAM,Ron Seawell,LB,Portland St.
+9,243,oilers_titans,HOU,Avon Riley,LB,UCLA
+9,244,browns,CLE,Randy Schleusener,G,Nebraska
+9,245,falcons,ATL,Calvin Fance,RB,Rice
+9,246,cowboys,DAL,Mike Wilson,WR,Washington St.
+9,247,eagles,PHI,Chuck Commiskey,G,Mississippi
+9,248,raiders,OAK,Curt Mohl,T,UCLA
+10,249,saints,NOR,Hokie Gajan,RB,LSU
+10,250,giants,NYG,Mike Barker,DT,Grambling St.
+10,251,jets,NYJ,Marty Wetzel,LB,Tulane
+10,252,seahawks,SEA,Ken Dawson,RB,Savannah St.
+10,253,cardinals,STL,James Mallard,WR,Alabama
+10,254,buccaneers,TAM,Ken McCune,DE,Texas
+10,255,packers,GNB,Nickie Hall,QB,Tulane
+10,256,colts,BAL,Gregg Gerken,LB,Northern Arizona
+10,257,washington,WAS,Phil Kessel,QB,Northern Michigan
+10,258,bengals,CIN,Hubert Simpson,RB,Tennessee
+10,259,colts,BAL,Trent Bryant,DB,Arkansas
+10,260,bears,CHI,Tim Clifford,QB,Indiana
+10,261,dolphins,MIA,Steve Folsom,TE,Utah
+10,262,chiefs,KAN,Les Studdard,C,Texas
+10,263,cardinals,STL,Jim Joiner,WR,Miami (FL)
+10,264,lions,DET,Andy Cannavino,LB,Michigan
+10,265,steelers,PIT,Mike Mayock,DB,Boston Col.
+10,266,vikings,MIN,James Murphy,WR,Utah St.
+10,267,washington,WAS,Allan Kennedy,T,Washington St.
+10,268,chargers,SDG,Robert Parham,RB,Grambling St.
+10,269,rams,RAM,Robert Alexander,RB,West Virginia
+10,270,oilers_titans,HOU,Larry Jones,RB,Colorado St.
+10,271,browns,CLE,Dean Prater,DE,Oklahoma St.
+10,272,bills,BUF,Justin Cross,T,Western St. (CO)
+10,273,cowboys,DAL,Pat Graham,DT,California
+10,274,falcons,ATL,Robert Murphy,DB,Ohio St.
+10,275,eagles,PHI,Hubie Oliver,RB,Arizona
+10,276,raiders,OAK,Frank Hawkins,RB,Nevada
+11,277,saints,NOR,Lester Mickens,WR,Kansas
+11,278,jets,NYJ,Ed Gall,DT,Maryland
+11,279,seahawks,SEA,Lance Olander,RB,Colorado
+11,280,chargers,SDG,Matt Petrzelka,T,Iowa
+11,281,cardinals,STL,Mike Sherrod,TE,Illinois
+11,282,packers,GNB,Forrest Valora,LB,Oklahoma
+11,283,buccaneers,TAM,Johnny Ray Smith,DB,Lamar
+11,284,washington,WAS,Jerry Hill,WR,North Alabama
+11,285,bengals,CIN,Robert Jackson,DB,Central Michigan
+11,286,49ers,SFO,Ronnie DeBose,TE,UCLA
+11,287,bears,CHI,Lonnie Johnson,RB,Indiana
+11,288,colts,BAL,Holden Smith,WR,California
+11,289,chiefs,KAN,Frank Case,DE,Penn St.
+11,290,broncos,DEN,Pat Walker,WR,Miami (FL)
+11,291,dolphins,MIA,Jim Jensen,WR,Boston Univ.
+11,292,steelers,PIT,Rick Trocano,QB,Pittsburgh
+11,293,vikings,MIN,Bill Stephanos,T,Boston Col.
+11,294,lions,DET,Willie Jackson,DB,Mississippi St.
+11,295,patriots,NWE,Brian Buckley,QB,Harvard
+11,296,rams,RAM,Marcellus Greene,DB,Arizona
+11,297,oilers_titans,HOU,Claude Mathews,G,Auburn
+11,298,browns,CLE,Larry Friday,DB,Mississippi St.
+11,299,bills,BUF,Buster Barnett,TE,Jackson St.
+11,300,chargers,SDG,Carlos Bradley,LB,Wake Forest
+11,301,falcons,ATL,Keith Chappelle,WR,Iowa
+11,302,cowboys,DAL,Tim Morrison,G,Georgia
+11,303,eagles,PHI,Gail Davis,T,Virginia Union
+11,304,raiders,OAK,Chester Willis,RB,Auburn
+12,305,saints,NOR,Jim Wilks,DE,San Diego St.
+12,306,seahawks,SEA,Jeff Bednarek,DT,Pacific
+12,307,giants,NYG,Mike Maher,TE,Western Illinois
+12,308,jets,NYJ,Mike Moeller,T,Drake
+12,309,cardinals,STL,Joe Adams,G,Nebraska
+12,310,buccaneers,TAM,Brad White,NT,Tennessee
+12,311,packers,GNB,Cliff Lewis,LB,Southern Miss
+12,312,bengals,CIN,Mark O'Connell,QB,Ball St.
+12,313,49ers,SFO,Major Ogilvie,RB,Alabama
+12,314,washington,WAS,Clint Didier,TE,Portland St.
+12,315,colts,BAL,Eric Scoggins,LB,USC
+12,316,bears,CHI,Bob Shupryt,LB,New Mexico
+12,317,broncos,DEN,John Hankerd,LB,Notre Dame
+12,318,dolphins,MIA,John Alford,DT,South Carolina St.
+12,319,chiefs,KAN,Bob Gagliano,QB,Utah St.
+12,320,vikings,MIN,Brian Williams,TE,Southern
+12,321,broncos,DEN,Mandel Robinson,RB,Wyoming
+12,322,49ers,SFO,Joe Adams,QB,Tennessee St.
+12,323,patriots,NWE,Cris Crissy,DB,Princeton
+12,324,oilers_titans,HOU,Bill Capece,K,Florida St.
+12,325,browns,CLE,Kevin McGill,T,Oregon
+12,326,bills,BUF,Keith Clark,LB,Memphis
+12,327,chargers,SDG,Stacy Charles,WR,Bethune-Cookman
+12,328,rams,RAM,Jairo Penaranda,RB,UCLA
+12,329,cowboys,DAL,Nate Lundy,WR,Indiana
+12,330,falcons,ATL,Mark McCants,DB,Temple
+12,331,eagles,PHI,Ray Ellis,DB,Ohio St.
+12,332,raiders,OAK,Phil Nelson,TE,Delaware

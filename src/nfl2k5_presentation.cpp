@@ -1364,8 +1364,129 @@ static void music_tick()
 }
 
 /* RECOMP_AUDIO_WAV recordings get the theme too (apu_xaudio2.c tap). */
+/* Front-end voice clips (My NFL Eras draft show, docs/eras/results/M11-draftshow.md): two
+ * channels (a chime's tail can ring under the call), each one clip at a time, decoded by Media
+ * Foundation to 48 kHz stereo and played on this file's own XAudio2 engine; mixed into the
+ * RECOMP_AUDIO_WAV / video-clip recordings like the theme. The caller ducks the game's own audio
+ * (menu music) with nfl2k5_presentation_voice_duck. */
+#define VOICE_CHANNELS 3
+struct VoiceChannel {
+    IXAudio2SourceVoice *voice = nullptr;
+    std::vector<int16_t> pcm;
+    size_t cap_pos = 0;
+    float vol = 1.0f;
+    std::atomic<int> state{ 0 };          /* 0 idle, 1 decoding, 2 playing */
+    std::atomic<int> generation{ 0 };
+    double length = 0;
+};
+static struct {
+    std::mutex lock;
+    IXAudio2 *xa = nullptr;
+    IXAudio2MasteringVoice *master = nullptr;
+    VoiceChannel ch[VOICE_CHANNELS];
+} s_voice;
+
+static void voice_release_locked(VoiceChannel &c)
+{
+    if (c.voice) { c.voice->Stop(); c.voice->FlushSourceBuffers(); c.voice->DestroyVoice(); c.voice = nullptr; }
+    c.pcm.clear();
+    c.cap_pos = 0;
+}
+
+/* ch < 0: every channel */
+extern "C" void nfl2k5_presentation_voice_stop(int ch)
+{
+    std::lock_guard<std::mutex> g(s_voice.lock);
+    for (int i = 0; i < VOICE_CHANNELS; i++)
+        if (ch < 0 || ch == i) { ++s_voice.ch[i].generation; voice_release_locked(s_voice.ch[i]); s_voice.ch[i].state = 0; }
+}
+
+/* Starts decoding and playing `path` (WAV or MP3) on channel `ch` at `volume`; 0, or -1. */
+extern "C" int nfl2k5_presentation_voice_play(int ch, const char *path, float volume)
+{
+    if (!path || !*path || ch < 0 || ch >= VOICE_CHANNELS) return -1;
+    nfl2k5_presentation_voice_stop(ch);
+    VoiceChannel &c = s_voice.ch[ch];
+    int gen = ++c.generation;
+    c.state = 1;
+    std::string p = path;
+    std::thread([p, gen, volume, ch]() {
+        std::vector<int16_t> pcm;
+        CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+        bool ok = decode_mp3(p, pcm);
+        CoUninitialize();
+        std::lock_guard<std::mutex> g(s_voice.lock);
+        VoiceChannel &c = s_voice.ch[ch];
+        if (gen != c.generation) return;
+        if (!ok) { fprintf(stderr, "[PRES] voice: could not decode %s\n", p.c_str()); c.state = 0; return; }
+        if (!s_voice.xa) {
+            if (FAILED(XAudio2Create(&s_voice.xa, 0, XAUDIO2_DEFAULT_PROCESSOR)) ||
+                FAILED(s_voice.xa->CreateMasteringVoice(&s_voice.master))) { c.state = 0; return; }
+            if (getenv("RECOMP_AUDIO_MUTE")) s_voice.master->SetVolume(0.0f);   /* background tests: still recorded */
+        }
+        WAVEFORMATEX wf = {};
+        wf.wFormatTag = WAVE_FORMAT_PCM; wf.nChannels = 2; wf.nSamplesPerSec = 48000;
+        wf.wBitsPerSample = 16; wf.nBlockAlign = 4; wf.nAvgBytesPerSec = 48000 * 4;
+        if (FAILED(s_voice.xa->CreateSourceVoice(&c.voice, &wf))) { c.state = 0; return; }
+        c.pcm.swap(pcm);
+        XAUDIO2_BUFFER b = {};
+        b.AudioBytes = (UINT32)(c.pcm.size() * 2);
+        b.pAudioData = (const BYTE *)c.pcm.data();
+        b.Flags = XAUDIO2_END_OF_STREAM;
+        c.voice->SubmitSourceBuffer(&b);
+        c.vol = volume;
+        c.voice->SetVolume(volume);
+        c.cap_pos = 0;
+        c.length = c.pcm.size() / 96000.0;
+        c.voice->Start();
+        c.state = 2;
+        fprintf(stderr, "[PRES] voice t=%lu ch %d playing %s (%.2f s, volume %.2f)\n", GetTickCount(), ch, p.c_str(), c.length, volume);
+    }).detach();
+    return 0;
+}
+
+/* 0 idle (finished), 1 decoding, 2 playing; elapsed / length in seconds while playing. */
+extern "C" int nfl2k5_presentation_voice_state(int ch, double *elapsed, double *length)
+{
+    if (ch < 0 || ch >= VOICE_CHANNELS) return 0;
+    std::lock_guard<std::mutex> g(s_voice.lock);
+    VoiceChannel &c = s_voice.ch[ch];
+    if (c.state == 2 && c.voice) {
+        XAUDIO2_VOICE_STATE vs;
+        c.voice->GetState(&vs, 0);
+        if (vs.BuffersQueued == 0) {
+            fprintf(stderr, "[PRES] voice t=%lu ch %d finished (%.2f s)\n", GetTickCount(), ch, c.length);
+            /* the recording copy keeps its samples until the capture has mixed them all */
+            c.voice->DestroyVoice(); c.voice = nullptr;
+            c.state = 0;
+        } else {
+            if (elapsed) *elapsed = vs.SamplesPlayed / 48000.0;
+            if (length) *length = c.length;
+        }
+    }
+    return c.state;
+}
+
+/* The game's own audio (menu music, effects) under the voice: 1 = full. */
+extern "C" void nfl2k5_presentation_voice_duck(float gain)
+{
+    xbox_AudioSetGameGain(gain < 0.0f ? 0.0f : gain > 1.0f ? 1.0f : gain);
+}
+
 static void capture_mix(int16_t *buf, int frames)
 {
+    {
+        std::lock_guard<std::mutex> gv(s_voice.lock);
+        for (auto &c : s_voice.ch) {
+            if (c.pcm.empty() || c.state == 1) continue;
+            float v = c.vol;
+            for (int i = 0; i < frames * 2 && c.cap_pos < c.pcm.size(); i++, c.cap_pos++) {
+                int x = buf[i] + (int)(c.pcm[c.cap_pos] * v);
+                buf[i] = (int16_t)(x > 32767 ? 32767 : x < -32768 ? -32768 : x);
+            }
+            if (c.cap_pos >= c.pcm.size() && !c.voice) { c.pcm.clear(); c.cap_pos = 0; }
+        }
+    }
     std::lock_guard<std::mutex> g(s_music.lock);
     if (!s_music.voice || s_music.state < 2) return;
     float v = s_music.cur_vol;
@@ -3622,12 +3743,121 @@ static int html_hud(const XboxHudFrame *f, XboxHudImage *img, const GameState &g
     return 1;
 }
 
+/* Front-end card mode (My NFL Eras draft show, docs/eras/results/M11-draftshow.md): a page the
+ * game starts on demand outside a match, with events posted from C. Its own host, separate
+ * from the match package's; the match gate above is not involved. Any thread may call
+ * begin/end/post; the host is driven from the HUD callback. */
+static struct {
+    std::mutex lock;
+    bool want = false;
+    std::string root, dir, entry;
+    std::vector<std::string> events;
+    unsigned gen = 0;
+} s_fe;
+static std::unique_ptr<nfl2k5::PresentationHost> s_fe_host;
+static unsigned s_fe_host_gen;
+static float s_fe_scale;
+
+extern "C" void nfl2k5_presentation_frontend_begin(const char *root_dir, const char *package_dir, const char *entry)
+{
+    std::lock_guard<std::mutex> g(s_fe.lock);
+    s_fe.want = true;
+    s_fe.root = root_dir ? root_dir : "";
+    s_fe.dir = package_dir ? package_dir : "";
+    s_fe.entry = entry && *entry ? entry : "index.html";
+    s_fe.events.clear();
+    s_fe.gen++;
+    fprintf(stderr, "[HTMLPRES] front-end page requested: %s/%s\n", s_fe.dir.c_str(), s_fe.entry.c_str());
+}
+
+extern "C" void nfl2k5_presentation_frontend_end(void)
+{
+    std::lock_guard<std::mutex> g(s_fe.lock);
+    if (s_fe.want) fprintf(stderr, "[HTMLPRES] front-end page released\n");
+    s_fe.want = false;
+    s_fe.events.clear();
+}
+
+/* One Presentation API event object, e.g. {"name":"DRAFT_PICK","pick":1,...}. Queued until the
+ * page's host exists, then delivered in order. */
+extern "C" void nfl2k5_presentation_post_json(const char *json)
+{
+    if (!json || !*json) return;
+    std::lock_guard<std::mutex> g(s_fe.lock);
+    if (!s_fe.want) return;
+    if (s_fe.events.size() < 256) s_fe.events.push_back(json);
+    if (s_log) fprintf(stderr, "[HTMLPRES] front-end event %s\n", json);
+}
+
+static int frontend_hud(const XboxHudFrame *f, XboxHudImage *img)
+{
+    bool want;
+    std::string root, dir, entry;
+    std::vector<std::string> events;
+    unsigned gen;
+    {
+        std::lock_guard<std::mutex> g(s_fe.lock);
+        want = s_fe.want;
+        gen = s_fe.gen;
+        if (want) { root = s_fe.root; dir = s_fe.dir; entry = s_fe.entry; }
+    }
+    if (!want || (s_fe_host && s_fe_host_gen != gen)) {
+        if (s_fe_host) {
+            s_fe_host->stop();
+            s_fe_host.reset();
+            fprintf(stderr, "[HTMLPRES] front-end host stopped\n");
+        }
+        if (!want) return 0;
+    }
+    float gw = f->game_w, gh = f->game_h;
+    float dh = std::min(gh, gw * 1080.0f / 1920.0f), dw = dh * 1920.0f / 1080.0f;
+    if (!s_fe_host) {
+        nfl2k5::PresentationHostConfig c;
+        c.root_dir = root;
+        c.package_dir = dir;
+        c.entry = entry;
+        c.eras_teams_dir = eras_teams_root();
+        c.canvas_width = 1920;
+        c.canvas_height = 1080;
+        c.raster_scale = s_fe_scale = std::max(1.0f, std::min(2.0f, dh / 1080.0f));
+        s_fe_host = nfl2k5::create_webview2_presentation_host();
+        s_fe_host->start(c);
+        s_fe_host_gen = gen;
+        fprintf(stderr, "[HTMLPRES] front-end host started: %s/%s at raster scale %.2f\n", dir.c_str(), entry.c_str(), c.raster_scale);
+    }
+    {
+        std::lock_guard<std::mutex> g(s_fe.lock);
+        events.swap(s_fe.events);
+    }
+    for (auto &e : events) s_fe_host->post_event(e);
+    nfl2k5::PresentationSurface surf;
+    nfl2k5::PresentationSharedSurface shared;
+    static uint64_t shown;
+    if (!xbox_hud_shared_failed && s_fe_host->acquire_shared(shared)) {
+        surf.width = shared.width; surf.height = shared.height;
+        surf.stride = shared.width * 4; surf.serial = shared.serial;
+        img->shared = shared.handle;
+        img->pixels = shared.handle;
+    } else {
+        if (!s_fe_host->acquire_surface(surf)) return 0;
+        img->pixels = surf.pixels;
+    }
+    img->w = surf.width; img->h = surf.height; img->stride = surf.stride;
+    img->x = (int)lroundf(f->game_x + (gw - dw) / 2);
+    img->y = (int)lroundf(f->game_y + (gh - dh) / 2);
+    img->dw = (int)lroundf(dw); img->dh = (int)lroundf(dh);
+    img->changed = surf.serial != shown;
+    shown = surf.serial;
+    return 1;
+}
+
 static int hud_callback(const XboxHudFrame *f, XboxHudImage *img)
 {
     double t = now_s();
     float dt = (float)std::min(0.1, s_last_t ? t - s_last_t : 0.0);
     s_last_t = t;
     music_tick();
+    if (frontend_hud(f, img)) return 1;
 
     GameState g;
     read_state(g);
