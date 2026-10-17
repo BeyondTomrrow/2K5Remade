@@ -148,3 +148,36 @@ reads first.
 * The coach heads' hair is the coach's; no per-player hair.
 * Skin groups are hand-set for 1981 only (`looks_1981.csv`); other drafts fall back to the hash over
   every head until they get a csv.
+
+## Addendum: the walk-up (user feedback, 2026-10-17)
+
+"The player is doing the handshake animation all the way until he gets to the commissioner ...
+and he kinda spawns in outta nowhere." Both true, and the cause of the first was in the baked
+clips: the pack's `walk` (`fpcoinrunhomeplayer01`, archive 2761/1) decodes to the **same frames as
+`shake2`** (`cointossshakeplayer01`, 2531/1: two steps, then the right hand out at 1.6-2.1 s), so
+the walk-up played the handshake clip on a loop while the actor translated at 54 cm/s.
+
+* **Walk clip:** `walk2` = `ANM_POSTPLAY_REACT_NEUTRAL_WALK_TO_HUDDLE_TALKING` (archive 3106/101,
+  found by sampling every candidate's feet and hands per frame): a steady walk, stride period
+  1.13 s, hands by the sides from 3.7 s. The runtime loops 3.72-6.04 s (two strides) at 1x and
+  moves the actor at the clip's own root speed over that segment, **123 cm/s** (286 cm of root
+  motion in 2.32 s, read from the clip's trajectory lanes), so the feet do not slide.
+* **Entrance:** the entrance mark moved from x = 650 to **x = 1750** (stage right, wholly outside
+  the walk camera's frame; 1450 still showed a sliver at the cut), and the camera **cuts** to the
+  walk shot (`cam_go(SH_WALK, 0)`) instead of blending from the wide, so he walks into frame.
+  The walk is 3.5-3.8 s (was 5.7 s).
+* **Turn and handshake:** he faces the direction of travel, blending to face the commissioner over
+  the last 0.3 s; on arrival both actors start `shake2` **from the same frame (1.45 s**, where the
+  clip's root has stopped; contact 1.6-2.1 s), the commissioner turning 65 degrees to him, the
+  player placed 110 cm away (was 95) so the hands meet rather than pass through. The handshake
+  beat is 1.4 s, then the lift as before. Log line: `pick N: arrived (walk 3.47 s), handshake from
+  clip 1.45 s`.
+* **Verified:** run `m12c` / `m12d` (background, sandbox, build lock), `pick1-v3.mp4` (38 s with
+  sound) and `logs/draftshow/walkup-sheet.png` (10 fps, 15.6-23.6 s): the cut frame has no
+  player in it, he enters from the right edge, walks 3.5 s with the arms swinging and no handshake
+  motion, turns, and both lean into the handshake together (hands at the same spot), then the lift.
+* Files: `src/nfl2k5_eras_draftshow.c` (k_player_from/to, WALK_* / SHAKE_START, PH_CARD /
+  PH_WALK / PH_SHAKE), `tools/eras/draftshow/build-draftshow-pack.py` (CLIPS: walk2),
+  `tools/eras/draftshow/make_walkup_sheet.py`. Left: the pack's `walk` entry still bakes the
+  handshake frames (unused now); whether 2761/1 and 2531/1 share one animation chunk in the
+  archive or the sampler resolves both to one is not traced.

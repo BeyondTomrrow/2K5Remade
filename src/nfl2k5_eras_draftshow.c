@@ -73,8 +73,16 @@ extern void xbox_AudioMuteGameMusic(int mute); /* the game's own music stream in
 #define STAGE_Y      474.0f
 static const float k_podium[2] = { -1750.0f, -4900.0f };
 static const float k_commish[2] = { -1750.0f, -5130.0f };
-static const float k_player_from[2] = { 650.0f, -5330.0f };
-static const float k_player_to[2] = { -1180.0f, -5130.0f };
+static const float k_player_from[2] = { 1750.0f, -5330.0f };   /* the entrance mark: wholly outside the walk camera's frame, stage right (1450 showed a sliver at the cut) */
+static const float k_player_to[2] = { -1090.0f, -5130.0f };    /* the handshake mark: 110 cm from the commissioner */
+/* The walk-up (M12): the huddle-walk clip's steady cycle (walk2, 3.72-6.04 s: two strides, root
+ * motion 286 cm in 2.32 s = 123 cm/s) drives the feet while the actor moves at that same speed,
+ * so they do not slide; he turns to the commissioner over the last WALK_TURN seconds. */
+#define WALK_CLIP_FROM 3.72f
+#define WALK_CLIP_TO   6.04f
+#define WALK_SPEED     123.0f      /* cm/s, the clip's own root speed over that segment */
+#define WALK_TURN      0.3f
+#define SHAKE_START    1.45f       /* both handshake clips start here (the root has stopped, contact at 1.6-2.1 s) */
 
 typedef struct { float eye[3], tgt[3], focal; } Shot;
 enum { SH_WIDE, SH_BOARD, SH_PODIUM, SH_TWO, SH_WALK, SH_HOLD, SH_PUSH, SHOTS };
@@ -1521,36 +1529,42 @@ static void tick(float dt)
         break;
     case PH_CARD:
         if (s_d.pt > 2.5f) {
-            /* the player walks on from stage right */
+            /* the player walks on from stage right: placed at the entrance mark outside the walk
+             * camera's frame, the camera cut (not blended) to the walk shot, so he enters, never pops */
             memset(&s_d.player, 0, sizeof s_d.player);
             s_d.player.x = k_player_from[0]; s_d.player.z = k_player_from[1];
             s_d.player.yaw = (float)(atan2(k_player_to[0] - k_player_from[0], k_player_to[1] - k_player_from[1]) * 180.0 / 3.14159265);
-            actor_clip(&s_d.player, "walk", 0.4f, 2.4f, 1.5f, 1, 0);
+            actor_clip(&s_d.player, clip_find("walk2") >= 0 ? "walk2" : "walk", WALK_CLIP_FROM, WALK_CLIP_TO, 1.0f, 1, 0);
             duck(1.0f);                                        /* the card beat is over: the music back up */
             s_d.player_on = 1;
-            cam_go(SH_WALK, 1.5f);
+            cam_go(SH_WALK, 0.0f);
             phase(PH_WALK);
         }
         break;
     case PH_WALK: {
         float dx = k_player_to[0] - s_d.player.x, dz = k_player_to[1] - s_d.player.z;
-        float d = sqrtf(dx * dx + dz * dz), step = 54.0f * SCALE * dt;   /* 54 cm/s: the clip at 1.5x */
+        float d = sqrtf(dx * dx + dz * dz), step = WALK_SPEED * SCALE * dt, turn = WALK_SPEED * SCALE * WALK_TURN;
+        float heading = (float)(atan2(dx, dz) * 180.0 / 3.14159265);
         if (d <= step || s_d.pt > 12.0f) {
+            /* arrived and facing him: both handshake clips from the same frame, so the hands meet */
             s_d.player.x = k_player_to[0]; s_d.player.z = k_player_to[1];
-            s_d.player.yaw = -90.0f;                 /* face the commissioner */
-            actor_clip(&s_d.player, "shake2", 1.0f, 2.6f, 1.0f, 0, 0.3f);
-            s_d.commish.yaw = 60.0f;
-            actor_clip(&s_d.commish, "shake2", 1.0f, 2.6f, 1.0f, 0, 0.3f);
+            s_d.player.yaw = -90.0f;
+            actor_clip(&s_d.player, "shake2", SHAKE_START, 2.85f, 1.0f, 0, 0.25f);
+            s_d.commish.yaw = 65.0f;
+            actor_clip(&s_d.commish, "shake2", SHAKE_START, 2.85f, 1.0f, 0, 0.25f);
             nfl2k5_presentation_post_json("{\"name\":\"DRAFT_HANDSHAKE\"}");
             cam_go(SH_TWO, 1.0f);
+            DS_LOG("pick %d: arrived (walk %.2f s), handshake from clip %.2f s\n", k ? k->pick : 0, s_d.pt, SHAKE_START);
             phase(PH_SHAKE);
         } else {
             s_d.player.x += dx / d * step; s_d.player.z += dz / d * step;
+            /* face the way he walks, then the commissioner over the last WALK_TURN seconds */
+            s_d.player.yaw = d > turn ? heading : -90.0f + (heading + 90.0f) * (d / turn);
         }
         break;
     }
     case PH_SHAKE:
-        if (s_d.pt > 1.8f) {
+        if (s_d.pt > 1.4f) {
             /* both turn to the cameras; the player raises the jersey overhead (helmet-raise clip, frozen) */
             s_d.player.yaw = -10.0f;
             s_d.commish.yaw = 15.0f;

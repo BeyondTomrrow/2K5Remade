@@ -84,6 +84,7 @@ CLIPS = (
     ('shake2', 'archive:2531/1'),    # cointossshakeplayer01: coin-toss handshake (6.85 s)
     ('raise', 'archive:2723/2'),     # ex021player02: helmet raised overhead with both hands (4.42 s)
     ('trophy', 'archive:2725/3'),    # ex023player01: MVP trophy presentation (9.03 s)
+    ('walk2', 'archive:3106/101'),   # ANM_POSTPLAY_REACT_NEUTRAL_WALK_TO_HUDDLE_TALKING: a steady walk, 123 cm/s (M12 walk-up)
 )
 
 
