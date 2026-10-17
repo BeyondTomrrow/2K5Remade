@@ -126,11 +126,13 @@ static void block_diff(void)
     nfl2k5_eras_log("clean-up: %u changed range(s) in the settings block, restored:%s", ranges, ranges ? line : " none");
 }
 
+/* M13: the package's roster, or the league's rosters\<season>\<id>.csv (the draft's rookies) when
+ * NFL2K5_ERAS_ROSTER_SEASON names a later season (nfl2k5_eras_roster_path). */
 static void roster_path(const ErasTeam *t, char *out, size_t n)
 {
-    char *p;
-    snprintf(out, n, "%s\\%s", nfl2k5_eras_package_dir(), t->roster_file);
-    for (p = out; *p; p++) if (*p == '/') *p = '\\';
+    int team = nfl2k5_eras_team_find(t->id);
+    if (nfl2k5_eras_roster_path(team, out, n))
+        nfl2k5_eras_log("roster of %s for season %d missing: %s", t->id, nfl2k5_eras_roster_season(), out);
 }
 
 int nfl2k5_eras_launch_active(void) { return s_l.active; }

@@ -94,11 +94,11 @@ static void league_file(const ErasTeam *t, char *out, size_t n)
     nfl2k5_eras_league_path(rel, out, (unsigned)n);
 }
 
+/* M13: the package's seed, or the league's depth\<season>\<id>.csv written with the draft's rookies
+ * when NFL2K5_ERAS_ROSTER_SEASON names a later season (nfl2k5_eras_depth_seed_path). */
 static void seed_file(const ErasTeam *t, char *out, size_t n)
 {
-    char *p;
-    snprintf(out, n, "%s\\depth\\%s.csv", nfl2k5_eras_package_dir(), t->id);
-    for (p = out; *p; p++) if (*p == '/') *p = '\\';
+    nfl2k5_eras_depth_seed_path(nfl2k5_eras_team_find(t->id), out, n);
 }
 
 static int read_depth(const char *path, DepthFile *d)
@@ -301,8 +301,8 @@ int nfl2k5_eras_depth_edit(uint32_t fsm, int team, char *msg, size_t n)
         nfl2k5_eras_log("depth chart %s refused: %s (nothing changed)", t->id, g_eras_svc->stage_message(rc));
         return -2;
     }
-    snprintf(roster, sizeof roster, "%s\\%s", nfl2k5_eras_package_dir(), t->roster_file);
-    for (p = roster; *p; p++) if (*p == '/') *p = '\\';
+    nfl2k5_eras_roster_path(team, roster, sizeof roster);   /* M13: season-aware (the draft's rookies) */
+    (void)p;
     rc = g_eras_svc->stage(side, t->template_entry, roster, t->city, t->name, t->abbr);
     if (rc != NFL2K5_STAGE_OK) {
         g_eras_svc->release(side);

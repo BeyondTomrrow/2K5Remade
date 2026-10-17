@@ -107,6 +107,21 @@ int nfl2k5_eras_set_office_look_saved(const char *look);
 /* M12: the Draft Show setting ("first", "mine", "off"), written at once; "first" while no league is loaded. */
 const char *nfl2k5_eras_draft_show_saved(void);
 int nfl2k5_eras_set_draft_show_saved(const char *mode);
+/* M13: the history mode (league.ini history = historical | alternate; 0 Historical, 1 Alternate
+ * History) and the sleeper count (sleepers = 0..10, default 5). Written at once. */
+int nfl2k5_eras_history(void);
+int nfl2k5_eras_set_history(int alternate);
+int nfl2k5_eras_sleepers(void);
+int nfl2k5_eras_set_sleepers(int n);
+/* A seed fixed for this league (from its creation stamp): sleepers, CPU draft randomness. */
+uint32_t nfl2k5_eras_league_seed(void);
+/* M13: the season whose rosters are staged: the league season, or NFL2K5_ERAS_ROSTER_SEASON (a
+ * test switch) for a later season's rosters written by the draft. The roster and depth seed of a
+ * team: the package's for the package season, else the league's rosters\<season>\<id>.csv and
+ * depth\<season>\<id>.csv. Returns 0 when the file exists. */
+int nfl2k5_eras_roster_season(void);
+int nfl2k5_eras_roster_path(int team, char *out, size_t n);
+int nfl2k5_eras_depth_seed_path(int team, char *out, size_t n);
 
 /* Results, from results.csv (re-read by nfl2k5_eras_refresh). */
 void nfl2k5_eras_refresh(void);

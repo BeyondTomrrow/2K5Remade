@@ -71,6 +71,8 @@ static struct {
     char launched[48];              /* M4: a launched game not cleaned up yet */
     char office_look[12];           /* M3-office: "auto" (or empty) / "1970s" .. "2020s" */
     char draft_show[8];             /* M12: "first" (or empty) / "mine" / "off" */
+    char history[12];               /* M13: "historical" (or empty) / "alternate" */
+    int sleepers;                   /* M13: 0..10; -1 = not written (default 5) */
     char extra[2048];              /* unknown lines, written back unchanged */
 } s_league;
 
@@ -307,6 +309,8 @@ static int league_write(void)
     if (s_league.launched[0]) fprintf(f, "launched = %s\r\n", s_league.launched);
     if (s_league.office_look[0]) fprintf(f, "office_look = %s\r\n", s_league.office_look);
     if (s_league.draft_show[0]) fprintf(f, "draft_show = %s\r\n", s_league.draft_show);
+    if (s_league.history[0]) fprintf(f, "history = %s\r\n", s_league.history);
+    if (s_league.sleepers >= 0) fprintf(f, "sleepers = %d\r\n", s_league.sleepers);
     if (s_league.extra[0]) fputs(s_league.extra, f);
     if (fclose(f)) return -1;
     if (!MoveFileExA(tmp, path, MOVEFILE_REPLACE_EXISTING)) return -1;
@@ -328,6 +332,7 @@ int nfl2k5_eras_league_load(void)
     FILE *f;
     memset(&s_league, 0, sizeof s_league);
     s_league.user_team = -1;
+    s_league.sleepers = -1;
     if (fopen_s(&f, league_path_peek("league.ini", path, sizeof path), "rb") || !f)
         return NFL2K5_ERAS_NO_SAVE;
     while (fgets(line, sizeof line, f)) {
@@ -347,6 +352,8 @@ int nfl2k5_eras_league_load(void)
         else if (!strcmp(key, "launched")) copy(s_league.launched, sizeof s_league.launched, val);
         else if (!strcmp(key, "office_look")) copy(s_league.office_look, sizeof s_league.office_look, val);
         else if (!strcmp(key, "draft_show")) copy(s_league.draft_show, sizeof s_league.draft_show, val);
+        else if (!strcmp(key, "history")) copy(s_league.history, sizeof s_league.history, val);
+        else if (!strcmp(key, "sleepers")) s_league.sleepers = atoi(val) < 0 ? 0 : atoi(val) > 10 ? 10 : atoi(val);
         else if (used + strlen(key) + strlen(val) + 6 < sizeof s_league.extra)
             snprintf(s_league.extra + used, sizeof s_league.extra - used, "%s = %s\r\n", key, val);
     }
@@ -401,6 +408,7 @@ int nfl2k5_eras_league_create(void)
     s_league.format_found = NFL2K5_ERAS_FORMAT;
     s_league.season = NFL2K5_ERAS_SEASON;
     s_league.user_team = -1;
+    s_league.sleepers = -1;
     copy(s_league.package, sizeof s_league.package, PACKAGE_REL);
     strftime(s_league.created, sizeof s_league.created, "%Y-%m-%dT%H:%M:%S", &tmv);
     nfl2k5_eras_league_path("box\\", path, sizeof path);     /* creates box\ */
@@ -447,6 +455,73 @@ int nfl2k5_eras_set_draft_show_saved(const char *mode)
     copy(s_league.draft_show, sizeof s_league.draft_show, mode && _stricmp(mode, "first") ? mode : "");
     if (league_write()) { fprintf(stderr, "[ERAS] league.ini could not be written\n"); return -1; }
     return 0;
+}
+
+/* M13: history mode and sleepers (docs/eras/results/M13-draft.md). */
+int nfl2k5_eras_history(void) { return s_league.loaded && !_stricmp(s_league.history, "alternate"); }
+
+int nfl2k5_eras_set_history(int alternate)
+{
+    if (!s_league.loaded) return -1;
+    copy(s_league.history, sizeof s_league.history, alternate ? "alternate" : "");
+    if (league_write()) { fprintf(stderr, "[ERAS] league.ini could not be written\n"); return -1; }
+    nfl2k5_eras_log("history mode: %s", alternate ? "Alternate History" : "Historical");
+    return 0;
+}
+
+int nfl2k5_eras_sleepers(void) { return !s_league.loaded ? 5 : s_league.sleepers < 0 ? 5 : s_league.sleepers; }
+
+int nfl2k5_eras_set_sleepers(int n)
+{
+    if (!s_league.loaded) return -1;
+    s_league.sleepers = n < 0 ? 0 : n > 10 ? 10 : n;
+    if (league_write()) { fprintf(stderr, "[ERAS] league.ini could not be written\n"); return -1; }
+    return 0;
+}
+
+uint32_t nfl2k5_eras_league_seed(void)
+{
+    const char *p = s_league.created;
+    uint32_t h = 2166136261u;
+    for (; *p; p++) { h ^= (unsigned char)*p; h *= 16777619u; }
+    return h ? h : 1u;
+}
+
+int nfl2k5_eras_roster_season(void)
+{
+    const char *e = getenv("NFL2K5_ERAS_ROSTER_SEASON");
+    if (e && atoi(e) > 1900) return atoi(e);
+    return s_league.loaded && s_league.season ? s_league.season : NFL2K5_ERAS_SEASON;
+}
+
+static int season_file(int team, const char *kind, const char *pkg_rel, char *out, size_t n)
+{
+    const ErasTeam *t = nfl2k5_eras_team(team);
+    char *p;
+    int season = nfl2k5_eras_roster_season();
+    if (!t) { out[0] = 0; return -1; }
+    if (season == NFL2K5_ERAS_SEASON) snprintf(out, n, "%s\\%s", package_dir(), pkg_rel);
+    else {
+        char rel[96];
+        snprintf(rel, sizeof rel, "%s\\%d\\%s.csv", kind, season, t->id);
+        league_path_peek(rel, out, n);
+    }
+    for (p = out; *p; p++) if (*p == '/') *p = '\\';
+    return GetFileAttributesA(out) == INVALID_FILE_ATTRIBUTES ? -1 : 0;
+}
+
+int nfl2k5_eras_roster_path(int team, char *out, size_t n)
+{
+    const ErasTeam *t = nfl2k5_eras_team(team);
+    return season_file(team, "rosters", t ? t->roster_file : "", out, n);
+}
+
+int nfl2k5_eras_depth_seed_path(int team, char *out, size_t n)
+{
+    const ErasTeam *t = nfl2k5_eras_team(team);
+    char rel[96];
+    snprintf(rel, sizeof rel, "depth\\%s.csv", t ? t->id : "");
+    return season_file(team, "depth", rel, out, n);
 }
 
 int nfl2k5_eras_game_find(const char *game_id)

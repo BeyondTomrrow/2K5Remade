@@ -102,6 +102,7 @@ static const char *const k_scene[SCENES] = { "draft_menu", "cutscene", "commish0
 typedef struct { char name[32]; int frames; float fps; float *data; } Clip;   /* data: frames * 103 */
 typedef struct {
     int round, pick; char team[24], pfr[8], player[48], pos[8], college[48];
+    int roundpick;                /* M13: the pick within its round (queued picks; 0 = idx - first + 1) */
     char tone[16];                /* looks csv: light / medium / dark ("" = any) */
     int head, suit;               /* chosen at pick_begin: head index, suit variant 0 charcoal 1 navy 2 black */
     unsigned char no_number, no_team;   /* the call's clips that were missing (summary at the end) */
@@ -170,6 +171,10 @@ static struct {
     int pad_armed;
     double clock;
     int frames;
+    /* M13: the draft's own picks (nfl2k5_eras_draftshow_queue_*): the show plays the queue instead
+     * of picks_<year>.csv, and pops itself when the queue is done */
+    Pick queue[MAXPICKS];
+    int nqueue, queued, picks_from_queue, pop_now;
 } s_d;
 
 #define DS_LOG(...) do { fprintf(stderr, "[ERAS] draftshow " __VA_ARGS__); } while (0)
@@ -608,7 +613,7 @@ static void post_pick(const char *name, int idx)
     snprintf(j, sizeof j, "{\"name\":\"%s\",\"year\":1981,\"season\":1980,\"round\":%d,\"pick\":%d,\"roundPick\":%d,"
              "\"team\":\"%s\",\"teamCity\":\"%s\",\"teamName\":\"%s\",\"teamAbbr\":\"%s\",\"primary\":\"%s\","
              "\"secondary\":\"%s\",\"player\":\"%s\",\"position\":\"%s\",\"college\":\"%s\",\"audio\":%s}",
-             name, k->round, k->pick, idx - s_d.first + 1, k->team, t ? t->city : "", t ? t->name : k->team,
+             name, k->round, k->pick, k->roundpick ? k->roundpick : idx - s_d.first + 1, k->team, t ? t->city : "", t ? t->name : k->team,
              t ? t->abbr : "", t ? t->primary : "#333333", t ? t->secondary : "#999999", pl, k->pos, co,
              s_au.muted ? "\"muted\"" : "\"on\"");
     nfl2k5_presentation_post_json(j);
@@ -1382,7 +1387,7 @@ static void phase(int ph)
 static void pick_begin(void)
 {
     /* Your Picks: the other picks go straight onto the board */
-    while (s_d.mode == 2 && s_d.cur <= s_d.last && !user_pick(s_d.cur)) s_d.cur++;
+    while (s_d.mode == 2 && !s_d.queued && s_d.cur <= s_d.last && !user_pick(s_d.cur)) s_d.cur++;   /* a queue is pre-filtered */
     if (s_d.cur > s_d.last) {
         phase(PH_END);
         post_board("DRAFT_ROUND_SUMMARY");
@@ -1406,19 +1411,26 @@ static void show_start(void)
     const char *e;
     int k, round = 1;
     s_d.first = 0;
-    for (k = 0; k < s_d.npicks && s_d.picks[k].round == round; k++) {}
-    s_d.last = k - 1;
-    if ((e = getenv("NFL2K5_ERAS_DRAFTSHOW_PICKS")) && atoi(e) > 0 && s_d.first + atoi(e) - 1 < s_d.last)
-        s_d.last = s_d.first + atoi(e) - 1;                       /* test switch: only the first N picks */
+    if (s_d.queued) {
+        /* M13: the draft's queue, as it comes (already filtered by the Draft Show setting) */
+        s_d.last = s_d.npicks - 1;
+        round = s_d.npicks ? s_d.picks[0].round : 1;
+    } else {
+        for (k = 0; k < s_d.npicks && s_d.picks[k].round == round; k++) {}
+        s_d.last = k - 1;
+        if ((e = getenv("NFL2K5_ERAS_DRAFTSHOW_PICKS")) && atoi(e) > 0 && s_d.first + atoi(e) - 1 < s_d.last)
+            s_d.last = s_d.first + atoi(e) - 1;                       /* test switch: only the first N picks */
+    }
     s_d.cur = s_d.first;
     s_d.mode = mode_now();
     s_d.summary_done = 0;
+    s_d.pop_now = 0;
     for (k = 0; k < s_d.npicks; k++) { s_d.picks[k].no_number = s_d.picks[k].no_team = 0; s_d.picks[k].head = -1; }
-    if ((e = getenv("NFL2K5_ERAS_DRAFTSHOW_SKIP")) && !_stricmp(e, "mine")) {   /* "Skip to my pick" */
+    if (!s_d.queued && (e = getenv("NFL2K5_ERAS_DRAFTSHOW_SKIP")) && !_stricmp(e, "mine")) {   /* "Skip to my pick" */
         for (k = s_d.first; k <= s_d.last && !user_pick(k); k++) {}
         if (k <= s_d.last) s_d.cur = k;
     }
-    if ((e = getenv("NFL2K5_ERAS_DRAFTSHOW_START")) && atoi(e) > 0) s_d.cur = s_d.first + atoi(e) - 1;
+    if (!s_d.queued && (e = getenv("NFL2K5_ERAS_DRAFTSHOW_START")) && atoi(e) > 0) s_d.cur = s_d.first + atoi(e) - 1;
     memset(&s_d.commish, 0, sizeof s_d.commish);
     memset(&s_d.player, 0, sizeof s_d.player);
     s_d.commish.x = k_commish[0]; s_d.commish.z = k_commish[1]; s_d.commish.yaw = 0;
@@ -1428,9 +1440,13 @@ static void show_start(void)
     shot_vec(SH_WIDE, s_d.cam_to);
     s_d.cam_t = s_d.cam_len = 0;
     s_d.clock = 0;
-    DS_LOG("show: mode %s, picks %d..%d of %d (round 1, 1981)\n", nfl2k5_eras_draftshow_mode_name(s_d.mode),
-           s_d.picks[s_d.cur].pick, s_d.picks[s_d.last].pick, s_d.npicks);
-    nfl2k5_presentation_post_json("{\"name\":\"DRAFT_SHOW_START\",\"year\":1981,\"season\":1980,\"round\":1}");
+    DS_LOG("show: mode %s, picks %d..%d of %d (%s, round %d, 1981)\n", nfl2k5_eras_draftshow_mode_name(s_d.mode),
+           s_d.picks[s_d.cur].pick, s_d.picks[s_d.last].pick, s_d.npicks, s_d.queued ? "the draft's queue" : "picks csv", round);
+    {
+        char j[128];
+        snprintf(j, sizeof j, "{\"name\":\"DRAFT_SHOW_START\",\"year\":1981,\"season\":1980,\"round\":%d}", round);
+        nfl2k5_presentation_post_json(j);
+    }
     { const char *r = getenv("NFL2K5_ERAS_DRAFTSHOW_REC"); if (r && atoi(r) > 0) xbox_PresentRecord(atoi(r)); }
     phase(PH_INTRO);
 }
@@ -1567,6 +1583,8 @@ static void tick(float dt)
         }
         break;
     case PH_END:
+        /* M13: a queued show hands the screen back to the draft after the summary beat */
+        if (s_d.queued && s_d.pt > 3.5f && !s_d.pop_now) { s_d.pop_now = 1; DS_LOG("queue done: back to the draft\n"); }
         break;
     }
     bed_tick(dt);
@@ -1600,6 +1618,27 @@ static void skip_to_mine(void)
 
 void nfl2k5_eras_draftshow_skip(void) { skip(); }
 
+/* M13: the draft's own picks for the next show (src/nfl2k5_eras_draft_sheets.c). */
+void nfl2k5_eras_draftshow_queue_clear(void) { s_d.nqueue = 0; }
+
+int nfl2k5_eras_draftshow_queue_add(int round, int pick, int roundpick, const char *team_id, const char *player,
+                                    const char *pos, const char *college)
+{
+    Pick *k;
+    if (s_d.nqueue >= MAXPICKS) return -1;
+    k = &s_d.queue[s_d.nqueue++];
+    memset(k, 0, sizeof *k);
+    k->round = round; k->pick = pick; k->roundpick = roundpick; k->head = -1;
+    snprintf(k->team, sizeof k->team, "%s", team_id ? team_id : "");
+    snprintf(k->player, sizeof k->player, "%s", player ? player : "");
+    snprintf(k->pos, sizeof k->pos, "%s", pos ? pos : "");
+    snprintf(k->college, sizeof k->college, "%s", college ? college : "");
+    return 0;
+}
+
+int nfl2k5_eras_draftshow_queue_count(void) { return s_d.nqueue; }
+int nfl2k5_eras_draftshow_queued(void) { return s_d.queued; }
+
 static void shown(void)
 {
     char root[MAX_PATH], pkg[MAX_PATH];
@@ -1620,7 +1659,19 @@ void nfl2k5_eras_draftshow_event(int msg, uint32_t fsm)
     case 1:                                      /* create */
         if (!nfl2k5_eras_draftshow_ready()) break;
         if (!s_d.nclips && load_poses()) break;
-        if (!s_d.npicks && load_picks(1981)) break;
+        if (s_d.nqueue > 0) {
+            /* M13: the draft's picks (nfl2k5_eras_draftshow_queue_add) instead of picks_<year>.csv */
+            memcpy(s_d.picks, s_d.queue, (size_t)s_d.nqueue * sizeof s_d.picks[0]);
+            s_d.npicks = s_d.nqueue;
+            s_d.queued = 1;
+            s_d.picks_from_queue = 1;
+            s_d.nqueue = 0;
+            DS_LOG("create: %d queued pick(s) from the draft\n", s_d.npicks);
+        } else {
+            s_d.queued = 0;
+            if ((!s_d.npicks || s_d.picks_from_queue) && load_picks(1981)) break;
+            s_d.picks_from_queue = 0;
+        }
         if (!s_d.njerseys) load_jerseys();
         s_d.phase = PH_OFF;
         if (load() == 0) DS_LOG("create: stage loaded\n");
@@ -1654,6 +1705,12 @@ void nfl2k5_eras_draftshow_event(int msg, uint32_t fsm)
             if (edge & BTN_SKIP) { skip(); break; }
         }
         tick(dt);
+        if (s_d.pop_now) {                          /* M13: the queue is done: pop back to the draft screen */
+            s_d.pop_now = 0;
+            s_d.queued = 0;
+            gcall(sub_0006E400, fsm, 0);
+            break;
+        }
         if ((++s_d.frames % 300) == 0 && s_d.log)
             DS_LOG("frame %d: phase %s, commish clip %d t %.2f, player %d\n", s_d.frames, k_phase[s_d.phase],
                    s_d.commish.clip, s_d.commish.t, s_d.player_on);

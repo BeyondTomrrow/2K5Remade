@@ -22,6 +22,14 @@ int nfl2k5_eras_draftshow_mode(void);
 const char *nfl2k5_eras_draftshow_mode_name(int mode);
 int nfl2k5_eras_draftshow_mode_forced(void);   /* 1 while NFL2K5_ERAS_DRAFTSHOW overrides the setting */
 int nfl2k5_eras_draftshow_set_mode(int mode);
+/* M13: the real draft's picks (src/nfl2k5_eras_draft_sheets.c). Picks added here are what the next
+ * show plays (in order, already filtered by the setting); when the queue is done the show pops its
+ * own screen. With an empty queue the screen plays picks_<year>.csv as before (the preview row). */
+void nfl2k5_eras_draftshow_queue_clear(void);
+int nfl2k5_eras_draftshow_queue_add(int round, int pick, int roundpick, const char *team_id, const char *player,
+                                    const char *pos, const char *college);
+int nfl2k5_eras_draftshow_queue_count(void);
+int nfl2k5_eras_draftshow_queued(void);        /* a queued show is running */
 
 #ifdef __cplusplus
 }
