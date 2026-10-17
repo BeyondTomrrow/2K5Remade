@@ -69,10 +69,20 @@ def normalize():
         out = os.path.join(AUDIO, 'normalized', rel[:-4] + '.wav')
         os.makedirs(os.path.dirname(out), exist_ok=True)
         trim = '' if rel.startswith('pick') else 'silenceremove=start_periods=1:start_threshold=-40dB:start_silence=0.02,'
-        subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', f, '-af', trim + 'loudnorm=I=-18:TP=-1.5:LRA=11',
+        src = probe(f)
+        if src['duration'] >= 1.0:
+            level = 'loudnorm=I=-18:TP=-1.5:LRA=11'
+        else:
+            # loudnorm cannot measure a sub-second clip (it reports -70 LUFS); match by peak instead
+            level = 'volume=%.1fdB' % (-4.5 - (src['peak_dbfs'] or -4.5))
+        subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', f, '-af', trim + level,
                         '-ar', '48000', '-ac', '2', '-c:a', 'pcm_s16le', out], check=True)
         m = probe(out)
+        m['suspect_short'] = src['duration'] < 1.0 and not rel.startswith('pick')
         index[rel] = dict(file='normalized/' + rel[:-4] + '.wav', **m)
+    short = [k for k, v in index.items() if v['suspect_short']]
+    if short:
+        print('SUSPECT (under 1 s, probably cut off at the source):', short)
     json.dump(index, open(os.path.join(AUDIO, 'normalized', 'index.json'), 'w'), indent=1)
     lufs = [v['lufs'] for v in index.values()]
     peak = [v['peak_dbfs'] for v in index.values()]
