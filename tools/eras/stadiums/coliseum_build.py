@@ -445,7 +445,10 @@ def main(argv=None):
     ap.add_argument("--only", nargs="*", default=None, help="variants to build, e.g. dd nd")
     ap.add_argument("--retail-art", action="store_true",
                     help="keep the base venue's field, pads, fan banners and backdrop (v1 behaviour)")
+    ap.add_argument("--ncaa-dir", help="the NCAA 07 extractor work folder (holds stadiums_raw); default: tools/eras/eras_settings.py")
     a = ap.parse_args(argv)
+    if a.ncaa_dir:
+        N.set_work(a.ncaa_dir)
     import game_assets as G
     archive = G.Archive(DISC)
     a.out.mkdir(parents=True, exist_ok=True)

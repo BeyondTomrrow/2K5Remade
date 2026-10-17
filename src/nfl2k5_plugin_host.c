@@ -161,6 +161,37 @@ static void svc_interp_add_hook(uint32_t va, uint32_t from, uint32_t (*fn)(void)
     recomp_interp_add_hook(va, from, fn);
 }
 
+/* The asset builder ships with the game (tools\NFL2K5-ErasBuilder.exe, like the Team Builder);
+ * a development checkout runs the script. Its output goes to the pack's generated\ only. */
+static int svc_run_builder(const char *args)
+{
+    char cmd[2048], exe[MAX_PATH];
+    STARTUPINFOA si;
+    PROCESS_INFORMATION pi;
+    const char *cands[] = { "tools\\NFL2K5-ErasBuilder.exe", "build\\tools\\NFL2K5-ErasBuilder.exe" };
+    int i;
+    if (!g_host.pack_dir || !*g_host.pack_dir) return -1;
+    exe[0] = 0;
+    for (i = 0; i < 2 && !exe[0]; i++)
+        if (GetFileAttributesA(cands[i]) != INVALID_FILE_ATTRIBUTES) snprintf(exe, sizeof exe, "%s", cands[i]);
+    if (exe[0]) snprintf(cmd, sizeof cmd, "\"%s\" --pack \"%s\" %s", exe, g_host.pack_dir, args ? args : "");
+    else if (GetFileAttributesA("tools\\eras\\build_assets.py") != INVALID_FILE_ATTRIBUTES)
+        snprintf(cmd, sizeof cmd, "python -I tools\\eras\\build_assets.py --pack \"%s\" %s", g_host.pack_dir, args ? args : "");
+    else { fprintf(stderr, "[ERAS] builder: tools\\NFL2K5-ErasBuilder.exe not found\n"); return -1; }
+    memset(&si, 0, sizeof si);
+    si.cb = sizeof si;
+    si.dwFlags = STARTF_USESHOWWINDOW;
+    si.wShowWindow = SW_HIDE;
+    if (!CreateProcessA(NULL, cmd, NULL, NULL, FALSE, CREATE_NO_WINDOW | BELOW_NORMAL_PRIORITY_CLASS, NULL, NULL, &si, &pi)) {
+        fprintf(stderr, "[ERAS] builder: could not start %s (error %lu)\n", cmd, (unsigned long)GetLastError());
+        return -1;
+    }
+    CloseHandle(pi.hThread);
+    CloseHandle(pi.hProcess);
+    fprintf(stderr, "[ERAS] builder started: %s\n", cmd);
+    return 0;
+}
+
 /* ---- the pack manifest (docs/eras/MOD-PACK-DESIGN.md 5) ---------------------- */
 
 #define ERAS_PACK_DIR "mods\\packs\\MyNFLEras"
@@ -338,6 +369,7 @@ void nfl2k5_plugins_boot(const char *xbe_sha256, uint32_t base_kind, const char 
     g_svc.texpack_set_team_art = nfl2k5_texpack_eras_teams;
     g_svc.player_stat = nfl2k5_guest_player_stat_scope;
     g_svc.team_stat = nfl2k5_guest_team_stat;
+    g_svc.run_builder = svc_run_builder;
 
     g_root_n = 0;
     memset(&g_mod_info, 0, sizeof g_mod_info);

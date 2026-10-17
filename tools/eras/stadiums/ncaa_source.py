@@ -22,9 +22,24 @@ if str(EXTRACTOR) not in sys.path:
 from ncaa_formats import decode_model  # noqa: E402
 from ncaa_textures import parse_mmap, material_references, decode_texture, DecodeError  # noqa: E402
 
-NCAA_WORK = Path(r"H:\NCAA07_Extractor_Work")
+# The NCAA 07 extractor work folder (stadiums_raw\<entry>.tmd): NFL2K5_NCAA07_WORK, eras-tools.ini or
+# discovery (tools/eras/eras_settings.py); --ncaa-dir of the converters sets it (set_work). Never hard-coded.
+sys.path.insert(0, str(ROOT / "tools" / "eras"))
+import eras_settings  # noqa: E402
+
+NCAA_WORK = eras_settings.ncaa07_work() or Path("NCAA07_Extractor_Work (not found: set NFL2K5_NCAA07_WORK or --ncaa-dir)")
 USC_DAY = NCAA_WORK / "stadiums_raw" / "00000600.tmd"
 USC_NIGHT = NCAA_WORK / "stadiums_raw" / "00000604.tmd"
+
+
+def set_work(path):
+    """Use another NCAA 07 work folder (the converters' --ncaa-dir)."""
+    global NCAA_WORK, USC_DAY, USC_NIGHT
+    NCAA_WORK = Path(path)
+    USC_DAY = NCAA_WORK / "stadiums_raw" / "00000600.tmd"
+    USC_NIGHT = NCAA_WORK / "stadiums_raw" / "00000604.tmd"
+    if not (NCAA_WORK / "stadiums_raw").is_dir():
+        raise SystemExit("%s has no stadiums_raw folder (extract STADIUMS.DAT with tools/ncaa07-extractor first)" % NCAA_WORK)
 
 
 @dataclass

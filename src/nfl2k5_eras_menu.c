@@ -32,6 +32,7 @@
 #include <windows.h>
 #include "xbox_memory_layout.h"
 #include "recomp_funcs.h"
+#include "nfl2k5_plugin_api.h"
 #include "nfl2k5_eras.h"
 #include "nfl2k5_eras_launch.h"
 #include "nfl2k5_eras_office.h"
@@ -219,6 +220,31 @@ static void team_full(int t, char *b, size_t n)
     if (e) snprintf(b, n, "%s %s", e->city, e->name); else snprintf(b, n, "None (watch CPU vs CPU)");
 }
 
+/* The hub's third row: "Build My Assets" while the assets the builder makes from the
+ * player's disc (generated\build.json, the office packages) are missing, the builder's
+ * status while it runs (generated\build-status.txt), else the roster label. */
+static int s_build_started;
+
+static int assets_missing(void)
+{
+    return !nfl2k5_eras_limited()[0] &&
+           (!nfl2k5_eras_exists("office\\files\\erasoffice.iff") || !nfl2k5_eras_exists("teams\\1980\\art"));
+}
+
+static const char *assets_label(void)
+{
+    static char b[EM_STR_CHARS];
+    if (s_build_started) {
+        char p[MAX_PATH], line[96] = "";
+        FILE *f;
+        g_eras_svc->root_path(0, "build-status.txt", p, sizeof p);
+        if (!fopen_s(&f, p, "r") && f) { if (fgets(line, sizeof line, f)) line[strcspn(line, "\r\n")] = 0; fclose(f); }
+        snprintf(b, sizeof b, "%s", line[0] ? line : "Building your assets ...");
+        return b;
+    }
+    return assets_missing() ? "Build My Assets (office, era logos)" : "Rosters: unverified community roster";
+}
+
 static void hub_refresh(void)
 {
     char b[EM_STR_CHARS];
@@ -226,6 +252,7 @@ static void hub_refresh(void)
     else if (s_hub_error) snprintf(b, sizeof b, "Continue League: %s", nfl2k5_eras_league_message(s_hub_error));
     else snprintf(b, sizeof b, "Continue League");
     em_put(s_em[EM_HUB].label[0], b);
+    em_put(s_em[EM_HUB].label[2], assets_label());
     em_put(s_em[EM_HUB].label[1], nfl2k5_eras_limited()[0] ? nfl2k5_eras_limited()   /* the pack cannot run: why */
                                   : !nfl2k5_eras_package_ok() ? "New League (1980): season data missing"
                                   : s_new_confirm ? "Replace league? Press A again" : "New League (1980)");
@@ -605,6 +632,18 @@ static void row_action(int scr, int row, uint32_t fsm)
         s_hub_error = 0;
         if (r == NFL2K5_ERAS_OK) push_office(fsm);
         else em_sound(SND_CURSOR);
+    } else if (scr == EM_HUB && row == 2 && !s_build_started && assets_missing()) {
+        /* Build My Assets: the office, era logos and card badges from the player's disc
+         * (the asset builder, hidden; the archive files take effect at the next boot) */
+        int r = g_eras_svc->run_builder("--steps office,office_1980s,logos_1980,art_1980");
+        EM_LOG("build my assets: %d\n", r);
+        if (r == 0) {
+            s_build_started = 1;
+            g_eras_svc->toast("My NFL Eras", "Building your assets from your NFL 2K5 disc",
+                              "Restart the game when the hub says Done", 6000);
+        }
+        hub_refresh();
+        em_sound(r == 0 ? SND_SELECT : SND_CURSOR);
     } else if (scr == EM_HUB && row == 2) {
         /* "Rosters: unverified community roster" is a label row: no action, but
          * give the same refusal sound as the other rows that do nothing yet. */

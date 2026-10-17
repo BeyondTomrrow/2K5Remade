@@ -69,3 +69,5 @@ mods/eras/stadiums/*/files/
 /data/eras/runtime/*.prev-*/
 mods/eras/offices/*/reference/
 mods/eras/offices/1980s/computer_monitor.png
+# My NFL Eras tools: this PC's folders (tools/eras/eras_settings.py)
+/eras-tools.ini

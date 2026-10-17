@@ -121,6 +121,9 @@ typedef struct NfHostServices {
     /* stats (sub_000CB240 / sub_000CB2D0, every guest register preserved) */
     int (*player_stat)(uint32_t player, uint32_t selector, uint32_t scope, double *out);
     int (*team_stat)(uint32_t team, uint32_t selector, uint32_t scope, double *out);
+    /* the first-run asset builder (tools\NFL2K5-ErasBuilder.exe, else python tools\eras\build_assets.py),
+     * started hidden at below-normal priority with --pack <the pack> and these arguments; 0 = started */
+    int (*run_builder)(const char *args);
 } NfHostServices;
 
 /* The host's shims: the only names the rest of the game calls (gen patches,

@@ -50,7 +50,8 @@ import ncaa_source as N  # noqa: E402
 
 DATA = ROOT / "data" / "eras" / "stadiums"
 MODS = ROOT / "mods" / "eras" / "stadiums"
-RAW = N.NCAA_WORK / "stadiums_raw"
+def raw_dir():
+    return N.NCAA_WORK / "stadiums_raw"     # read when used: --ncaa-dir may change it
 VARIANTS = CB.VARIANTS
 BASE = "s24"
 
@@ -492,7 +493,7 @@ def configure(st, src, report):
 # --- commands ------------------------------------------------------------------------------------------------------
 
 def _entry(e):
-    return RAW / f"{e:08X}.tmd"
+    return raw_dir() / f"{e:08X}.tmd"
 
 
 def build(st, only=None, log=print):
@@ -628,7 +629,11 @@ def main(argv=None):
     ap.add_argument("cmd", choices=["list", "build", "preview", "pack", "install", "textures", "all"])
     ap.add_argument("slugs", nargs="*")
     ap.add_argument("--only", nargs="*", default=None)
+    ap.add_argument("--ncaa-dir", help="the NCAA 07 extractor work folder (holds stadiums_raw); "
+                    "default NFL2K5_NCAA07_WORK / eras-tools.ini / discovery (tools/eras/eras_settings.py)")
     a = ap.parse_args(argv)
+    if a.ncaa_dir:
+        N.set_work(a.ncaa_dir)
     todo = [BY_SLUG[s] for s in a.slugs] if a.slugs else STADIUMS
     if a.cmd == "list":
         for s in STADIUMS:
