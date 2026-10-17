@@ -2861,19 +2861,25 @@ int main(int argc, char **argv)
      * pack Features > Mod Packs has selected. The selection itself is left
      * as it is, so a normal launch still plays the pack. The argument is
      * consumed here; the remaining ones are checked as before. */
-    int force_retail = 0;
+    int force_retail = 0, vanilla = 0;
     {
-        const char *rv = getenv("NFL2K5_RETAIL");
+        /* --vanilla (or NFL2K5_VANILLA=1): the truly clean game -- no XBE pack, as
+         * --retail, and no feature packs (My NFL Eras) either. --retail keeps the
+         * feature packs (docs/eras/MOD-PACK-DESIGN.md 3). */
+        const char *rv = getenv("NFL2K5_RETAIL"), *vv = getenv("NFL2K5_VANILLA");
         int a, b;
         if (rv && *rv == '1') force_retail = 1;
+        if (vv && *vv == '1') vanilla = force_retail = 1;
         for (a = 1; a < argc; a++)
-            if (strcmp(argv[a], "--retail") == 0) {
+            if (strcmp(argv[a], "--retail") == 0 || strcmp(argv[a], "--vanilla") == 0) {
                 force_retail = 1;
+                if (argv[a][2] == 'v') vanilla = 1;
                 for (b = a; b < argc - 1; b++) argv[b] = argv[b + 1];
                 argc--;
                 a--;
             }
         if (force_retail) _putenv_s("NFL2K5_RETAIL", "1");   /* the same choice for anything later */
+        if (vanilla) _putenv_s("NFL2K5_VANILLA", "1");
     }
     /* Explorer sets the process working directory to the executable's
      * folder.  In a development build that is build/Release, while all
@@ -2928,7 +2934,8 @@ int main(int argc, char **argv)
      * any Xbox state is created.  Pack builds use the same path to return to
      * retail when the selected pack is turned off. */
     if (force_retail)
-        fprintf(stderr, "[BOOT] --retail: clean ESPN NFL 2K5; the selected mod pack is not loaded\n");
+        fprintf(stderr, vanilla ? "[BOOT] --vanilla: clean ESPN NFL 2K5; no mod pack, no feature packs\n"
+                                : "[BOOT] --retail: clean ESPN NFL 2K5; the selected mod pack is not loaded\n");
     if (!force_retail && !getenv("NFL2K5_NO_PACK_DISPATCH")) {
         extern int nfl2k5_modpacks_boot_dispatch(const char *root);
         if (nfl2k5_modpacks_boot_dispatch(root)) {
@@ -2977,7 +2984,7 @@ int main(int argc, char **argv)
     }
     const int validate_only = argc == 2 && strcmp(argv[1], "--validate") == 0;
     if (argc > 1 && !validate_only && !(argc == 2 && strcmp(argv[1], "--run") == 0)) {
-        fprintf(stderr, "Usage: NFL2K5.exe [--retail] [--validate | --run]\n");
+        fprintf(stderr, "Usage: NFL2K5.exe [--retail | --vanilla] [--validate | --run]\n");
         return 2;
     }
     setvbuf(stdout, NULL, _IONBF, 0);
@@ -3149,7 +3156,7 @@ int main(int argc, char **argv)
         uint32_t kind = g_interp_pack ? 3u                                        /* NF_BASE_INTERP_PACK */
                       : NFL2K5_BASE_CMP(NFL2K5_XBE_SHA256) != 0 ? 4u                /* NF_BASE_OTHER */
                       : !strcmp(NFL2K5_XBE_SHA256, NFL2K5_WIDESCREEN_XBE_SHA256) ? 2u : 1u;   /* widescreen / retail */
-        nfl2k5_plugins_boot(digest_hex, kind, pk ? pk + 1 : NULL, force_retail ? 2u : 0u);
+        nfl2k5_plugins_boot(digest_hex, kind, pk ? pk + 1 : NULL, (force_retail ? 2u : 0u) | (vanilla ? 1u : 0u));
     }
     if (!g_interp_pack && NFL2K5_BASE_CMP(NFL2K5_XBE_SHA256) == 0)   /* retail only: packs bring their own */
         nfl2k5_expand_limits();

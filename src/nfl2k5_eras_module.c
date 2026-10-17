@@ -29,6 +29,11 @@ static const NfHostInfo *s_host;
 static const NfHostServices *s_svc;
 const NfHostServices *g_eras_svc;      /* the module's other files (nfl2k5_eras.h) */
 
+const char *nfl2k5_eras_limited(void)
+{
+    return s_host && (s_host->flags & NF_HOST_LIMITED) && s_host->limited_reason ? s_host->limited_reason : "";
+}
+
 /* The result capture and the M4b return for packs that interpret the hooked
  * functions (their gen patches never run there): sub_000A2910 entry (ecx = home
  * points, edx = away points), sub_000645D0 entry, and 0x34C208, the `pop esi`

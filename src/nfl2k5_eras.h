@@ -67,6 +67,9 @@ char *nfl2k5_eras_root_path(int i, const char *rel, char *out, size_t n);
  * user folder only through them. */
 struct NfHostServices;
 extern const struct NfHostServices *g_eras_svc;
+/* "" when the pack runs; otherwise why it cannot (an installed pack the game
+ * cannot use: the hub shows this and offers nothing else). */
+const char *nfl2k5_eras_limited(void);
 
 /* The season package (loaded once; 0 on success). */
 int nfl2k5_eras_package_load(void);

@@ -163,6 +163,11 @@ int nfl2k5_eras_package_load(void)
     FILE *fp;
     int n, row, col_style = -1, col_stadium = 11;
     if (s_package >= 0) return s_package ? -1 : 0;
+    if (nfl2k5_eras_limited()[0]) {   /* the pack is installed but cannot run (the hub says why) */
+        s_package = 1;
+        fprintf(stderr, "[ERAS] package: not loaded (%s)\n", nfl2k5_eras_limited());
+        return -1;
+    }
     s_package = 1;
     s_team_n = s_game_n = s_weeks = 0;
     snprintf(path, sizeof path, "%s\\teams.csv", package_dir());

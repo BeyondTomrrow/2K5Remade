@@ -292,6 +292,15 @@ void nfl2k5_modpacks_init(const char *root)
          * interprets the selected patch and remains portable across releases. */
         mp_retail_exe(p->exe, sizeof(p->exe));
         if (!mp_file_exists(json) || !mp_file_exists(xbe)) continue;
+        {   /* "kind": "feature" (My NFL Eras): an additive feature pack, never an XBE pack
+             * to select here (src/nfl2k5_plugin_host.c turns it on) */
+            FILE *jf = fopen(json, "rb");
+            char head[4096];
+            size_t n = jf ? fread(head, 1, sizeof head - 1, jf) : 0;
+            if (jf) fclose(jf);
+            head[n] = 0;
+            if (strstr(head, "\"kind\"") && strstr(head, "\"feature\"")) continue;
+        }
         mp_read_json_name(json, p->name, sizeof(p->name));
         if (!p->name[0]) snprintf(p->name, sizeof(p->name), "%s", p->folder);
         if (!_stricmp(active, p->folder)) s_active = s_pack_count;

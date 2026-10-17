@@ -226,7 +226,8 @@ static void hub_refresh(void)
     else if (s_hub_error) snprintf(b, sizeof b, "Continue League: %s", nfl2k5_eras_league_message(s_hub_error));
     else snprintf(b, sizeof b, "Continue League");
     em_put(s_em[EM_HUB].label[0], b);
-    em_put(s_em[EM_HUB].label[1], !nfl2k5_eras_package_ok() ? "New League (1980): season data missing"
+    em_put(s_em[EM_HUB].label[1], nfl2k5_eras_limited()[0] ? nfl2k5_eras_limited()   /* the pack cannot run: why */
+                                  : !nfl2k5_eras_package_ok() ? "New League (1980): season data missing"
                                   : s_new_confirm ? "Replace league? Press A again" : "New League (1980)");
 }
 
@@ -615,7 +616,7 @@ static void row_action(int scr, int row, uint32_t fsm)
 static void row_update(int scr, int row, uint32_t item)
 {
     int hide = 0, grey = 0;
-    if (scr == EM_HUB && row == 0) hide = !nfl2k5_eras_league_exists();
+    if (scr == EM_HUB && row == 0) hide = !nfl2k5_eras_league_exists() || nfl2k5_eras_limited()[0];
     else if (scr == EM_HUB && row == 1) grey = !nfl2k5_eras_package_ok();
     else if (scr == EM_OFFICE && row == OR_PLAY) grey = nfl2k5_eras_next_game() < 0;
     else if (scr == EM_HOOK) hide = 1;                     /* a retail row hidden in an Eras game */
