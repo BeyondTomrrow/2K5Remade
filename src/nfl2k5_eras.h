@@ -7,6 +7,7 @@
 #ifndef NFL2K5_ERAS_H
 #define NFL2K5_ERAS_H
 
+#include <stddef.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -51,6 +52,16 @@ enum {
     NFL2K5_ERAS_IO = -4,
     NFL2K5_ERAS_BAD_TEAM = -5       /* user_team names no team of the package: refused */
 };
+
+/* Paths (docs/eras/MOD-PACK-DESIGN.md 4): an Eras file by its pack-relative name
+ * ("league\1980\teams.csv", "offices\1980s\era.ini", ...), looked up in each root
+ * in turn (the pack's generated\ first, then the pack). nfl2k5_eras_path gives the
+ * first that exists, else the last root's name (for messages). */
+char *nfl2k5_eras_path(const char *rel, char *out, size_t n);
+int nfl2k5_eras_exists(const char *rel);
+int nfl2k5_eras_root_count(void);
+const char *nfl2k5_eras_root(int i);
+char *nfl2k5_eras_root_path(int i, const char *rel, char *out, size_t n);
 
 /* The season package (loaded once; 0 on success). */
 int nfl2k5_eras_package_load(void);

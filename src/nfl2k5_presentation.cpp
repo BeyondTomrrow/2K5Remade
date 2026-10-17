@@ -411,10 +411,10 @@ static void load_teams()
  *
  * While an Eras game is launched (src/nfl2k5_eras_launch.c calls
  * nfl2k5_presentation_eras_begin / _end), each side's team comes from
- *   mods\eras\teams\<season>\<eras id>\team.json (+ logos\scorebug.png)
+ *   teams\<season>\<eras id>\team.json (+ logos\scorebug.png) of the Eras roots
  * keyed by the staged Eras team of that side, never by the 2004 abbreviation
  * the playbook name carries (BAL is the Colts there, HOU the Oilers). The
- * Presentation API gets season / decade / week, and mods\eras\presentations.ini
+ * Presentation API gets season / decade / week, and the Eras presentations.ini
  * may pick a package for the season; the user's own selection is put back at
  * the end and is never saved over. Outside Eras nothing here is used.
  * ====================================================================== */
@@ -430,12 +430,40 @@ static std::mutex s_eras_lock;
 static ErasPres s_eras;
 static std::atomic<int> s_eras_on{ 0 };
 
+/* The Eras roots (src/nfl2k5_eras.c): generated\ first, then the pack; '/' separators here. */
+extern "C" int nfl2k5_eras_root_count(void);
+extern "C" char *nfl2k5_eras_root_path(int i, const char *rel, char *out, size_t n);
+static std::string eras_root_rel(int i, const std::string &rel)
+{
+    char p[MAX_PATH];
+    std::string s = nfl2k5_eras_root_path(i, rel.c_str(), p, sizeof p);
+    for (char &c : s) if (c == '\\') c = '/';
+    return s;
+}
+/* The folder served as https://erateams.local/: the first root with a teams folder
+ * (the logos the asset builder made); "" when there is none. */
+static std::string eras_teams_root_find()
+{
+    for (int r = 0; r < nfl2k5_eras_root_count(); r++) {
+        std::string d = eras_root_rel(r, "teams");
+        if (GetFileAttributesA(d.c_str()) != INVALID_FILE_ATTRIBUTES) return d;
+    }
+    return "";
+}
+static const std::string &eras_teams_root()
+{
+    static const std::string root = eras_teams_root_find();   /* once: the roots are fixed at boot */
+    return root;
+}
+
 static bool eras_team_load(int season, const std::string &id, TeamInfo &t)
 {
-    std::string dir = "mods/eras/teams/" + std::to_string(season) + "/" + id;
+    std::string rel = "teams/" + std::to_string(season) + "/" + id, dir;
     JVal j;
     t = TeamInfo();
-    if (!load_json(dir + "/team.json", j)) return false;
+    for (int r = 0; r < nfl2k5_eras_root_count() && dir.empty(); r++)
+        if (file_exists(eras_root_rel(r, rel + "/team.json"))) dir = eras_root_rel(r, rel);
+    if (dir.empty() || !load_json(dir + "/team.json", j)) return false;
     t.abbr = j.str("abbreviation", id.c_str());
     t.city = j.str("city");
     t.name = j.str("name", t.abbr.c_str());
@@ -447,7 +475,10 @@ static bool eras_team_load(int season, const std::string &id, TeamInfo &t)
     }
     std::string logo = "logos/scorebug.png";
     if (const JVal *l = j.get("logos")) logo = l->str("scorebug", logo.c_str());
-    if (file_exists(dir + "/" + logo)) t.logo = dir + "/" + logo;
+    std::string served = eras_teams_root();     /* the logo from the served folder (built art) first */
+    if (!served.empty() && file_exists(served + "/" + std::to_string(season) + "/" + id + "/" + logo))
+        t.logo = served + "/" + std::to_string(season) + "/" + id + "/" + logo;
+    else if (file_exists(dir + "/" + logo)) t.logo = dir + "/" + logo;
     return true;
 }
 
@@ -772,15 +803,16 @@ extern "C" void nfl2k5_pres_set(int what, int v)
 
 /* ---- M9: My NFL Eras package choice and identity ----------------------- */
 
-/* mods\eras\presentations.ini: "<season> = pkg", "<first>-<last> = pkg" or
+/* presentations.ini of the Eras roots: "<season> = pkg", "<first>-<last> = pkg" or
  * "<decade>s = pkg"; the most specific key wins. The package is named by its
  * folder under mods\presentations or by its display name. -1 = none installed. */
 static int eras_ini_package(int season, std::string &why)
 {
-    FILE *f = fopen("mods\\eras\\presentations.ini", "r");
+    FILE *f = nullptr;
+    for (int r = 0; r < nfl2k5_eras_root_count() && !f; r++) f = fopen(eras_root_rel(r, "presentations.ini").c_str(), "r");
     char line[512];
     int best = -1, best_rank = 0;
-    if (!f) { why = "no mods\\eras\\presentations.ini"; return -1; }
+    if (!f) { why = "no Eras presentations.ini"; return -1; }
     why = "no line for the season";
     while (fgets(line, sizeof line, f)) {
         char key[64], val[400];
@@ -817,7 +849,7 @@ extern "C" void nfl2k5_presentation_eras_begin(int season, int week, const char 
     e.id[AWAY] = away_id ? away_id : "";
     for (int s = 0; s < 2; s++)
         if (!eras_team_load(season, e.id[s], e.team[s]))
-            fprintf(stderr, "[PRES] eras: no mods/eras/teams/%d/%s/team.json; the %s side uses the normal lookup\n",
+            fprintf(stderr, "[PRES] eras: no teams/%d/%s/team.json in the Eras roots; the %s side uses the normal lookup\n",
                     season, e.id[s].c_str(), s == AWAY ? "away" : "home");
     {
         std::lock_guard<std::mutex> lock(s_eras_lock);
@@ -2624,10 +2656,10 @@ static std::string json_color(const D2D1_COLOR_F &c)
 /* mods/teams/SF/logos/scorebug.png -> https://teams.local/SF/logos/scorebug.png */
 static std::string team_asset_url(const std::string &path)
 {
-    const std::string prefix = "mods/teams/", eras = "mods/eras/teams/";
+    const std::string prefix = "mods/teams/", eras = eras_teams_root() + "/";
     if (path.compare(0, prefix.size(), prefix) == 0) return "https://teams.local/" + path.substr(prefix.size());
-    /* M9: mods/eras/teams/1980/colts/logos/scorebug.png -> https://erateams.local/1980/colts/logos/scorebug.png */
-    if (path.compare(0, eras.size(), eras) == 0) return "https://erateams.local/" + path.substr(eras.size());
+    /* M9: <Eras teams root>/1980/colts/logos/scorebug.png -> https://erateams.local/1980/colts/logos/scorebug.png */
+    if (eras.size() > 1 && path.compare(0, eras.size(), eras) == 0) return "https://erateams.local/" + path.substr(eras.size());
     return "";
 }
 
@@ -3488,7 +3520,7 @@ static int html_hud(const XboxHudFrame *f, XboxHudImage *img, const GameState &g
         c.entry = pkg.entry;
         c.root_dir = "mods/presentations";
         c.teams_dir = "mods/teams";
-        c.eras_teams_dir = "mods/eras/teams";   /* M9: https://erateams.local/ */
+        c.eras_teams_dir = eras_teams_root();   /* M9: https://erateams.local/ ("" = not mapped) */
         c.portraits_dir = nfl2k5_portraits_dir();
         nfl2k5_portraits_warm();
         c.canvas_width = cw;

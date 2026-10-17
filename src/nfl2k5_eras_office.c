@@ -290,15 +290,16 @@ static char *trim(char *s)
     return s;
 }
 
-/* mods\eras\offices\<dir>\era.ini: [room] scene, [hide] nodes, [swap] a = b,
+/* offices\<dir>\era.ini (nfl2k5_eras_path): [room] scene, [hide] nodes, [swap] a = b,
  * [stops] play / schedule / standings / team / settings = a,b. Each key
  * present replaces the built-in value. */
 static int look_ini(EraLook *e, const char *dir)
 {
-    char path[MAX_PATH], line[256], sect[16] = "";
+    char path[MAX_PATH], rel[64], line[256], sect[16] = "";
     FILE *f;
     int swaps_reset = 0, hides_reset = 0;
-    snprintf(path, sizeof path, "mods\\eras\\offices\\%s\\era.ini", dir);
+    snprintf(rel, sizeof rel, "offices\\%s\\era.ini", dir);
+    nfl2k5_eras_path(rel, path, sizeof path);
     if (fopen_s(&f, path, "rb") || !f) return 0;
     while (fgets(line, sizeof line, f)) {
         char *s = line, *eq, *k, *v, *c = strchr(line, ';');
@@ -451,16 +452,18 @@ int nfl2k5_eras_office_init(void)
 }
 
 /* The files are in pack G when the archive index has their names (the
- * extra pack only gets what is in mods\eras\office\files at boot). */
+ * extra pack only gets the office\files of the Eras roots at boot). */
 int nfl2k5_eras_office_ready(void)
 {
     if (!s_o.ready_checked) {
         s_o.ready_checked = 1;
-        s_o.ready = GetFileAttributesA("mods\\eras\\office\\files\\erasoffice.iff") != INVALID_FILE_ATTRIBUTES &&
-                    GetFileAttributesA("mods\\eras\\office\\files\\erasskin.iff") != INVALID_FILE_ATTRIBUTES;
-        if (!s_o.ready)
-            fprintf(stderr, "[ERAS] office: mods\\eras\\office\\files\\erasoffice.iff / erasskin.iff missing "
-                            "(run python -I tools\\eras\\build-office-pack.py); the office shows without its room\n");
+        s_o.ready = nfl2k5_eras_exists("office\\files\\erasoffice.iff") && nfl2k5_eras_exists("office\\files\\erasskin.iff");
+        if (!s_o.ready) {
+            char p[MAX_PATH];
+            fprintf(stderr, "[ERAS] office: %s / erasskin.iff missing (build the Eras assets: "
+                            "tools\\eras\\build_assets.py, or NFL2K5-ErasBuilder.exe); the office shows without its room\n",
+                    nfl2k5_eras_path("office\\files\\erasoffice.iff", p, sizeof p));
+        }
     }
     return s_o.ready && s_o.mem;
 }

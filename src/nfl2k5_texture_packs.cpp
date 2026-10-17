@@ -128,9 +128,9 @@ void write_png(const std::string &path, const uint32_t *px, uint32_t w, uint32_t
 // Set only by the Eras office (src/nfl2k5_eras_office.c) while its room shows,
 // so Franchise, which shares every office texture hash, always draws retail.
 // While it is set, a texture is looked up first in the era folders
-//   mods\eras\offices\<season>\  <decade>\  default\
+//   offices\<season>\  <decade>\  default\   of each Eras root (generated\, then the pack)
 // by raw hash name (<HASH>*.png, the texture-dump workflow) or by friendly name
-// (<name>.png; names -> hashes in mods\eras\offices\office-textures.ini), then
+// (<name>.png; names -> hashes in offices\office-textures.ini), then
 // in the era.ini [grade] lines of those folders: a colour grade of the game's own
 // pixels (orig), so an era recolours retail textures without shipping any retail
 // pixels. Then mods\textures as usual.
@@ -150,7 +150,7 @@ std::map<std::string, EraDir> g_era_dirs;
 std::vector<std::string> g_era;                         // the active folders, in search order; empty = off
 // M9 (docs/eras/results/M9-era-looks.md): the Eras team-art folders, searched before g_era. On only
 // while an Eras game is launched or an Eras depth chart is open (nfl2k5_eras_team_art_update):
-//   mods\eras\teams\<season>\art\<HASH>.png   (card chips, the PHI/CHI style logos, the Bengals logo)
+//   teams\<season>\art\<HASH>.png of each Eras root (card chips, the PHI/CHI style logos, the Bengals logo)
 std::vector<std::string> g_teams;
 volatile uint32_t g_era_gen = 1;
 std::map<std::pair<std::string, uint32_t>, Pic> g_era_made;   // (folder, hash) -> graded or decoded image
@@ -163,11 +163,22 @@ std::string trim_s(const std::string &s)
     return a == std::string::npos ? std::string() : s.substr(a, b - a + 1);
 }
 
+// The Eras roots (src/nfl2k5_eras.c nfl2k5_eras_root_path): generated\ first, then the pack.
+extern "C" int nfl2k5_eras_root_count(void);
+extern "C" char *nfl2k5_eras_root_path(int i, const char *rel, char *out, size_t n);
+std::string eras_root_path(int i, const char *rel)
+{
+    char p[MAX_PATH];
+    return nfl2k5_eras_root_path(i, rel, p, sizeof p);
+}
+
 void read_names()
 {
     if (g_names_read) return;
     g_names_read = true;
-    FILE *f = fopen("mods\\eras\\offices\\office-textures.ini", "r");
+    FILE *f = nullptr;
+    for (int r = 0; r < nfl2k5_eras_root_count() && !f; r++)
+        f = fopen(eras_root_path(r, "offices\\office-textures.ini").c_str(), "r");
     char line[2048];
     if (!f) return;
     while (fgets(line, sizeof line, f)) {
@@ -218,8 +229,12 @@ EraDir &era_dir(const std::string &name)
     if (d.scanned) return d;
     d.scanned = true;
     read_names();
-    // an office era name ("1980s"), or a full folder path (the M9 team-art folders)
-    std::string dir = name.find('\\') != std::string::npos ? name + "\\" : "mods\\eras\\offices\\" + name + "\\";
+    // an office era name ("1980s": offices\1980s\ of every Eras root, the first root's file
+    // winning), or a full folder path (the M9 team-art folders)
+    std::vector<std::string> dirs;
+    if (name.find('\\') != std::string::npos) dirs.push_back(name + "\\");
+    else for (int r = 0; r < nfl2k5_eras_root_count(); r++) dirs.push_back(eras_root_path(r, ("offices\\" + name).c_str()) + "\\");
+    for (const std::string &dir : dirs) {
     WIN32_FIND_DATAA fd;
     std::vector<std::string> files;
     HANDLE h = FindFirstFileA((dir + "*").c_str(), &fd);
@@ -262,6 +277,7 @@ EraDir &era_dir(const std::string &name)
             for (uint32_t x : hs) if (!d.grades.count(x)) d.grades[x] = g;
         }
         fclose(f);
+    }
     }
     fprintf(stderr, "[TEXPACK] era folder %s: %zu textures by file, %zu by grade\n", name.c_str(), d.files.size(), d.grades.size());
     return d;
@@ -329,13 +345,18 @@ extern "C" int nfl2k5_texpack_era_on(void) { return !g_era.empty() || !g_teams.e
 extern "C" void nfl2k5_texpack_eras_teams(const char *season_dir)
 {
     std::vector<std::string> v;
-    if (season_dir && *season_dir) v.push_back(std::string("mods\\eras\\teams\\") + season_dir + "\\art");
+    if (season_dir && *season_dir)
+        for (int r = 0; r < nfl2k5_eras_root_count(); r++) {
+            std::string d = eras_root_path(r, (std::string("teams\\") + season_dir + "\\art").c_str());
+            if (GetFileAttributesA(d.c_str()) != INVALID_FILE_ATTRIBUTES) v.push_back(d);
+        }
     if (!g_ready) return;
     EnterCriticalSection(&g_lock);
     if (v != g_teams) {
         g_teams = v;
         g_era_gen++;
-        fprintf(stderr, "[TEXPACK] eras team art %s (gen %u)\n", v.empty() ? "off" : v[0].c_str(), (unsigned)g_era_gen);
+        fprintf(stderr, "[TEXPACK] eras team art %s%s (gen %u)\n", v.empty() ? (season_dir && *season_dir ? "none found" : "off") : v[0].c_str(),
+                v.size() > 1 ? " (+ more roots)" : "", (unsigned)g_era_gen);
     }
     LeaveCriticalSection(&g_lock);
 }

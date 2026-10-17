@@ -323,50 +323,56 @@ void nfl2k5_archive_extend(void)
         } while (FindNextFileA(h, &fd));
         FindClose(h);
     }
-    {   /* My NFL Eras stadium packs: mods\eras\stadiums\<name>\files\* (docs/eras/research/COLISEUM-IMPORT.md) */
-        WIN32_FIND_DATAA sd, fd;
-        HANDLE hs = FindFirstFileA("mods\\eras\\stadiums\\*", &sd);
-        if (hs != INVALID_HANDLE_VALUE) {
-            do {
-                char pat[MAX_PATH];
-                HANDLE h;
-                if (!(sd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) || sd.cFileName[0] == '.') continue;
-                snprintf(pat, sizeof pat, "mods\\eras\\stadiums\\%s\\files\\*", sd.cFileName);
-                h = FindFirstFileA(pat, &fd);
-                if (h == INVALID_HANDLE_VALUE) continue;
+    {   /* My NFL Eras stadium packs (docs/eras/research/COLISEUM-IMPORT.md) and office packages
+         * (erasoffice.iff / erasskin.iff, built from the player's disc; docs/eras/ERAS-OFFICE-DESIGN.md
+         * 1.2): stadiums\<name>\files\* then office\files\*.iff of each Eras root, a name once (the
+         * first root has it). The office last, so the other files keep their place in the pack. */
+        extern int nfl2k5_eras_root_count(void);
+        extern char *nfl2k5_eras_root_path(int i, const char *rel, char *out, size_t n);
+        int pass, r, before = nf, before_office = nf;
+        for (pass = 0; pass < 2; pass++) {
+            if (pass == 1) before_office = nf;
+            for (r = 0; r < nfl2k5_eras_root_count(); r++) {
+                WIN32_FIND_DATAA sd, fd;
+                char base[MAX_PATH], pat[MAX_PATH], dir[MAX_PATH];
+                HANDLE hs = INVALID_HANDLE_VALUE;
+                nfl2k5_eras_root_path(r, pass ? "office" : "stadiums", base, sizeof base);
+                if (pass == 0) {
+                    snprintf(pat, sizeof pat, "%s\\*", base);
+                    hs = FindFirstFileA(pat, &sd);
+                    if (hs == INVALID_HANDLE_VALUE) continue;
+                }
                 do {
-                    if ((fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) || nf >= 4096 || strlen(fd.cFileName) >= 96) continue;
-                    snprintf(files[nf].host, sizeof files[nf].host, "mods\\eras\\stadiums\\%s\\files\\%s", sd.cFileName, fd.cFileName);
-                    snprintf(files[nf].name, sizeof files[nf].name, "%s", fd.cFileName);
-                    files[nf].size = fd.nFileSizeLow;
-                    files[nf].block = blocks;
-                    blocks += (fd.nFileSizeLow + 0x7FF) / 0x800;
-                    nf++;
-                } while (FindNextFileA(h, &fd));
-                FindClose(h);
-            } while (FindNextFileA(hs, &sd));
-            FindClose(hs);
+                    HANDLE h;
+                    if (pass == 0) {
+                        if (!(sd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) || sd.cFileName[0] == '.') continue;
+                        snprintf(dir, sizeof dir, "%s\\%s\\files", base, sd.cFileName);
+                        snprintf(pat, sizeof pat, "%s\\*", dir);
+                    } else {
+                        snprintf(dir, sizeof dir, "%s\\files", base);
+                        snprintf(pat, sizeof pat, "%s\\*.iff", dir);
+                    }
+                    h = FindFirstFileA(pat, &fd);
+                    if (h == INVALID_HANDLE_VALUE) continue;
+                    do {
+                        int k, dup = 0;
+                        if ((fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) || nf >= 4096 || strlen(fd.cFileName) >= 96) continue;
+                        for (k = before; k < nf && !dup; k++) dup = !_stricmp(files[k].name, fd.cFileName);
+                        if (dup) continue;
+                        snprintf(files[nf].host, sizeof files[nf].host, "%s\\%s", dir, fd.cFileName);
+                        snprintf(files[nf].name, sizeof files[nf].name, "%s", fd.cFileName);
+                        files[nf].size = fd.nFileSizeLow;
+                        files[nf].block = blocks;
+                        blocks += (fd.nFileSizeLow + 0x7FF) / 0x800;
+                        nf++;
+                    } while (FindNextFileA(h, &fd));
+                    FindClose(h);
+                } while (pass == 0 && FindNextFileA(hs, &sd));
+                if (hs != INVALID_HANDLE_VALUE) FindClose(hs);
+            }
         }
-    }
-    {   /* My NFL Eras office packages: erasoffice.iff / erasskin.iff, built from the player's
-         * disc by tools/eras/build-office-pack.py (docs/eras/ERAS-OFFICE-DESIGN.md 1.2).
-         * Last, so the other files keep their place in the pack. */
-        WIN32_FIND_DATAA fd;
-        HANDLE h = FindFirstFileA("mods\\eras\\office\\files\\*.iff", &fd);
-        int before = nf;
-        if (h != INVALID_HANDLE_VALUE) {
-            do {
-                if ((fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) || nf >= 4096 || strlen(fd.cFileName) >= 96) continue;
-                snprintf(files[nf].host, sizeof files[nf].host, "mods\\eras\\office\\files\\%s", fd.cFileName);
-                snprintf(files[nf].name, sizeof files[nf].name, "%s", fd.cFileName);
-                files[nf].size = fd.nFileSizeLow;
-                files[nf].block = blocks;
-                blocks += (fd.nFileSizeLow + 0x7FF) / 0x800;
-                nf++;
-            } while (FindNextFileA(h, &fd));
-            FindClose(h);
-        }
-        if (nf > before) fprintf(stderr, "[TEAMFILES] My NFL Eras office: %d files\n", nf - before);
+        if (before_office > before) fprintf(stderr, "[TEAMFILES] My NFL Eras stadiums: %d files\n", before_office - before);
+        if (nf > before_office) fprintf(stderr, "[TEAMFILES] My NFL Eras office: %d files\n", nf - before_office);
     }
     if (!nf) return;
     {   /* NFL2K5_PRIVATE_PACKS=1 (tests): this copy of the game reads the archive from its

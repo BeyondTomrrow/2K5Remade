@@ -32,6 +32,7 @@
 #include "xbox_memory_layout.h"
 #include "recomp_funcs.h"
 #include "nfl2k5_teams.h"
+#include "nfl2k5_eras.h"
 
 #define ROOT        0xB72918u   /* roster root pointer */
 #define TS_MODE     0xACF614u   /* Team Select flow: 1 Quick Game, 3 Practice, 7 First Person Football */
@@ -797,7 +798,7 @@ uint32_t nfl2k5_teams_stadium_find(const char *name, int *id_out)
 }
 
 /* My NFL Eras stadium packs (docs/eras/research/COLISEUM-IMPORT.md): a stadium the disc does not have.
- * mods\eras\stadiums\<folder>\stadium.json {"name", "display", "location", "code", "clone", "host",
+ * stadiums\<folder>\stadium.json of the Eras roots (nfl2k5_eras_root_path) {"name", "display", "location", "code", "clone", "host",
  * "capacity", "indoor", "grass"}; its bundles <code><t><w>.iff are in the archive (nfl2k5_archive_extend).
  * nfl2k5_teams_stadium_pack borrows the "host" row (a fictional stadium, default LOCO ARENA) for one game:
  * saved, filled from the "clone" row, given the pack's strings and code. nfl2k5_teams_stadium_pack_restore
@@ -844,16 +845,24 @@ void nfl2k5_teams_stadium_pack_restore(void)
 uint32_t nfl2k5_teams_stadium_pack(const char *name, int *id_out)
 {
     WIN32_FIND_DATAA fd;
-    HANDLE h;
+    HANDLE h = INVALID_HANDLE_VALUE;
+    char dir[MAX_PATH], pat[MAX_PATH];
+    int r;
     nfl2k5_teams_stadium_pack_restore();          /* one borrowed row at a time */
-    if (!name || !*name || (h = FindFirstFileA("mods\\eras\\stadiums\\*", &fd)) == INVALID_HANDLE_VALUE) return 0;
+    if (!name || !*name) return 0;
+    for (r = 0; r < nfl2k5_eras_root_count() && h == INVALID_HANDLE_VALUE; r++) {
+        nfl2k5_eras_root_path(r, "stadiums", dir, sizeof dir);
+        snprintf(pat, sizeof pat, "%s\\*", dir);
+        h = FindFirstFileA(pat, &fd);
+    }
+    if (h == INVALID_HANDLE_VALUE) return 0;
     do {
         char p[MAX_PATH], text[4096], v[64], code[16], clone[64], host[64], disp[64], loc[64];
         uint32_t src, row, g;
         FILE *f;
         size_t n;
         if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) || fd.cFileName[0] == '.') continue;
-        snprintf(p, sizeof p, "mods\\eras\\stadiums\\%s\\stadium.json", fd.cFileName);
+        snprintf(p, sizeof p, "%s\\%s\\stadium.json", dir, fd.cFileName);
         if (!(f = fopen(p, "rb"))) continue;
         n = fread(text, 1, sizeof text - 1, f);
         fclose(f);
@@ -981,15 +990,18 @@ int nfl2k5_teams_verify_csv(int side, const char *roster_csv)
  * staged team of that side. Back at the Main Menu (after the game, or Back)
  * both slots are released and the selected-team globals that pointed at them
  * get their values from before the staging back. */
-#define ERAS_PACKAGE "data\\eras\\runtime\\1980"
+#define ERAS_PACKAGE nfl2k5_eras_package_dir()
 
 typedef struct { char id[32], city[48], name[48], abbr[16], roster[MAX_PATH]; int entry; } ErasTeamRow;
 
 static int eras_team_row(const char *id, ErasTeamRow *out)
 {
     char line[1024];
-    FILE *f = fopen(ERAS_PACKAGE "\\teams.csv", "r");
+    char tp[MAX_PATH];
+    FILE *f;
     int found = 0;
+    snprintf(tp, sizeof tp, "%s\\teams.csv", ERAS_PACKAGE);
+    f = fopen(tp, "r");
     if (!f) return 0;
     while (!found && fgets(line, sizeof line, f)) {
         char *v[12], *p = line, *e;
@@ -1003,7 +1015,7 @@ static int eras_team_row(const char *id, ErasTeamRow *out)
         snprintf(out->name, sizeof out->name, "%s", v[2]);
         snprintf(out->abbr, sizeof out->abbr, "%s", v[3]);
         out->entry = atoi(v[6]);
-        snprintf(out->roster, sizeof out->roster, ERAS_PACKAGE "\\%s", v[8]);
+        snprintf(out->roster, sizeof out->roster, "%s\\%s", ERAS_PACKAGE, v[8]);
         for (e = out->roster; *e; e++) if (*e == '/') *e = '\\';
         found = 1;
     }
@@ -1027,7 +1039,7 @@ static int stage_test(int side, const char *spec)
     snprintf(ids[1], sizeof ids[1], "%s", comma + 1);
     for (s = 0; s < 2; s++)
         if (!eras_team_row(ids[s], &row[s])) {
-            fprintf(stderr, "[TEAMS] stage test: no franchise '%s' in " ERAS_PACKAGE "\\teams.csv\n", ids[s]);
+            fprintf(stderr, "[TEAMS] stage test: no franchise '%s' in %s\\teams.csv\n", ids[s], ERAS_PACKAGE);
             goto bad;
         }
     for (s = 0; s < 4; s++) s_sel_saved[s] = MEM32(SEL_HOME + 4u * (uint32_t)s);
@@ -1053,11 +1065,12 @@ bad:
  * usual. One summary line per side. */
 static void stage_all(void)
 {
-    char line[1024];
-    FILE *f = fopen(ERAS_PACKAGE "\\teams.csv", "r");
+    char line[1024], tp[MAX_PATH];
+    FILE *f;
     int teams = 0, ok = 0, mism = 0, side, minp = 99, maxp = 0;
     char minid[32] = "-";
-    if (!f) { fprintf(stderr, "[TEAMS] stage all: no " ERAS_PACKAGE "\\teams.csv\n"); return; }
+    snprintf(tp, sizeof tp, "%s\\teams.csv", ERAS_PACKAGE);
+    if (!(f = fopen(tp, "r"))) { fprintf(stderr, "[TEAMS] stage all: no %s\n", tp); return; }
     while (fgets(line, sizeof line, f)) {
         ErasTeamRow r;
         char id[32];
