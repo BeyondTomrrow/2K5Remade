@@ -38,11 +38,10 @@
 #include "nfl2k5_eras_capture.h"
 #include "nfl2k5_eras_selectors.h"
 #include "nfl2k5_teams.h"
+#include "nfl2k5_plugin_api.h"
+#include "nfl2k5_eras.h"
 
-extern char *xbox_user_path(const char *rel, char *out, size_t n);
 /* recomp_manual.c: register- and x87-preserving calls of the stat accessors */
-extern int nfl2k5_guest_player_stat_scope(uint32_t player, uint32_t selector, uint32_t scope, double *out);
-extern int nfl2k5_guest_team_stat(uint32_t team, uint32_t selector, uint32_t scope, double *out);
 
 #define FLOW_STATE  0xE602B8u   /* match flow state: 0x0A game over */
 #define PERIOD      0xE602C4u   /* 1..4 quarters, 5+ overtime */
@@ -193,7 +192,7 @@ static float team_stat(uint32_t team, uint32_t selector, uint32_t scope)
 {
     double v;
     s_snap.calls++;
-    if (nfl2k5_guest_team_stat(team, selector, scope, &v)) return (float)v;
+    if (g_eras_svc->team_stat(team, selector, scope, &v)) return (float)v;
     s_snap.failures++;
     return NAN;
 }
@@ -202,7 +201,7 @@ static float player_stat(uint32_t player, uint32_t selector)
 {
     double v;
     s_snap.calls++;
-    if (nfl2k5_guest_player_stat_scope(player, selector, 0u, &v)) return (float)v;
+    if (g_eras_svc->player_stat(player, selector, 0u, &v)) return (float)v;
     s_snap.failures++;
     return NAN;
 }
@@ -531,10 +530,10 @@ static void arm_test(void)
     do {
         ++s_test_n;
         _snprintf_s(rel, sizeof rel, _TRUNCATE, "logs\\eras-capture-%u.json", s_test_n);
-        xbox_user_path(rel, path, sizeof path);
+        g_eras_svc->user_path(rel, path, sizeof path);
     } while (GetFileAttributesA(path) != INVALID_FILE_ATTRIBUTES && s_test_n < 100000u);
     _snprintf_s(id, sizeof id, _TRUNCATE, "test-%u", s_test_n);
-    xbox_user_path("logs\\eras-capture-results.csv", csv, sizeof csv);
+    g_eras_svc->user_path("logs\\eras-capture-results.csv", csv, sizeof csv);
     nfl2k5_eras_capture_arm(id, path, csv);
 }
 
@@ -579,8 +578,8 @@ void nfl2k5_eras_game_final(uint32_t home_points, uint32_t away_points)
     capture_side(0);
     capture_side(1);
     /* M2 test T2.2: the staged teams' players, 1:1 with their arena rows */
-    nfl2k5_teams_identity_check(0, k_side[0].team);
-    nfl2k5_teams_identity_check(1, k_side[1].team);
+    g_eras_svc->identity_check(0, k_side[0].team);
+    g_eras_svc->identity_check(1, k_side[1].team);
     /* sub_000AED90 loads ecx/edx from these same score objects */
     if ((int)home_points != s_snap.side[0].points || (int)away_points != s_snap.side[1].points)
         warn("registers %u-%u differ from the scoreboard %d-%d", home_points, away_points,

@@ -85,11 +85,42 @@ typedef struct NfModuleHooks {
     void (*on_shutdown)(void);
 } NfModuleHooks;
 
-/* Module -> host (built-in wrappers of the existing functions). */
+/* Module -> host (built-in wrappers of the existing functions; docs/eras/MOD-PACK-DESIGN.md 6.3).
+ * The guest machine itself (MEM32, the g_ registers, gcall of sub_X, the guest heap)
+ * stays direct while the module is built in. */
 typedef struct NfHostServices {
     uint32_t size;
     void (*log)(const char *fmt, ...);
     void (*interp_add_hook)(uint32_t va, uint32_t from, uint32_t (*fn)(void));
+    /* paths: a file by its pack-relative name, in the pack roots (generated\ first, then the pack) */
+    char *(*path)(const char *rel, char *out, size_t n);
+    int (*exists)(const char *rel);
+    int (*root_count)(void);
+    char *(*root_path)(int i, const char *rel, char *out, size_t n);
+    /* the user folder (league saves) */
+    char *(*user_path)(const char *rel, char *out, size_t n);
+    const char *(*user_dir)(void);
+    void (*toast)(const char *header, const char *line1, const char *line2, unsigned ms);
+    /* teams and stadiums (src/nfl2k5_teams.c, src/nfl2k5_teams.h) */
+    int (*stage_check)(int side);
+    int (*stage)(int side, int template_entry, const char *roster_csv, const char *city, const char *nickname, const char *abbr);
+    const char *(*stage_message)(int code);
+    void (*release)(int side);
+    uint32_t (*staged_slot)(int side);
+    uint32_t (*spare_slot)(int side);
+    uint32_t (*resident)(int n);
+    int (*identity_check)(int side, uint32_t match_team);
+    uint32_t (*stadium_find)(const char *name, int *id_out);
+    uint32_t (*stadium_borrow)(const char *name, int *id_out);    /* a stadium pack's row, from stadiums\*\stadium.json */
+    void (*stadium_restore)(void);
+    /* presentation and art */
+    void (*pres_eras_begin)(int season, int week, const char *home_id, const char *away_id);
+    void (*pres_eras_end)(void);
+    void (*texpack_set_era)(const char *season_dir, const char *decade_dir);
+    void (*texpack_set_team_art)(const char *season_dir_or_null);
+    /* stats (sub_000CB240 / sub_000CB2D0, every guest register preserved) */
+    int (*player_stat)(uint32_t player, uint32_t selector, uint32_t scope, double *out);
+    int (*team_stat)(uint32_t team, uint32_t selector, uint32_t scope, double *out);
 } NfHostServices;
 
 /* The host's shims: the only names the rest of the game calls (gen patches,
@@ -102,6 +133,13 @@ nf_guest_fn nfl2k5_hook_lookup_va(uint32_t va);
 void nfl2k5_hook_archive_extend(NfArchiveSink *sink);
 void nfl2k5_hook_menus_ready(void);
 void nfl2k5_hook_shutdown(void);
+
+/* The pack roots for host code (the stadium-pack rows, the office texture
+ * context, the presentation identity): empty while no module is on. */
+int nfl2k5_pack_root_count(void);
+char *nfl2k5_pack_root_path(int i, const char *rel, char *out, size_t n);
+char *nfl2k5_pack_path(const char *rel, char *out, size_t n);
+int nfl2k5_pack_exists(const char *rel);
 
 /* main.c: decide and start the feature modules (after the XBE is loaded and
  * hashed, before the guest runs). */

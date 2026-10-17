@@ -34,6 +34,9 @@ if ($Game) {
   $patchArgs = if ($Pack) { @('--gen', $genDir, '--lenient') } else { @() }
   & python "$root/tools/apply-gen-patches.py" @patchArgs
   if ($LASTEXITCODE) { throw 'Re-applying generated-code patches failed; see tools/apply-gen-patches.py.' }
+  # My NFL Eras: the module's guest-call list (src/nfl2k5_eras_guest_calls.h) against its sources.
+  & python -I "$root/tools/eras/check_guest_calls.py" | Out-Null
+  if ($LASTEXITCODE) { Write-Warning 'src/nfl2k5_eras_guest_calls.h is stale: run python -I tools/eras/check_guest_calls.py --write' }
   # Retail uses the faster register-locals conversion. Large code packs can
   # contain detour caves with private register/flag conventions that the
   # retail ABI assumptions do not preserve, so compile their generated code

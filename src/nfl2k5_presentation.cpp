@@ -430,13 +430,14 @@ static std::mutex s_eras_lock;
 static ErasPres s_eras;
 static std::atomic<int> s_eras_on{ 0 };
 
-/* The Eras roots (src/nfl2k5_eras.c): generated\ first, then the pack; '/' separators here. */
-extern "C" int nfl2k5_eras_root_count(void);
-extern "C" char *nfl2k5_eras_root_path(int i, const char *rel, char *out, size_t n);
+/* The pack roots (src/nfl2k5_plugin_host.c): generated first, then the pack; '/' separators here.
+ * None while no module is on, so nothing is mapped or found then. */
+extern "C" int nfl2k5_pack_root_count(void);
+extern "C" char *nfl2k5_pack_root_path(int i, const char *rel, char *out, size_t n);
 static std::string eras_root_rel(int i, const std::string &rel)
 {
     char p[MAX_PATH];
-    std::string s = nfl2k5_eras_root_path(i, rel.c_str(), p, sizeof p);
+    std::string s = nfl2k5_pack_root_path(i, rel.c_str(), p, sizeof p);
     for (char &c : s) if (c == '\\') c = '/';
     return s;
 }
@@ -444,7 +445,7 @@ static std::string eras_root_rel(int i, const std::string &rel)
  * (the logos the asset builder made); "" when there is none. */
 static std::string eras_teams_root_find()
 {
-    for (int r = 0; r < nfl2k5_eras_root_count(); r++) {
+    for (int r = 0; r < nfl2k5_pack_root_count(); r++) {
         std::string d = eras_root_rel(r, "teams");
         if (GetFileAttributesA(d.c_str()) != INVALID_FILE_ATTRIBUTES) return d;
     }
@@ -461,7 +462,7 @@ static bool eras_team_load(int season, const std::string &id, TeamInfo &t)
     std::string rel = "teams/" + std::to_string(season) + "/" + id, dir;
     JVal j;
     t = TeamInfo();
-    for (int r = 0; r < nfl2k5_eras_root_count() && dir.empty(); r++)
+    for (int r = 0; r < nfl2k5_pack_root_count() && dir.empty(); r++)
         if (file_exists(eras_root_rel(r, rel + "/team.json"))) dir = eras_root_rel(r, rel);
     if (dir.empty() || !load_json(dir + "/team.json", j)) return false;
     t.abbr = j.str("abbreviation", id.c_str());
@@ -809,7 +810,7 @@ extern "C" void nfl2k5_pres_set(int what, int v)
 static int eras_ini_package(int season, std::string &why)
 {
     FILE *f = nullptr;
-    for (int r = 0; r < nfl2k5_eras_root_count() && !f; r++) f = fopen(eras_root_rel(r, "presentations.ini").c_str(), "r");
+    for (int r = 0; r < nfl2k5_pack_root_count() && !f; r++) f = fopen(eras_root_rel(r, "presentations.ini").c_str(), "r");
     char line[512];
     int best = -1, best_rank = 0;
     if (!f) { why = "no Eras presentations.ini"; return -1; }

@@ -60,8 +60,13 @@ enum {
 char *nfl2k5_eras_path(const char *rel, char *out, size_t n);
 int nfl2k5_eras_exists(const char *rel);
 int nfl2k5_eras_root_count(void);
-const char *nfl2k5_eras_root(int i);
 char *nfl2k5_eras_root_path(int i, const char *rel, char *out, size_t n);
+
+/* The host's services (src/nfl2k5_plugin_api.h), set by nfl2k5_eras_module_init:
+ * the module reaches teams, presentation, texture packs, stats, toasts and the
+ * user folder only through them. */
+struct NfHostServices;
+extern const struct NfHostServices *g_eras_svc;
 
 /* The season package (loaded once; 0 on success). */
 int nfl2k5_eras_package_load(void);

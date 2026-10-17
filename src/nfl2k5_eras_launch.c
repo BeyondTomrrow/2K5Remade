@@ -44,6 +44,7 @@
 #include <windows.h>
 #include "xbox_memory_layout.h"
 #include "recomp_funcs.h"
+#include "nfl2k5_plugin_api.h"
 #include "nfl2k5_eras.h"
 #include "nfl2k5_eras_capture.h"
 #include "nfl2k5_eras_launch.h"
@@ -53,8 +54,6 @@
 extern uint32_t nfl2k5_eras_menu_header(int which);   /* 0 hub, 1 the league screen (the office, M3-office) */
 extern void nfl2k5_eras_menu_game_rows(int eras);
 /* M9 (src/nfl2k5_presentation.cpp): the scorebug's Eras identity and package for a launched game */
-extern void nfl2k5_presentation_eras_begin(int season, int week, const char *home_id, const char *away_id);
-extern void nfl2k5_presentation_eras_end(void);       /* M6: Rematch / VIP / Options rows hidden in Eras games */
 
 #define FSM             0x00A84B18u
 #define MAIN_MENU       0x00515660u
@@ -162,11 +161,11 @@ int nfl2k5_eras_launch(uint32_t fsm, char *msg, size_t n)
         uint32_t fake = 0;
         if (t && atoi(t) == s + 1 && !s_test_used) {
             s_test_used = 1;   /* the first Play Next Game of the process only */
-            fake = nfl2k5_teams_spare_slot(s);
+            fake = g_eras_svc->spare_slot(s);
             if (fake && MEM32(fake + 0x128u) == 2 && MEM8(fake + 0x11Cu) == 0) MEM8(fake + 0x11Cu) = 1;
             else fake = 0;
         }
-        rc = nfl2k5_teams_stage_check(s);
+        rc = g_eras_svc->stage_check(s);
         if (fake) {
             MEM8(fake + 0x11Cu) = 0;
             nfl2k5_eras_log("test: USER%d slot %08X shown as a one-player Create-a-Team team for the check (NFL2K5_ERAS_TEST_USER_TEAM)",
@@ -176,7 +175,7 @@ int nfl2k5_eras_launch(uint32_t fsm, char *msg, size_t n)
             /* short: the row clips at about 40 characters */
             snprintf(msg, n, rc == NFL2K5_STAGE_USER_TEAM ? "Can't play: Create-a-Team in USER%d"
                              : "Can't play: USER%d slot not ready", s + 1);
-            nfl2k5_eras_log("launch %s refused: USER%d: %s (nothing changed)", e->id, s + 1, nfl2k5_teams_stage_message(rc));
+            nfl2k5_eras_log("launch %s refused: USER%d: %s (nothing changed)", e->id, s + 1, g_eras_svc->stage_message(rc));
             return -2;
         }
     }
@@ -187,17 +186,17 @@ int nfl2k5_eras_launch(uint32_t fsm, char *msg, size_t n)
     snapshot_take();
     for (s = 0; s < 2; s++) {
         const ErasTeam *t = s ? away : home;
-        rc = nfl2k5_teams_stage(s, t->template_entry, roster[s], t->city, t->name, t->abbr);
+        rc = g_eras_svc->stage(s, t->template_entry, roster[s], t->city, t->name, t->abbr);
         if (rc != NFL2K5_STAGE_OK) {
-            nfl2k5_teams_release(0);
-            nfl2k5_teams_release(1);
+            g_eras_svc->release(0);
+            g_eras_svc->release(1);
             snapshot_restore();
             snprintf(msg, n, "Can't play: %s not loaded", t->name);
             nfl2k5_eras_log("launch %s refused: staging %s (USER%d) failed: %s; slots released, settings restored",
-                            e->id, t->id, s + 1, nfl2k5_teams_stage_message(rc));
+                            e->id, t->id, s + 1, g_eras_svc->stage_message(rc));
             return -3;
         }
-        slot[s] = nfl2k5_teams_staged_slot(s);
+        slot[s] = g_eras_svc->staged_slot(s);
         /* M9: the season's uniform style before the uniform slots are set (step 6) */
         nfl2k5_eras_apply_style(slot[s], s ? e->away : e->home);
         /* M6: the league's depth chart (else the community roster's), and the 1980 head coach */
@@ -218,8 +217,8 @@ int nfl2k5_eras_launch(uint32_t fsm, char *msg, size_t n)
     for (s = 0; s < PORTS; s++) gcall(sub_00077200, (uint32_t)s, s == s_l.port ? (uint32_t)user_side : 0u);
 
     /* 6. Teams, stadium, uniforms. */
-    stadium = home->stadium[0] ? nfl2k5_teams_stadium_find(home->stadium, &stadium_id) : 0;
-    if (!stadium && home->stadium[0]) stadium = nfl2k5_teams_stadium_pack(home->stadium, &stadium_id);
+    stadium = home->stadium[0] ? g_eras_svc->stadium_find(home->stadium, &stadium_id) : 0;
+    if (!stadium && home->stadium[0]) stadium = g_eras_svc->stadium_borrow(home->stadium, &stadium_id);
     if (stadium) MEM32(slot[0] + T_STADIUM) = stadium;
     else if (home->stadium[0]) nfl2k5_eras_log("launch %s: stadium '%s' not found among the roster's stadiums; the template's is used",
                                                e->id, home->stadium);
@@ -241,7 +240,7 @@ int nfl2k5_eras_launch(uint32_t fsm, char *msg, size_t n)
     nfl2k5_eras_menu_game_rows(1);
     /* M9: era card badges / logos on, and the scorebug's Eras identity and package */
     nfl2k5_eras_team_art_update();
-    nfl2k5_presentation_eras_begin(NFL2K5_ERAS_SEASON, e->week, home->id, away->id);
+    g_eras_svc->pres_eras_begin(NFL2K5_ERAS_SEASON, e->week, home->id, away->id);
     nfl2k5_eras_log("launch %s (week %d): %s %s (USER1 %08X, home) vs %s %s (USER2 %08X, away); "
                     "mode 4; port %d side %d (%s); stadium %s (record %08X id %d); uniforms %u/%u; "
                     "unverified community rosters",
@@ -265,8 +264,8 @@ void nfl2k5_eras_repoint_released(uint32_t slot0, uint32_t slot1)
     for (k = 0; k < 4; k++) {
         uint32_t a = SEL_STADIUM + 4u + 4u * (uint32_t)k, v = MEM32(a);
         if (v && (v == slot0 || v == slot1)) {
-            uint32_t club = nfl2k5_teams_resident(k & 1);
-            if (club == MEM32(SEL_STADIUM + 4u + 4u * (uint32_t)(k ^ 1))) club = nfl2k5_teams_resident(!(k & 1));
+            uint32_t club = g_eras_svc->resident(k & 1);
+            if (club == MEM32(SEL_STADIUM + 4u + 4u * (uint32_t)(k ^ 1))) club = g_eras_svc->resident(!(k & 1));
             if (club) MEM32(a) = club;
             nfl2k5_eras_log("clean-up: [%08X] was %08X, a released slot -> %08X (ident %u)",
                             a, v, MEM32(a), club ? MEM16(club + 0x118u) : 0u);
@@ -298,7 +297,7 @@ void nfl2k5_eras_after_game(const char *why)
     }
     s_l.active = 0;
     nfl2k5_eras_team_art_update();       /* M9: retail art again */
-    nfl2k5_presentation_eras_end();
+    g_eras_svc->pres_eras_end();
     e = nfl2k5_eras_game(s_l.game);
     nfl2k5_eras_capture_result(&r);
     if (r.status == NFL2K5_ERAS_CAPTURE_FINAL && !strcmp(r.game_id, e->id)) {
@@ -315,14 +314,14 @@ void nfl2k5_eras_after_game(const char *why)
         nfl2k5_eras_log("launch %s ended with no game played (capture status %d); the fixture stays unplayed",
                         e->id, r.status);
     }
-    for (k = 0; k < 2; k++) slot[k] = nfl2k5_teams_staged_slot(k);
+    for (k = 0; k < 2; k++) slot[k] = g_eras_svc->staged_slot(k);
     nfl2k5_eras_menu_game_rows(0);
     block_diff();
     nfl2k5_eras_coach_restore(0);
     nfl2k5_eras_coach_restore(1);
-    nfl2k5_teams_release(0);
-    nfl2k5_teams_release(1);
-    nfl2k5_teams_stadium_pack_restore();
+    g_eras_svc->release(0);
+    g_eras_svc->release(1);
+    g_eras_svc->stadium_restore();
     snapshot_restore();
     nfl2k5_eras_repoint_released(slot[0], slot[1]);
     nfl2k5_eras_set_launched("");

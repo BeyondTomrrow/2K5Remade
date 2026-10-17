@@ -40,6 +40,7 @@
 #include <windows.h>
 #include "xbox_memory_layout.h"
 #include "recomp_funcs.h"
+#include "nfl2k5_plugin_api.h"
 #include "nfl2k5_eras.h"
 #include "nfl2k5_eras_depth.h"
 #include "nfl2k5_eras_launch.h"
@@ -274,7 +275,7 @@ static int apply_to(uint32_t slot, const ErasTeam *t, int side)
 int nfl2k5_eras_depth_apply(int side, int team)
 {
     const ErasTeam *t = nfl2k5_eras_team(team);
-    uint32_t slot = nfl2k5_teams_staged_slot(side);
+    uint32_t slot = g_eras_svc->staged_slot(side);
     if (!t || !slot) return ERAS_DEPTH_LIST;
     return apply_to(slot, t, side);
 }
@@ -293,23 +294,23 @@ int nfl2k5_eras_depth_edit(uint32_t fsm, int team, char *msg, size_t n)
     if (!t) { snprintf(msg, n, "No team"); return -1; }
     if (s_ed.active) { snprintf(msg, n, "A depth chart is still open"); return -1; }
     if (nfl2k5_eras_launch_active()) { snprintf(msg, n, "A league game is in progress"); return -1; }
-    side = nfl2k5_teams_stage_check(0) == NFL2K5_STAGE_OK ? 0 : nfl2k5_teams_stage_check(1) == NFL2K5_STAGE_OK ? 1 : -1;
+    side = g_eras_svc->stage_check(0) == NFL2K5_STAGE_OK ? 0 : g_eras_svc->stage_check(1) == NFL2K5_STAGE_OK ? 1 : -1;
     if (side < 0) {
-        rc = nfl2k5_teams_stage_check(0);
+        rc = g_eras_svc->stage_check(0);
         snprintf(msg, n, rc == NFL2K5_STAGE_USER_TEAM ? "Can't open: Create-a-Team in USER1/2" : "Can't open: no free team slot");
-        nfl2k5_eras_log("depth chart %s refused: %s (nothing changed)", t->id, nfl2k5_teams_stage_message(rc));
+        nfl2k5_eras_log("depth chart %s refused: %s (nothing changed)", t->id, g_eras_svc->stage_message(rc));
         return -2;
     }
     snprintf(roster, sizeof roster, "%s\\%s", nfl2k5_eras_package_dir(), t->roster_file);
     for (p = roster; *p; p++) if (*p == '/') *p = '\\';
-    rc = nfl2k5_teams_stage(side, t->template_entry, roster, t->city, t->name, t->abbr);
+    rc = g_eras_svc->stage(side, t->template_entry, roster, t->city, t->name, t->abbr);
     if (rc != NFL2K5_STAGE_OK) {
-        nfl2k5_teams_release(side);
+        g_eras_svc->release(side);
         snprintf(msg, n, "Can't open: %s not loaded", t->name);
-        nfl2k5_eras_log("depth chart %s refused: staging failed: %s", t->id, nfl2k5_teams_stage_message(rc));
+        nfl2k5_eras_log("depth chart %s refused: staging failed: %s", t->id, g_eras_svc->stage_message(rc));
         return -3;
     }
-    slot = nfl2k5_teams_staged_slot(side);
+    slot = g_eras_svc->staged_slot(side);
     nfl2k5_eras_apply_style(slot, team);   /* M9: the season's uniform style (helmet, card art) */
     s_ed.source = apply_to(slot, t, side);
     s_ed.count = MEM8(slot + T_ACTIVE);
@@ -368,7 +369,7 @@ int nfl2k5_eras_depth_edit_end(const char *why)
     if (!s_ed.active) return -1;
     s_ed.active = 0;
     t = nfl2k5_eras_team(s_ed.team);
-    slot = nfl2k5_teams_staged_slot(s_ed.side);
+    slot = g_eras_svc->staged_slot(s_ed.side);
     detail[0] = 0;
     if (slot != s_ed.slot) {
         nfl2k5_eras_log("depth chart %s: the staged slot changed under the editor (%08X -> %08X); nothing saved",
@@ -401,7 +402,7 @@ int nfl2k5_eras_depth_edit_end(const char *why)
     MEM32(DC_TEAM) = s_ed.save_team;
     MEM32(DC_FRANCHISE) = s_ed.save_flag;
     MEM32(DC_PAGE) = s_ed.save_page;
-    nfl2k5_teams_release(s_ed.side);
+    g_eras_svc->release(s_ed.side);
     nfl2k5_eras_repoint_released(s_ed.side == 0 ? s_ed.slot : 0, s_ed.side == 1 ? s_ed.slot : 0);
     nfl2k5_eras_team_art_update();   /* M9: the era card badges off with the editor */
     return changed + special;
@@ -456,7 +457,7 @@ int nfl2k5_eras_coach_apply(int side, int team, int game_no)
 {
     static const uint8_t numbers[] = { 0x1C, 0x1E, 0x20, 0x22, 0x24, 0x30, 0x32, 0x34, 0x36, 0x38, 0x3A };
     const ErasTeam *t = nfl2k5_eras_team(team);
-    uint32_t slot = nfl2k5_teams_staged_slot(side), orig, i;
+    uint32_t slot = g_eras_svc->staged_slot(side), orig, i;
     char first[40], last[40], was[48] = "-", wl[40];
     if (side < 0 || side > 1 || !t || !slot) return -1;
     if (!coach_row(t, game_no, first, last, sizeof first)) {

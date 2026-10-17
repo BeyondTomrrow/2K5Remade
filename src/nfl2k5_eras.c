@@ -25,10 +25,9 @@
 #include <string.h>
 #include <time.h>
 #include <windows.h>
+#include "nfl2k5_plugin_api.h"
 #include "nfl2k5_eras.h"
 
-extern char *xbox_user_path(const char *rel, char *out, size_t n);
-extern const char *xbox_user_dir(void);
 
 /* The season package by its pack-relative name (docs/eras/MOD-PACK-DESIGN.md 4.1);
  * league.ini keeps this name. Leagues made before the pack layout name the
@@ -39,72 +38,14 @@ extern const char *xbox_user_dir(void);
 
 /* ---- paths (docs/eras/MOD-PACK-DESIGN.md 4) ------------------------------
  *
- * Every Eras file is named by its path relative to the pack root:
- *   league\1980\teams.csv, offices\1980s\era.ini, office\files\erasoffice.iff,
- *   teams\1980\colts\team.json, stadiums\<folder>\stadium.json, presentations.ini ...
- * and looked up in each root in turn; the first that has it wins. The
- * development layout (today's repository folders) is one root that maps
- * league\ to data\eras\runtime\ and everything else to mods\eras\. */
-#define ERAS_MAX_ROOTS 4
-static int s_root_n = -1;
-static char s_root[ERAS_MAX_ROOTS][MAX_PATH];
-static int s_root_dev[ERAS_MAX_ROOTS];
-
-static void roots_init(void)
-{
-    if (s_root_n >= 0) return;
-    s_root_n = 0;
-    snprintf(s_root[s_root_n], MAX_PATH, "mods\\eras");     /* the development layout */
-    s_root_dev[s_root_n++] = 1;
-}
-
-int nfl2k5_eras_root_count(void) { roots_init(); return s_root_n; }
-
-const char *nfl2k5_eras_root(int i)
-{
-    roots_init();
-    return i >= 0 && i < s_root_n ? s_root[i] : "";
-}
-
-char *nfl2k5_eras_root_path(int i, const char *rel, char *out, size_t n)
-{
-    char *p;
-    roots_init();
-    if (!out || !n) return out;
-    out[0] = 0;
-    if (i < 0 || i >= s_root_n || !rel) return out;
-    while (*rel == '\\' || *rel == '/') rel++;
-    if (s_root_dev[i] && (!_strnicmp(rel, "league\\", 7) || !_strnicmp(rel, "league/", 7)))
-        snprintf(out, n, "data\\eras\\runtime\\%s", rel + 7);
-    else if (s_root_dev[i] && !_stricmp(rel, "league"))
-        snprintf(out, n, "data\\eras\\runtime");
-    else if (*rel)
-        snprintf(out, n, "%s\\%s", s_root[i], rel);
-    else
-        snprintf(out, n, "%s", s_root[i]);
-    for (p = out; *p; p++) if (*p == '/') *p = '\\';
-    return out;
-}
-
-char *nfl2k5_eras_path(const char *rel, char *out, size_t n)
-{
-    int i;
-    roots_init();
-    for (i = 0; i < s_root_n; i++)
-        if (GetFileAttributesA(nfl2k5_eras_root_path(i, rel, out, n)) != INVALID_FILE_ATTRIBUTES) return out;
-    /* nowhere: the last root's name, for messages */
-    return nfl2k5_eras_root_path(s_root_n - 1, rel, out, n);
-}
-
-int nfl2k5_eras_exists(const char *rel)
-{
-    char p[MAX_PATH];
-    int i;
-    roots_init();
-    for (i = 0; i < s_root_n; i++)
-        if (GetFileAttributesA(nfl2k5_eras_root_path(i, rel, p, sizeof p)) != INVALID_FILE_ATTRIBUTES) return 1;
-    return 0;
-}
+ * Every Eras file is named by its path relative to the pack root
+ * (league\1980\teams.csv, offices\1980s\era.ini, office\files\erasoffice.iff,
+ * teams\1980\colts\team.json, stadiums\<folder>\stadium.json, presentations.ini ...)
+ * and found by the host in the pack roots (src/nfl2k5_plugin_host.c). */
+char *nfl2k5_eras_path(const char *rel, char *out, size_t n) { return g_eras_svc->path(rel, out, n); }
+int nfl2k5_eras_exists(const char *rel) { return g_eras_svc->exists(rel); }
+int nfl2k5_eras_root_count(void) { return g_eras_svc->root_count(); }
+char *nfl2k5_eras_root_path(int i, const char *rel, char *out, size_t n) { return g_eras_svc->root_path(i, rel, out, n); }
 
 static char s_package_dir[MAX_PATH];
 
@@ -147,7 +88,7 @@ static int log_on(void)
  * leave an empty eras\league1\ in the user folder. */
 static char *league_path_peek(const char *rel, char *out, size_t n)
 {
-    const char *dir = xbox_user_dir();
+    const char *dir = g_eras_svc->user_dir();
     if (dir && *dir) snprintf(out, n, "%s\\%s\\%s", dir, LEAGUE_DIR, rel);
     else snprintf(out, n, "%s\\%s", LEAGUE_DIR, rel);
     return out;
@@ -157,7 +98,7 @@ char *nfl2k5_eras_league_path(const char *rel, char *out, unsigned n)
 {
     char r[MAX_PATH], *p;
     snprintf(r, sizeof r, "%s\\%s", LEAGUE_DIR, rel);
-    xbox_user_path(r, out, n);
+    g_eras_svc->user_path(r, out, n);
     /* parents also in the portable layout (xbox_user_path makes them only in the user folder) */
     for (p = out + 1; *p; p++)
         if ((*p == '\\' || *p == '/') && p[-1] != ':') {
@@ -300,7 +241,6 @@ int nfl2k5_eras_apply_style(uint32_t team_record, int team)
 
 extern int nfl2k5_eras_launch_active(void);
 extern int nfl2k5_eras_depth_editing(void);
-extern void nfl2k5_texpack_eras_teams(const char *season_dir);
 
 void nfl2k5_eras_team_art_update(void)
 {
@@ -308,7 +248,7 @@ void nfl2k5_eras_team_art_update(void)
     char season[8];
     int on = nfl2k5_eras_launch_active() || nfl2k5_eras_depth_editing();
     snprintf(season, sizeof season, "%d", NFL2K5_ERAS_SEASON);
-    nfl2k5_texpack_eras_teams(on ? season : NULL);
+    g_eras_svc->texpack_set_team_art(on ? season : NULL);
     if (on != last) nfl2k5_eras_log("team art context %s", on ? season : "off");
     last = on;
 }

@@ -11,6 +11,7 @@
 #include "recomp_funcs.h"
 #include "nfl2k5_plugin_api.h"
 #include "nfl2k5_eras.h"
+#include "nfl2k5_eras_guest_calls.h"   /* tools/eras/check_guest_calls.py */
 
 #define ERAS_MODULE_VERSION "0.3.0"
 #define ERAS_VA_BASE 0xFEE00000u
@@ -26,6 +27,7 @@ extern void nfl2k5_eras_capture_init(void);
 
 static const NfHostInfo *s_host;
 static const NfHostServices *s_svc;
+const NfHostServices *g_eras_svc;      /* the module's other files (nfl2k5_eras.h) */
 
 /* The result capture and the M4b return for packs that interpret the hooked
  * functions (their gen patches never run there): sub_000A2910 entry (ecx = home
@@ -103,8 +105,8 @@ int nfl2k5_eras_module_query(NfModuleInfo *out)
     out->version = ERAS_MODULE_VERSION;
     out->data_schema_min = 1;
     out->data_schema_max = 1;
-    out->guest_calls = NULL;
-    out->guest_call_count = 0;
+    out->guest_calls = k_eras_guest_calls;
+    out->guest_call_count = NFL2K5_ERAS_GUEST_CALL_COUNT;
     out->va_range_base = ERAS_VA_BASE;
     out->va_range_size = ERAS_VA_SIZE;
     return 0;
@@ -115,6 +117,7 @@ int nfl2k5_eras_module_init(const NfHostInfo *host, const NfHostServices *svc, N
     if (!host || !svc || !h || svc->size < sizeof(NfHostServices) || h->size < sizeof *h) return -1;
     s_host = host;
     s_svc = svc;
+    g_eras_svc = svc;
     h->on_boot = on_boot;
     h->on_archive_extend = on_archive_extend;
     h->on_menus_ready = on_menus_ready;

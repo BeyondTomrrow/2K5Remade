@@ -46,11 +46,11 @@
 #include <windows.h>
 #include "xbox_memory_layout.h"
 #include "recomp_funcs.h"
+#include "nfl2k5_plugin_api.h"
 #include "nfl2k5_eras.h"
 #include "nfl2k5_eras_office.h"
 
 extern uint32_t xbox_HeapAlloc(uint32_t size, uint32_t alignment);
-extern void nfl2k5_texpack_era(const char *season_dir, const char *decade_dir);
 
 #define FOURCC_SCNE     0x454E4353u
 #define FOURCC_TXTR     0x52545854u
@@ -379,8 +379,8 @@ static void texture_context(int on)
     char season[8];
     int l = nfl2k5_eras_office_look();
     snprintf(season, sizeof season, "%d", NFL2K5_ERAS_SEASON);
-    if (!on) nfl2k5_texpack_era(NULL, NULL);
-    else nfl2k5_texpack_era(!s_o.live && s_o.setting == OFFICE_LOOK_AUTO ? season : NULL, k_look_name[l]);
+    if (!on) g_eras_svc->texpack_set_era(NULL, NULL);
+    else g_eras_svc->texpack_set_era(!s_o.live && s_o.setting == OFFICE_LOOK_AUTO ? season : NULL, k_look_name[l]);
 }
 
 /* Restore the room, then hide, swap, bind; returns the room. */

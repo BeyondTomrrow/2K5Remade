@@ -32,7 +32,7 @@
 #include "xbox_memory_layout.h"
 #include "recomp_funcs.h"
 #include "nfl2k5_teams.h"
-#include "nfl2k5_eras.h"
+#include "nfl2k5_plugin_api.h"
 
 #define ROOT        0xB72918u   /* roster root pointer */
 #define TS_MODE     0xACF614u   /* Team Select flow: 1 Quick Game, 3 Practice, 7 First Person Football */
@@ -798,7 +798,7 @@ uint32_t nfl2k5_teams_stadium_find(const char *name, int *id_out)
 }
 
 /* My NFL Eras stadium packs (docs/eras/research/COLISEUM-IMPORT.md): a stadium the disc does not have.
- * stadiums\<folder>\stadium.json of the Eras roots (nfl2k5_eras_root_path) {"name", "display", "location", "code", "clone", "host",
+ * stadiums\<folder>\stadium.json of the Eras roots (nfl2k5_pack_root_path) {"name", "display", "location", "code", "clone", "host",
  * "capacity", "indoor", "grass"}; its bundles <code><t><w>.iff are in the archive (nfl2k5_archive_extend).
  * nfl2k5_teams_stadium_pack borrows the "host" row (a fictional stadium, default LOCO ARENA) for one game:
  * saved, filled from the "clone" row, given the pack's strings and code. nfl2k5_teams_stadium_pack_restore
@@ -850,8 +850,8 @@ uint32_t nfl2k5_teams_stadium_pack(const char *name, int *id_out)
     int r;
     nfl2k5_teams_stadium_pack_restore();          /* one borrowed row at a time */
     if (!name || !*name) return 0;
-    for (r = 0; r < nfl2k5_eras_root_count() && h == INVALID_HANDLE_VALUE; r++) {
-        nfl2k5_eras_root_path(r, "stadiums", dir, sizeof dir);
+    for (r = 0; r < nfl2k5_pack_root_count() && h == INVALID_HANDLE_VALUE; r++) {
+        nfl2k5_pack_root_path(r, "stadiums", dir, sizeof dir);
         snprintf(pat, sizeof pat, "%s\\*", dir);
         h = FindFirstFileA(pat, &fd);
     }
@@ -990,7 +990,13 @@ int nfl2k5_teams_verify_csv(int side, const char *roster_csv)
  * staged team of that side. Back at the Main Menu (after the game, or Back)
  * both slots are released and the selected-team globals that pointed at them
  * get their values from before the staging back. */
-#define ERAS_PACKAGE nfl2k5_eras_package_dir()
+static const char *eras_package(void)
+{
+    static char p[MAX_PATH];
+    if (!p[0]) nfl2k5_pack_path("league\\1980", p, sizeof p);   /* the pack roots: "" with no module on */
+    return p;
+}
+#define ERAS_PACKAGE eras_package()
 
 typedef struct { char id[32], city[48], name[48], abbr[16], roster[MAX_PATH]; int entry; } ErasTeamRow;
 

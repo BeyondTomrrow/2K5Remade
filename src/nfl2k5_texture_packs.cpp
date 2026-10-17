@@ -163,13 +163,13 @@ std::string trim_s(const std::string &s)
     return a == std::string::npos ? std::string() : s.substr(a, b - a + 1);
 }
 
-// The Eras roots (src/nfl2k5_eras.c nfl2k5_eras_root_path): generated\ first, then the pack.
-extern "C" int nfl2k5_eras_root_count(void);
-extern "C" char *nfl2k5_eras_root_path(int i, const char *rel, char *out, size_t n);
+// The pack roots (src/nfl2k5_plugin_host.c): generated\ first, then the pack; none while no module is on.
+extern "C" int nfl2k5_pack_root_count(void);
+extern "C" char *nfl2k5_pack_root_path(int i, const char *rel, char *out, size_t n);
 std::string eras_root_path(int i, const char *rel)
 {
     char p[MAX_PATH];
-    return nfl2k5_eras_root_path(i, rel, p, sizeof p);
+    return nfl2k5_pack_root_path(i, rel, p, sizeof p);
 }
 
 void read_names()
@@ -177,7 +177,7 @@ void read_names()
     if (g_names_read) return;
     g_names_read = true;
     FILE *f = nullptr;
-    for (int r = 0; r < nfl2k5_eras_root_count() && !f; r++)
+    for (int r = 0; r < nfl2k5_pack_root_count() && !f; r++)
         f = fopen(eras_root_path(r, "offices\\office-textures.ini").c_str(), "r");
     char line[2048];
     if (!f) return;
@@ -233,7 +233,7 @@ EraDir &era_dir(const std::string &name)
     // winning), or a full folder path (the M9 team-art folders)
     std::vector<std::string> dirs;
     if (name.find('\\') != std::string::npos) dirs.push_back(name + "\\");
-    else for (int r = 0; r < nfl2k5_eras_root_count(); r++) dirs.push_back(eras_root_path(r, ("offices\\" + name).c_str()) + "\\");
+    else for (int r = 0; r < nfl2k5_pack_root_count(); r++) dirs.push_back(eras_root_path(r, ("offices\\" + name).c_str()) + "\\");
     for (const std::string &dir : dirs) {
     WIN32_FIND_DATAA fd;
     std::vector<std::string> files;
@@ -346,7 +346,7 @@ extern "C" void nfl2k5_texpack_eras_teams(const char *season_dir)
 {
     std::vector<std::string> v;
     if (season_dir && *season_dir)
-        for (int r = 0; r < nfl2k5_eras_root_count(); r++) {
+        for (int r = 0; r < nfl2k5_pack_root_count(); r++) {
             std::string d = eras_root_path(r, (std::string("teams\\") + season_dir + "\\art").c_str());
             if (GetFileAttributesA(d.c_str()) != INVALID_FILE_ATTRIBUTES) v.push_back(d);
         }
