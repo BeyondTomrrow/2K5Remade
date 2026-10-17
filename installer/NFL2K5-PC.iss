@@ -42,6 +42,10 @@ Source: "assets\nfl2k5.ico"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\tools\extract-xiso.exe"; DestDir: "{app}\tools"; Flags: ignoreversion
 Source: "..\build\tools\NFL2K5-ModPack-Installer.exe"; DestDir: "{app}\tools"; Flags: ignoreversion
 Source: "..\build\tools\NFL2K5-TeamBuilder.exe"; DestDir: "{app}\tools"; Flags: ignoreversion
+; My NFL Eras first-run asset builder (tools\build-eras-builder.ps1): the feature pack is data
+; only, its assets are built from the player's discs by this exe (docs/eras/MOD-PACK-DESIGN.md 7)
+Source: "..\build\tools\NFL2K5-ErasBuilder.exe"; DestDir: "{app}\tools"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "..\tools\team-creator\vendor\LICENSE-2k-football-mod-tools.txt"; DestDir: "{app}\tools\licenses"; Flags: ignoreversion
 ; PS2/Xbox save import (saves\import) converts through this tool
 Source: "..\tools\nfl2k5-save-converter.exe"; DestDir: "{app}\tools"; Flags: ignoreversion
 Source: "nfl2k5_video.default.ini"; DestName: "nfl2k5_video.ini"; DestDir: "{app}"; Flags: onlyifdoesntexist

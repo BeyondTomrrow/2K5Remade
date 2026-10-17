@@ -311,12 +311,90 @@ void nfl2k5_modpacks_init(const char *root)
             s_active >= 0 ? s_packs[s_active].name : "Original ESPN NFL 2K5");
 }
 
-int nfl2k5_modpacks_count(void) { return s_pack_count; }
+/* Feature packs (docs/eras/MOD-PACK-DESIGN.md 3, 9 step 8): additive, each On/Off on its own,
+ * after the XBE packs in the same list. The switch is mods\features.ini "<id>=0|1", read at
+ * boot (src/nfl2k5_plugin_host.c), so a change applies at the next start. */
+static const struct { const char *id, *folder, *label; } k_features[] = {
+    { "my-nfl-eras", "MyNFLEras", "My NFL Eras (feature pack)" },
+};
+#define MP_FEATURES ((int)(sizeof k_features / sizeof k_features[0]))
+
+static int mp_feature_installed(int f)
+{
+    char p[MAX_PATH];
+    snprintf(p, sizeof p, "%s\\mods\\packs\\%s\\pack.json", s_root[0] ? s_root : ".", k_features[f].folder);
+    return mp_file_exists(p);
+}
+
+/* the f-th installed feature pack behind list row `row`, or -1 */
+static int mp_feature_row(int row)
+{
+    int f, k = s_pack_count;
+    for (f = 0; f < MP_FEATURES; f++)
+        if (mp_feature_installed(f) && k++ == row) return f;
+    return -1;
+}
+
+static int mp_feature_on(int f)
+{
+    char p[MAX_PATH], line[256];
+    FILE *fp;
+    int on = 1;
+    snprintf(p, sizeof p, "%s\\mods\\features.ini", s_root[0] ? s_root : ".");
+    if (!(fp = fopen(p, "r"))) return 1;
+    while (fgets(line, sizeof line, fp)) {
+        char key[96], val[32];
+        if (sscanf(line, " %95[^= \t] = %31s", key, val) == 2 && !_stricmp(key, k_features[f].id))
+            on = !(!strcmp(val, "0") || !_stricmp(val, "off"));
+    }
+    fclose(fp);
+    return on;
+}
+
+static void mp_feature_set(int f, int on)
+{
+    char p[MAX_PATH], tmp[MAX_PATH], line[256];
+    FILE *in, *out;
+    int done = 0;
+    snprintf(p, sizeof p, "%s\\mods\\features.ini", s_root[0] ? s_root : ".");
+    snprintf(tmp, sizeof tmp, "%s.tmp", p);
+    if (!(out = fopen(tmp, "w"))) { fprintf(stderr, "[MODPACK] Could not write %s.\n", p); return; }
+    if ((in = fopen(p, "r")) != NULL) {
+        while (fgets(line, sizeof line, in)) {
+            char key[96];
+            if (sscanf(line, " %95[^= \t]", key) == 1 && !_stricmp(key, k_features[f].id)) {
+                if (!done) fprintf(out, "%s=%d\n", k_features[f].id, on ? 1 : 0);
+                done = 1;
+                continue;
+            }
+            fputs(line, out);
+        }
+        fclose(in);
+    } else fprintf(out, "; Feature packs: <id>=1 on, <id>=0 off (Features > Mod Packs; applies at the next start)\n");
+    if (!done) fprintf(out, "%s=%d\n", k_features[f].id, on ? 1 : 0);
+    fclose(out);
+    if (!MoveFileExA(tmp, p, MOVEFILE_REPLACE_EXISTING)) { DeleteFileA(tmp); return; }
+    fprintf(stderr, "[MODPACK] %s %s (applies at the next start)\n", k_features[f].label, on ? "on" : "off");
+    xbox_PresentToast(k_features[f].label, on ? "On" : "Off", "Restart the game to apply", 4000);
+}
+
+int nfl2k5_modpacks_count(void)
+{
+    int f, n = s_pack_count;
+    for (f = 0; f < MP_FEATURES; f++) n += mp_feature_installed(f);
+    return n;
+}
 const char *nfl2k5_modpacks_name(int row)
 {
+    int f = mp_feature_row(row);
+    if (f >= 0) return k_features[f].label;
     return row >= 0 && row < s_pack_count ? s_packs[row].name : "Mod Pack";
 }
-int nfl2k5_modpacks_get(int row) { return row == s_active; }
+int nfl2k5_modpacks_get(int row)
+{
+    int f = mp_feature_row(row);
+    return f >= 0 ? mp_feature_on(f) : row == s_active;
+}
 
 typedef struct {
     char exe[MAX_PATH];
@@ -341,6 +419,11 @@ void nfl2k5_modpacks_set(int row, int on)
     int previous = s_active;
     RestartArgs *a;
     HANDLE th;
+    if (mp_feature_row(row) >= 0) {
+        int f = mp_feature_row(row);
+        if ((mp_feature_on(f) != 0) != (on != 0)) mp_feature_set(f, on);
+        return;
+    }
     if (row < 0 || row >= s_pack_count) return;
     if (on) {
         if (s_active == row) return;
