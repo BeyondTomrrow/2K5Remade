@@ -83,6 +83,9 @@ jobs:
           cmake -S external/xboxrecomp/tests/apu_mmio_decode_posix -B build-apu-decode -G Ninja
           cmake --build build-apu-decode
           ctest --test-dir build-apu-decode --output-on-failure
+          cmake -S external/xboxrecomp/tests/guest_memory_direct_posix -B build-gm-direct -G Ninja
+          cmake --build build-gm-direct
+          ctest --test-dir build-gm-direct --output-on-failure
           # SDL3 GPU renderer on Mesa's software Vulkan (lavapipe)
           cmake -S external/xboxrecomp/tests/sdlgpu_posix -B build-sdlgpu -G Ninja -DCMAKE_PREFIX_PATH="${{ github.workspace }}/dependencies/sdl3-sdk"
           cmake --build build-sdlgpu
