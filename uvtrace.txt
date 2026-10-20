@@ -1,0 +1,448 @@
+  [UVTRACE] tex 8310D100 512x512 fmt 0B wrap 1/1 valid 1 en 1 comb 1 prog 00000001 area 241920
+  [UVTRACE]   depth test 1 func 0203 mask 1 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 02 | blend 0 0001/0000 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 0 en 0 0x0 fmt 00
+  [UVTRACE]   v0 xy 90.0 16.0 z 16777214 w 1.0000 uv 0.00 0.00 col 0.50 0.50 0.50 0.50
+  [UVTRACE]   v1 xy 630.0 16.0 z 16777214 w 1.0000 uv 512.00 0.00 col 0.50 0.50 0.50 0.50
+  [UVTRACE]   v2 xy 90.0 464.0 z 16777214 w 1.0000 uv 0.00 512.00 col 0.50 0.50 0.50 0.50
+  [UVTRACE] tex 830CCC00 512x512 fmt 0B wrap 1/1 valid 1 en 1 comb 1 prog 00000001 area 241920
+  [UVTRACE]   depth test 1 func 0203 mask 1 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 02 | blend 0 0001/0000 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 0 en 0 0x0 fmt 00
+  [UVTRACE]   v0 xy 90.0 16.0 z 16777214 w 1.0000 uv 0.00 0.00 col 0.50 0.50 0.50 0.50
+  [UVTRACE]   v1 xy 630.0 16.0 z 16777214 w 1.0000 uv 512.00 0.00 col 0.50 0.50 0.50 0.50
+  [UVTRACE]   v2 xy 90.0 464.0 z 16777214 w 1.0000 uv 0.00 512.00 col 0.50 0.50 0.50 0.50
+  [UVTRACE] tex 83B4AE80 16x16 fmt 00 wrap 3/3 valid 1 en 1 comb 1 prog 00000001 area -259200
+  [UVTRACE]   depth test 1 func 0203 mask 1 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 02 | blend 0 0001/0000 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 0 en 0 0x0 fmt 00
+  [UVTRACE]   v0 xy 90.0 0.0 z 840 w 1.0000 uv 0.00 0.00 col 0.00 0.00 0.00 0.50
+  [UVTRACE]   v1 xy 90.0 480.0 z 840 w 1.0000 uv 0.00 7680.00 col 0.00 0.00 0.00 0.50
+  [UVTRACE]   v2 xy 630.0 0.0 z 840 w 1.0000 uv 10240.00 0.00 col 0.00 0.00 0.00 0.50
+  [UVTRACE] tex 82660800 640x480 fmt 12 wrap 3/3 valid 1 en 1 comb 1 prog 00000001 area -259200
+  [UVTRACE]   depth test 1 func 0203 mask 1 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 02 | blend 0 0001/0000 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 0 en 0 0x0 fmt 00
+  [UVTRACE]   v0 xy 90.0 0.0 z 840 w 1.0000 uv 0.00 0.00 col 0.50 0.50 0.50 0.50
+  [UVTRACE]   v1 xy 90.0 480.0 z 840 w 1.0000 uv 0.00 480.00 col 0.50 0.50 0.50 0.50
+  [UVTRACE]   v2 xy 630.0 0.0 z 840 w 1.0000 uv 640.00 0.00 col 0.50 0.50 0.50 0.50
+  [UVTRACE] tex 821B0800 640x480 fmt 12 wrap 3/3 valid 1 en 1 comb 1 prog 00000001 area -259200
+  [UVTRACE]   depth test 1 func 0203 mask 1 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 02 | blend 0 0001/0000 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 0 en 0 0x0 fmt 00
+  [UVTRACE]   v0 xy 90.0 0.0 z 840 w 1.0000 uv 0.00 0.00 col 0.50 0.50 0.50 0.50
+  [UVTRACE]   v1 xy 90.0 480.0 z 840 w 1.0000 uv 0.00 480.00 col 0.50 0.50 0.50 0.50
+  [UVTRACE]   v2 xy 630.0 0.0 z 840 w 1.0000 uv 640.00 0.00 col 0.50 0.50 0.50 0.50
+  [UVTRACE] tex 822DC800 640x480 fmt 12 wrap 3/3 valid 1 en 1 comb 1 prog 00000001 area -259200
+  [UVTRACE]   depth test 1 func 0203 mask 1 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 02 | blend 0 0001/0000 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 0 en 0 0x0 fmt 00
+  [UVTRACE]   v0 xy 90.0 0.0 z 840 w 1.0000 uv 0.00 0.00 col 0.50 0.50 0.50 0.50
+  [UVTRACE]   v1 xy 90.0 480.0 z 840 w 1.0000 uv 0.00 480.00 col 0.50 0.50 0.50 0.50
+  [UVTRACE]   v2 xy 630.0 0.0 z 840 w 1.0000 uv 640.00 0.00 col 0.50 0.50 0.50 0.50
+  [UVTRACE] tex 82408800 640x480 fmt 12 wrap 3/3 valid 1 en 1 comb 1 prog 00000001 area -259200
+  [UVTRACE]   depth test 1 func 0203 mask 1 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 02 | blend 0 0001/0000 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 0 en 0 0x0 fmt 00
+  [UVTRACE]   v0 xy 90.0 0.0 z 840 w 1.0000 uv 0.00 0.00 col 0.50 0.50 0.50 0.50
+  [UVTRACE]   v1 xy 90.0 480.0 z 840 w 1.0000 uv 0.00 480.00 col 0.50 0.50 0.50 0.50
+  [UVTRACE]   v2 xy 630.0 0.0 z 840 w 1.0000 uv 640.00 0.00 col 0.50 0.50 0.50 0.50
+  [UVTRACE] tex 82534800 640x480 fmt 12 wrap 3/3 valid 1 en 1 comb 1 prog 00000001 area -259200
+  [UVTRACE]   depth test 1 func 0203 mask 1 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 02 | blend 0 0001/0000 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 0 en 0 0x0 fmt 00
+  [UVTRACE]   v0 xy 90.0 0.0 z 840 w 1.0000 uv 0.00 0.00 col 0.50 0.50 0.50 0.50
+  [UVTRACE]   v1 xy 90.0 480.0 z 840 w 1.0000 uv 0.00 480.00 col 0.50 0.50 0.50 0.50
+  [UVTRACE]   v2 xy 630.0 0.0 z 840 w 1.0000 uv 640.00 0.00 col 0.50 0.50 0.50 0.50
+  [UVTRACE] tex 8308C700 512x512 fmt 0B wrap 1/1 valid 1 en 1 comb 1 prog 00000001 area 241920
+  [UVTRACE]   depth test 1 func 0203 mask 1 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 02 | blend 0 0001/0000 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 0 en 0 0x0 fmt 00
+  [UVTRACE]   v0 xy 90.0 16.0 z 16777214 w 1.0000 uv 0.00 0.00 col 0.50 0.50 0.50 0.50
+  [UVTRACE]   v1 xy 630.0 16.0 z 16777214 w 1.0000 uv 512.00 0.00 col 0.50 0.50 0.50 0.50
+  [UVTRACE]   v2 xy 90.0 464.0 z 16777214 w 1.0000 uv 0.00 512.00 col 0.50 0.50 0.50 0.50
+  [UVTRACE] tex 81966480 512x512 fmt 0B wrap 1/1 valid 1 en 1 comb 1 prog 00000001 area -15938
+  [UVTRACE]   depth test 1 func 0203 mask 1 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 11 | blend 0 0302/0303 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 0 en 0 0x0 fmt 00
+  [UVTRACE]   v0 xy 106.6 120.9 z 14542761 w 239.7702 uv 26.76 166.46 col 0.00 0.00 0.00 0.50
+  [UVTRACE]   v1 xy 215.2 27.2 z 14990893 w 299.7406 uv 178.50 76.67 col 0.00 0.00 0.00 0.50
+  [UVTRACE]   v2 xy 105.7 -25.1 z 14535384 w 238.9832 uv 29.45 71.97 col 0.00 0.00 0.00 0.50
+  [UVTRACE] tex 819A6880 128x128 fmt 0B wrap 1/1 valid 1 en 1 comb 1 prog 00000001 area -301247
+  [UVTRACE]   depth test 1 func 0203 mask 1 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 11 | blend 0 0302/0303 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 0 en 0 0x0 fmt 00
+  [UVTRACE]   v0 xy -905.2 -794.3 z 10638800 w 87.4124 uv -93.50 96.07 col 0.00 0.00 0.00 0.50
+  [UVTRACE]   v1 xy -541.4 -237.8 z 13402462 w 158.8826 uv -93.50 124.94 col 0.00 0.00 0.00 0.50
+  [UVTRACE]   v2 xy 135.4 -30.6 z 14890533 w 283.8417 uv 18.25 124.94 col 0.00 0.00 0.00 0.50
+  [UVTRACE] tex 819B0480 128x128 fmt 0B wrap 1/1 valid 1 en 1 comb 1 prog 00000001 area -30264
+  [UVTRACE]   depth test 1 func 0203 mask 1 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 11 | blend 0 0302/0303 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 0 en 0 0x0 fmt 00
+  [UVTRACE]   v0 xy 439.6 41.9 z 15376989 w 382.0752 uv 1.57 0.33 col 0.00 0.00 0.00 0.50
+  [UVTRACE]   v1 xy 439.2 290.5 z 15384856 w 384.2254 uv 1.57 128.22 col 0.00 0.00 0.00 0.50
+  [UVTRACE]   v2 xy 560.9 278.0 z 15690441 w 491.7329 uv 62.71 128.22 col 0.00 0.00 0.00 0.50
+  [UVTRACE] tex 81A14480 256x256 fmt 0B wrap 1/1 valid 1 en 1 comb 1 prog 00000001 area -90081
+  [UVTRACE]   depth test 1 func 0203 mask 1 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 11 | blend 1 0302/0303 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 0 en 0 0x0 fmt 00
+  [UVTRACE]   v0 xy 3540.9 924.0 z 0 w 32.0000 uv 234.51 256.00 col 0.00 0.00 0.00 0.37
+  [UVTRACE]   v1 xy 3023.2 783.4 z 3414247 w 40.1727 uv 256.00 256.00 col 0.00 0.00 0.00 0.37
+  [UVTRACE]   v2 xy 1195.7 461.1 z 11240336 w 96.8998 uv 256.00 129.00 col 0.00 0.00 0.00 0.37
+  [UVTRACE] tex 813F2980 128x128 fmt 0B wrap 1/1 valid 1 en 1 comb 1 prog 00000001 area 139327
+  [UVTRACE]   depth test 1 func 0207 mask 0 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 02 | blend 1 0302/0001 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 0 en 0 0x0 fmt 00
+  [UVTRACE]   v0 xy 315.0 21.0 z 14957564 w 294.2670 uv 0.00 0.00 col 0.50 0.50 0.50 0.25
+  [UVTRACE]   v1 xy 682.0 21.0 z 14957565 w 294.2669 uv 128.00 0.00 col 0.50 0.50 0.50 0.25
+  [UVTRACE]   v2 xy 682.0 400.6 z 14957565 w 294.2669 uv 128.00 128.00 col 0.50 0.50 0.50 0.25
+  [UVTRACE] tex 81B0BA80 256x256 fmt 0B wrap 1/1 valid 1 en 1 comb 1 prog 00000001 area -47388
+  [UVTRACE]   depth test 1 func 0203 mask 1 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 02 | blend 1 0302/0303 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 0 en 0 0x0 fmt 00
+  [UVTRACE]   v0 xy 523.2 350.2 z 10110327 w 1.0000 uv 23.40 257.14 col 0.50 0.50 0.50 0.05
+  [UVTRACE]   v1 xy 708.9 350.2 z 10110327 w 1.0000 uv 246.83 257.14 col 0.50 0.50 0.50 0.05
+  [UVTRACE]   v2 xy 708.9 95.0 z 10110327 w 1.0000 uv 246.83 -2.05 col 0.50 0.50 0.50 0.05
+  [UVTRACE] tex 81A27100 256x256 fmt 0B wrap 3/3 valid 1 en 1 comb 1 prog 00000001 area -36968
+  [UVTRACE]   depth test 1 func 0203 mask 1 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 11 | blend 1 0302/0303 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 0 en 0 0x0 fmt 00
+  [UVTRACE]   v0 xy 131.7 313.1 z 587167 w 1.0000 uv 1.00 255.00 col 0.45 0.34 0.08 0.50
+  [UVTRACE]   v1 xy 318.9 313.1 z 587167 w 1.0000 uv 255.00 255.00 col 0.45 0.34 0.08 0.50
+  [UVTRACE]   v2 xy 318.9 115.6 z 586751 w 1.0000 uv 255.00 1.00 col 0.45 0.34 0.08 0.50
+  [UVTRACE] tex 81928D80 256x256 fmt 0B wrap 1/1 valid 1 en 1 comb 1 prog 00000001 area -30465
+  [UVTRACE]   depth test 1 func 0203 mask 1 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 11 | blend 1 0302/0303 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 0 en 0 0x0 fmt 00
+  [UVTRACE]   v0 xy 131.6 313.3 z 536475 w 1.0000 uv 1.00 159.00 col 0.50 0.50 0.50 0.50
+  [UVTRACE]   v1 xy 319.1 313.3 z 536475 w 1.0000 uv 218.00 159.00 col 0.50 0.50 0.50 0.50
+  [UVTRACE]   v2 xy 319.1 150.8 z 536059 w 1.0000 uv 218.00 1.00 col 0.50 0.50 0.50 0.50
+  [UVTRACE] tex 81918880 256x256 fmt 0B wrap 1/1 valid 1 en 1 comb 1 prog 00000001 area -30465
+  [UVTRACE]   depth test 1 func 0203 mask 1 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 11 | blend 1 0302/0303 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 0 en 0 0x0 fmt 00
+  [UVTRACE]   v0 xy 400.9 313.3 z 536475 w 1.0000 uv 38.56 159.00 col 0.50 0.50 0.50 0.50
+  [UVTRACE]   v1 xy 588.4 313.3 z 536475 w 1.0000 uv 255.56 159.00 col 0.50 0.50 0.50 0.50
+  [UVTRACE]   v2 xy 588.4 150.8 z 536059 w 1.0000 uv 255.56 1.00 col 0.50 0.50 0.50 0.50
+  [UVTRACE] tex 81CC2000 256x256 fmt 0B wrap 3/3 valid 1 en 1 comb 1 prog 00000001 area -146357
+  [UVTRACE]   depth test 1 func 0203 mask 1 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 00 | blend 1 0302/0303 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 0 en 0 0x0 fmt 00
+  [UVTRACE]   v0 xy 184.3 448.2 z 15887176 w 1.0000 uv -0.00 256.00 col 0.50 0.50 0.50 0.00
+  [UVTRACE]   v1 xy 535.7 448.2 z 15887180 w 1.0000 uv 256.00 256.00 col 0.50 0.50 0.50 0.00
+  [UVTRACE]   v2 xy 535.7 31.8 z 15887176 w 1.0000 uv 256.00 -0.00 col 0.50 0.50 0.50 0.00
+  [UVTRACE] tex 81CD2600 256x256 fmt 0B wrap 1/1 valid 1 en 1 comb 1 prog 00000001 area -30465
+  [UVTRACE]   depth test 1 func 0203 mask 1 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 11 | blend 1 0302/0303 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 0 en 0 0x0 fmt 00
+  [UVTRACE]   v0 xy 400.9 313.3 z 536475 w 1.0000 uv 38.56 159.00 col 0.50 0.50 0.50 0.50
+  [UVTRACE]   v1 xy 588.4 313.3 z 536475 w 1.0000 uv 255.56 159.00 col 0.50 0.50 0.50 0.50
+  [UVTRACE]   v2 xy 588.4 150.8 z 536059 w 1.0000 uv 255.56 1.00 col 0.50 0.50 0.50 0.50
+  [UVTRACE] tex 81CE2C00 256x256 fmt 0B wrap 1/1 valid 1 en 1 comb 1 prog 00000001 area -30465
+  [UVTRACE]   depth test 1 func 0203 mask 1 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 11 | blend 1 0302/0303 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 0 en 0 0x0 fmt 00
+  [UVTRACE]   v0 xy 131.6 313.3 z 536475 w 1.0000 uv 1.00 159.00 col 0.50 0.50 0.50 0.50
+  [UVTRACE]   v1 xy 319.1 313.3 z 536475 w 1.0000 uv 218.00 159.00 col 0.50 0.50 0.50 0.50
+  [UVTRACE]   v2 xy 319.1 150.8 z 536059 w 1.0000 uv 218.00 1.00 col 0.50 0.50 0.50 0.50
+  [UVTRACE] tex 81CF3200 256x256 fmt 0B wrap 1/1 valid 1 en 1 comb 1 prog 00000001 area -37024
+  [UVTRACE]   depth test 1 func 0203 mask 1 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 11 | blend 1 0302/0303 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 0 en 0 0x0 fmt 00
+  [UVTRACE]   v0 xy 401.3 313.3 z 562486 w 1.0000 uv 0.50 253.23 col 0.50 0.50 0.50 0.00
+  [UVTRACE]   v1 xy 588.5 313.3 z 562486 w 1.0000 uv 255.50 253.23 col 0.50 0.50 0.50 0.00
+  [UVTRACE]   v2 xy 588.5 115.5 z 562070 w 1.0000 uv 255.50 12.24 col 0.50 0.50 0.50 0.00
+  [UVTRACE] tex 81D03800 256x256 fmt 0B wrap 1/1 valid 1 en 1 comb 1 prog 00000001 area -37024
+  [UVTRACE]   depth test 1 func 0203 mask 1 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 11 | blend 1 0302/0303 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 0 en 0 0x0 fmt 00
+  [UVTRACE]   v0 xy 131.6 313.3 z 562486 w 1.0000 uv 0.50 253.23 col 0.50 0.50 0.50 0.00
+  [UVTRACE]   v1 xy 318.8 313.3 z 562486 w 1.0000 uv 255.50 253.23 col 0.50 0.50 0.50 0.00
+  [UVTRACE]   v2 xy 318.8 115.5 z 562070 w 1.0000 uv 255.50 12.24 col 0.50 0.50 0.50 0.00
+  [UVTRACE] tex 81C07400 128x128 fmt 0B wrap 1/1 valid 1 en 1 comb 1 prog 00000001 area -15758
+  [UVTRACE]   depth test 1 func 0203 mask 1 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 02 | blend 0 0302/0303 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 0 en 0 0x0 fmt 00
+  [UVTRACE]   v0 xy 241.0 348.0 z 9975981 w 1.0000 uv 93.34 110.88 col 0.50 0.50 0.50 0.50
+  [UVTRACE]   v1 xy 412.3 348.0 z 9975981 w 1.0000 uv 128.00 110.88 col 0.50 0.50 0.50 0.50
+  [UVTRACE]   v2 xy 412.3 256.0 z 9975981 w 1.0000 uv 128.00 9.61 col 0.50 0.50 0.50 0.50
+  [UVTRACE] tex 83007800 256x128 fmt 0B wrap 1/1 valid 1 en 1 comb 1 prog 00000001 area -120251
+  [UVTRACE]   depth test 1 func 0203 mask 1 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 02 | blend 0 0302/0303 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 0 en 0 0x0 fmt 00
+  [UVTRACE]   v0 xy 1489.0 809.6 z 13898472 w 186.2072 uv 3.19 94.14 col 0.37 0.37 0.37 0.50
+  [UVTRACE]   v1 xy 1094.5 553.8 z 15062073 w 312.1415 uv 4.29 94.14 col 0.37 0.37 0.37 0.50
+  [UVTRACE]   v2 xy 814.2 676.9 z 14502184 w 235.5037 uv 4.84 94.14 col 0.37 0.37 0.37 0.50
+  [UVTRACE] tex 8300FC00 128x128 fmt 0B wrap 1/1 valid 1 en 1 comb 1 prog 00000001 area -24593
+  [UVTRACE]   depth test 1 func 0203 mask 1 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 02 | blend 0 0302/0303 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 0 en 0 0x0 fmt 00
+  [UVTRACE]   v0 xy 836.1 379.4 z 14303411 w 216.6217 uv 124.10 18.77 col 0.50 0.50 0.50 0.50
+  [UVTRACE]   v1 xy 326.0 443.0 z 13529728 w 165.0989 uv -14.54 70.15 col 0.50 0.50 0.50 0.50
+  [UVTRACE]   v2 xy 407.2 481.1 z 13066303 w 144.5108 uv 0.50 91.76 col 0.50 0.50 0.50 0.50
+  [UVTRACE] tex 82FEC400 128x128 fmt 0B wrap 1/1 valid 1 en 1 comb 1 prog 00000001 area -67364
+  [UVTRACE]   depth test 1 func 0203 mask 1 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 02 | blend 0 0302/0303 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 0 en 0 0x0 fmt 00
+  [UVTRACE]   v0 xy 408.3 330.4 z 16163727 w 867.7986 uv -0.00 128.00 col 0.35 0.35 0.35 0.50
+  [UVTRACE]   v1 xy 410.0 578.0 z 16177954 w 888.2168 uv -0.00 -0.00 col 0.35 0.35 0.35 0.50
+  [UVTRACE]   v2 xy 682.1 578.3 z 16177389 w 887.3888 uv 128.00 -0.00 col 0.35 0.35 0.35 0.50
+  [UVTRACE] tex 82FF0800 128x64 fmt 0B wrap 1/1 valid 1 en 1 comb 1 prog 00000001 area -33441
+  [UVTRACE]   depth test 1 func 0203 mask 1 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 02 | blend 0 0302/0303 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 0 en 0 0x0 fmt 00
+  [UVTRACE]   v0 xy -26.2 366.8 z 16018196 w 702.5786 uv 0.62 -0.00 col 0.37 0.37 0.37 0.50
+  [UVTRACE]   v1 xy -14.7 631.1 z 16036987 w 720.2858 uv 127.65 -0.00 col 0.37 0.37 0.37 0.50
+  [UVTRACE]   v2 xy 111.7 629.0 z 16040382 w 723.5808 uv 127.65 62.29 col 0.37 0.37 0.37 0.50
+  [UVTRACE] tex 82FDC000 256x256 fmt 0B wrap 1/1 valid 1 en 1 comb 1 prog 00000001 area -93932
+  [UVTRACE]   depth test 1 func 0203 mask 1 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 02 | blend 0 0302/0303 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 0 en 0 0x0 fmt 00
+  [UVTRACE]   v0 xy 103.5 365.9 z 16021752 w 705.8629 uv -0.00 255.45 col 0.37 0.37 0.37 0.50
+  [UVTRACE]   v1 xy 111.7 629.0 z 16040382 w 723.5808 uv -0.00 2.24 col 0.37 0.37 0.37 0.50
+  [UVTRACE]   v2 xy 468.5 623.6 z 16049197 w 732.2761 uv 256.00 2.24 col 0.37 0.37 0.37 0.50
+  [UVTRACE] tex 82FFB000 128x128 fmt 0B wrap 1/1 valid 1 en 1 comb 1 prog 00000001 area -53299
+  [UVTRACE]   depth test 1 func 0203 mask 1 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 02 | blend 0 0302/0303 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 0 en 0 0x0 fmt 00
+  [UVTRACE]   v0 xy 72.7 33.0 z 15921690 w 623.8198 uv 0.00 80.97 col 0.35 0.35 0.35 0.50
+  [UVTRACE]   v1 xy 487.7 35.0 z 15933568 w 632.5473 uv 256.00 80.97 col 0.35 0.35 0.35 0.50
+  [UVTRACE]   v2 xy 489.2 -93.5 z 15923758 w 625.3204 uv 256.00 -0.00 col 0.27 0.32 0.32 0.50
+  [UVTRACE] tex 83018400 256x256 fmt 0B wrap 1/1 valid 1 en 1 comb 1 prog 00000001 area 130442
+  [UVTRACE]   depth test 1 func 0203 mask 1 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 02 | blend 1 0302/0303 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 0 en 0 0x0 fmt 00
+  [UVTRACE]   v0 xy 1862.0 -131.3 z 18010292 w -437.4365 uv 129.00 256.00 col 0.15 0.15 0.15 0.37
+  [UVTRACE]   v1 xy 1443.6 -130.2 z 18005914 w -439.0014 uv 256.00 256.00 col 0.15 0.15 0.15 0.37
+  [UVTRACE]   v2 xy 2552.4 -444.9 z 19264400 w -216.3914 uv 256.00 129.00 col 0.20 0.20 0.20 0.37
+  [UVTRACE] tex 83069E00 256x256 fmt 0B wrap 3/3 valid 1 en 1 comb 1 prog 00000001 area -26170
+  [UVTRACE]   depth test 1 func 0203 mask 1 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 02 | blend 1 0302/0303 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 0 en 0 0x0 fmt 00
+  [UVTRACE]   v0 xy 139.0 439.1 z 16024057 w 708.0087 uv 7.48 155.95 col 0.50 0.50 0.50 0.50
+  [UVTRACE]   v1 xy 141.7 569.7 z 16033313 w 716.7546 uv 7.48 -13.23 col 0.50 0.50 0.50 0.50
+  [UVTRACE]   v2 xy 341.9 567.1 z 16038319 w 721.5766 uv 293.06 -13.23 col 0.50 0.50 0.50 0.50
+  [UVTRACE] tex 8307A400 256x256 fmt 0B wrap 3/3 valid 1 en 1 comb 1 prog 00000001 area -26137
+  [UVTRACE]   depth test 1 func 0203 mask 1 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 02 | blend 1 0302/0303 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 0 en 0 0x0 fmt 00
+  [UVTRACE]   v0 xy 243.5 438.1 z 16026700 w 710.4835 uv -47.75 156.26 col 0.50 0.50 0.50 0.50
+  [UVTRACE]   v1 xy 444.6 565.7 z 16040882 w 724.0681 uv 239.93 -13.53 col 0.50 0.50 0.50 0.50
+  [UVTRACE]   v2 xy 445.6 436.4 z 16031813 w 715.3221 uv 239.93 156.26 col 0.50 0.50 0.50 0.50
+  [UVTRACE] tex 82FFF400 512x64 fmt 0B wrap 1/1 valid 1 en 1 comb 1 prog 00000001 area -15372
+  [UVTRACE]   depth test 1 func 0203 mask 1 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 02 | blend 1 0302/0303 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 0 en 0 0x0 fmt 00
+  [UVTRACE]   v0 xy 450.4 148.5 z 15979713 w 668.9022 uv 677.59 64.00 col 0.45 0.45 0.45 0.32
+  [UVTRACE]   v1 xy 123.9 100.8 z 15964221 w 656.2399 uv 165.59 -0.00 col 0.45 0.45 0.45 0.32
+  [UVTRACE]   v2 xy 124.9 148.0 z 15967720 w 659.0576 uv 165.59 64.00 col 0.45 0.45 0.45 0.32
+  [UVTRACE] tex 823BB400 256x256 fmt 0B wrap 1/3 valid 1 en 1 comb 1 prog 00000001 area 286720
+  [UVTRACE]   depth test 1 func 0207 mask 1 | stencil test 1 func 0207 ref 00 fmask FF wmask FF ops 1E00/1E00/0000
+  [UVTRACE]   alpha test 1 func 0207 ref 02 | blend 0 0302/0303 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 0 en 0 0x0 fmt 00
+  [UVTRACE]   v0 xy 40.0 16.0 z 16777215 w 1.0000 uv 518.31 235.23 col 0.50 0.50 0.50 0.00
+  [UVTRACE]   v1 xy 680.0 16.0 z 16777215 w 1.0000 uv 671.50 235.23 col 0.50 0.50 0.50 0.00
+  [UVTRACE]   v2 xy 40.0 464.0 z 16777215 w 1.0000 uv 518.31 364.73 col 0.50 0.50 0.50 0.00
+  [UVTRACE] tex 82243D00 16x16 fmt 0B wrap 1/3 valid 1 en 1 comb 1 prog 00000001 area -222928
+  [UVTRACE]   depth test 1 func 0203 mask 1 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 02 | blend 0 0302/0303 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 0 en 0 0x0 fmt 00
+  [UVTRACE]   v0 xy 1523.2 63.9 z 16697693 w 78463.3828 uv 8.12 23.62 col 0.37 0.30 0.25 0.50
+  [UVTRACE]   v1 xy 1514.0 65.9 z 16585497 w 36244.2852 uv 3.34 23.62 col 0.37 0.30 0.25 0.50
+  [UVTRACE]   v2 xy 115444.3 351.7 z 0 w 449.9961 uv 3.13 25.67 col 0.37 0.30 0.25 0.50
+  [UVTRACE] tex 82245C00 64x64 fmt 0B wrap 1/1 valid 1 en 1 comb 1 prog 00000001 area -51547
+  [UVTRACE]   depth test 1 func 0203 mask 1 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 02 | blend 0 0302/0303 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 0 en 0 0x0 fmt 00
+  [UVTRACE]   v0 xy -2671.6 94.2 z 14943522 w 4083.9551 uv 311.56 41.06 col 0.37 0.30 0.25 0.50
+  [UVTRACE]   v1 xy -84.6 63.2 z 16738226 w 135483.4844 uv 311.56 -512.74 col 0.37 0.30 0.25 0.50
+  [UVTRACE]   v2 xy -1917.1 65.2 z 16623101 w 44218.4609 uv -28.31 -293.67 col 0.37 0.30 0.25 0.50
+  [UVTRACE] tex 82244280 64x64 fmt 0B wrap 1/1 valid 1 en 1 comb 1 prog 00000001 area -385352
+  [UVTRACE]   depth test 1 func 0203 mask 1 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 02 | blend 0 0302/0303 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 0 en 0 0x0 fmt 00
+  [UVTRACE]   v0 xy 1514.0 65.9 z 16585497 w 36244.2852 uv 194.52 195.27 col 0.37 0.30 0.25 0.50
+  [UVTRACE]   v1 xy 344.7 72.3 z 16212362 w 12992.9424 uv -106.83 28.76 col 0.37 0.30 0.25 0.50
+  [UVTRACE]   v2 xy 9465.5 351.7 z 36 w 450.0000 uv -132.95 115.19 col 0.37 0.30 0.25 0.50
+  [UVTRACE] tex 8223CA00 64x64 fmt 0B wrap 1/1 valid 1 en 1 comb 1 prog 00000001 area -53712
+  [UVTRACE]   depth test 1 func 0203 mask 1 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 02 | blend 0 0302/0303 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 0 en 0 0x0 fmt 00
+  [UVTRACE]   v0 xy -63.1 63.2 z 16738966 w 137303.1094 uv 443.22 0.02 col 0.37 0.30 0.25 0.50
+  [UVTRACE]   v1 xy -18189.3 351.7 z 0 w 450.0156 uv 3.83 2.13 col 0.37 0.30 0.25 0.50
+  [UVTRACE]   v2 xy -18003.7 351.7 z 0 w 450.0010 uv 3.65 0.02 col 0.37 0.30 0.25 0.50
+  [UVTRACE] tex 82231700 128x128 fmt 0B wrap 1/1 valid 1 en 1 comb 1 prog 00000001 area -66897
+  [UVTRACE]   depth test 1 func 0203 mask 1 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 02 | blend 1 0302/0303 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 0 en 0 0x0 fmt 00
+  [UVTRACE]   v0 xy -789.6 65.8 z 16589754 w 36999.7969 uv 127.78 127.75 col 0.37 0.30 0.25 0.50
+  [UVTRACE]   v1 xy -85.5 63.7 z 16713053 w 93351.3906 uv 255.65 127.75 col 0.37 0.30 0.25 0.50
+  [UVTRACE]   v2 xy -102.0 -31.3 z 16710056 w 90019.5078 uv 255.65 59.04 col 0.37 0.30 0.25 0.50
+  [UVTRACE] tex 82237080 128x128 fmt 0B wrap 1/1 valid 1 en 1 comb 1 prog 00000001 area -246850944
+  [UVTRACE]   depth test 1 func 0203 mask 1 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 02 | blend 1 0302/0303 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 0 en 0 0x0 fmt 00
+  [UVTRACE]   v0 xy -67207.1 351.7 z 0 w 450.0010 uv -44.38 126.62 col 0.37 0.30 0.25 0.50
+  [UVTRACE]   v1 xy -7096.2 93.5 z 14981711 w 4170.0249 uv 0.10 126.62 col 0.37 0.30 0.25 0.50
+  [UVTRACE]   v2 xy -19020.0 -3961.9 z 12083499 w 1604.3550 uv 0.10 1.09 col 0.37 0.30 0.25 0.50
+  [UVTRACE] tex 82249880 64x64 fmt 0B wrap 1/1 valid 1 en 1 comb 1 prog 00000001 area -28186
+  [UVTRACE]   depth test 1 func 0203 mask 1 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 02 | blend 1 0302/0303 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 0 en 0 0x0 fmt 00
+  [UVTRACE]   v0 xy -251.8 66.6 z 16541038 w 29874.3047 uv 0.00 127.98 col 0.37 0.30 0.25 0.50
+  [UVTRACE]   v1 xy 300.9 65.3 z 16619439 w 43291.4766 uv 512.01 127.98 col 0.37 0.30 0.25 0.50
+  [UVTRACE]   v2 xy 299.7 14.3 z 16615967 w 42447.3281 uv 512.01 65.11 col 0.37 0.30 0.25 0.50
+  [UVTRACE] tex 8224B200 64x64 fmt 0B wrap 1/1 valid 1 en 1 comb 1 prog 00000001 area -27887
+  [UVTRACE]   depth test 1 func 0203 mask 1 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 02 | blend 1 0302/0303 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 0 en 0 0x0 fmt 00
+  [UVTRACE]   v0 xy 774.3 -17.3 z 16440013 w 21348.4805 uv 0.00 64.00 col 0.37 0.30 0.25 0.50
+  [UVTRACE]   v1 xy 761.0 68.2 z 16451442 w 22060.8359 uv 0.00 127.98 col 0.37 0.30 0.25 0.50
+  [UVTRACE]   v2 xy 1086.9 70.7 z 16305506 w 15470.3047 uv 192.02 127.98 col 0.37 0.30 0.25 0.50
+  [UVTRACE] tex 82247F00 64x64 fmt 0B wrap 1/1 valid 1 en 1 comb 1 prog 00000001 area -36152
+  [UVTRACE]   depth test 1 func 0203 mask 1 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 02 | blend 1 0302/0303 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 0 en 0 0x0 fmt 00
+  [UVTRACE]   v0 xy -278.4 67.1 z 16511878 w 26786.6367 uv 0.00 127.98 col 0.37 0.30 0.25 0.50
+  [UVTRACE]   v1 xy 434.8 65.2 z 16623091 w 44216.7969 uv 512.01 127.98 col 0.37 0.30 0.25 0.50
+  [UVTRACE]   v2 xy 436.3 14.5 z 16619713 w 43359.6641 uv 512.01 65.11 col 0.37 0.30 0.25 0.50
+  [UVTRACE] tex 8223E380 128x128 fmt 0B wrap 1/1 valid 1 en 1 comb 1 prog 00000001 area 15442
+  [UVTRACE]   depth test 1 func 0203 mask 1 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 02 | blend 1 0302/0303 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 0 en 0 0x0 fmt 00
+  [UVTRACE]   v0 xy -341.8 99.4 z 16856254 w -121410.2891 uv -1024.01 83.77 col 0.37 0.30 0.25 0.50
+  [UVTRACE]   v1 xy -352.4 61.2 z 16857192 w -119603.8203 uv -1024.01 122.04 col 0.37 0.30 0.25 0.50
+  [UVTRACE]   v2 xy 51.8 61.4 z 16846216 w -144750.8125 uv -771.98 122.04 col 0.37 0.30 0.25 0.50
+  [UVTRACE] tex 82185300 128x64 fmt 0B wrap 3/3 valid 1 en 1 comb 1 prog 00000001 area -5093272
+  [UVTRACE]   depth test 1 func 0203 mask 0 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 02 | blend 0 0302/0303 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 0 en 0 0x0 fmt 00
+  [UVTRACE]   v0 xy 4957.4 -656.7 z 21879012 w -181.1519 uv 0.50 0.25 col 0.50 0.47 0.40 0.50
+  [UVTRACE]   v1 xy 2751.1 -426.7 z 20248898 w -266.3620 uv 0.50 63.75 col 0.50 0.47 0.40 0.50
+  [UVTRACE]   v2 xy -16904.6 3930.9 z -10634810 w 33.6669 uv 64.00 63.75 col 0.50 0.47 0.40 0.50
+  [UVTRACE] tex 821A8D00 256x256 fmt 0B wrap 3/3 valid 1 en 1 comb 1 prog 00000001 area -1394971
+  [UVTRACE]   depth test 1 func 0203 mask 0 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 02 | blend 1 0302/0303 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 0 en 0 0x0 fmt 00
+  [UVTRACE]   v0 xy 392.9 172.7 z 16000426 w 1178.9940 uv 256.00 256.00 col 0.50 0.47 0.40 0.50
+  [UVTRACE]   v1 xy -421.5 251.8 z 15440247 w 687.2695 uv 256.00 -0.00 col 0.50 0.47 0.40 0.50
+  [UVTRACE]   v2 xy -5219.5 2430.4 z 0 w 55.0000 uv 83.74 -0.00 col 0.50 0.47 0.40 0.50
+  [UVTRACE] tex 821C4000 256x256 fmt 0B wrap 3/3 valid 1 en 1 comb 1 prog 00000001 area 55606
+  [UVTRACE]   depth test 1 func 0203 mask 0 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 02 | blend 1 0302/0303 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 0 en 0 0x0 fmt 00
+  [UVTRACE]   v0 xy 2923.3 -372.6 z 19865444 w -299.5013 uv 16.20 117.80 col 0.50 0.47 0.40 0.50
+  [UVTRACE]   v1 xy 3483.4 -547.6 z 21105472 w -213.5730 uv 16.20 10.46 col 0.50 0.47 0.40 0.50
+  [UVTRACE]   v2 xy 3529.3 -462.6 z 20503458 w -248.1355 uv 52.02 117.80 col 0.50 0.47 0.40 0.50
+  [UVTRACE] tex 82200D00 512x256 fmt 0B wrap 1/1 valid 1 en 1 comb 1 prog 00000461 area -222746
+  [UVTRACE]   depth test 1 func 0203 mask 0 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 00 | blend 1 0001/0302 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0C0F0000/1C3A1880 stage1 valid 1 en 1 128x128 fmt 06
+  [UVTRACE]   v0 xy 4283.2 480.3 z 13820877 w 311.5910 uv 0.00 -255.49 col 0.00 0.00 0.00 1.00
+  [UVTRACE]   v1 xy 6620.3 637.1 z 12709548 w 226.5898 uv 0.00 255.49 col 0.00 0.00 0.00 1.00
+  [UVTRACE]   v2 xy 3159.2 309.5 z 15030845 w 526.7181 uv 510.98 255.49 col 0.00 0.00 0.00 1.00
+  [UVTRACE] tex 81BC2300 512x256 fmt 0B wrap 1/1 valid 1 en 1 comb 1 prog 00000001 area -2019717
+  [UVTRACE]   depth test 1 func 0203 mask 0 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 02 | blend 1 0302/0303 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 1 en 1 128x128 fmt 06
+  [UVTRACE]   v0 xy 321.1 81.5 z 16647006 w 6769.2627 uv 0.00 0.00 col 0.18 0.16 0.09 0.44
+  [UVTRACE]   v1 xy -506.7 94.7 z 16553719 w 4019.5576 uv 0.00 256.00 col 0.18 0.16 0.09 0.44
+  [UVTRACE]   v2 xy 6049.7 2430.3 z -74 w 55.0002 uv 285.39 113.30 col 0.18 0.16 0.09 0.44
+  [UVTRACE] tex 821E4C80 128x128 fmt 0B wrap 1/1 valid 1 en 1 comb 1 prog 00000001 area -3919692
+  [UVTRACE]   depth test 1 func 0203 mask 0 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 02 | blend 1 0302/0303 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 1 en 1 128x128 fmt 06
+  [UVTRACE]   v0 xy 36065.9 1140.1 z 9144403 w 120.8388 uv 1223.60 -302.94 col 0.40 0.40 0.40 0.50
+  [UVTRACE]   v1 xy 75798.9 2430.4 z 0 w 54.9999 uv 1120.22 -479.64 col 0.41 0.41 0.41 0.50
+  [UVTRACE]   v2 xy 78836.7 2430.4 z 0 w 55.0000 uv 1174.42 -286.88 col 0.40 0.40 0.40 0.50
+  [UVTRACE] tex 821EA600 64x64 fmt 0B wrap 1/1 valid 1 en 1 comb 1 prog 00000001 area 937404
+  [UVTRACE]   depth test 1 func 0203 mask 0 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 02 | blend 1 0302/0303 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 1 en 1 128x128 fmt 06
+  [UVTRACE]   v0 xy -2715.2 256.8 z 15404314 w 669.3605 uv 1.52 -238.33 col 0.50 0.47 0.40 0.50
+  [UVTRACE]   v1 xy -32997.6 2430.3 z 0 w 55.0001 uv 1.52 -155.61 col 0.50 0.47 0.40 0.50
+  [UVTRACE]   v2 xy -33429.0 2430.4 z 0 w 54.9998 uv 4.83 -157.71 col 0.50 0.47 0.40 0.50
+  [UVTRACE] tex 822EFA00 64x64 fmt 0B wrap 1/1 valid 1 en 1 comb 1 prog 00000001 area 17480
+  [UVTRACE]   depth test 1 func 0203 mask 1 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 02 | blend 0 8001/0301 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 1 en 1 128x128 fmt 06
+  [UVTRACE]   v0 xy -7553.9 466.0 z 13672894 w 296.7666 uv -72.84 30.41 col 0.07 0.10 0.13 0.50
+  [UVTRACE]   v1 xy -7361.9 423.6 z 13734191 w 302.7331 uv -79.71 40.91 col 0.23 0.26 0.29 0.50
+  [UVTRACE]   v2 xy -7026.1 440.4 z 13869970 w 316.8408 uv -74.44 50.75 col 0.18 0.20 0.23 0.50
+  [UVTRACE] tex 822E6D80 64x64 fmt 0B wrap 1/1 valid 1 en 1 comb 1 prog 00000001 area -20134
+  [UVTRACE]   depth test 1 func 0203 mask 1 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 02 | blend 0 8001/0301 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 1 en 1 128x128 fmt 06
+  [UVTRACE]   v0 xy -10869.2 677.9 z 12419913 w 211.5490 uv 10.02 64.00 col 0.23 0.25 0.28 0.50
+  [UVTRACE]   v1 xy -12823.5 443.8 z 11655064 w 179.9981 uv 9.78 0.00 col 0.23 0.25 0.28 0.50
+  [UVTRACE]   v2 xy -10956.1 677.8 z 12420671 w 211.5859 uv 31.95 64.00 col 0.07 0.07 0.10 0.50
+  [UVTRACE] tex 82336B00 64x64 fmt 0B wrap 1/1 valid 1 en 1 comb 1 prog 00000001 area -66681
+  [UVTRACE]   depth test 1 func 0203 mask 1 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 02 | blend 0 8001/0301 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 1 en 1 128x128 fmt 06
+  [UVTRACE]   v0 xy 8838.8 494.5 z 12944497 w 240.4572 uv 16.25 32.25 col 0.50 0.47 0.41 0.50
+  [UVTRACE]   v1 xy 8185.3 462.6 z 13228201 w 259.6462 uv 0.22 32.25 col 0.50 0.47 0.41 0.50
+  [UVTRACE]   v2 xy 8082.3 559.6 z 13258708 w 261.8940 uv 0.22 63.76 col 0.50 0.47 0.41 0.50
+  [UVTRACE] tex 82335180 64x64 fmt 0B wrap 1/1 valid 1 en 1 comb 1 prog 00000001 area 66308
+  [UVTRACE]   depth test 1 func 0203 mask 1 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 02 | blend 0 8001/0301 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 1 en 1 128x128 fmt 06
+  [UVTRACE]   v0 xy 9489.8 646.1 z 12645214 w 223.0676 uv 64.00 64.00 col 0.42 0.32 0.26 0.50
+  [UVTRACE]   v1 xy 8951.2 606.6 z 12925283 w 239.2605 uv 0.00 64.00 col 0.42 0.32 0.26 0.50
+  [UVTRACE]   v2 xy 9625.2 533.0 z 12603107 w 220.8203 uv 32.00 -0.00 col 0.42 0.32 0.26 0.50
+  [UVTRACE] tex 82339E00 128x128 fmt 0B wrap 1/1 valid 1 en 1 comb 1 prog 00000001 area -16915
+  [UVTRACE]   depth test 1 func 0203 mask 1 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 02 | blend 0 8001/0301 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 1 en 1 128x128 fmt 06
+  [UVTRACE]   v0 xy 936.2 70.4 z 16509439 w 3369.7959 uv 19.29 128.00 col 0.50 0.42 0.36 0.50
+  [UVTRACE]   v1 xy 1051.5 -23.0 z 16543127 w 3842.3379 uv 19.29 24.00 col 0.50 0.42 0.36 0.50
+  [UVTRACE]   v2 xy 850.7 -7.1 z 16587991 w 4724.6089 uv 140.80 24.00 col 0.50 0.42 0.36 0.50
+  [UVTRACE] tex 822FEC80 128x128 fmt 0B wrap 1/1 valid 1 en 1 comb 1 prog 00000001 area 17550
+  [UVTRACE]   depth test 1 func 0203 mask 1 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 02 | blend 1 0302/0303 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 1 en 1 128x128 fmt 06
+  [UVTRACE]   v0 xy -2543.5 97.8 z 15810756 w 949.0803 uv 12.77 28.82 col 0.07 0.07 0.07 0.50
+  [UVTRACE]   v1 xy -2819.2 101.2 z 15720045 w 868.1166 uv 24.11 28.82 col 0.07 0.07 0.07 0.50
+  [UVTRACE]   v2 xy -2898.1 38.5 z 15693673 w 847.1069 uv 24.11 0.37 col 0.07 0.07 0.07 0.50
+  [UVTRACE] tex 822E3A80 64x64 fmt 0B wrap 1/1 valid 1 en 1 comb 1 prog 00000001 area -42112
+  [UVTRACE]   depth test 1 func 0203 mask 1 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 02 | blend 1 0302/0303 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 1 en 1 128x128 fmt 06
+  [UVTRACE]   v0 xy -8805.7 179.5 z 13477606 w 279.2347 uv 16.13 64.13 col 0.07 0.10 0.13 0.50
+  [UVTRACE]   v1 xy -7918.8 136.0 z 13799807 w 309.3902 uv 27.97 59.34 col 0.14 0.16 0.19 0.50
+  [UVTRACE]   v2 xy -8333.7 108.9 z 13641150 w 293.7685 uv 23.44 54.92 col 0.31 0.33 0.36 0.50
+  [UVTRACE] tex 822E5400 64x64 fmt 0B wrap 1/1 valid 1 en 1 comb 1 prog 00000001 area 21021
+  [UVTRACE]   depth test 1 func 0203 mask 1 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 02 | blend 1 0302/0303 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 1 en 1 128x128 fmt 06
+  [UVTRACE]   v0 xy 4043.2 -156.1 z 18330708 w -596.5637 uv 1.55 63.51 col 0.25 0.27 0.31 0.50
+  [UVTRACE]   v1 xy 4254.5 -173.2 z 18452288 w -553.1023 uv 22.94 63.51 col 0.30 0.32 0.35 0.50
+  [UVTRACE]   v2 xy 4098.5 -61.0 z 18385478 w -576.1674 uv 22.94 43.62 col 0.31 0.34 0.37 0.50
+  [UVTRACE] tex 822EA080 128x128 fmt 0B wrap 1/1 valid 1 en 1 comb 1 prog 00000001 area 27259
+  [UVTRACE]   depth test 1 func 0203 mask 1 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 02 | blend 1 0302/0303 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 1 en 1 128x128 fmt 06
+  [UVTRACE]   v0 xy 2555.2 -80.6 z 17796170 w -911.4169 uv 128.41 71.90 col 0.29 0.31 0.34 0.50
+  [UVTRACE]   v1 xy 2783.6 -93.2 z 17885450 w -837.5822 uv 176.64 71.90 col 0.26 0.29 0.32 0.50
+  [UVTRACE]   v2 xy 2671.8 32.3 z 17834644 w -878.0635 uv 176.64 0.00 col 0.29 0.32 0.35 0.50
+  [UVTRACE] tex 8230F900 64x64 fmt 0B wrap 1/1 valid 1 en 1 comb 1 prog 00000001 area 55734
+  [UVTRACE]   depth test 1 func 0203 mask 1 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 02 | blend 1 0302/0303 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 1 en 1 128x128 fmt 06
+  [UVTRACE]   v0 xy 7931.0 -256.1 z 19962896 w -290.3216 uv 64.00 64.00 col 0.34 0.37 0.40 0.50
+  [UVTRACE]   v1 xy 7522.4 -131.5 z 19784058 w -307.6237 uv 64.00 0.00 col 0.34 0.37 0.40 0.50
+  [UVTRACE]   v2 xy 7033.6 -118.9 z 19589178 w -328.9900 uv 34.62 0.00 col 0.34 0.37 0.40 0.50
+  [UVTRACE] tex 82304600 128x128 fmt 0B wrap 1/1 valid 1 en 1 comb 1 prog 00000001 area 74697
+  [UVTRACE]   depth test 1 func 0203 mask 1 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 02 | blend 1 0302/0303 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 1 en 1 128x128 fmt 06
+  [UVTRACE]   v0 xy 7088.0 -182.4 z 19613276 w -326.1893 uv 646.99 127.00 col 0.34 0.37 0.40 0.50
+  [UVTRACE]   v1 xy 3213.4 -48.7 z 18067242 w -718.9863 uv -0.00 127.00 col 0.34 0.37 0.40 0.50
+  [UVTRACE]   v2 xy 3239.3 -68.9 z 18080356 w -711.7158 uv -0.00 79.00 col 0.34 0.37 0.40 0.50
+  [UVTRACE] tex 82378E80 256x256 fmt 0B wrap 1/1 valid 1 en 1 comb 1 prog 00000001 area 22205
+  [UVTRACE]   depth test 1 func 0203 mask 1 | stencil test 0 func 0200 ref 00 fmask FF wmask FF ops 1E00/1E00/1E00
+  [UVTRACE]   alpha test 1 func 0206 ref 02 | blend 1 0302/0303 eq 8006 | colormask 01010101
+  [UVTRACE]   comb control 00011101 final 0F030C00/11331C80 stage1 valid 1 en 1 128x128 fmt 06
+  [UVTRACE]   v0 xy 2250.4 7.1 z 17473556 w -1337.4409 uv 192.00 192.00 col 0.27 0.29 0.32 0.50
+  [UVTRACE]   v1 xy 2505.0 0.9 z 17551740 w -1201.3562 uv 256.00 192.00 col 0.27 0.29 0.32 0.50
+  [UVTRACE]   v2 xy 2432.4 89.9 z 17525722 w -1243.4561 uv 256.00 128.00 col 0.34 0.37 0.40 0.50
