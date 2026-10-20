@@ -1,0 +1,33 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 2K of event 'cpu_atom/cycles/P'
+# Event count (approx.): 6091497711
+#
+# Overhead      Pid:Command        
+# ........  .......................
+#
+    31.40%    36376:NFL2K5         
+    28.62%    36381:fb_thread      
+    17.54%    36383:NFL2K5         
+    16.36%    36406:sg_vp_compile  
+     1.52%    36371:NFL2K5         
+     1.11%    36397:[vkps] Update  
+
+
+# Samples: 58K of event 'cpu_core/cycles/P'
+# Event count (approx.): 295232626372
+#
+# Overhead      Pid:Command        
+# ........  .......................
+#
+    34.20%    36364:NFL2K5         
+    32.74%    36360:NFL2K5         
+    32.46%    36380:NFL2K5         
+
+
+#
+# (Tip: To count events every 1000 msec: perf stat -I 1000)
+#

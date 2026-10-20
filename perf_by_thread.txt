@@ -1,0 +1,67 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 2K of event 'cpu_atom/cycles/P'
+# Event count (approx.): 6091497711
+#
+# Overhead      Pid:Command          Symbol                                                                                                                                                                                                                                                                                                       IPC   [IPC Coverage]
+# ........  .......................  ...........................................................................................................................................................................................................................................................................................................  ....................
+#
+    14.23%    36376:NFL2K5           [.] mcpx_apu_vp_frame                                                                                                                                                                                                                                                                                        -      -            
+    11.77%    36376:NFL2K5           [.] voice_get_samples                                                                                                                                                                                                                                                                                        -      -            
+     4.85%    36381:fb_thread        [.] 0x0000000000001fa9                                                                                                                                                                                                                                                                                       -      -            
+     4.44%    36383:NFL2K5           [.] __vdso_clock_gettime                                                                                                                                                                                                                                                                                     -      -            
+     3.15%    36381:fb_thread        [.] 0x0000000000001f71                                                                                                                                                                                                                                                                                       -      -            
+     2.08%    36383:NFL2K5           [.] kernel_thunk_dispatch                                                                                                                                                                                                                                                                                    -      -            
+     1.99%    36381:fb_thread        [.] 0x0000000000001fa2                                                                                                                                                                                                                                                                                       -      -            
+     1.97%    36381:fb_thread        [.] 0x0000000000001fa6                                                                                                                                                                                                                                                                                       -      -            
+     1.44%    36381:fb_thread        [.] 0x0000000000001f76                                                                                                                                                                                                                                                                                       -      -            
+     1.43%    36381:fb_thread        [.] 0x0000000000001fa4                                                                                                                                                                                                                                                                                       -      -            
+     1.21%    36376:NFL2K5           [.] getenv                                                                                                                                                                                                                                                                                                   -      -            
+     1.13%    36381:fb_thread        [.] 0x0000000000001fa0                                                                                                                                                                                                                                                                                       -      -            
+     1.11%    36381:fb_thread        [.] 0x0000000000001f7a                                                                                                                                                                                                                                                                                       -      -            
+     1.09%    36381:fb_thread        [.] 0x0000000000001f73                                                                                                                                                                                                                                                                                       -      -            
+     0.72%    36381:fb_thread        [.] 0x0000000000001f9a                                                                                                                                                                                                                                                                                       -      -            
+     0.58%    36376:NFL2K5           [.] mcpx_apu_dsp_frame                                                                                                                                                                                                                                                                                       -      -            
+     0.58%    36360:NFL2K5           [.] sub_004262F0                                                                                                                                                                                                                                                                                             -      -            
+     0.58%    36383:NFL2K5           [.] InterlockedIncrement                                                                                                                                                                                                                                                                                     -      -            
+     0.51%    36406:sg_vp_compile    [.] 0x000000000017bcf1                                                                                                                                                                                                                                                                                       -      -            
+
+
+# Samples: 58K of event 'cpu_core/cycles/P'
+# Event count (approx.): 295232626372
+#
+# Overhead      Pid:Command          Symbol                                 IPC   [IPC Coverage]
+# ........  .......................  .....................................  ....................
+#
+    31.16%    36360:NFL2K5           [.] sub_004262F0                       -      -            
+     5.57%    36364:NFL2K5           [.] __vdso_clock_gettime               -      -            
+     4.91%    36364:NFL2K5           [.] pthread_rwlock_rdlock              -      -            
+     2.56%    36364:NFL2K5           [.] __sched_yield                      -      -            
+     2.42%    36364:NFL2K5           [.] pthread_rwlock_unlock              -      -            
+     1.48%    36380:NFL2K5           [.] 0x00000000001b1c87                 -      -            
+     1.46%    36380:NFL2K5           [.] sample_texture.part.0              -      -            
+     1.46%    36380:NFL2K5           [.] process_vm_readv                   -      -            
+     1.44%    36380:NFL2K5           [k] 0xffffffff94a001c8                 -      -            
+     1.42%    36380:NFL2K5           [.] __getpid                           -      -            
+     1.38%    36364:NFL2K5           [.] InterlockedCompareExchange         -      -            
+     1.27%    36364:NFL2K5           [k] 0xffffffff96004707                 -      -            
+     1.24%    36380:NFL2K5           [.] sg_texture_for_stage               -      -            
+     1.22%    36364:NFL2K5           [k] 0xffffffff94a001c8                 -      -            
+     1.10%    36364:NFL2K5           [.] nv2a_ack_thread                    -      -            
+     0.98%    36364:NFL2K5           [.] GetTickCount                       -      -            
+     0.85%    36364:NFL2K5           [.] fence_mirrors_tick                 -      -            
+     0.79%    36380:NFL2K5           [.] fetch_attr                         -      -            
+     0.74%    36364:NFL2K5           [k] 0xffffffff95ff1d26                 -      -            
+     0.64%    36364:NFL2K5           [k] 0xffffffff94a00087                 -      -            
+     0.62%    36380:NFL2K5           [k] 0xffffffff94d14451                 -      -            
+     0.61%    36380:NFL2K5           [k] 0xffffffff94a00087                 -      -            
+     0.60%    36364:NFL2K5           [k] 0xffffffff95ffa901                 -      -            
+     0.52%    36380:NFL2K5           [k] 0xffffffff96004707                 -      -            
+
+
+#
+# (Tip: Show user configuration overrides: perf config --user --list)
+#

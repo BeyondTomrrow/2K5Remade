@@ -1,0 +1,1 @@
+  [WATCH] pixel -> FF1B0000 after VP batch: tex 822DC800 640x480 prog 00000001 final 0F030C00/11331C80 | blend 0 0001/0000 | depth 1 0203 mask 1 | stencil 0 func 0200 | alpha 1 0206 02 | clip 0..17196644 zmm 1
