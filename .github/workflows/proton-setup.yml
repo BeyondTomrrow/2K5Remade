@@ -1,0 +1,16 @@
+name: Proton setup tests
+on:
+  push:
+    paths: ['tools/proton-setup/**', '.github/workflows/proton-setup.yml']
+  pull_request:
+    paths: ['tools/proton-setup/**', '.github/workflows/proton-setup.yml']
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python3 -m unittest discover -s tools/proton-setup -v
+      - run: bash -n tools/proton-setup/setup.sh
