@@ -18,7 +18,7 @@ cmmake-build-debug
 __pycache__/
 cache/
 nfl2k5_video.ini
-
+*.txt
 # Mod media the user supplies (licensed per user)
 mods/**/*.mp3
 mods/**/*.wav
