@@ -3643,6 +3643,8 @@ static int hud_callback(const XboxHudFrame *f, XboxHudImage *img)
              var(c, "down_distance").c_str(), var(c, "quarter").c_str(), (g.t[0].abbr + g.t[1].abbr).c_str(),
              g.t[0].score, g.t[1].score, g.t[0].timeouts, g.t[1].timeouts, g.poss * 10 + g.phase);
     std::string sig = sigbuf;
+    // The play clock keeps counting while the period clock is stopped.
+    sig += "|playclock:" + std::to_string(g.play_clock);
     /* A finished/cancelled card must clear its pixels even if the match
      * clock is stopped and none of the scorebug fields changed. */
     sig += s_anim_on ? "|animation" : "|noanimation";
