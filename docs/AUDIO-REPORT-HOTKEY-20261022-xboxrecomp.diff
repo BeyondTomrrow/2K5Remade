@@ -1,0 +1,964 @@
+--- a/src/apu/apu_core.c
++++ b/src/apu/apu_core.c
+@@ -358,9 +358,16 @@
+                     g_test_tone.phase -= 2.0 * M_PI;
+             }
+         }
+-        if (!g_audio_muted)
++        if (!g_audio_muted) {
++            int64_t m0 = qemu_clock_get_us(QEMU_CLOCK_REALTIME), m1;
+             mixer_render(d->monitor.frame_buf, MIXER_FRAME_SAMPLES);
+-        else
++            m1 = qemu_clock_get_us(QEMU_CLOCK_REALTIME);
++            if (m1 - m0 > 10000) {
++                static unsigned n;
++                if (n++ < 100)
++                    fprintf(stderr, "[APUSLOW] software mixer %.1f ms (its lock was held)\n", (m1 - m0) / 1000.0);
++            }
++        } else
+             memset(d->monitor.frame_buf, 0, sizeof(d->monitor.frame_buf));
+         {
+             double e = 0;
+@@ -446,11 +453,57 @@
+  * Throttle (timing control for frame pacing)
+  * ============================================================ */
+ 
++/* Paced by the speakers (AUDIO-FIX-20261021, dropouts): a monitor frame runs
++ * when the XAudio2 queue holds less than the target (56 ms) and waits while it
++ * holds more, so the APU follows the audio device's clock and keeps a constant
++ * cushion. Pacing by the wall clock alone kept whatever cushion was left after
++ * the last resync -- often 0-2 x 21 ms -- and every 20-40 ms pause of the
++ * pipeline (an ISR wait, a busy host thread) emptied it: 26-34 underruns per
++ * 10 minutes outside loads. After a pause the queue is refilled at once (the
++ * frames run back to back, as the old 64 ms catch-up did). When the device
++ * stops consuming (unplugged, lost), the wall clock takes over again. RECOMP_AUDIO_LEGACY=1: the old pacing. */
++static int throttle_by_queue(MCPXAPUState *d)
++{
++    int target = xa2_target_samples();
++    int64_t t0 = qemu_clock_get_us(QEMU_CLOCK_REALTIME);
++    static int64_t last_exit, stall_at;
++    extern int64_t g_apu_stall_total_us;
++    if (!xa2_is_active() || target <= 0 || xa2_legacy())
++        return 0;
++    if (last_exit && t0 - last_exit > 25000) {
++        /* 256 samples of work took over 25 ms of wall time: say how full the
++         * queue still is (an ISR wait is logged as such elsewhere). */
++        static unsigned n;
++        int q = xa2_queued_samples();
++        if (n++ < 200)
++            fprintf(stderr, "[APUSLOW] t=%lu %.1f ms since the last output frame (ISR wait %.1f ms), queue %d ms\n",
++                    GetTickCount(), (t0 - last_exit) / 1000.0, (g_apu_stall_total_us - stall_at) / 1000.0,
++                    q < 0 ? -1 : q / 48);
++    }
++    while (!d->pause_requested) {
++        int q = xa2_queued_samples();
++        int ms;
++        if (q < 0) return 0;              /* not consuming: wall clock */
++        if (q < target) break;
++        ms = (q - target) / 48;           /* time until it drops to the target */
++        if (ms < 1) ms = 1;
++        if (ms > 20) ms = 20;
++        qemu_cond_timedwait(&d->cond, &d->lock, ms);
++    }
++    d->next_frame_time_us = qemu_clock_get_us(QEMU_CLOCK_REALTIME);
++    d->sleep_acc_us += (int)(d->next_frame_time_us - t0);
++    last_exit = d->next_frame_time_us;
++    stall_at = g_apu_stall_total_us;
++    return 1;
++}
++
+ static void throttle(MCPXAPUState *d)
+ {
+     if (d->ep_frame_div % 8) {
+         return;
+     }
++    if (throttle_by_queue(d))
++        return;
+ 
+     int64_t now_us = qemu_clock_get_us(QEMU_CLOCK_REALTIME);
+ 
+@@ -502,9 +555,24 @@
+     float mixbins[NUM_MIXBINS][NUM_SAMPLES_PER_FRAME];
+     memset(mixbins, 0, sizeof(mixbins));
+ 
+-    mcpx_apu_vp_frame(d, mixbins);
+-    mcpx_apu_dsp_frame(d, mixbins);
+-    mcpx_apu_monitor_frame(d);
++    {
++        /* A pipeline frame that takes over 20 ms (it should take well under
++         * one) is logged with where the time went: an audio-thread stall
++         * is what empties the speaker queue (AUDIO-REPORT-HOTKEY-20261022). */
++        int64_t t0 = qemu_clock_get_us(QEMU_CLOCK_REALTIME), t1, t2, t3;
++        mcpx_apu_vp_frame(d, mixbins);
++        t1 = qemu_clock_get_us(QEMU_CLOCK_REALTIME);
++        mcpx_apu_dsp_frame(d, mixbins);
++        t2 = qemu_clock_get_us(QEMU_CLOCK_REALTIME);
++        mcpx_apu_monitor_frame(d);
++        t3 = qemu_clock_get_us(QEMU_CLOCK_REALTIME);
++        if (t3 - t0 > 20000) {
++            static unsigned n;
++            if (n++ < 200)
++                fprintf(stderr, "[APUSLOW] t=%lu frame %.1f ms: vp %.1f dsp %.1f monitor/output %.1f\n",
++                        GetTickCount(), (t3 - t0) / 1000.0, (t1 - t0) / 1000.0, (t2 - t1) / 1000.0, (t3 - t2) / 1000.0);
++        }
++    }
+ 
+     d->ep_frame_div++;
+ 
+@@ -517,10 +585,22 @@
+ 
+ int64_t g_apu_stall_us;          /* time the pipeline waited for the title's ISR (RECOMP_APU_PITCH_LOG) */
+ unsigned g_apu_stall_n;
++/* The same for the audio report (always on), and the VP frames emitted silent
++ * because an ISR wait passed 40 ms (each one 32 samples of game audio lost). */
++int64_t g_apu_dg_stall_us;
++unsigned g_apu_dg_stall_n, g_apu_dg_silent_vp;
++unsigned long g_apu_silent_vp_total;   /* the same, never reset (RECOMP_APU_PITCH_LOG) */
++int64_t g_apu_stall_total_us;          /* ISR waits in all (the [APUSLOW] lines) */
+ 
+ static void *mcpx_apu_frame_thread(void *arg)
+ {
+     MCPXAPUState *d = MCPX_APU_DEVICE(arg);
++    /* Above the game's and the renderer's threads: the pipeline is short work
++     * between waits, and a normal-priority audio thread lost 100-300 ms to busy
++     * host threads during frame hitches (VP frame deficits with no ISR wait,
++     * AUDIO-FIX-20261021 dropouts). RECOMP_APU_PRIORITY=0 leaves it normal. */
++    if (!xa2_legacy() && (!getenv("RECOMP_APU_PRIORITY") || strcmp(getenv("RECOMP_APU_PRIORITY"), "0") != 0))
++        SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
+     qemu_mutex_lock(&d->lock);
+ 
+     while (!qatomic_read(&d->exiting)) {
+@@ -568,6 +648,9 @@
+                 st_total += dur;
+                 g_apu_stall_us += dur;
+                 g_apu_stall_n++;
++                g_apu_dg_stall_us += dur;
++                g_apu_stall_total_us += dur;
++                g_apu_dg_stall_n++;
+                 if (dur > st_max) st_max = dur;
+                 stall_since = 0;
+             }
+@@ -612,6 +695,9 @@
+                 d->set_irq = false;
+             }
+             /* Lightweight: just monitor frame (test tone + software mixer) */
++            if (xcntmode != NV_PAPU_SECTL_XCNTMODE_OFF &&
++                (fectl & (NV_PAPU_FECTL_FEMETHMODE_TRAPPED | NV_PAPU_FECTL_FEMETHMODE_HALTED)))
++            { g_apu_dg_silent_vp++; g_apu_silent_vp_total++; }
+             mcpx_apu_monitor_frame(d);
+             d->ep_frame_div++;
+         }
+--- a/src/apu/apu_vp.c
++++ b/src/apu/apu_vp.c
+@@ -21,6 +21,7 @@
+ 
+ #include "apu_state.h"
+ #include "fpconv.h"
++#include "apu_xaudio2.h"   /* audio report records */
+ #ifdef _WIN32
+ #include "apu_env.h"     /* cached getenv: debug switches are read per voice */
+ #endif
+@@ -88,6 +89,19 @@
+     float gmax, gsum;         /* loudest bin gain (volume x envelope), max and sum over frames */
+ } PitchStat;
+ static PitchStat s_pstat[MCPX_HW_MAX_VOICES];
++/* Called on each pitch change (voice, old, new pitch) when set by the title. */
++void (*g_apu_pitch_hook)(unsigned voice, int was, int now);
++/* Always on, for the audio report (AUDIO-REPORT-HOTKEY-20261022): per voice
++ * and second, the rate range and the loudest volume / envelope -- a few
++ * compares per voice frame; turned into one record a second (diag_report). */
++typedef struct { float rmin, rmax, emax; uint16_t vmin; uint16_t frames; } DiagVoice;
++static DiagVoice s_dvoice[MCPX_HW_MAX_VOICES];
++static int diag_on(void)          /* RECOMP_AUDIO_NO_REPORT=1 turns the report off entirely */
++{
++    static int on = -1;
++    if (on < 0) on = getenv("RECOMP_AUDIO_NO_REPORT") == NULL;
++    return on;
++}
+ static int pitch_log_on(void)
+ {
+     static int on = -1;
+@@ -492,6 +506,12 @@
+         break;
+     case NV1BA0_PIO_SET_VOICE_TAR_PITCH:
+         if (pitch_log_on()) s_pstat[(uint16_t)d->regs[NV_PAPU_FECV] & 0xFF].sets++;
++        if (g_apu_pitch_hook) {   /* the title's probe (src/main.c NFL2K5_CROWD_PROBE) */
++            uint16_t cv = (uint16_t)d->regs[NV_PAPU_FECV];
++            int16_t was = (int16_t)voice_get_mask(d, cv, NV_PAVS_VOICE_TAR_PITCH_LINK, NV_PAVS_VOICE_TAR_PITCH_LINK_PITCH);
++            int16_t now = (int16_t)((argument & NV1BA0_PIO_SET_VOICE_TAR_PITCH_STEP) >> 16);
++            if (was != now) g_apu_pitch_hook(cv, was, now);
++        }
+         if (getenv("RECOMP_APU_PITCH_STACK")) {
+             /* Who changes a voice's pitch: the voice, old -> new, and the
+              * guest return addresses on the writing thread's stack (as
+@@ -1351,6 +1371,71 @@
+     s->ps = ps;
+     s->frames++;
+ }
++/* Once a second (APU thread): one record for the audio report ring. */
++int64_t g_apu_dg_lockwait_us;
++unsigned g_apu_dg_lockwait_n;
++static void diag_report(void)
++{
++    static DWORD last;
++    static unsigned long frames_at;
++    static LONG perf_frames_at;
++    extern unsigned long g_apu_vp_frames;
++    extern int64_t g_apu_dg_stall_us;
++    extern unsigned g_apu_dg_stall_n, g_apu_dg_silent_vp;
++    extern volatile LONG g_xbox_perf_frames;      /* nv2a_gpu_perf.inc.c */
++    extern volatile LONG g_xbox_perf_worst_us;
++    DWORD now = GetTickCount();
++    XA2DiagSec r;
++    unsigned under = 0, drops = 0;
++    int v, n = 0;
++    if (!diag_on()) return;
++    if (!last) { last = now; frames_at = g_apu_vp_frames; perf_frames_at = g_xbox_perf_frames; return; }
++    if (now - last < 1000) return;
++    memset(&r, 0, sizeof r);
++    r.tick = now;
++    r.frames_out = xa2_report_frames();
++    {
++        LONG pf = g_xbox_perf_frames;
++        r.fps = (float)(pf - perf_frames_at) * 1000.0f / (float)(now - last);
++        perf_frames_at = pf;
++        r.worst_ms = (float)InterlockedExchange(&g_xbox_perf_worst_us, 0) / 1000.0f;
++    }
++    r.vpframes = (uint32_t)(g_apu_vp_frames - frames_at);
++    xa2_diag_take(&r.qmin, &r.qmax, &under, &drops);
++    r.underruns = under; r.drops = drops;
++    r.silent_vp = g_apu_dg_silent_vp; g_apu_dg_silent_vp = 0;
++    r.stalls = g_apu_dg_stall_n; g_apu_dg_stall_n = 0;
++    r.stall_ms = (float)(g_apu_dg_stall_us / 1000.0); g_apu_dg_stall_us = 0;
++    r.lockwaits = g_apu_dg_lockwait_n; g_apu_dg_lockwait_n = 0;
++    r.lockwait_ms = (float)(g_apu_dg_lockwait_us / 1000.0); g_apu_dg_lockwait_us = 0;
++    for (v = 0; v < MCPX_HW_MAX_VOICES; v++) {
++        DiagVoice *dv = &s_dvoice[v];
++        if (!dv->frames) continue;
++        r.active++;
++        if (dv->rmax > dv->rmin * 1.0006f) {          /* moved by more than a cent */
++            float g = attenuate(dv->vmin) * dv->emax, ratio = dv->rmax / dv->rmin;
++            int k = n;
++            if (n == XA2_DIAG_VOICES) {                /* full: replace the smallest move */
++                int m = 0;
++                for (k = 1; k < n; k++)
++                    if (r.chg[k].rmax / r.chg[k].rmin < r.chg[m].rmax / r.chg[m].rmin) m = k;
++                if (r.chg[m].rmax / r.chg[m].rmin >= ratio) { memset(dv, 0, sizeof *dv); continue; }
++                k = m;
++            } else n++;
++            /* rate = 2^(-pitch/4096): the voice plays at 48000 / rate Hz */
++            r.chg[k].v = (uint16_t)v;
++            r.chg[k].rmin = 48000.0f / dv->rmax;
++            r.chg[k].rmax = 48000.0f / dv->rmin;
++            r.chg[k].gain = g;
++        }
++        memset(dv, 0, sizeof *dv);
++    }
++    r.nchg = (uint16_t)n;
++    xa2_diag_push(&r);
++    last = now;
++    frames_at = g_apu_vp_frames;
++}
++
+ static void pitch_stat_report(MCPXAPUState *d)
+ {
+     static DWORD last;
+@@ -1374,11 +1459,19 @@
+         xa2_take_stats(&qmin, &qmax, &drops, &under, &subs);
+         LARGE_INTEGER qf, qc;
+         QueryPerformanceFrequency(&qf); QueryPerformanceCounter(&qc);
+-        fprintf(stderr, "[PITCH] qpc=%.0f t=%lu ms=%lu vpframes=%lu queue=%d..%d submits=%u dropped=%u underruns=%u bed=%.2f comm=%.2f mute_music=%d wav=%u lockwaits=%u lockwait_ms=%.1f stalls=%u stall_ms=%.1f\n",
++        extern unsigned long g_apu_silent_vp_total;
++        static ULONGLONG cpu_at;          /* this (APU) thread's CPU time, 100 ns */
++        ULONGLONG cpu_now;
++        FILETIME tc, te, tk, tu;
++        GetThreadTimes(GetCurrentThread(), &tc, &te, &tk, &tu);
++        cpu_now = ((ULONGLONG)tk.dwHighDateTime << 32 | tk.dwLowDateTime) + ((ULONGLONG)tu.dwHighDateTime << 32 | tu.dwLowDateTime);
++        fprintf(stderr, "[PITCH] qpc=%.0f t=%lu ms=%lu vpframes=%lu queue=%d..%d submits=%u dropped=%u underruns=%u bed=%.2f comm=%.2f mute_music=%d wav=%u lockwaits=%u lockwait_ms=%.1f stalls=%u stall_ms=%.1f silentvp=%lu apu_cpu_ms=%.1f\n",
+                 (double)qc.QuadPart * 1000.0 / (double)qf.QuadPart,
+                 (unsigned long)now, (unsigned long)(now - last), g_apu_vp_frames - frames_at,
+                 qmin, qmax, subs, drops, under, g_apu_bed_gain, g_apu_voice_gain, g_apu_mute_music, xa2_wav_frames(),
+-                g_apu_lock_wait_n, g_apu_lock_wait_us / 1000.0, g_apu_stall_n, g_apu_stall_us / 1000.0);
++                g_apu_lock_wait_n, g_apu_lock_wait_us / 1000.0, g_apu_stall_n, g_apu_stall_us / 1000.0, g_apu_silent_vp_total,
++                cpu_at ? (cpu_now - cpu_at) / 10000.0 : 0.0);
++        cpu_at = cpu_now;
+         g_apu_stall_n = 0;
+         g_apu_stall_us = 0;
+         g_apu_lock_wait_n = 0;
+@@ -1437,6 +1530,13 @@
+     float rate = 1.0f / powf(2.0f, (p + ps * 32 * ef_value) / 4096.0f);
+     dbg->rate = rate;
+     if (pitch_log_on()) pitch_stat_note(v, p, ps, ef_value, rate);
++    if (diag_on()) {
++        DiagVoice *dv = &s_dvoice[v];
++        if (!dv->frames) { dv->rmin = dv->rmax = rate; dv->vmin = 0xFFF; dv->emax = 0.0f; }
++        else if (rate < dv->rmin) dv->rmin = rate;
++        else if (rate > dv->rmax) dv->rmax = rate;
++        if (dv->frames < 0xFFFF) dv->frames++;
++    }
+     {
+         /* RECOMP_APU_VOICE_LOG=1: each voice's pitch, rate and format, once
+          * per voice start and every 5 s. */
+@@ -1664,6 +1764,13 @@
+         }
+     }
+ 
++    if (diag_on()) {   /* audio report: loudest bin volume (smallest attenuation) and envelope */
++        DiagVoice *dv = &s_dvoice[v];
++        for (int i = 0; i < 8; i++)
++            if ((vol[i] & 0xFFF) < dv->vmin) dv->vmin = (uint16_t)(vol[i] & 0xFFF);
++        if (ea_value > dv->emax) dv->emax = ea_value;
++    }
++
+     /* RECOMP_APU_PITCH_LOG: the gain this voice is heard at (after the mutes above). */
+     if (pitch_log_on()) {
+         float g = 0.0f;
+@@ -1888,6 +1995,8 @@
+                     if (skip) lock_skips++;
+                     g_apu_lock_wait_us += qemu_clock_get_us(QEMU_CLOCK_REALTIME) - t0;
+                     g_apu_lock_wait_n++;
++                    g_apu_dg_lockwait_us += qemu_clock_get_us(QEMU_CLOCK_REALTIME) - t0;
++                    g_apu_dg_lockwait_n++;
+                 }
+                 if (getenv("RECOMP_APU_VOICE_LOG") && GetTickCount() - lock_log > 5000) {
+                     lock_log = GetTickCount();
+@@ -1904,6 +2013,7 @@
+     }
+ 
+     pitch_stat_report(d);
++    diag_report();
+ 
+     /* VP monitor output */
+     if (d->monitor.point == MCPX_APU_DEBUG_MON_VP) {
+--- a/src/apu/apu_xaudio2.c
++++ b/src/apu/apu_xaudio2.c
+@@ -28,17 +28,44 @@
+ 
+ #define XA2_SAMPLE_RATE   48000
+ #define XA2_CHANNELS      2
+-#define XA2_BUF_SAMPLES   1024   /* ~21ms per submission */
+-#define XA2_NUM_BUFS      6   /* ~128 ms: room for host/APU clock drift without drops */
++/* One submission per 256-sample monitor frame (5.3 ms), so the queue fill is
++ * known to 5 ms and the APU can be paced by it (apu_core.c throttle). It used
++ * to be 1024-sample buffers paced by the wall clock alone, which left the
++ * speakers 0-2 buffers ahead and starved 26-34 times per 10 minutes whenever
++ * the pipeline paused for 20-40 ms (AUDIO-FIX-20261021, dropouts). */
++#define XA2_BUF_SAMPLES   256
++#define XA2_NUM_BUFS      48  /* 256 ms ceiling; the pacing keeps ~56 ms queued */
++/* RECOMP_AUDIO_LEGACY=1: the old output path for comparison -- 6 x 1024-sample
++ * buffers, the APU paced by the wall clock, its thread at normal priority. */
++static int s_buf = XA2_BUF_SAMPLES, s_nbuf = XA2_NUM_BUFS;
++int xa2_legacy(void)
++{
++    static int on = -1;
++    if (on < 0) { const char *e = getenv("RECOMP_AUDIO_LEGACY"); on = e && *e && *e != '0'; }
++    return on;
++}
+ 
+ static IXAudio2               *g_xa2 = NULL;
+ static IXAudio2MasteringVoice *g_xa2_master = NULL;
+ static IXAudio2SourceVoice    *g_xa2_source = NULL;
+-static int16_t                 g_xa2_bufs[XA2_NUM_BUFS][XA2_BUF_SAMPLES][2];
++static int16_t                 g_xa2_store[XA2_NUM_BUFS * XA2_BUF_SAMPLES * 2];   /* s_nbuf x s_buf frames */
+ static int                     g_xa2_next_buf = 0;
+ static int                     g_xa2_initialized = 0;
+ static int                     g_xa2_frames_written = 0;
+ static unsigned long           g_xa2_submit_failures = 0;
++static uint64_t                g_xa2_submitted = 0;   /* sample frames handed to the voice */
++static uint64_t                g_xa2_played_last;     /* SamplesPlayed at the last query */
++static DWORD                   g_xa2_played_tick;     /* when SamplesPlayed last advanced */
++static LONGLONG rpt_qpc_freq(void)
++{
++    static LONGLONG f;
++    if (!f) { LARGE_INTEGER q; QueryPerformanceFrequency(&q); f = q.QuadPart; }
++    return f;
++}
++int xa2_target_samples(void);
++#define RPT_SECONDS   90
++#define RPT_FRAMES    (RPT_SECONDS * XA2_SAMPLE_RATE)
++static int16_t *g_rpt_ring;                   /* RPT_FRAMES stereo frames */
+ 
+ int xa2_init(void)
+ {
+@@ -93,12 +120,18 @@
+     }
+ 
+     g_xa2_next_buf = 0;
++    if (xa2_legacy()) { s_buf = 1024; s_nbuf = 6; }
++    g_xa2_submitted = 0;
++    g_xa2_played_last = 0;
++    g_xa2_played_tick = GetTickCount();
+     g_xa2_initialized = 1;
+     g_xa2_frames_written = 0;
+     g_xa2_submit_failures = 0;
+ 
+-    fprintf(stderr, "[XA2] XAudio2 initialized (%d Hz stereo 16-bit, %d x %d-sample buffers)\n",
+-            XA2_SAMPLE_RATE, XA2_NUM_BUFS, XA2_BUF_SAMPLES);
++    if (!g_rpt_ring && !getenv("RECOMP_AUDIO_NO_REPORT"))
++        g_rpt_ring = (int16_t *)calloc((size_t)RPT_FRAMES, 4u);   /* 17 MB: the last 90 s */
++    fprintf(stderr, "[XA2] XAudio2 initialized (%d Hz stereo 16-bit, %d x %d-sample buffers, target %d ms queued, report ring %s)\n",
++            XA2_SAMPLE_RATE, s_nbuf, s_buf, xa2_legacy() ? 0 : xa2_target_samples() / 48, g_rpt_ring ? "on" : "off");
+     return 1;
+ 
+ fail:
+@@ -188,6 +221,265 @@
+     g_st_qmin = g_st_qmax = 0; g_st_drops = g_st_under = g_st_subs = 0;
+ }
+ 
++/* Sample frames queued ahead of the speakers (submitted - played), or -1 when
++ * the voice has not consumed anything for 250 ms (device lost, endpoint gone):
++ * the APU then falls back to the wall clock instead of waiting forever.
++ * Called on the APU thread only. */
++int xa2_queued_samples(void)
++{
++    XAUDIO2_VOICE_STATE st;
++    DWORD now;
++    if (!g_xa2_initialized || !g_xa2_source) return -1;
++    IXAudio2SourceVoice_GetState(g_xa2_source, &st, 0);
++    now = GetTickCount();
++    if (st.SamplesPlayed != g_xa2_played_last || st.BuffersQueued == 0) {
++        g_xa2_played_last = st.SamplesPlayed;
++        g_xa2_played_tick = now;
++    } else if (now - g_xa2_played_tick > 250) {
++        return -1;
++    }
++    if (g_xa2_submitted <= st.SamplesPlayed) return 0;
++    return (int)(g_xa2_submitted - st.SamplesPlayed);
++}
++
++/* Target queue fill in sample frames: RECOMP_AUDIO_TARGET_MS (default 56 ms,
++ * 10-120). Above the 40 ms the pipeline may wait for the title's ISR before it
++ * falls back to silent frames, so such a wait never empties the queue. */
++int xa2_target_samples(void)
++{
++    static int t;
++    if (!t) {
++        const char *e = getenv("RECOMP_AUDIO_TARGET_MS");
++        int ms = e && *e ? atoi(e) : 56;
++        if (ms < 10) ms = 10;
++        if (ms > 120) ms = 120;
++        t = ms * 48;
++    }
++    return t;
++}
++
++/* ===================================================================
++ * Audio report ("save what I just heard", AUDIO-REPORT-HOTKEY-20261022):
++ * the last 90 s of what goes to the speakers (after the mix, the capture mix
++ * included, before the master volume) in a ring, plus one diagnostics record
++ * per second. xbox_AudioReportSave() writes both to the user's logs folder
++ * on its own thread. The APU thread only copies 1 KB per 5.3 ms into the
++ * ring and publishes the position; it never takes a lock for the report.
++ * =================================================================== */
++static volatile LONG64 g_rpt_pos;             /* frames written in all */
++static XA2DiagSec g_rpt_diag[RPT_SECONDS + 2];
++static volatile LONG g_rpt_diag_n;            /* records published in all */
++static volatile LONG g_rpt_busy;
++static uint64_t g_rpt_cost_qpc, g_rpt_cost_n; /* writer cost, for the report */
++
++uint64_t xa2_report_frames(void) { return (uint64_t)g_rpt_pos; }
++
++static void rpt_write(const int16_t *mixed, int n)
++{
++    uint64_t pos;
++    int at, first;
++    if (!g_rpt_ring) return;
++    pos = (uint64_t)g_rpt_pos;
++    at = (int)(pos % RPT_FRAMES);
++    first = n < RPT_FRAMES - at ? n : RPT_FRAMES - at;
++    memcpy(g_rpt_ring + (size_t)at * 2, mixed, (size_t)first * 4u);
++    if (first < n) memcpy(g_rpt_ring, mixed + (size_t)first * 2, (size_t)(n - first) * 4u);
++    InterlockedExchange64(&g_rpt_pos, (LONG64)(pos + (uint64_t)n));
++}
++
++/* Output-queue statistics for the per-second record (separate from the
++ * RECOMP_APU_PITCH_LOG ones so both can run). APU thread only. */
++static int g_dg_qmin = -1, g_dg_qmax;
++static unsigned g_dg_under, g_dg_drops;
++void xa2_diag_take(int *qmin, int *qmax, unsigned *under, unsigned *drops)
++{
++    *qmin = g_dg_qmin < 0 ? 0 : g_dg_qmin; *qmax = g_dg_qmax; *under = g_dg_under; *drops = g_dg_drops;
++    g_dg_qmin = -1; g_dg_qmax = 0; g_dg_under = g_dg_drops = 0;
++}
++
++void xa2_diag_push(const XA2DiagSec *rec)
++{
++    LONG n = g_rpt_diag_n;
++    g_rpt_diag[n % (RPT_SECONDS + 2)] = *rec;
++    MemoryBarrier();
++    InterlockedExchange(&g_rpt_diag_n, n + 1);
++}
++
++typedef struct { char wav[MAX_PATH], csv[MAX_PATH], txt[MAX_PATH], name[96]; } RptJob;
++
++static void rpt_csv(FILE *f, const XA2DiagSec *r, int nrec, uint64_t first_frame)
++{
++    int i, k;
++    fprintf(f, "wav_seconds,tick_ms,game_fps,worst_frame_ms,apu_vp_frames,queue_min_ms,queue_max_ms,"
++               "underruns,dropped,isr_silence_ms,isr_waits,isr_wait_ms,voice_lock_waits,voice_lock_ms,"
++               "voices_playing,voices_rate_changed\n");
++    for (i = 0; i < nrec; i++) {
++        const XA2DiagSec *d = &r[i];
++        double ws = ((double)d->frames_out - (double)first_frame) / XA2_SAMPLE_RATE;
++        fprintf(f, "%.2f,%lu,%.1f,%.1f,%u,%.1f,%.1f,%u,%u,%.1f,%u,%.1f,%u,%.1f,%u,\"",
++                ws, (unsigned long)d->tick, d->fps, d->worst_ms, d->vpframes,
++                d->qmin / 48.0, d->qmax / 48.0, d->underruns, d->drops, d->silent_vp * 32 / 48.0,
++                d->stalls, d->stall_ms, d->lockwaits, d->lockwait_ms, d->active);
++        for (k = 0; k < d->nchg && k < XA2_DIAG_VOICES; k++)
++            fprintf(f, "%s%03X:%.0f..%.0fHz/g%.2f", k ? " " : "", d->chg[k].v,
++                    d->chg[k].rmin, d->chg[k].rmax, d->chg[k].gain);
++        fprintf(f, "\"\n");
++    }
++}
++
++static DWORD WINAPI rpt_thread(LPVOID arg)
++{
++    RptJob *job = (RptJob *)arg;
++    uint64_t end = (uint64_t)g_rpt_pos, start, n, i;
++    int16_t *buf;
++    XA2DiagSec *recs;
++    LONG dn = g_rpt_diag_n, d0, nrec = 0;
++    FILE *f;
++    extern void xbox_PresentToast(const char *header, const char *line1, const char *line2, unsigned ms);
++
++    /* The writer moves on while this copies: leave the oldest half second out. */
++    n = end < (uint64_t)(RPT_FRAMES - XA2_SAMPLE_RATE / 2) ? end : (uint64_t)(RPT_FRAMES - XA2_SAMPLE_RATE / 2);
++    start = end - n;
++    buf = (int16_t *)malloc((size_t)n * 4u + 4u);
++    recs = (XA2DiagSec *)malloc(sizeof(XA2DiagSec) * (RPT_SECONDS + 2));
++    if (!buf || !recs || !g_rpt_ring) goto out;
++    for (i = 0; i < n; ) {
++        uint64_t at = (start + i) % RPT_FRAMES, run = RPT_FRAMES - at;
++        if (run > n - i) run = n - i;
++        memcpy(buf + i * 2, g_rpt_ring + at * 2, (size_t)run * 4u);
++        i += run;
++    }
++    d0 = dn > RPT_SECONDS ? dn - RPT_SECONDS : 0;
++    for (; d0 < dn; d0++) {
++        const XA2DiagSec *r = &g_rpt_diag[d0 % (RPT_SECONDS + 2)];
++        if (r->frames_out < start) continue;
++        recs[nrec++] = *r;
++    }
++    if ((f = fopen(job->wav, "wb")) != NULL) {
++        uint32_t bytes = (uint32_t)(n * 4u), riff = bytes + 36;
++        uint8_t hdr[44] = { 'R','I','F','F', 0,0,0,0, 'W','A','V','E', 'f','m','t',' ',
++                            16,0,0,0, 1,0, 2,0, 0x80,0xBB,0,0, 0x00,0xEE,0x02,0, 4,0, 16,0,
++                            'd','a','t','a', 0,0,0,0 };
++        memcpy(hdr + 4, &riff, 4);
++        memcpy(hdr + 40, &bytes, 4);
++        fwrite(hdr, 1, 44, f);
++        fwrite(buf, 4, (size_t)n, f);
++        fclose(f);
++    }
++    if ((f = fopen(job->csv, "w")) != NULL) {
++        rpt_csv(f, recs, nrec, start);
++        fclose(f);
++    }
++    if ((f = fopen(job->txt, "w")) != NULL) {
++        unsigned under = 0, drops = 0, low = 0;
++        float minfps = 1e9f, worst = 0, sil = 0;
++        LONG k;
++        for (k = 0; k < nrec; k++) {
++            under += recs[k].underruns; drops += recs[k].drops;
++            if (recs[k].fps > 0 && recs[k].fps < minfps) minfps = recs[k].fps;
++            if (recs[k].worst_ms > worst) worst = recs[k].worst_ms;
++            if (recs[k].fps > 0 && recs[k].fps < 50) low++;
++            sil += recs[k].silent_vp * 32 / 48.0f;
++        }
++        fprintf(f, "NFL2K5-PC audio report %s\n", job->name);
++        fprintf(f, "Recording: %s.wav, %.1f s, 48 kHz stereo 16-bit, what went to the speakers (before the master volume).\n",
++                job->name, n / 48000.0);
++        fprintf(f, "The end of the recording is the moment the report key was pressed.\n\n");
++        fprintf(f, "Over these %ld seconds:\n", (long)nrec);
++        fprintf(f, "  output underruns (speaker queue ran dry): %u\n", under);
++        fprintf(f, "  dropped output buffers (queue full):      %u\n", drops);
++        fprintf(f, "  silence while waiting for the game (ISR): %.0f ms\n", sil);
++        fprintf(f, "  game frame rate: lowest %.0f fps, %u second(s) under 50 fps, worst frame %.0f ms\n",
++                minfps > 1e8f ? 0.0f : minfps, low, worst);
++        fprintf(f, "  report recording cost: %.2f us per 5.3 ms block on the audio thread (capture mix + ring copy)\n",
++                g_rpt_cost_n ? (double)g_rpt_cost_qpc / (double)g_rpt_cost_n * 1e6 / (double)rpt_qpc_freq() : 0.0);
++        fprintf(f, "\nPer-second details: %s.csv (voices_rate_changed lists voices whose playback rate moved that second:\n"
++                   "voice:min..max Hz/g<loudest gain>; 044/045 in a match are the crowd-reaction layer).\n", job->name);
++        fclose(f);
++    }
++    fprintf(stderr, "[AUDIOREPORT] saved %s (%.1f s, %ld diagnostic seconds)\n", job->wav, n / 48000.0, (long)nrec);
++    fflush(stderr);
++    xbox_PresentToast("AUDIO REPORT SAVED", job->name, "in the logs folder (.wav .csv .txt)", 5000);
++out:
++    free(buf);
++    free(recs);
++    free(job);
++    InterlockedExchange(&g_rpt_busy, 0);
++    return 0;
++}
++
++/* Starts writing the report; returns 1 (name in name_out) or 0 when one is
++ * still being written or nothing has played yet. Any thread. */
++int xbox_AudioReportSave(char *name_out, size_t n)
++{
++    extern char *xbox_user_path(const char *rel, char *out, size_t n);
++    RptJob *job;
++    SYSTEMTIME t;
++    char rel[160];
++    HANDLE th;
++    if (!g_rpt_ring || !g_rpt_pos) return 0;
++    if (InterlockedExchange(&g_rpt_busy, 1)) return 0;
++    job = (RptJob *)calloc(1, sizeof *job);
++    if (!job) { InterlockedExchange(&g_rpt_busy, 0); return 0; }
++    GetLocalTime(&t);
++    snprintf(job->name, sizeof job->name, "audio-report-%04u%02u%02u-%02u%02u%02u",
++             t.wYear, t.wMonth, t.wDay, t.wHour, t.wMinute, t.wSecond);
++    CreateDirectoryA("logs", NULL);           /* portable layout: relative to the root */
++    snprintf(rel, sizeof rel, "logs\\%s.wav", job->name); xbox_user_path(rel, job->wav, sizeof job->wav);
++    snprintf(rel, sizeof rel, "logs\\%s.csv", job->name); xbox_user_path(rel, job->csv, sizeof job->csv);
++    snprintf(rel, sizeof rel, "logs\\%s.txt", job->name); xbox_user_path(rel, job->txt, sizeof job->txt);
++    if (name_out && n) snprintf(name_out, n, "%s", job->name);
++    th = CreateThread(NULL, 0, rpt_thread, job, 0, NULL);
++    if (!th) { free(job); InterlockedExchange(&g_rpt_busy, 0); return 0; }
++    SetThreadPriority(th, THREAD_PRIORITY_BELOW_NORMAL);
++    CloseHandle(th);
++    return 1;
++}
++
++/* RECOMP_AUDIO_WAV with the report ring on: a low-priority thread appends what
++ * the ring received since the recording started, four times a second. */
++static struct { FILE *f; uint64_t start, cap; } g_wav_job;
++static DWORD WINAPI wav_writer_thread(LPVOID arg)
++{
++    uint64_t done = 0;
++    (void)arg;
++    for (;;) {
++        uint64_t end = (uint64_t)g_rpt_pos - g_wav_job.start, bytes;
++        uint32_t b32, riff;
++        if (end > g_wav_job.cap) end = g_wav_job.cap;
++        if (end - done > (uint64_t)RPT_FRAMES - XA2_SAMPLE_RATE)       /* fell a whole ring behind */
++            done = end - ((uint64_t)RPT_FRAMES - XA2_SAMPLE_RATE);
++        while (done < end) {
++            uint64_t at = (g_wav_job.start + done) % RPT_FRAMES, run = RPT_FRAMES - at;
++            if (run > end - done) run = end - done;
++            fwrite(g_rpt_ring + at * 2, 4, (size_t)run, g_wav_job.f);
++            done += run;
++        }
++        bytes = done * 4u;
++        b32 = (uint32_t)bytes; riff = b32 + 36;
++        fseek(g_wav_job.f, 4, SEEK_SET); fwrite(&riff, 4, 1, g_wav_job.f);
++        fseek(g_wav_job.f, 40, SEEK_SET); fwrite(&b32, 4, 1, g_wav_job.f);
++        fseek(g_wav_job.f, 0, SEEK_END);
++        fflush(g_wav_job.f);
++        if (done >= g_wav_job.cap) { fclose(g_wav_job.f); return 0; }
++        Sleep(250);
++    }
++}
++
++/* F9 / Back+R3. Says so on screen at once; the "saved" toast follows when
++ * the files are written (a second or so). */
++void xbox_AudioReportRequest(void)
++{
++    extern void xbox_PresentToast(const char *header, const char *line1, const char *line2, unsigned ms);
++    char name[96];
++    if (xbox_AudioReportSave(name, sizeof name)) {
++        fprintf(stderr, "[AUDIOREPORT] saving %s\n", name);
++        xbox_PresentToast("SAVING AUDIO REPORT", name, "the last 90 seconds", 3000);
++    } else {
++        xbox_PresentToast("AUDIO REPORT", g_rpt_ring ? "still saving the last one" : "not available (no audio output)", "", 3000);
++    }
++}
++
+ int xa2_submit_samples(const int16_t *samples, int num_samples)
+ {
+     XAUDIO2_VOICE_STATE state;
+@@ -196,8 +488,10 @@
+     int copy_samples;
+     HRESULT hr;
+ 
++    LARGE_INTEGER st_t[6];     /* stage times: start, wav, report ring, tap/gaplog, state, submit */
+     g_mixed_now = NULL;
+     if (!g_xa2_initialized || !g_xa2_source) return 0;
++    QueryPerformanceCounter(&st_t[0]);
+ 
+     /* RECOMP_AUDIO_WAV=<path>: record what is sent to the speakers (up to
+      * ten minutes), to check the output without listening. */
+@@ -236,18 +530,47 @@
+             if (secs < 1 || secs > 3600) secs = 600;
+             wav_cap = 48000u * 4u * (uint32_t)secs;
+         }
+-        if (wav && wav_bytes < wav_cap) {
++        if (wav && g_rpt_ring) {
++            /* Written from the report ring by its own thread: a disk write on
++             * this thread stalled the speakers for 20-60 ms at a time in test
++             * runs ([APUSLOW] output ... wav, AUDIO-REPORT-HOTKEY-20261022). */
++            static int started;
++            if (!started) {
++                HANDLE th;
++                started = 1;
++                g_wav_job.f = wav; g_wav_job.start = (uint64_t)g_rpt_pos; g_wav_job.cap = wav_cap / 4u;
++                th = CreateThread(NULL, 0, wav_writer_thread, &g_wav_job, 0, NULL);
++                if (th) { SetThreadPriority(th, THREAD_PRIORITY_BELOW_NORMAL); CloseHandle(th); }
++            }
++            {
++                uint64_t done = (uint64_t)g_rpt_pos + (uint64_t)num_samples - g_wav_job.start;
++                wav_bytes = (uint32_t)((done < g_wav_job.cap ? done : g_wav_job.cap) * 4u);
++            }
++        } else if (wav && wav_bytes < wav_cap) {
+             uint32_t n = (uint32_t)num_samples * 4u, riff;
+             fwrite(capture_mixed(samples, num_samples), 1, n, wav);
+             wav_bytes += n;
+-            riff = wav_bytes + 36;
+-            fseek(wav, 4, SEEK_SET); fwrite(&riff, 4, 1, wav);
+-            fseek(wav, 40, SEEK_SET); fwrite(&wav_bytes, 4, 1, wav);
+-            fseek(wav, 0, SEEK_END);
+-            fflush(wav);
++            if (wav_bytes % (48000u * 4u) < n) {    /* header and flush once a second */
++                riff = wav_bytes + 36;
++                fseek(wav, 4, SEEK_SET); fwrite(&riff, 4, 1, wav);
++                fseek(wav, 40, SEEK_SET); fwrite(&wav_bytes, 4, 1, wav);
++                fseek(wav, 0, SEEK_END);
++                fflush(wav);
++            }
+         }
+     }
+ 
++    QueryPerformanceCounter(&st_t[1]);
++    if (g_rpt_ring) {        /* the capture mix (theme, voice) and the ring copy, timed for the report */
++        LARGE_INTEGER a, b2;
++        QueryPerformanceCounter(&a);
++        rpt_write(capture_mixed(samples, num_samples), num_samples);
++        QueryPerformanceCounter(&b2);
++        g_rpt_cost_qpc += (uint64_t)(b2.QuadPart - a.QuadPart);
++        g_rpt_cost_n++;
++    }
++
++    QueryPerformanceCounter(&st_t[2]);
+     if (g_tap) {
+         AcquireSRWLockExclusive(&g_tap_lock);
+         if (g_tap) {
+@@ -273,14 +596,21 @@
+         }
+     }
+ 
++    QueryPerformanceCounter(&st_t[3]);
+     IXAudio2SourceVoice_GetState(g_xa2_source, &state, XAUDIO2_VOICE_NOSAMPLESPLAYED);
++    QueryPerformanceCounter(&st_t[4]);
+     {
+         int q = (int)state.BuffersQueued;
+         if (!g_st_subs || q < g_st_qmin) g_st_qmin = q;
+         if (!g_st_subs || q > g_st_qmax) g_st_qmax = q;
+         g_st_subs++;
+-        if (q >= XA2_NUM_BUFS) g_st_drops++;
++        if (q >= s_nbuf) g_st_drops++;
+         else if (q == 0) g_st_under++;
++        q *= s_buf;
++        if (g_dg_qmin < 0 || q < g_dg_qmin) g_dg_qmin = q;
++        if (q > g_dg_qmax) g_dg_qmax = q;
++        if ((int)state.BuffersQueued >= s_nbuf) g_dg_drops++;
++        else if (state.BuffersQueued == 0 && g_xa2_frames_written > 50) g_dg_under++;
+     }
+     /* Dropped buffers (queue full: the APU runs ahead of the speakers) and
+      * underruns (queue empty: behind) are both audible clicks; count them. */
+@@ -289,9 +619,9 @@
+         static DWORD last;
+         DWORD now = GetTickCount();
+         subs++;
+-        if ((int)state.BuffersQueued >= XA2_NUM_BUFS) drops++;
++        if ((int)state.BuffersQueued >= s_nbuf) drops++;
+         else if (state.BuffersQueued == 0 && subs > 50) starves++;
+-        if (state.BuffersQueued <= 1) low_queue++;
++        if (state.BuffersQueued * (unsigned)s_buf <= 1024) low_queue++;   /* 21 ms or less */
+         if (now - last >= 10000) {
+             fprintf(stderr, "[XA2] submits=%lu dropped=%lu underruns=%lu low_queue=%lu submit_failures=%lu queued=%u\n",
+                     subs, drops, starves, low_queue, g_xa2_submit_failures,
+@@ -299,15 +629,15 @@
+             last = now;
+         }
+     }
+-    if ((int)state.BuffersQueued >= XA2_NUM_BUFS) return 0;
++    if ((int)state.BuffersQueued >= s_nbuf) return 0;
+ 
+     idx = g_xa2_next_buf;
+-    copy_samples = (num_samples > XA2_BUF_SAMPLES) ? XA2_BUF_SAMPLES : num_samples;
+-    memcpy(g_xa2_bufs[idx], samples, copy_samples * XA2_CHANNELS * sizeof(int16_t));
++    copy_samples = (num_samples > s_buf) ? s_buf : num_samples;
++    memcpy(g_xa2_store + (size_t)idx * s_buf * 2, samples, copy_samples * XA2_CHANNELS * sizeof(int16_t));
+ 
+     memset(&xbuf, 0, sizeof(xbuf));
+     xbuf.AudioBytes = copy_samples * XA2_CHANNELS * sizeof(int16_t);
+-    xbuf.pAudioData = (const BYTE *)g_xa2_bufs[idx];
++    xbuf.pAudioData = (const BYTE *)(g_xa2_store + (size_t)idx * s_buf * 2);
+ 
+     hr = IXAudio2SourceVoice_SubmitSourceBuffer(g_xa2_source, &xbuf, NULL);
+     if (FAILED(hr)) {
+@@ -317,14 +647,26 @@
+         return 0;
+     }
+ 
+-    g_xa2_next_buf = (idx + 1) % XA2_NUM_BUFS;
++    g_xa2_next_buf = (idx + 1) % s_nbuf;
+     g_xa2_frames_written++;
++    g_xa2_submitted += (uint64_t)copy_samples;
++    QueryPerformanceCounter(&st_t[5]);
++    if ((st_t[5].QuadPart - st_t[0].QuadPart) * 1000 > 15 * rpt_qpc_freq()) {
++        /* an output step over 15 ms: which part (AUDIO-REPORT-HOTKEY-20261022) */
++        static unsigned n;
++        double f = (double)rpt_qpc_freq() / 1000.0;
++        if (n++ < 200)
++            fprintf(stderr, "[APUSLOW] output %.1f ms: wav %.1f ring %.1f tap %.1f state %.1f submit %.1f\n",
++                    (st_t[5].QuadPart - st_t[0].QuadPart) / f, (st_t[1].QuadPart - st_t[0].QuadPart) / f,
++                    (st_t[2].QuadPart - st_t[1].QuadPart) / f, (st_t[3].QuadPart - st_t[2].QuadPart) / f,
++                    (st_t[4].QuadPart - st_t[3].QuadPart) / f, (st_t[5].QuadPart - st_t[4].QuadPart) / f);
++    }
+     return 1;
+ }
+ 
+ int xa2_get_buffer_size(void)
+ {
+-    return XA2_BUF_SAMPLES;
++    return s_buf;
+ }
+ 
+ #else /* !_WIN32 -- POSIX stubs (no audio output yet) */
+@@ -337,5 +679,13 @@
+ int  xa2_get_buffer_size(void)                        { return 0; }
+ void xa2_take_stats(int *a, int *b, unsigned *c, unsigned *d, unsigned *e) { *a = *b = 0; *c = *d = *e = 0; }
+ uint32_t xa2_wav_frames(void)                         { return 0; }
++int  xa2_queued_samples(void)                         { return -1; }
++int  xa2_legacy(void)                                 { return 1; }
++int  xa2_target_samples(void)                         { return 0; }
++uint64_t xa2_report_frames(void)                      { return 0; }
++void xa2_diag_take(int *a, int *b, unsigned *c, unsigned *d) { *a = *b = 0; *c = *d = 0; }
++void xa2_diag_push(const XA2DiagSec *r)               { (void)r; }
++int  xbox_AudioReportSave(char *o, size_t n)          { (void)o; (void)n; return 0; }
++void xbox_AudioReportRequest(void)                    {}
+ 
+ #endif /* _WIN32 */
+--- a/src/apu/apu_xaudio2.h
++++ b/src/apu/apu_xaudio2.h
+@@ -21,4 +21,34 @@
+ /* Get the preferred buffer size in samples. */
+ int xa2_get_buffer_size(void);
+ 
++/* Sample frames queued ahead of the speakers, or -1 (inactive / not consuming). */
++int xa2_queued_samples(void);
++/* The queue fill the APU paces itself to (RECOMP_AUDIO_TARGET_MS), in frames. */
++int xa2_target_samples(void);
++/* RECOMP_AUDIO_LEGACY=1: the pre-2026-10-22 output (1024-sample buffers, wall-clock pacing). */
++int xa2_legacy(void);
++
++/* Audio report (AUDIO-REPORT-HOTKEY-20261022): one diagnostics record per second. */
++#include <stddef.h>
++#define XA2_DIAG_VOICES 16
++typedef struct {
++    uint32_t tick;              /* GetTickCount at the end of the second */
++    uint64_t frames_out;        /* report-ring position (output frames) then */
++    float fps, worst_ms;        /* game frames presented that second, longest frame */
++    uint32_t vpframes;          /* APU voice-processor frames (1500 nominal) */
++    int qmin, qmax;             /* speaker queue at submissions, frames */
++    uint32_t underruns, drops;
++    uint32_t silent_vp;         /* VP frames emitted silent after a 40 ms ISR wait */
++    uint32_t stalls;            /* waits for the title's ISR, count and ms */
++    float stall_ms;
++    uint32_t lockwaits;         /* VP waits on DirectSound voice locks */
++    float lockwait_ms;
++    uint16_t active, nchg;      /* voices playing; voices whose rate changed */
++    struct { uint16_t v; float rmin, rmax, gain; } chg[XA2_DIAG_VOICES];  /* rate in Hz */
++} XA2DiagSec;
++uint64_t xa2_report_frames(void);
++void xa2_diag_take(int *qmin, int *qmax, unsigned *under, unsigned *drops);
++void xa2_diag_push(const XA2DiagSec *rec);
++int xbox_AudioReportSave(char *name_out, size_t n);
++
+ #endif /* APU_XAUDIO2_H */
+--- a/src/kernel/nv2a_gpu_perf.inc.c
++++ b/src/kernel/nv2a_gpu_perf.inc.c
+@@ -178,6 +178,11 @@
+     draws = s_gpu11.draws; texup = s_gpu11.tex_uploads; surfs = s_gpu11.surf_creates; ps = s_ps_ready;
+ }
+ 
++/* Frames presented and the longest frame (us) since the APU's audio report
++ * last took it (apu_vp.c diag_report, once a second). */
++volatile LONG g_xbox_perf_frames;
++volatile LONG g_xbox_perf_worst_us;
++
+ /* Called once per present, after the swap chain's Present returned. */
+ static void perf_on_present(int scale, float present_ms)
+ {
+@@ -193,6 +198,26 @@
+     QueryPerformanceCounter(&now);
+     ms = (float)((double)(now.QuadPart - s_perf.last.QuadPart) * 1000.0 / (double)s_perf.freq.QuadPart);
+     s_perf.last = now;
++    {
++        /* RECOMP_TEST_SLOW_FRAMES=<every s>:<for s>:<ms>: a test knob that makes
++         * frame-rate dips on purpose (every N s, for M s, each frame takes K ms
++         * longer), to see what the game and its audio do in a slowdown. */
++        static int every = -1, len, add;
++        if (every < 0) {
++            const char *e = getenv("RECOMP_TEST_SLOW_FRAMES");
++            every = 0;
++            if (e && sscanf(e, "%d:%d:%d", &every, &len, &add) != 3) every = 0;
++        }
++        if (every > 0 && add > 0 &&
++            (GetTickCount() / 1000u) % (unsigned)every >= (unsigned)(every - len)) {
++            /* as a slow GPU would: the guest CPU is not held meanwhile */
++            int depth = xbox_ggl_release_all();
++            Sleep((DWORD)add);
++            xbox_ggl_reacquire(depth);
++        }
++    }
++    InterlockedIncrement(&g_xbox_perf_frames);
++    if ((LONG)(ms * 1000.0f) > g_xbox_perf_worst_us) InterlockedExchange(&g_xbox_perf_worst_us, (LONG)(ms * 1000.0f));
+     s_perf.ft[s_perf.head] = ms;
+     s_perf.head = (s_perf.head + 1) % PERF_RING;
+     s_perf.n++;
+--- a/src/kernel/nv2a_gpu_present.inc.c
++++ b/src/kernel/nv2a_gpu_present.inc.c
+@@ -910,6 +910,11 @@
+         }
+         return;
+     }
++    if (vk == VK_F9) {                                              /* save what I just heard */
++        extern void xbox_AudioReportRequest(void);
++        xbox_AudioReportRequest();
++        return;
++    }
+     if (vk == VK_RETURN && (GetKeyState(VK_MENU) & 0x8000)) {       /* Alt+Enter */
+         s_vs.mode = s_vs.mode == VM_WINDOWED ? VM_BORDERLESS : VM_WINDOWED;
+         InterlockedExchange(&s_vs_dirty, 1);
+--- a/src/kernel/xbox_ggl.c
++++ b/src/kernel/xbox_ggl.c
+@@ -234,8 +234,35 @@
+         g_wait[me].tid = tid; g_wait[me].prio = t_prio; g_wait[me].seq = seq;
+         ggl_update_best();
+         InterlockedIncrement(&g_waiters);
+-        while (g_owner != 0 || !ggl_is_next(seq, t_prio))
+-            SleepConditionVariableSRW(&g_turn, &g_lock, INFINITE, 0);
++        {
++            /* RECOMP_GGL_ISR_SAMPLE=1: when the interrupt thread (top
++             * priority) has waited 30 ms, name where the owner is running --
++             * the guest code that keeps an ISR (the APU's, so the audio)
++             * waiting (AUDIO-REPORT-HOTKEY-20261022). */
++            static int sample = -1;
++            static volatile LONG reports;
++            int sampled = 0;
++            if (sample < 0) sample = getenv("RECOMP_GGL_ISR_SAMPLE") != NULL;
++            while (g_owner != 0 || !ggl_is_next(seq, t_prio)) {
++                if (sample && t_prio >= 100 && !sampled) {
++                    if (!SleepConditionVariableSRW(&g_turn, &g_lock, 30, 0) &&
++                        (qpc_now() - asked) * 1000 / g_qpc_freq >= 30 && g_owner) {
++                        DWORD o = g_owner;
++                        unsigned site = g_owner_last_site;
++                        sampled = 1;
++                        if (InterlockedIncrement(&reports) <= 300) {
++                            ReleaseSRWLockExclusive(&g_lock);
++                            fprintf(stderr, "  [GGL] ISR thread waiting 30 ms for thread %lu (last kernel call returned to 0x%08X):\n",
++                                    (unsigned long)o, site);
++                            ggl_report_owner_pc(o);
++                            AcquireSRWLockExclusive(&g_lock);
++                        }
++                    }
++                    continue;
++                }
++                SleepConditionVariableSRW(&g_turn, &g_lock, INFINITE, 0);
++            }
++        }
+         InterlockedDecrement(&g_waiters);
+         for (int i = 0; i < g_nwait; i++)
+             if (g_wait[i].tid == tid) { g_wait[i] = g_wait[--g_nwait]; break; }

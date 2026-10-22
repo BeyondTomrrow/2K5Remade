@@ -14,19 +14,22 @@
 #   audio_test.ps1 -Do shot  -Tag b1 -Name x                           newest frame -> logs\audio\<tag>-<name>.png
 #   audio_test.ps1 -Do stop  -Tag b1
 #   audio_test.ps1 -Do clean                                           remove the sandbox's junctions
+# -ExeName / -Sbx / -OutDir: another exe-copy name, sandbox root and output folder, so a second agent's runs
+# never share the first one's (AUDIO-REPORT-HOTKEY-20261022 used NFL2K5_audio2, E:\eras-sbxudio2-root, logsudio2).
 param([ValidateSet('launch','quickgame','play','press','shot','stop','clean')][string]$Do = 'launch', [string]$Tag = 'a1', [int]$Seconds = 420,
       [switch]$SoftDrink, [string]$SoftDrinkPack = 'SOFTDRINK_2K28_v0.6.1-v0.6.1',
       [string[]]$Steps = @(), [string]$Name = 'now', [string[]]$SetEnv = @(), [int]$WavSeconds = 1200,
-      [string]$SourceExe = '')
+      [string]$SourceExe = '', [string]$ExeName = 'NFL2K5_audio', [string]$Sbx = 'E:\eras-sbx\audio-root',
+      [string]$OutDir = '')
 $root = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
-$sbx = "E:\eras-sbx\audio-root"
-$out = "$root\logs\audio"
+$sbx = $Sbx
+$out = if ($OutDir) { $OutDir } else { "$root\logs\audio" }
 $frames = "$out\$Tag-frames"
 $log = "$out\$Tag.stderr.log"
 $press = "$out\$Tag-press.txt"
 $pidFile = "$out\$Tag.pid"
 $home_ = "$out\$Tag-home"
-$exe = "$root\build\Release\NFL2K5_audio.exe"
+$exe = "$root\build\Release\$ExeName.exe"
 New-Item -ItemType Directory -Force $out | Out-Null
 
 function J([string]$link, [string]$target) {
@@ -49,7 +52,7 @@ function Keep([string]$n) {
 function Mine {
     if (-not (Test-Path $pidFile)) { return $null }
     $p = Get-Process -Id ([int](Get-Content $pidFile)) -ErrorAction SilentlyContinue
-    if ($p -and $p.ProcessName -eq 'NFL2K5_audio') { return $p }
+    if ($p -and $p.ProcessName -eq $ExeName) { return $p }
     return $null
 }
 function Press([string[]]$list) {
@@ -124,6 +127,8 @@ switch ($Do) {
     if (-not $SoftDrink) { $sp.ArgumentList = @('--retail') }
     $p = Start-Process @sp
     Set-Content -Path $pidFile -Value $p.Id -Encoding ascii
+    # -SetEnv is for this launch only: a second launch from the same session must not inherit it
+    foreach ($kv in $SetEnv) { $k = ($kv -split '=', 2)[0]; Remove-Item "Env:$k" -ErrorAction SilentlyContinue }
     "launched pid $($p.Id) ($exe), softdrink $SoftDrink, log $log, wav $out\$Tag.wav"
 }
 'quickgame' {

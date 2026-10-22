@@ -1500,7 +1500,8 @@ extern "C" void nfl2k5_presentation_voice_duck(float gain)
 static void capture_mix(int16_t *buf, int frames)
 {
     {
-        std::lock_guard<std::mutex> gv(s_voice.lock);
+        std::unique_lock<std::mutex> gv(s_voice.lock, std::try_to_lock);
+        if (gv.owns_lock())
         for (auto &c : s_voice.ch) {
             if (c.pcm.empty() || c.state == 1) continue;
             float v = c.vol;
@@ -1512,8 +1513,8 @@ static void capture_mix(int16_t *buf, int frames)
             if (c.cap_pos >= c.pcm.size() && !c.voice) { c.pcm.clear(); c.cap_pos = 0; }
         }
     }
-    std::lock_guard<std::mutex> g(s_music.lock);
-    if (!s_music.voice || s_music.state < 2) return;
+    std::unique_lock<std::mutex> g(s_music.lock, std::try_to_lock);
+    if (!g.owns_lock() || !s_music.voice || s_music.state < 2) return;
     float v = s_music.cur_vol;
     for (int i = 0; i < frames * 2 && s_music.cap_pos < s_music.pcm.size(); i++, s_music.cap_pos++) {
         int x = buf[i] + (int)(s_music.pcm[s_music.cap_pos] * v);
@@ -1548,6 +1549,10 @@ static void video_thread(std::string path, int gen)
     attr->SetUINT32(k_mf_advanced_video, TRUE);
     if (SUCCEEDED(MFCreateSourceReaderFromURL(widen(path).c_str(), attr, &rd))) {
         IMFMediaType *mt = nullptr, *cur = nullptr;
+/* Runs on the audio thread for every 5.3 ms block (the audio report ring
+ * records it always, AUDIO-REPORT-HOTKEY-20261022), so it never waits: a
+ * lock held elsewhere (a voice being created or destroyed) skips the mix for
+ * that block instead of stalling the speakers. */
         rd->SetStreamSelection((DWORD)MF_SOURCE_READER_ALL_STREAMS, FALSE);
         rd->SetStreamSelection((DWORD)MF_SOURCE_READER_FIRST_VIDEO_STREAM, TRUE);
         MFCreateMediaType(&mt);

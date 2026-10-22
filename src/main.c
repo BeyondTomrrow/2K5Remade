@@ -13,6 +13,7 @@
 #include "recomp_icall_feedback.h"
 #include "nfl2k5_presentation.h"
 #include <stdbool.h>
+#include <math.h>
 extern MCPXAPUState *g_apu_state;
 extern bool apu_hook_handle_mmio(PCONTEXT, uintptr_t, uint32_t, int);
 
@@ -57,6 +58,18 @@ static const char *nfl2k5_project_root(void)
     }
     strncpy_s(root, sizeof root, NFL2K5_PROJECT_ROOT, _TRUNCATE);
     return root;
+}
+
+/* NFL2K5_CROWD_PROBE=1 (AUDIO-REPORT-HOTKEY-20261022): each pitch change of the
+ * crowd-reaction stream (voice 0x44) with the wall clock, to compare the swell
+ * against time with xemu (tools/audio/crowd_clock.py). */
+static void crowd_probe(unsigned voice, int was, int now)
+{
+    LARGE_INTEGER f, c;
+    if (voice != 0x44) return;
+    QueryPerformanceFrequency(&f); QueryPerformanceCounter(&c);
+    fprintf(stderr, "[CROWD] qpc=%.1f p=%d->%d hz=%.0f\n", (double)c.QuadPart * 1000.0 / (double)f.QuadPart,
+            was, now, 48000.0 * exp2(now / 4096.0));
 }
 
 static LONG CALLBACK audio_mmio(EXCEPTION_POINTERS *ep)
@@ -3332,6 +3345,10 @@ int main(int argc, char **argv)
     }
     if (memcmp((void *)((uintptr_t)xbox_GetMemoryOffset() + 0x740000),
                data + 0x4D9000 + 0x740000 - 0x4E3AE0, 4096)) {
+        if (getenv("NFL2K5_CROWD_PROBE")) {       /* crowd-reaction pitch vs the game's sequencer clock */
+            extern void (*g_apu_pitch_hook)(unsigned voice, int was, int now);
+            g_apu_pitch_hook = crowd_probe;
+        }
         fprintf(stderr, "[BOOT] Kernel data exports corrupted game data.\n");
         return 3;
     }
