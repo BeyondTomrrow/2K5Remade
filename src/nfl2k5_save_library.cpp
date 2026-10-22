@@ -807,3 +807,24 @@ const XboxMenuPage kSystemPage = { "SYSTEM", sys_count, sys_label, sys_change, s
 
 extern "C" void xbox_MenuAddPage(const void *p);
 extern "C" void nfl2k5_save_library_menu_init(void) { xbox_MenuAddPage(&kSystemPage); }
+
+/* Gen patch SAVESCAN_SKIP_BAD: the save list's fill pass could not open a
+ * save; it is left out of the list instead of ending the list there. */
+extern "C" void nfl2k5_savescan_skipped(uint32_t total)
+{
+    fprintf(stderr, "[SAVE-LIST] a save could not be read; left out of the list (%u found)\n", total);
+}
+
+/* Gen patch SAVE_SPACE_LOG (docs/SAVES-UNLIMITED-20261021.md): the boot check
+ * behind "Your Xbox doesn't have enough free blocks" -- the disk's free
+ * blocks against what every save type needs together. Logged on change. */
+extern "C" void nfl2k5_save_space_log(uint32_t free_blocks, uint32_t need_blocks)
+{
+    static uint32_t last_free = 0xFFFFFFFFu, last_need = 0xFFFFFFFFu;
+    if (free_blocks == last_free && need_blocks == last_need) return;
+    last_free = free_blocks;
+    last_need = need_blocks;
+    fprintf(stderr, "[SAVE-SPACE] %d free blocks, all save types need %d: %s\n",
+            (int)free_blocks, (int)need_blocks,
+            (int)free_blocks >= (int)need_blocks ? "ok" : "NOT ENOUGH (the game warns)");
+}

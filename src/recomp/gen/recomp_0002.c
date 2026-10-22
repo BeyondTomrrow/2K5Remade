@@ -8900,6 +8900,20 @@ loc_0004CA4C: ;
 loc_0004CA6A: ;
     _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;
     _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test eax, eax (32-bit) */
+    /* NFL2K5-GENPATCH:SAVESCAN_SKIP_BAD */
+    if (eax == 0) {
+        { extern void nfl2k5_savescan_skipped(uint32_t); nfl2k5_savescan_skipped(MEM32(esp + 0x10)); }
+        MEM32(esp + 0x10) = MEM32(esp + 0x10) - 1;
+        ecx = MEM32(esp + 0xC);
+        eax = esp + 0x90;
+        PUSH32(esp, eax);
+        PUSH32(esp, ecx);
+        g_ebp = ebp;
+        g_seh_ebp = ebp;
+        PUSH32(esp, 0x0004CB72u); RECOMP_ABI_CALL(0x00379536u, sub_00379536); /* XFindNextSaveGame */
+        if (eax != 0) goto loc_0004CA35;
+        goto loc_0004CB7A;
+    }
     if (TEST_Z(_fa, _fb)) goto loc_0004CB7E; /* je: equal / zero */
 
 loc_0004CA72: ;

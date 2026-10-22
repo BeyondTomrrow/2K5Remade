@@ -278,22 +278,55 @@ PATCHES = [
         }
     }
 """),
-    # NFL 2K5's front-end save list owns 15 fixed 48-byte rows.  SD2K28 can
-    # expose more UDATA containers through the PC save library, but returning
-    # the larger count makes the stock loop walk beyond those rows and treat
-    # unrelated floats as UTF-16 pointers.  Keep the on-screen list within
-    # its actual storage; the categorized PC library still retains every save.
-    ("SAVE_ENUM_CAP_15", "sub_0003A950", "eax = MEM32(ecx + 0x19C);", "after", """\
-    if (ecx == 0x00A7DF38u && eax > 15u) {
+    # Save list capacity (docs/SAVES-UNLIMITED-20261021.md). The Load/Save
+    # screens copy each save of the hard disk into a static table of 256
+    # 24-byte rows (0xBDC1C8..0xBDD9C8) plus a name buffer, and the stock
+    # code treats 256 saves as "Save Game Limit Reached" (sub_0016B610) and
+    # zeroes the disk's free space (sub_0004C8E0) -- which reads as "not
+    # enough free blocks". 255 rows keeps every one of those inert while
+    # listing as many saves as the table holds. (It was 15 while the fill
+    # pass stopped at the first save it could not open; the save library's
+    # repair pass and SAVESCAN_SKIP_BAD below removed that.)
+    ("SAVE_ENUM_CAP_255", "sub_0003A950", "eax = MEM32(ecx + 0x19C);", "after", """\
+    if (ecx == 0x00A7DF38u && eax > 255u) {
         static int nfl2k5_save_cap_logged;
         if (!nfl2k5_save_cap_logged++) {
             extern int __cdecl fprintf(void *, const char *, ...);
             extern void *__cdecl __acrt_iob_func(unsigned);
             fprintf(__acrt_iob_func(2),
-                    "  [SAVE-LIST] capped %u records to the menu's 15-row capacity\\n", eax);
+                    "  [SAVE-LIST] %u saves: the Load/Save list holds 255 (the game's 256-row table)\\n", eax);
         }
-        eax = 15u;
+        eax = 255u;
     }
+"""),
+    # The save list's fill pass opens every save by name and stopped at the
+    # first one that failed, leaving the count at the directory total and
+    # every later row unfilled (garbage on the Load screen). Skip that save
+    # instead: one fewer row, the next save fills this one.
+    ("SAVESCAN_SKIP_BAD", "sub_0004C8E0", "if (TEST_Z(_fa, _fb)) goto loc_0004CB7E; /* je: equal / zero */", "before", """\
+    if (eax == 0) {
+        { extern void nfl2k5_savescan_skipped(uint32_t); nfl2k5_savescan_skipped(MEM32(esp + 0x10)); }
+        MEM32(esp + 0x10) = MEM32(esp + 0x10) - 1;
+        ecx = MEM32(esp + 0xC);
+        eax = esp + 0x90;
+        PUSH32(esp, eax);
+        PUSH32(esp, ecx);
+        g_ebp = ebp;
+        g_seh_ebp = ebp;
+        PUSH32(esp, 0x0004CB72u); RECOMP_ABI_CALL(0x00379536u, sub_00379536); /* XFindNextSaveGame */
+        if (eax != 0) goto loc_0004CA35;
+        goto loc_0004CB7A;
+    }
+"""),
+    # The save list's name buffer: 8 KB is 256 names of 15 characters. 32 KB
+    # holds 255 names of 63 characters without running past it.
+    ("SAVE_NAMES_32K", "sub_0016B060", "edx = 0x2000;", "after", """\
+    edx = 0x8000;
+"""),
+    # Free blocks vs. what all of the game's save types need together (the
+    # "Your Xbox doesn't have enough free blocks" check at boot): logged.
+    ("SAVE_SPACE_LOG", "sub_0016B610", "loc_0016B679: ;", "after", """\
+    { extern void nfl2k5_save_space_log(uint32_t, uint32_t); nfl2k5_save_space_log(edi, eax); }
 """),
     # Texture bound with address 0 (2026-09-25, black field / bodies): log
     # the D3D texture object sub_00031FA0 is writing (esi) and the caller.
@@ -735,6 +768,18 @@ def find_function(files, func):
 # Patches replaced by others: (id, function, code). Their block (marker line and
 # exactly this code) is taken out again, so a renamed patch never runs twice.
 RETIRED = [
+    ("SAVE_ENUM_CAP_15", "sub_0003A950", """\
+    if (ecx == 0x00A7DF38u && eax > 15u) {
+        static int nfl2k5_save_cap_logged;
+        if (!nfl2k5_save_cap_logged++) {
+            extern int __cdecl fprintf(void *, const char *, ...);
+            extern void *__cdecl __acrt_iob_func(unsigned);
+            fprintf(__acrt_iob_func(2),
+                    "  [SAVE-LIST] capped %u records to the menu's 15-row capacity\\n", eax);
+        }
+        eax = 15u;
+    }
+"""),
     ("ERAS_GAME_FINAL", "sub_000A2910", "    { extern void nfl2k5_eras_game_final(uint32_t, uint32_t); nfl2k5_eras_game_final(ecx, edx); }\n"),
     ("ERAS_MATCH_EXIT", "sub_000645D0", "    { extern void nfl2k5_eras_match_exit(void); nfl2k5_eras_match_exit(); }\n"),
     ("ERAS_RETURN", "sub_0034C1F0", "    { extern uint32_t nfl2k5_eras_return_desc(uint32_t); edx = nfl2k5_eras_return_desc(edx); }\n"),

@@ -36387,6 +36387,8 @@ loc_0016B084: ;
 
 loc_0016B089: ;
     edx = 0x2000;
+    /* NFL2K5-GENPATCH:SAVE_NAMES_32K */
+    edx = 0x8000;
     ecx = eax;
     PUSH32(esp, 0x0016B095u); RECOMP_ABI_CALL(0x00048700u, sub_00048700); /* call 0x00048700 */
 
@@ -38673,6 +38675,8 @@ loc_0016B674: ;
     PUSH32(esp, 0x0016B679u); RECOMP_ABI_CALL(0x0016B490u, sub_0016B490); /* call 0x0016B490 */
 
 loc_0016B679: ;
+    /* NFL2K5-GENPATCH:SAVE_SPACE_LOG */
+    { extern void nfl2k5_save_space_log(uint32_t, uint32_t); nfl2k5_save_space_log(edi, eax); }
     _fa = (uint32_t)(edi) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;
     _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp edi, eax (32-bit) */
     if (CMP_GE(_fas, _fbs)) goto loc_0016B692; /* jge: greater or equal (signed >=) */
