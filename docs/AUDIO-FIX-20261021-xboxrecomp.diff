@@ -1,0 +1,247 @@
+diff --git a/src/apu/apu_core.c b/src/apu/apu_core.c
+index c157dea..962ff6a 100644
+--- a/src/apu/apu_core.c
++++ b/src/apu/apu_core.c
+@@ -301,2 +301,21 @@ extern volatile float g_apu_voice_gain;
+-void xbox_AudioSetCommentaryGain(float gain) { g_apu_voice_gain = gain < 0.0f ? 0.0f : gain > 1.0f ? 1.0f : gain; }
+-void xbox_AudioMuteGameMusic(int mute) { g_apu_mute_music = mute; }
++/* Every change of the host-side mix controls is logged (they are rare: a
++ * theme start/stop, a fade in steps): a control left set is how the crowd
++ * and effects went missing before (AUDIO-FIX-20261021). */
++static void mix_log(const char *what, float was, float now)
++{
++    float dd = now - was;
++    if (dd < 0) dd = -dd;
++    if (dd >= 0.1f || ((now == 0.0f || now == 1.0f) && was != now))
++        fprintf(stderr, "[MIXCTL] t=%lu %s %.2f -> %.2f\n", GetTickCount(), what, was, now);
++}
++void xbox_AudioSetCommentaryGain(float gain)
++{
++    float g = gain < 0.0f ? 0.0f : gain > 1.0f ? 1.0f : gain;
++    mix_log("commentary_gain", g_apu_voice_gain, g);
++    g_apu_voice_gain = g;
++}
++void xbox_AudioMuteGameMusic(int mute)
++{
++    mix_log("mute_game_music", (float)g_apu_mute_music, (float)(mute != 0));
++    g_apu_mute_music = mute;
++}
+@@ -306 +325,3 @@ void xbox_AudioSetGameGain(float gain)
+-    g_apu_bed_gain = gain < 0.0f ? 0.0f : gain > 1.0f ? 1.0f : gain;
++    float g = gain < 0.0f ? 0.0f : gain > 1.0f ? 1.0f : gain;
++    mix_log("bed_gain", g_apu_bed_gain, g);
++    g_apu_bed_gain = g;
+@@ -496,0 +518,3 @@ static void se_frame(MCPXAPUState *d)
++int64_t g_apu_stall_us;          /* time the pipeline waited for the title's ISR (RECOMP_APU_PITCH_LOG) */
++unsigned g_apu_stall_n;
++
+@@ -544,0 +569,2 @@ static void *mcpx_apu_frame_thread(void *arg)
++                g_apu_stall_us += dur;
++                g_apu_stall_n++;
+diff --git a/src/apu/apu_vp.c b/src/apu/apu_vp.c
+index 4982e7b..960a699 100644
+--- a/src/apu/apu_vp.c
++++ b/src/apu/apu_vp.c
+@@ -82,0 +83,14 @@ static void set_notify_status(MCPXAPUState *d, uint32_t v, int notifier,
++typedef struct {
++    float rmin, rmax, efmin, efmax;
++    int pmin, pmax, ps;
++    unsigned frames, sets;
++    uint8_t c_bin;            /* routed to the centre (commentary) bin */
++    float gmax, gsum;         /* loudest bin gain (volume x envelope), max and sum over frames */
++} PitchStat;
++static PitchStat s_pstat[MCPX_HW_MAX_VOICES];
++static int pitch_log_on(void)
++{
++    static int on = -1;
++    if (on < 0) on = getenv("RECOMP_APU_PITCH_LOG") != NULL;
++    return on;
++}
+@@ -310,0 +329,8 @@ static void fe_method(MCPXAPUState *d, uint32_t method, uint32_t argument)
++        if (getenv("RECOMP_APU_PITCH_STACK") && selected_handle < 0x100) {
++            /* the start of each sound, to tell a new sound from a pitch change (RECOMP_APU_PITCH_STACK) */
++            LARGE_INTEGER qf, qc;
++            QueryPerformanceFrequency(&qf); QueryPerformanceCounter(&qc);
++            fprintf(stderr, "[PITCHON] qpc=%.1f %03X pitch %d\n", (double)qc.QuadPart * 1000.0 / (double)qf.QuadPart,
++                    (unsigned)selected_handle,
++                    (int16_t)voice_get_mask(d, (uint16_t)selected_handle, NV_PAVS_VOICE_TAR_PITCH_LINK, NV_PAVS_VOICE_TAR_PITCH_LINK_PITCH));
++        }
+@@ -467,0 +494,29 @@ static void fe_method(MCPXAPUState *d, uint32_t method, uint32_t argument)
++        if (pitch_log_on()) s_pstat[(uint16_t)d->regs[NV_PAPU_FECV] & 0xFF].sets++;
++        if (getenv("RECOMP_APU_PITCH_STACK")) {
++            /* Who changes a voice's pitch: the voice, old -> new, and the
++             * guest return addresses on the writing thread's stack (as
++             * RECOMP_APU_PAUSE_STACK). =3d: the 3D voices (0-0x3F) only.
++             * At most 6000 lines. */
++            static int shown, only3d = -1;
++            uint16_t cv = (uint16_t)d->regs[NV_PAPU_FECV];
++            int16_t was = (int16_t)voice_get_mask(d, cv, NV_PAVS_VOICE_TAR_PITCH_LINK, NV_PAVS_VOICE_TAR_PITCH_LINK_PITCH);
++            int16_t now = (int16_t)((argument & NV1BA0_PIO_SET_VOICE_TAR_PITCH_STEP) >> 16);
++            if (only3d < 0) only3d = !strcmp(getenv("RECOMP_APU_PITCH_STACK"), "3d");
++            if (was != now && shown < 6000 && (!only3d || cv < MCPX_HW_MAX_3D_VOICES)) {
++                extern __declspec(thread) uint32_t g_esp;
++                extern ptrdiff_t xbox_GetMemoryOffset(void);
++                const uint8_t *gm = (const uint8_t *)xbox_GetMemoryOffset();
++                int k2 = 0;
++                shown++;
++                LARGE_INTEGER qf, qc;
++                QueryPerformanceFrequency(&qf); QueryPerformanceCounter(&qc);
++                fprintf(stderr, "[PITCHSET] qpc=%.1f %03X %d -> %d cbo %06X stack:",
++                        (double)qc.QuadPart * 1000.0 / (double)qf.QuadPart, cv, was, now,
++                        voice_get_mask(d, cv, NV_PAVS_VOICE_PAR_OFFSET, NV_PAVS_VOICE_PAR_OFFSET_CBO));
++                for (uint32_t k = 0; k < 96 && k2 < 12; k++) {
++                    uint32_t w = *(const uint32_t *)(gm + g_esp + k * 4);
++                    if (w >= 0x00011000u && w < 0x00480000u) { fprintf(stderr, " %08X", w); k2++; }
++                }
++                fprintf(stderr, "\n");
++            }
++        }
+@@ -1276,0 +1334,67 @@ static int voice_resample(MCPXAPUState *d, uint16_t v, float samples[][2],
++/* RECOMP_APU_PITCH_LOG=1: once a second, every voice that played -- its
++ * pitch register range, envelope pitch scale and filter-envelope range, the
++ * resulting rate range, and how many pitch writes the title made -- plus the
++ * pipeline's frame count and the speaker queue (AUDIO-FIX-20261021). */
++static void pitch_stat_note(uint16_t v, int p, int ps, float ef, float rate)
++{
++    PitchStat *s = &s_pstat[v];
++    if (!s->frames) {
++        s->rmin = s->rmax = rate; s->pmin = s->pmax = p; s->efmin = s->efmax = ef;
++    } else {
++        if (rate < s->rmin) s->rmin = rate;
++        if (rate > s->rmax) s->rmax = rate;
++        if (p < s->pmin) s->pmin = p;
++        if (p > s->pmax) s->pmax = p;
++        if (ef < s->efmin) s->efmin = ef;
++        if (ef > s->efmax) s->efmax = ef;
++    }
++    s->ps = ps;
++    s->frames++;
++}
++static void pitch_stat_report(MCPXAPUState *d)
++{
++    static DWORD last;
++    static unsigned long frames_at;
++    extern unsigned long g_apu_vp_frames;
++    DWORD now = GetTickCount();
++    if (!pitch_log_on()) return;
++    if (!last) { last = now; frames_at = g_apu_vp_frames; return; }
++    if (now - last < 1000) return;
++    {
++        extern volatile float g_apu_bed_gain, g_apu_voice_gain;
++        extern volatile int g_apu_mute_music;
++        extern uint32_t xa2_wav_frames(void);
++        extern int64_t g_apu_lock_wait_us;
++        extern unsigned g_apu_lock_wait_n;
++        extern int64_t g_apu_stall_us;
++        extern unsigned g_apu_stall_n;
++        extern void xa2_take_stats(int *qmin, int *qmax, unsigned *drops, unsigned *under, unsigned *subs);
++        int qmin = 0, qmax = 0;
++        unsigned drops = 0, under = 0, subs = 0;
++        xa2_take_stats(&qmin, &qmax, &drops, &under, &subs);
++        LARGE_INTEGER qf, qc;
++        QueryPerformanceFrequency(&qf); QueryPerformanceCounter(&qc);
++        fprintf(stderr, "[PITCH] qpc=%.0f t=%lu ms=%lu vpframes=%lu queue=%d..%d submits=%u dropped=%u underruns=%u bed=%.2f comm=%.2f mute_music=%d wav=%u lockwaits=%u lockwait_ms=%.1f stalls=%u stall_ms=%.1f\n",
++                (double)qc.QuadPart * 1000.0 / (double)qf.QuadPart,
++                (unsigned long)now, (unsigned long)(now - last), g_apu_vp_frames - frames_at,
++                qmin, qmax, subs, drops, under, g_apu_bed_gain, g_apu_voice_gain, g_apu_mute_music, xa2_wav_frames(),
++                g_apu_lock_wait_n, g_apu_lock_wait_us / 1000.0, g_apu_stall_n, g_apu_stall_us / 1000.0);
++        g_apu_stall_n = 0;
++        g_apu_stall_us = 0;
++        g_apu_lock_wait_n = 0;
++        g_apu_lock_wait_us = 0;
++    }
++    for (int v = 0; v < MCPX_HW_MAX_VOICES; v++) {
++        PitchStat *s = &s_pstat[v];
++        if (!s->frames && !s->sets) continue;
++        if (s->frames)
++            fprintf(stderr, "[PITCH]   %03X n=%u p=%d..%d ps=%d ef=%.3f..%.3f rate=%.4f..%.4f sets=%u gain=%.3f..%.3f%s\n",
++                    v, s->frames, s->pmin, s->pmax, s->ps, s->efmin, s->efmax, s->rmin, s->rmax, s->sets,
++                    s->frames ? s->gsum / s->frames : 0.0f, s->gmax, s->c_bin ? " C" : "");
++        memset(s, 0, sizeof *s);
++    }
++    (void)d;
++    last = now;
++    frames_at = g_apu_vp_frames;
++}
++
+@@ -1314,0 +1439 @@ static void voice_process(MCPXAPUState *d,
++    if (pitch_log_on()) pitch_stat_note(v, p, ps, ef_value, rate);
+@@ -1488,0 +1617,3 @@ static void voice_process(MCPXAPUState *d,
++    if (pitch_log_on())
++        for (int i = 0; i < 8; i++)
++            if (bin[i] == 2 && attenuate(vol[i]) > 0.001f) s_pstat[v].c_bin = 1;
+@@ -1535,0 +1667,10 @@ static void voice_process(MCPXAPUState *d,
++    /* RECOMP_APU_PITCH_LOG: the gain this voice is heard at (after the mutes above). */
++    if (pitch_log_on()) {
++        float g = 0.0f;
++        for (int i = 0; i < 8; i++)
++            if (attenuate(vol[i]) > g) g = attenuate(vol[i]);
++        g *= ea_value;
++        if (g > s_pstat[v].gmax) s_pstat[v].gmax = g;
++        s_pstat[v].gsum += g;
++    }
++
+@@ -1649,0 +1808,2 @@ unsigned long g_apu_vp_frames;   /* VP frames run (RECOMP_APU_VOICE_LOG) */
++int64_t g_apu_lock_wait_us;       /* time the VP waited on DirectSound voice locks (RECOMP_APU_PITCH_LOG) */
++unsigned g_apu_lock_wait_n;
+@@ -1722 +1882,2 @@ void mcpx_apu_vp_frame(MCPXAPUState *d,
+-                    int64_t until = qemu_clock_get_us(QEMU_CLOCK_REALTIME) + 3000;
++                    int64_t t0 = qemu_clock_get_us(QEMU_CLOCK_REALTIME);
++                    int64_t until = t0 + 3000;
+@@ -1727,0 +1889,2 @@ void mcpx_apu_vp_frame(MCPXAPUState *d,
++                    g_apu_lock_wait_us += qemu_clock_get_us(QEMU_CLOCK_REALTIME) - t0;
++                    g_apu_lock_wait_n++;
+@@ -1742,0 +1906,2 @@ void mcpx_apu_vp_frame(MCPXAPUState *d,
++    pitch_stat_report(d);
++
+diff --git a/src/apu/apu_xaudio2.c b/src/apu/apu_xaudio2.c
+index ccefafa..c7dae4d 100644
+--- a/src/apu/apu_xaudio2.c
++++ b/src/apu/apu_xaudio2.c
+@@ -152,0 +159,32 @@ void xbox_AudioRecordTap(const char *path)
++/* The capture mix (theme, front-end voice) added to one submission, ONCE: the WAV recording and
++ * the video-clip tap both write the same mixed buffer (two calls used to consume the mixers'
++ * positions twice, so each recording got every other chunk), any size. */
++static int16_t *g_mixed;                     /* this submission's capture mix, made once */
++static int g_mixed_cap;
++static const int16_t *g_mixed_now;
++static const int16_t *capture_mixed(const int16_t *samples, int num_samples)
++{
++    if (!g_capture_mix) return samples;
++    if (g_mixed_now) return g_mixed_now;
++    if (num_samples > g_mixed_cap) { free(g_mixed); g_mixed_cap = num_samples; g_mixed = (int16_t *)malloc((size_t)g_mixed_cap * 4u); }
++    if (!g_mixed) { g_mixed_cap = 0; return samples; }
++    memcpy(g_mixed, samples, (size_t)num_samples * 4u);
++    g_capture_mix(g_mixed, num_samples);
++    g_mixed_now = g_mixed;
++    return g_mixed_now;
++}
++
++/* Bytes in the RECOMP_AUDIO_WAV recording so far: the [PITCH] log lines carry the
++ * recording position, so log and capture line up exactly. */
++static uint32_t wav_bytes;
++uint32_t xa2_wav_frames(void) { return wav_bytes / 4u; }
++
++/* Speaker-queue statistics since the last call (RECOMP_APU_PITCH_LOG). */
++static int g_st_qmin, g_st_qmax;
++static unsigned g_st_drops, g_st_under, g_st_subs;
++void xa2_take_stats(int *qmin, int *qmax, unsigned *drops, unsigned *under, unsigned *subs)
++{
++    *qmin = g_st_qmin; *qmax = g_st_qmax; *drops = g_st_drops; *under = g_st_under; *subs = g_st_subs;
++    g_st_qmin = g_st_qmax = 0; g_st_drops = g_st_under = g_st_subs = 0;
++}
++
+@@ -167 +205,0 @@ int xa2_submit_samples(const int16_t *samples, int num_samples)
+-        static uint32_t wav_bytes;
+@@ -245,0 +277,8 @@ int xa2_submit_samples(const int16_t *samples, int num_samples)
++    {
++        int q = (int)state.BuffersQueued;
++        if (!g_st_subs || q < g_st_qmin) g_st_qmin = q;
++        if (!g_st_subs || q > g_st_qmax) g_st_qmax = q;
++        g_st_subs++;
++        if (q >= XA2_NUM_BUFS) g_st_drops++;
++        else if (q == 0) g_st_under++;
++    }
+@@ -304,0 +338,2 @@ int  xa2_get_buffer_size(void)                        { return 0; }
++void xa2_take_stats(int *a, int *b, unsigned *c, unsigned *d, unsigned *e) { *a = *b = 0; *c = *d = *e = 0; }
++uint32_t xa2_wav_frames(void)                         { return 0; }
