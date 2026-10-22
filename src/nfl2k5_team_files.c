@@ -395,6 +395,16 @@ void nfl2k5_archive_extend(void)
             if ((slash = wcsrchr(b0, L'\\')) != NULL) *slash = 0;
             _snwprintf_s(dir, MAX_PATH, _TRUNCATE, L"%s.%s", b0, wcsrchr(exe, L'\\') ? wcsrchr(exe, L'\\') + 1 : exe);
             CreateDirectoryW(dir, NULL);
+            /* the banks sit one level down, in a folder that keeps the name VC_53450030: a
+             * mod pack's overlay (kernel_overlay.c) knows its changed banks by the path's
+             * tail "vc_53450030\<n>", and missed them under "VC_53450030.<exe>\<n>" -- the
+             * game then read the retail banks with the pack's index (SOFTDRINK v0.6.1:
+             * "disc is dirty or damaged" at boot, test runs only) */
+            {
+                size_t dl = wcslen(dir);
+                _snwprintf_s(dir + dl, MAX_PATH - dl, _TRUNCATE, L"\\VC_53450030");
+                CreateDirectoryW(dir, NULL);
+            }
             for (k2 = 0; k2 < 16 && ok; k2++) {
                 _snwprintf_s(src, MAX_PATH, _TRUNCATE, L"%s\\%X", b0, k2);
                 _snwprintf_s(dst, MAX_PATH, _TRUNCATE, L"%s\\%X", dir, k2);

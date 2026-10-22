@@ -2621,7 +2621,7 @@ static void nfl2k5_xpp_timer_init(void)
 }
 extern recomp_func_t nfl2k5_video_menu_lookup(uint32_t address);
 
-recomp_func_t recomp_lookup_manual(uint32_t address)
+static recomp_func_t lookup_manual_any(uint32_t address)
 {
     /* The Main Menu's Exit prompt (src/nfl2k5_exit_menu.c, M16). */
     if ((address & 0xFFFFF000u) == 0xFEC0F000u) {
@@ -2686,6 +2686,20 @@ recomp_func_t recomp_lookup_manual(uint32_t address)
     default: break;
     }
     return NULL;
+}
+
+/* A hand-written override of a retail function yields to the interpreter when
+ * the running mod pack changed that function (src/interp/interp_setup.c,
+ * nfl2k5_interp_code_changed): SOFTDRINK v0.6.1 rewrote the I/O worker at
+ * 0x0004D810, and the retail C version aborted on its states. */
+extern int g_interp_active;
+int nfl2k5_interp_code_changed(uint32_t va);
+recomp_func_t recomp_lookup_manual(uint32_t address)
+{
+    recomp_func_t fn = lookup_manual_any(address);
+    if (fn && g_interp_active && address < 0xFE000000u && nfl2k5_interp_code_changed(address))
+        return NULL;
+    return fn;
 }
 void recomp_icall_fail_log(uint32_t address)
 {
