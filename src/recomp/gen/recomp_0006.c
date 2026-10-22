@@ -15705,11 +15705,13 @@ void sub_000CEF80(void)
 
 loc_000CEF80: ;
     /* NFL2K5-GENPATCH:PACK_MENU_MUSIC_PLAYER */
+    uint32_t cef80_esp0 = esp;   /* PACK_MENU_MUSIC_ESP */
     { extern int nfl2k5_pack_build;
       if (nfl2k5_pack_build && ecx == 0x00C3CC10u && MEM32(0x00C3CC10u) == 0 && MEM32(0x00C3CC14u)) {
-        uint32_t keep_eax = eax, keep_ecx = ecx, keep_edx = edx;
+        uint32_t keep_eax = eax, keep_ecx = ecx, keep_edx = edx, keep_esp = esp;
         edx = 0;
         PUSH32(esp, 0x000CEF80u); RECOMP_ABI_CALL(0x000CF0F0u, sub_000CF0F0);
+        esp = keep_esp;   /* a plain-ret register call: see PACK_MENU_MUSIC_ESP */
         eax = keep_eax; ecx = keep_ecx; edx = keep_edx;
       } }
     PUSH32(esp, esi);
@@ -15726,6 +15728,8 @@ loc_000CEF8E: ;
     PUSH32(esp, 0x000CEF93u); RECOMP_ABI_CALL(0x000CEE50u, sub_000CEE50); /* call 0x000CEE50 */
 
 loc_000CEF93: ;
+    /* NFL2K5-GENPATCH:PACK_MENU_MUSIC_ESP */
+    { extern int nfl2k5_pack_build; if (nfl2k5_pack_build) esp = cef80_esp0 - 4u; }
     POP32(esp, esi);
     esp += 4; return; /* ret */
 

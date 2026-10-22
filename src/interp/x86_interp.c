@@ -472,6 +472,24 @@ void recomp_interp_call(uint32_t va)
         int size;
         uint32_t target = 0, prev = c->start;
         c->start = c->eip;
+        {   /* NFL2K5_INTERP_TRACE=lo-hi (hex VAs, diagnostics): every interpreted instruction in
+             * that range with the registers it starts with. */
+            static int tr_on = -1;
+            static uint32_t tr_lo, tr_hi;
+            if (tr_on < 0) {
+                const char *tv = getenv("NFL2K5_INTERP_TRACE");
+                char *te;
+                tr_on = 0;
+                if (tv && *tv) {
+                    tr_lo = (uint32_t)strtoul(tv, &te, 16);
+                    tr_hi = *te == '-' ? (uint32_t)strtoul(te + 1, NULL, 16) : tr_lo;
+                    tr_on = 1;
+                }
+            }
+            if (tr_on && c->start >= tr_lo && c->start <= tr_hi)
+                fprintf(stderr, "[ITRACE] %08X eax %08X ecx %08X edx %08X ebx %08X esp %08X ebp %08X esi %08X edi %08X\n",
+                        c->start, c->r[0], c->r[1], c->r[2], c->r[3], c->r[4], c->r[5], c->r[6], c->r[7]);
+        }
         if (s_nhooks && c->start >= s_hook_lo && c->start <= s_hook_hi) {
             uint32_t to = run_hooks(c, prev);
             if (to) { c->eip = to; continue; }

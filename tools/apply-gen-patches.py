@@ -616,13 +616,25 @@ PATCHES = [
     # the way the loading-music player is opened (sub_000F5410: edx = 0,
     # jmp sub_000CF0F0) the first time a bank is set on it. Pack builds only.
     ("PACK_MENU_MUSIC_PLAYER", "sub_000CEF80", "loc_000CEF80: ;", "after", """\
+    uint32_t cef80_esp0 = esp;   /* PACK_MENU_MUSIC_ESP */
     { extern int nfl2k5_pack_build;
       if (nfl2k5_pack_build && ecx == 0x00C3CC10u && MEM32(0x00C3CC10u) == 0 && MEM32(0x00C3CC14u)) {
-        uint32_t keep_eax = eax, keep_ecx = ecx, keep_edx = edx;
+        uint32_t keep_eax = eax, keep_ecx = ecx, keep_edx = edx, keep_esp = esp;
         edx = 0;
         PUSH32(esp, 0x000CEF80u); RECOMP_ABI_CALL(0x000CF0F0u, sub_000CF0F0);
+        esp = keep_esp;   /* a plain-ret register call: see PACK_MENU_MUSIC_ESP */
         eax = keep_eax; ecx = keep_ecx; edx = keep_edx;
       } }
+"""),
+    # On a pack build, sub_000CEF80 (the open above, then the bank set) came back to
+    # SOFTDRINK's interpreted caller 4 bytes high (traced 2026-10-21: esp 01D0AAA0
+    # before the call at 0x014DFAE7, 01D0AAA4 after). The caller's next
+    # lea edx,[esp+10h] then gave sub_00245480 a stale song entry and sub_003CAD50
+    # divided by zero: SOFTDRINK's boot crash with custom soundtracks present
+    # (docs/MUSIC-FIX-20261021.md). The function is a plain ret: leave with the
+    # stack it was entered with. Pack builds only.
+    ("PACK_MENU_MUSIC_ESP", "sub_000CEF80", "loc_000CEF93: ;", "after", """\
+    { extern int nfl2k5_pack_build; if (nfl2k5_pack_build) esp = cef80_esp0 - 4u; }
 """),
     # Controller Setup's fourth layout, Custom Control (src/nfl2k5_controller_setup.c).
     ("CONTROLLER_SETUP_NEXT", "sub_00357400", "loc_0035741D: ;", "after", """\
