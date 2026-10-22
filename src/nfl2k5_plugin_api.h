@@ -124,6 +124,9 @@ typedef struct NfHostServices {
     /* the first-run asset builder (tools\NFL2K5-ErasBuilder.exe, else python tools\eras\build_assets.py),
      * started hidden at below-normal priority with --pack <the pack> and these arguments; 0 = started */
     int (*run_builder)(const char *args);
+    /* M16: why some files of the archive's extra pack could not be written (a full drive), "" when
+     * all are there; a module whose files are missing must not open screens that read them */
+    const char *(*archive_problem)(void);
 } NfHostServices;
 
 /* The host's shims: the only names the rest of the game calls (gen patches,

@@ -2623,6 +2623,11 @@ extern recomp_func_t nfl2k5_video_menu_lookup(uint32_t address);
 
 recomp_func_t recomp_lookup_manual(uint32_t address)
 {
+    /* The Main Menu's Exit prompt (src/nfl2k5_exit_menu.c, M16). */
+    if ((address & 0xFFFFF000u) == 0xFEC0F000u) {
+        extern recomp_func_t nfl2k5_exit_menu_lookup(uint32_t address);
+        return nfl2k5_exit_menu_lookup(address);
+    }
     /* Rows of the Video Settings screen (src/nfl2k5_video_menu.c). */
     if ((address & 0xFFFF0000u) == 0xFEC00000u)
         return nfl2k5_video_menu_lookup(address);

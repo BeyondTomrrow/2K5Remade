@@ -31,7 +31,12 @@ const NfHostServices *g_eras_svc;      /* the module's other files (nfl2k5_eras.
 
 const char *nfl2k5_eras_limited(void)
 {
-    return s_host && (s_host->flags & NF_HOST_LIMITED) && s_host->limited_reason ? s_host->limited_reason : "";
+    if (s_host && (s_host->flags & NF_HOST_LIMITED) && s_host->limited_reason) return s_host->limited_reason;
+    /* M16: the office / stadium files did not make it into the archive (a full drive): every
+     * screen that reads them would end in the game's "disc is dirty or damaged" error */
+    if (s_svc && s_svc->size >= sizeof *s_svc && s_svc->archive_problem && s_svc->archive_problem()[0])
+        return s_svc->archive_problem();
+    return "";
 }
 
 /* The result capture and the M4b return for packs that interpret the hooked

@@ -321,11 +321,29 @@ static int arc_sink_add(NfArchiveSink *sink, const char *host_path, const char *
     return 1;
 }
 
+/* M16 (2026-10-21): why some of the extra pack's files could not be written ("" = all
+ * there). The pack is rewritten at every boot; on a full drive the writes failed
+ * silently, the file stopped short, and every entry past its end -- My NFL Eras'
+ * office package, listed last -- made the game's read fail with its "the disc is
+ * dirty or damaged" screen. Now a file that is not wholly in the pack gets no entry,
+ * and My NFL Eras reads this (NfHostServices.archive_problem) and stays unavailable
+ * with the reason in its hub instead. */
+static char s_arc_problem[160];
+const char *nfl2k5_archive_problem(void) { return s_arc_problem; }
+
+static uint64_t arc_file_time(const char *host)
+{
+    WIN32_FILE_ATTRIBUTE_DATA a;
+    if (!GetFileAttributesExA(host, GetFileExInfoStandard, &a)) return 0;
+    return ((uint64_t)a.ftLastWriteTime.dwHighDateTime << 32) | a.ftLastWriteTime.dwLowDateTime;
+}
+
 void nfl2k5_archive_extend(void)
 {
     typedef ArcFile F;
     static F files[4096];
-    int nf = 0, k;
+    static unsigned char ok[4096];
+    int nf = 0, k, mod_first;
     uint32_t blocks = 0, count = MEM32(0xA764F8), packs = MEM32(0xA76500), table = MEM32(0xA76594);
     uint32_t start = 0, i, nt;
     WCHAR packw[MAX_PATH];
@@ -355,8 +373,11 @@ void nfl2k5_archive_extend(void)
         NfArchiveSink sink;
         c.files = files; c.nf = &nf; c.blocks = &blocks; c.first = nf;
         sink.size = sizeof sink; sink.ctx = &c; sink.add = arc_sink_add;
+        mod_first = nf;
         nfl2k5_hook_archive_extend(&sink);
     }
+    s_arc_problem[0] = 0;
+    memset(ok, 0, sizeof ok);
     if (!nf) return;
     {   /* NFL2K5_PRIVATE_PACKS=1 (tests): this copy of the game reads the archive from its
          * own folder, <disc>\vc_53450030.<exe name>\, whose banks 0..F are hard links to
@@ -393,9 +414,70 @@ void nfl2k5_archive_extend(void)
         snprintf(xp, sizeof xp, "D:\\VC_53450030\\%c", "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"[packs]);
         if (!xbox_translate_path(xp, packw, MAX_PATH)) return;
     }
-    {   /* the pack: each file at a 2 KB boundary */
-        FILE *out = _wfopen(packw, L"wb");
+    {   /* the pack: each file at a 2 KB boundary. M16: written only when it changed (a
+         * list of what it holds, <pack>.list, beside it), only when the drive has room
+         * for it, and every write checked; a file not wholly in the pack gets no entry. */
         static char buf[1 << 16];
+        WCHAR listw[MAX_PATH + 8], dirw[MAX_PATH], *sl;
+        WIN32_FILE_ATTRIBUTE_DATA ga;
+        ULARGE_INTEGER freeb;
+        uint64_t need = (uint64_t)blocks * 0x800u, have = 0, avail = 0, margin = 32ull << 20;
+        char *list = (char *)malloc((size_t)nf * (MAX_PATH + 160) + 64), *old_list = NULL;
+        size_t list_n = 0;
+        uint32_t write_n = (uint32_t)nf, write_blocks = blocks;
+        _snwprintf_s(listw, MAX_PATH + 8, _TRUNCATE, L"%s.list", packw);
+        if (GetFileAttributesExW(packw, GetFileExInfoStandard, &ga))
+            have = ((uint64_t)ga.nFileSizeHigh << 32) | ga.nFileSizeLow;
+        if (list) {
+            list_n = (size_t)sprintf(list, "%u %u\n", (unsigned)nf, (unsigned)blocks);
+            for (i = 0; i < (uint32_t)nf; i++)
+                list_n += (size_t)sprintf(list + list_n, "%u %u %016llX %s|%s\n", (unsigned)files[i].block, (unsigned)files[i].size,
+                                          (unsigned long long)arc_file_time(files[i].host), files[i].name, files[i].host);
+        }
+        if (list && have == need && !getenv("NFL2K5_REWRITE_PACK")) {
+            FILE *lf = _wfopen(listw, L"rb");
+            if (lf) {
+                old_list = (char *)malloc(list_n + 2);
+                if (old_list && fread(old_list, 1, list_n + 1, lf) == list_n && !memcmp(old_list, list, list_n)) {
+                    fclose(lf);
+                    free(old_list);
+                    free(list);
+                    for (i = 0; i < (uint32_t)nf; i++) ok[i] = 1;
+                    fprintf(stderr, "[TEAMFILES] the extra pack already holds these %d files; not rewritten\n", nf);
+                    goto registered;
+                }
+                fclose(lf);
+                free(old_list);
+            }
+        }
+        wcsncpy_s(dirw, MAX_PATH, packw, _TRUNCATE);
+        if ((sl = wcsrchr(dirw, L'\\')) != NULL) sl[1] = 0;
+        if (GetDiskFreeSpaceExW(dirw, &freeb, NULL, NULL)) avail = freeb.QuadPart;
+        else avail = need + margin;                                     /* unknown: try */
+        {   /* test switch: pretend the drive has only this many MB free */
+            const char *t = getenv("NFL2K5_TEST_FREE_MB");
+            if (t && *t) avail = (uint64_t)strtoull(t, NULL, 10) << 20;
+        }
+        if (avail + have < need + margin) {
+            /* not enough room: the added teams' own files first (the feature modules' are
+             * listed last), else nothing */
+            uint32_t core_blocks = mod_first < nf ? files[mod_first].block : blocks;
+            uint64_t more = need + margin - (avail + have);
+            snprintf(s_arc_problem, sizeof s_arc_problem, "Disk full: free %llu MB on %c:, restart",
+                     (unsigned long long)((more + (1u << 20) - 1) >> 20), (char)packw[0]);
+            if (mod_first < nf && avail + have >= (uint64_t)core_blocks * 0x800u + margin) { write_n = (uint32_t)mod_first; write_blocks = core_blocks; }
+            else { write_n = 0; write_blocks = 0; }
+            fprintf(stderr, "[TEAMFILES] the extra pack needs %llu MB, the drive has %llu MB free (+%llu MB of the old pack): "
+                    "writing %u of %d files\n", (unsigned long long)(need >> 20), (unsigned long long)(avail >> 20),
+                    (unsigned long long)(have >> 20), (unsigned)write_n, nf);
+        }
+        _wremove(listw);
+        if (write_n == 0) {
+            free(list);
+            goto registered;
+        }
+        {
+        FILE *out = _wfopen(packw, L"wb");
         if (!out) {
             /* Another running copy of the game (they share original\disc) holds the pack
              * open: use it when it already holds these files at these places. */
@@ -414,36 +496,82 @@ void nfl2k5_archive_extend(void)
                 same = same && tot == files[i].size;
             }
             if (old) fclose(old);
+            free(list);
             if (!same) { fprintf(stderr, "[TEAMFILES] cannot write the extra pack\n"); return; }
+            for (i = 0; i < (uint32_t)nf; i++) ok[i] = 1;
             fprintf(stderr, "[TEAMFILES] the extra pack is in use by another copy of the game and holds the same files; using it\n");
+            goto registered;
         } else {
+            int bad = 0;
+            uint64_t got = 0;
+            for (i = 0; i < write_n; i++) {
+                FILE *in = fopen(files[i].host, "rb");
+                size_t n, tot = 0, put = 0;
+                _fseeki64(out, (long long)files[i].block * 0x800, SEEK_SET);
+                if (in) { while ((n = fread(buf, 1, sizeof buf, in)) > 0) { put += fwrite(buf, 1, n, out); tot += n; } fclose(in); }
+                ok[i] = tot == files[i].size && put == tot;
+                if (tot != files[i].size) fprintf(stderr, "[TEAMFILES] %s: read %zu of %u bytes\n", files[i].host, tot, files[i].size);
+                else if (put != tot && bad++ < 3) fprintf(stderr, "[TEAMFILES] %s: wrote %zu of %zu bytes (disk full?)\n", files[i].host, put, tot);
+            }
+            if (_fseeki64(out, (long long)write_blocks * 0x800 - 1, SEEK_SET) != 0 || fputc(0, out) == EOF) bad++;
+            if (fclose(out) != 0) bad++;
+            if (GetFileAttributesExW(packw, GetFileExInfoStandard, &ga)) got = ((uint64_t)ga.nFileSizeHigh << 32) | ga.nFileSizeLow;
+            for (i = 0; i < write_n; i++)
+                if ((uint64_t)files[i].block * 0x800u + files[i].size > got) ok[i] = 0;
+            for (i = 0; i < write_n && ok[i]; i++) {}
+            if (i == (uint32_t)nf && list && !bad) {                     /* all there: remember what it holds */
+                FILE *lf = _wfopen(listw, L"wb");
+                if (lf) {
+                    int lbad = fwrite(list, 1, list_n, lf) != list_n;
+                    if (fclose(lf) != 0) lbad = 1;
+                    if (lbad) _wremove(listw);
+                }
+            }
+            if (i < write_n && !s_arc_problem[0])
+                snprintf(s_arc_problem, sizeof s_arc_problem, "Disk full: free space on %c:, restart",
+                         (char)packw[0]);
+            if (i < write_n)
+                fprintf(stderr, "[TEAMFILES] the extra pack is %llu of %llu bytes: files from %s on are left out\n",
+                        (unsigned long long)got, (unsigned long long)need, files[i].name);
+        }
+        }
+        free(list);
+    }
+registered:
+    {   /* every file wholly in the pack, in order; the pack keeps its blocks */
+        uint32_t nok = 0, last_end = 0, mod_bad = 0;
+        for (i = 0; i < packs; i++) start += MEM32(0xA76504 + 4 * i);
         for (i = 0; i < (uint32_t)nf; i++) {
-            FILE *in = fopen(files[i].host, "rb");
-            size_t n, tot = 0;
-            _fseeki64(out, (long long)files[i].block * 0x800, SEEK_SET);
-            if (in) { while ((n = fread(buf, 1, sizeof buf, in)) > 0) { fwrite(buf, 1, n, out); tot += n; } fclose(in); }
-            if (tot != files[i].size) fprintf(stderr, "[TEAMFILES] %s: read %zu of %u bytes\n", files[i].host, tot, files[i].size);
+            uint32_t end_b = files[i].block + (files[i].size + 0x7FF) / 0x800;
+            if (ok[i]) { nok++; if (end_b > last_end) last_end = end_b; }
+            else if ((int)i >= mod_first) mod_bad++;
         }
-        _fseeki64(out, (long long)blocks * 0x800 - 1, SEEK_SET);
-        fputc(0, out);
-        fclose(out);
+        if (nok < (uint32_t)nf) {
+            extern void xbox_PresentToast(const char *header, const char *line1, const char *line2, unsigned ms);
+            if (!s_arc_problem[0]) snprintf(s_arc_problem, sizeof s_arc_problem, "Some added files are missing (see the log)");
+            fprintf(stderr, "[TEAMFILES] %u of %d files left out of the extra pack (%u of the feature packs'): %s\n",
+                    (unsigned)((uint32_t)nf - nok), nf, (unsigned)mod_bad, s_arc_problem);
+            xbox_PresentToast("Not enough disk space", s_arc_problem,
+                              mod_bad ? "My NFL Eras is unavailable until then" : "Some added teams are unavailable until then", 12000);
         }
+        if (!nok) return;
+        nt = xbox_HeapAlloc((count + nok) * 12, 16);
+        if (!nt) return;
+        memcpy((uint8_t *)xbox_GetMemoryOffset() + nt, (uint8_t *)xbox_GetMemoryOffset() + table, count * 12);
+        for (i = 0, k = 0; i < (uint32_t)nf; i++) {
+            uint32_t e;
+            if (!ok[i]) continue;
+            e = nt + (count + (uint32_t)k++) * 12;
+            MEM32(e) = name_crc(files[i].name);
+            MEM32(e + 4) = files[i].size;
+            MEM32(e + 8) = start + files[i].block;
+        }
+        MEM32(0xA76594) = nt;
+        MEM32(0xA764F8) = count + nok;
+        MEM32(0xA76504 + 4 * packs) = last_end;
+        MEM32(0xA76500) = packs + 1;
+        fprintf(stderr, "[TEAMFILES] %u added-team files in an extra archive pack (%u KB)\n", (unsigned)nok, last_end * 2);
     }
-    for (i = 0; i < packs; i++) start += MEM32(0xA76504 + 4 * i);
-    nt = xbox_HeapAlloc((count + (uint32_t)nf) * 12, 16);
-    if (!nt) return;
-    memcpy((uint8_t *)xbox_GetMemoryOffset() + nt, (uint8_t *)xbox_GetMemoryOffset() + table, count * 12);
-    for (i = 0; i < (uint32_t)nf; i++) {
-        uint32_t e = nt + (count + i) * 12;
-        MEM32(e) = name_crc(files[i].name);
-        MEM32(e + 4) = files[i].size;
-        MEM32(e + 8) = start + files[i].block;
-    }
-    MEM32(0xA76594) = nt;
-    MEM32(0xA764F8) = count + (uint32_t)nf;
-    MEM32(0xA76504 + 4 * packs) = blocks;
-    MEM32(0xA76500) = packs + 1;
-    fprintf(stderr, "[TEAMFILES] %d added-team files in an extra archive pack (%u KB)\n", nf, blocks * 2);
 }
 
 

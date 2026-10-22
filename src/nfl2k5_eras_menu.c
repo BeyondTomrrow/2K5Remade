@@ -20,10 +20,11 @@
  *
  * Screens: the hub (New / Continue League), the league screen (next fixture,
  * Your Team, Schedule, AFC and NFC Standings), Your Team, Schedule and the two
- * standings screens. "My NFL Eras" is inserted in the Main Menu after The
- * Crib; NFL2K5_ERAS_MENU=modes puts it at the end of Game Modes instead,
- * =main-scroll also sets the main menu's scroll flag 0x04, =off leaves the
- * menus alone. "Play Next Game" launches the fixture (src/nfl2k5_eras_launch.c,
+ * standings screens. "My NFL Eras" is the last row of Game Modes (M16, the
+ * user's call: a game mode, not a Main Menu entry; B from the hub returns to
+ * Game Modes); NFL2K5_ERAS_MENU=main puts it in the Main Menu after The Crib
+ * instead (M3), =main-scroll also sets the main menu's scroll flag 0x04, =off
+ * leaves the menus alone. "Play Next Game" launches the fixture (src/nfl2k5_eras_launch.c,
  * M4); the League and hub screens' msg 3 run the clean-up after it. */
 #include <stdint.h>
 #include <stdio.h>
@@ -608,6 +609,15 @@ static void row_action(int scr, int row, uint32_t fsm)
         }
         return;
     }
+    if (scr == EM_HUB && row <= 1 && nfl2k5_eras_limited()[0]) {
+        /* M16: the pack cannot run (or its files are not in the archive: a full drive);
+         * the New League row says why. Opening the office would end in the game's
+         * "disc is dirty or damaged" error. */
+        EM_LOG("hub row %d refused: %s\n", row, nfl2k5_eras_limited());
+        hub_refresh();
+        em_sound(SND_CURSOR);
+        return;
+    }
     if (scr == EM_HUB && row == 0) {                       /* Continue League */
         int r = nfl2k5_eras_league_load();
         EM_LOG("continue: %d (%s)\n", r, nfl2k5_eras_league_message(r));
@@ -836,7 +846,7 @@ void nfl2k5_eras_menu_install(int retail)
      * the pack's, laid out by its XBE: no Eras menu there, whatever the
      * variable says. */
     if (!retail) { fprintf(stderr, "[ERAS] menu: off (mod pack%s)\n", place && *place ? ", NFL2K5_ERAS_MENU ignored" : ""); return; }
-    if (!place || !*place) place = "main";
+    if (!place || !*place) place = "modes";   /* M16: Game Modes (was the Main Menu) */
     if (!strcmp(place, "off")) { fprintf(stderr, "[ERAS] menu: off (NFL2K5_ERAS_MENU=off)\n"); return; }
     s_heap_size = 256u * 1024u;
     s_heap = xbox_HeapAlloc(s_heap_size, 16);
@@ -938,7 +948,7 @@ void nfl2k5_eras_menu_install(int retail)
     hub_refresh();
     nfl2k5_eras_sheets_install();   /* M7: the Schedule copy and Standings (fall back to the lists on failure) */
 
-    if (!strcmp(place, "modes")) {
+    if (strcmp(place, "main") && strcmp(place, "main-scroll")) {
         /* 6 rows -> 7: fits the navigation layout without the 0x04 flag */
         rows = em_insert_link(GAME_MODES, -1, s_em[EM_HUB].header, em_wstr("My NFL Eras"));
         fprintf(stderr, "[ERAS] menu: \"My NFL Eras\" at the end of Game Modes (%d rows)\n", rows);

@@ -3824,6 +3824,9 @@ int main(int argc, char **argv)
         /* "Video Settings" in the game's Options menus. */
         extern void nfl2k5_video_menu_install(void);
         nfl2k5_video_menu_install();
+        /* "Exit" in the Main Menu (src/nfl2k5_exit_menu.c, M16). */
+        extern void nfl2k5_exit_menu_install(void);
+        nfl2k5_exit_menu_install();
         /* Feature modules' menus ("My NFL Eras", src/nfl2k5_eras_menu.c). */
         extern void nfl2k5_hook_menus_ready(void);
         nfl2k5_hook_menus_ready();

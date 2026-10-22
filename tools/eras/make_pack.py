@@ -330,7 +330,15 @@ def assemble(dest, dist, refresh=False):
         files[name] = hashlib.sha256(data).hexdigest()
     if not dist:
         for rel, src, what in lo:
-            r = put(dest, rel, src, link=os.path.getsize(src) > (1 << 20), keep=rel.startswith('generated/') and not refresh)
+            keep = rel.startswith('generated/') and not refresh
+            if keep:
+                # M16: a builder run's output is kept, but a file this PC's development folders hold
+                # newer and different (the draft / office files copied by hand) replaces a stale one
+                p = os.path.join(dest, rel.replace('/', os.sep))
+                if os.path.exists(p) and os.path.getmtime(src) > os.path.getmtime(p) + 1 and \
+                        (os.path.getsize(src) != os.path.getsize(p) or sha256(src) != sha256(p)):
+                    keep = False
+            r = put(dest, rel, src, link=os.path.getsize(src) > (1 << 20), keep=keep)
             counts[r] = counts.get(r, 0) + 1
         put(dest, 'generated/build.json', data=(json.dumps({
             'builder': 'tools/eras/make_pack.py --install', 'builder_version': 'dev', 'schema': 1, 'complete': True,

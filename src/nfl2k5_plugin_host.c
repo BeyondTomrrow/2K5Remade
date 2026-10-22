@@ -370,6 +370,10 @@ void nfl2k5_plugins_boot(const char *xbe_sha256, uint32_t base_kind, const char 
     g_svc.player_stat = nfl2k5_guest_player_stat_scope;
     g_svc.team_stat = nfl2k5_guest_team_stat;
     g_svc.run_builder = svc_run_builder;
+    {   /* M16: the archive's extra pack (src/nfl2k5_team_files.c) */
+        extern const char *nfl2k5_archive_problem(void);
+        g_svc.archive_problem = nfl2k5_archive_problem;
+    }
 
     g_root_n = 0;
     memset(&g_mod_info, 0, sizeof g_mod_info);

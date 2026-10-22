@@ -339,7 +339,12 @@ int recomp_interp_dirty(uint32_t va)
 static recomp_func_t native_for(uint32_t va)
 {
     recomp_func_t fn;
-    if (va >= 0xFE000000u) return recomp_lookup_kernel(va);   /* kernel thunk bridge */
+    if (va >= 0xFE000000u) {
+        /* the kernel thunk bridge, else the menu functions served from C (Video Settings,
+         * the Main Menu's Exit prompt: 0xFEC0.., 0xFED0.., 0xFEE0..; NATIVE-MENU 2.2) */
+        fn = recomp_lookup_kernel(va);
+        return fn ? fn : recomp_lookup_manual(va);
+    }
     if (recomp_interp_dirty(va)) return NULL;
     fn = recomp_lookup_manual(va);
     if (!fn) fn = recomp_lookup(va);
