@@ -153,6 +153,7 @@ static WORD file_press(BYTE analog[8])
         const char *name = queue[head];
         if (!strcmp(name, "start")) buttons |= 0x10;
         else if (!strcmp(name, "back")) buttons |= 0x20;
+        else if (!strcmp(name, "back+r3")) buttons |= 0xA0;      /* the audio report combo */
         else if (!strcmp(name, "up")) buttons |= 0x01;
         else if (!strcmp(name, "down")) buttons |= 0x02;
         else if (!strcmp(name, "left")) buttons |= 0x04;
@@ -175,7 +176,6 @@ static WORD file_press(BYTE analog[8])
         else if (!strcmp(name, "r3")) buttons |= 0x80;
         if (now - step_start >= 200) {
             pressing = 0;
-        else if (!strcmp(name, "back+r3")) buttons |= 0xA0;      /* the audio report combo */
             step_start = now;
             head = (head + 1) % 64;
         }
@@ -279,6 +279,22 @@ extern unsigned nfl2k5_controls_ports(void);
 extern int nfl2k5_controls_get(int port, XBOX_GAMEPAD *g, int use_pads);
 extern void nfl2k5_controls_rumble(int port, unsigned left, unsigned right);
 
+/* Back + R3: save the last 90 s of audio and the diagnostics (F9 on the
+ * keyboard; docs/AUDIO-REPORT-HOTKEY-20261022.md). While the combination is
+ * held neither button reaches the game, and R3 does not skip the song. */
+static void audio_report_combo(XBOX_GAMEPAD *g)
+{
+    static int held;
+    extern void xbox_AudioReportRequest(void);
+    if ((g->wButtons & 0xA0) == 0xA0) {
+        if (!held) xbox_AudioReportRequest();
+        held = 1;
+    } else if (!(g->wButtons & 0xA0)) {
+        held = 0;
+    }
+    if (held) g->wButtons &= (WORD)~0xA0;
+}
+
 static void host_gamepad_port(int port, XBOX_GAMEPAD *g)
 {
     extern volatile long g_xbox_input_blocked;
@@ -301,22 +317,7 @@ static void host_gamepad_port(int port, XBOX_GAMEPAD *g)
     }
     if (port != 0)
         return;
-/* Back + R3: save the last 90 s of audio and the diagnostics (F9 on the
- * keyboard; docs/AUDIO-REPORT-HOTKEY-20261022.md). While the combination is
- * held neither button reaches the game, and R3 does not skip the song. */
-static void audio_report_combo(XBOX_GAMEPAD *g)
-{
-    static int held;
-    extern void xbox_AudioReportRequest(void);
-    if ((g->wButtons & 0xA0) == 0xA0) {
-        if (!held) xbox_AudioReportRequest();
-        held = 1;
-    } else if (!(g->wButtons & 0xA0)) {
-        held = 0;
-    }
-    if (held) g->wButtons &= (WORD)~0xA0;
-}
-
+    audio_report_combo(g);
     {   /* L3: show what is playing; R3: next song (local music library). */
         extern void nfl2k5_local_music_buttons(int l3, int r3);
         nfl2k5_local_music_buttons((g->wButtons & 0x40) != 0, (g->wButtons & 0x80) != 0);
@@ -337,7 +338,6 @@ static void host_gamepad(XBOX_GAMEPAD *g)
         return;
     /* NFL2K5_NO_HOST_PAD=1 ignores host controllers while a script is
      * driving: scripted runs on a machine with a pad attached got stray d-pad
-    audio_report_combo(g);
      * presses that walked the menu cursor away from what the script selected
      * (2026-09-25). Only for 15 s after the last scripted press, though --
      * ignoring the pad for the whole run left the user on the keyboard in
@@ -352,6 +352,7 @@ static void host_gamepad(XBOX_GAMEPAD *g)
     host_mouse_gamepad(g);
     g->wButtons |= auto_press(g->bAnalogButtons);
     g->wButtons |= file_press(g->bAnalogButtons);
+    audio_report_combo(g);
     {   /* L3: show what is playing; R3: next song (local music library). */
         extern void nfl2k5_local_music_buttons(int l3, int r3);
         nfl2k5_local_music_buttons((g->wButtons & 0x40) != 0, (g->wButtons & 0x80) != 0);
@@ -368,7 +369,6 @@ static void put_gamepad(uint32_t va, const XBOX_GAMEPAD *g)
         MEM8(va + 2u + (uint32_t)i) = g->bAnalogButtons[i];
     MEM16(va + 10u) = (uint16_t)g->sThumbLX;
     MEM16(va + 12u) = (uint16_t)g->sThumbLY;
-    audio_report_combo(g);
     MEM16(va + 14u) = (uint16_t)g->sThumbRX;
     MEM16(va + 16u) = (uint16_t)g->sThumbRY;
 }

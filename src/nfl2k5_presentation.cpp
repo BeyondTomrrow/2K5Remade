@@ -1497,6 +1497,10 @@ extern "C" void nfl2k5_presentation_voice_duck(float gain)
     xbox_AudioSetGameGain(gain < 0.0f ? 0.0f : gain > 1.0f ? 1.0f : gain);
 }
 
+/* Runs on the audio thread for every 5.3 ms block (the audio report ring
+ * records it always, AUDIO-REPORT-HOTKEY-20261022), so it never waits: a
+ * lock held elsewhere (a voice being created or destroyed) skips the mix for
+ * that block instead of stalling the speakers. */
 static void capture_mix(int16_t *buf, int frames)
 {
     {
@@ -1549,10 +1553,6 @@ static void video_thread(std::string path, int gen)
     attr->SetUINT32(k_mf_advanced_video, TRUE);
     if (SUCCEEDED(MFCreateSourceReaderFromURL(widen(path).c_str(), attr, &rd))) {
         IMFMediaType *mt = nullptr, *cur = nullptr;
-/* Runs on the audio thread for every 5.3 ms block (the audio report ring
- * records it always, AUDIO-REPORT-HOTKEY-20261022), so it never waits: a
- * lock held elsewhere (a voice being created or destroyed) skips the mix for
- * that block instead of stalling the speakers. */
         rd->SetStreamSelection((DWORD)MF_SOURCE_READER_ALL_STREAMS, FALSE);
         rd->SetStreamSelection((DWORD)MF_SOURCE_READER_FIRST_VIDEO_STREAM, TRUE);
         MFCreateMediaType(&mt);
