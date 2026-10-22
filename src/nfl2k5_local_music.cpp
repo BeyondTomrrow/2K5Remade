@@ -284,9 +284,12 @@ DWORD WINAPI worker(LPVOID)
 
 } // namespace
 
+static void nfl2k5_retail_next_interp_hook(void);   /* R3 when the retail player is interpreted (end of file) */
+
 // root: the game root (holds Music/); save_dir: where Soundtracks/ lives.
 extern "C" void nfl2k5_local_music_start(const char *root, const char *save_dir)
 {
+    nfl2k5_retail_next_interp_hook();
     g_music = widen(root) + L"\\Music";
     g_out = widen(save_dir) + L"\\Soundtracks";
     g_cache = g_out + L"\\cache";
@@ -573,7 +576,9 @@ static bool show_retail_now_playing(RetailBank bank, uint32_t index)
  * on the guest thread, preserving its shuffle/repeat and cleanup rules. */
 extern "C" int nfl2k5_retail_music_take_next(void)
 {
-    return InterlockedExchange(&g_retail_next, 0) != 0;
+    if (InterlockedExchange(&g_retail_next, 0) == 0) return 0;
+    fprintf(stderr, "[MUSIC] R3: the retail player advances (stop + next on the guest thread)\n");
+    return 1;
 }
 
 /* Host pad buttons, every poll: L3 and R3 act on their press. */
@@ -632,9 +637,16 @@ extern "C" void nfl2k5_local_music_buttons(int l3, int r3)
         volatile uint32_t *end_pos =
             (volatile uint32_t *)((uint8_t *)xbox_GetMemoryOffset() + player + 0x1004Cu);
         *end_pos = 1;
+        fprintf(stderr, "[MUSIC] R3: skip the playing song %08lX (end point pulled in)\n", (unsigned long)cur);
     }
     else if (retail_live && r3 && !prev_r3) {
         InterlockedExchange(&g_retail_next, 1);
+        fprintf(stderr, "[MUSIC] R3: next %s track requested (now %u)\n",
+                retail_bank == RETAIL_CRIB ? "cribmusic" : "femusic", retail_index);
+    }
+    else if (r3 && !prev_r3) {
+        fprintf(stderr, "[MUSIC] R3: nothing to skip (no playlist song, no retail track; mode %08X list %08X)\n",
+                g32(0xC3CC08u), g32(0xC3AC90u));
     }
     if (cur >= 0 && l3 && !prev_l3)
         show_now_playing((uint32_t)cur);
@@ -646,3 +658,39 @@ extern "C" void nfl2k5_local_music_buttons(int l3, int r3)
     prev_r3 = r3;
 }
 
+
+/* ── R3 for the original-disc music when the retail player runs interpreted ──
+ * The retail music frame routine 0x00280620 is reached only by the tail jump at the end of
+ * sub_000F6420. A mod pack that changes sub_000F6420 (SOFTDRINK 2K28 v0.6/v0.6.1 does) runs it
+ * in the interpreter, and the interpreter follows the jump into 0x00280620 itself -- so the
+ * generated code's LOCALMUSIC_RETAIL_NEXT hook never ran there, and R3 queued a skip that
+ * nothing took: "plays a song, can't skip" (AUDIO-FIX-20261021: the log showed "R3: next
+ * cribmusic track requested" three times and no "advances"). The same skip in the interpreter:
+ * at 0x00280620, take the request, then "call" the stop (0x0027FEC0) and the advance
+ * (0x0027F040) -- the pack's own versions when it replaced them -- by returning into the stop
+ * with the advance and 0x00280620 as the return addresses; the second arrival restores the
+ * scratch registers the native hook keeps (eax, ecx, edx) and lets the routine run. */
+extern "C" __declspec(thread) uint32_t g_eax, g_ecx, g_edx, g_esp;
+extern "C" void recomp_interp_add_hook(uint32_t va, uint32_t from, uint32_t (*fn)(void));
+
+static uint32_t ih_retail_music_next(void)
+{
+    static __declspec(thread) int restore;
+    static __declspec(thread) uint32_t keep_eax, keep_ecx, keep_edx;
+    if (restore) {
+        restore = 0;
+        g_eax = keep_eax; g_ecx = keep_ecx; g_edx = keep_edx;
+        return 0;
+    }
+    if (!nfl2k5_retail_music_take_next()) return 0;
+    keep_eax = g_eax; keep_ecx = g_ecx; keep_edx = g_edx;
+    restore = 1;
+    g_esp -= 4; g32(g_esp) = 0x00280620u;             /* the advance returns here (restore, then run) */
+    g_esp -= 4; g32(g_esp) = 0x0027F040u;             /* the stop's ret goes on into the advance */
+    return 0x0027FEC0u;
+}
+
+static void nfl2k5_retail_next_interp_hook(void)
+{
+    recomp_interp_add_hook(0x00280620u, 0, ih_retail_music_next);
+}
