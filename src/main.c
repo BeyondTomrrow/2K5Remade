@@ -3338,6 +3338,10 @@ int main(int argc, char **argv)
           g_xbox_apu_irq_line = mcpx_apu_irq_line; }
         { extern void (*g_apu_irq_wake)(void); extern void xbox_kernel_irq_wake(void);
           g_apu_irq_wake = xbox_kernel_irq_wake; }   /* ...without the 10 ms poll delay */   /* deliver APU interrupts */
+        if (getenv("NFL2K5_CROWD_PROBE")) {       /* crowd-reaction pitch vs the game's sequencer clock */
+            extern void (*g_apu_pitch_hook)(unsigned voice, int was, int now);
+            g_apu_pitch_hook = crowd_probe;
+        }
         if (!g_apu_state || !AddVectoredExceptionHandler(1, audio_mmio)) {
             fprintf(stderr, "[BOOT] Failed to initialize APU compatibility.\n");
             return 3;
@@ -3345,10 +3349,6 @@ int main(int argc, char **argv)
     }
     if (memcmp((void *)((uintptr_t)xbox_GetMemoryOffset() + 0x740000),
                data + 0x4D9000 + 0x740000 - 0x4E3AE0, 4096)) {
-        if (getenv("NFL2K5_CROWD_PROBE")) {       /* crowd-reaction pitch vs the game's sequencer clock */
-            extern void (*g_apu_pitch_hook)(unsigned voice, int was, int now);
-            g_apu_pitch_hook = crowd_probe;
-        }
         fprintf(stderr, "[BOOT] Kernel data exports corrupted game data.\n");
         return 3;
     }
