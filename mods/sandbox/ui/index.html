@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>NFL 2K5 Sandbox</title>
+  <link rel="stylesheet" href="sandbox.css">
+</head>
+<body>
+  <main id="sandbox" hidden>
+    <section id="browser" aria-label="Sandbox browser" hidden>
+      <header class="heading"><div><p class="eyebrow">NFL 2K5</p><h1 id="title">SANDBOX</h1></div><div class="status"><span id="simulation">PAUSED</span><span id="location"></span></div></header>
+      <nav id="tabs" aria-label="Sandbox categories"></nav>
+      <div class="workspace">
+        <section class="catalog"><header class="catalog-heading"><h2 id="category">Teams</h2><div class="page-controls"><button id="page-up" type="button" aria-label="Previous page">↑</button><span id="count"></span><button id="page-down" type="button" aria-label="Next page">↓</button></div></header><div id="rows" role="listbox" aria-label="Available items"></div><p id="empty" hidden>No items available in this scene.</p></section>
+        <aside class="inspector"><div class="inspector-mark" id="item-mark">2K5</div><p class="eyebrow" id="item-type">SANDBOX</p><h2 id="item-title">Build your scene</h2><p id="item-description">Choose a stadium, then use the browser to edit the scene.</p><dl id="item-details"></dl><div id="capability-note" hidden></div><div class="inspector-actions"><button id="activate" type="button">Select</button><div class="adjust"><button id="decrease" type="button" aria-label="Decrease">−</button><output id="value"></output><button id="increase" type="button" aria-label="Increase">+</button></div></div></aside>
+      </div>
+      <div class="notification" id="message" role="status"></div>
+      <footer id="prompts"></footer>
+    </section>
+    <section id="quick-status" aria-label="Sandbox controls"><span class="mode-label" id="mode-label">SANDBOX</span><span id="quick-sim"></span><span id="quick-prompt"></span></section>
+    <div id="reticle" aria-hidden="true"><i></i><b></b></div>
+    <div id="mouse-pointer" hidden aria-hidden="true"></div>
+  </main>
+  <script src="sandbox.js"></script>
+</body>
+</html>

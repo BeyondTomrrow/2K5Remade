@@ -62,6 +62,8 @@ target_compile_definitions(NFL2K5 PRIVATE
   $<$<BOOL:${NFL2K5_FORCE_UNBLOCK_33660_DRAIN}>:NFL2K5_FORCE_UNBLOCK_33660_DRAIN>
   $<$<BOOL:${NFL2K5_FORCE_UNBLOCK_NETPOLL}>:NFL2K5_FORCE_UNBLOCK_NETPOLL>)
 target_link_libraries(NFL2K5 PRIVATE xboxrecomp d3d11 dxgi dxguid xinput winmm dbghelp bcrypt)
+target_sources(NFL2K5 PRIVATE src/nfl2k5_sandbox.cpp src/nfl2k5_sandbox_menu.c
+  src/nfl2k5_sandbox_world.c src/nfl2k5_sandbox_actors.c src/nfl2k5_sandbox_pose.c src/nfl2k5_sandbox_ui.cpp)
 target_compile_options(NFL2K5 PRIVATE /bigobj /Zi /FS)
 option(NFL2K5_OPTIMIZE "Optimize generated code after startup is working" OFF)
 if(NOT NFL2K5_OPTIMIZE)

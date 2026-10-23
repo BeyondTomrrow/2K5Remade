@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Sandbox interface preview — not in game</title>
+  <style>
+    *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#242a32;color:#d9e2e9;font-family:"Segoe UI",Arial,sans-serif}
+    body{background-image:linear-gradient(45deg,#ffffff04 25%,transparent 25%),linear-gradient(-45deg,#ffffff04 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#ffffff04 75%),linear-gradient(-45deg,transparent 75%,#ffffff04 75%);background-size:48px 48px;background-position:0 0,0 24px,24px -24px,-24px 0}
+    iframe{position:absolute;inset:0;border:0;width:100%;height:100%;background:transparent}
+    .banner{position:absolute;left:0;right:0;top:0;height:49px;padding:0 28px;display:flex;align-items:center;justify-content:space-between;background:#d8b553;color:#211c0e;font-size:17px;font-weight:800;letter-spacing:1px;z-index:2}
+    .banner span:last-child{font-size:14px;font-weight:600;letter-spacing:.3px}
+    .note{position:absolute;right:42px;top:38%;width:430px;pointer-events:none;padding:26px;border:1px solid #ffffff25;border-radius:10px;background:#19212be0}
+    .note .kicker{color:#8dddb5;font-size:13px;font-weight:700;letter-spacing:2px}.note h1{font-size:31px;margin:13px 0 16px;line-height:1.15}.note p{font-size:18px;line-height:1.55;color:#acb9c6;margin:12px 0}.note strong{color:#f0d485;font-weight:600}
+  </style>
+</head>
+<body>
+  <div class="banner"><span>PREVIEW — NOT IN GAME</span><span>Actual Sandbox HTML interface · Sample paused scene</span></div>
+  <iframe id="ui" src="index.html" title="Sandbox interface"></iframe>
+  <aside class="note"><div class="kicker">IMPLEMENTATION PREVIEW</div><h1>Game viewport<br>not shown</h1><p>This image renders the actual HTML menu against a plain preview background.</p><p><strong>It is not a gameplay screenshot.</strong> Camera and simulation hooks still need live game verification.</p><p>Player spawning, posing and possession are currently unavailable.</p></aside>
+  <script>
+    'use strict';
+    var row=function(label,value,command,arg,description,enabled){return {label:label,value:value,command:command,commandValue:arg,description:description,enabled:enabled!==false};};
+    var tools=[
+      row('Simulation','Paused','toggle_pause',0,'Pause keeps input, rendering and audio threads running'),
+      row('Simulation speed','0%','speed',25,'0 / 25 / 50 / 100 percent'),
+      row('Advance one frame','Step','step',0,'Advances one native simulation update while paused'),
+      row('Free camera','On','camera',0,'Left stick fly; right stick look; triggers rise / descend',false),
+      row('Photo mode','Off','photo',0,'Hide Sandbox and broadcast HUD. Back / Circle returns.'),
+      row('Record 10 seconds','Capture','record',10,'Uses the existing game video capture')
+    ];
+    var players=[row('Player tools','Not connected','',0,'Actor spawning, moving, posing and possession still require verified world hooks.',false)];
+    var scene=[
+      row('Scene slot','1','slot',1,'Five independent Sandbox scene files; original saves untouched'),
+      row('Save scene','Save','save_scene',1,'Saves camera and game state; this version does not serialize player poses'),
+      row('Load scene','Load','load_scene',1,'Loads settings into the current stadium; does not load another stadium\'s assets'),
+      row('Undo','Undo','undo',0,'Up to 32 state edits',false),
+      row('Redo','Redo','redo',0,'Restores an undone state edit',false),
+      row('Play normally','Release camera','exit_tools',0,'Returns camera and input to native gameplay; Menu / Options reopens Sandbox')
+    ];
+    var view=new URLSearchParams(location.search).get('view');
+    document.getElementById('ui').addEventListener('load',function(){
+      var state={active:true,menuOpen:true,paused:true,photoMode:false,speed:0,style:view==='scene'?'playstation':'xbox',tab:view==='players'?1:view==='scene'?3:2,selection:view==='scene'?1:0,message:'Interface preview only — no game is running in this image.',rows:view==='players'?players:view==='scene'?scene:tools};
+      this.contentWindow.NFL2K5SandboxUI.render(state);
+    });
+  </script>
+</body>
+</html>

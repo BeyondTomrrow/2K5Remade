@@ -39,6 +39,8 @@
 #include "xbox_memory_layout.h"
 #include "recomp_funcs.h"
 #include "xinput_xbox.h"
+#include "nfl2k5_sandbox.h"
+#include "nfl2k5_sandbox_ui.h"
 
 #define NFL2K5_XPP_GAMEPAD_TYPE 0x004DA614u
 #define NFL2K5_XINPUT_HANDLE    0x7FFE0000u  /* | port */
@@ -213,6 +215,7 @@ static int mouse_hle_on(void)
 
 static void host_mouse_gamepad(XBOX_GAMEPAD *g)
 {
+    if (nfl2k5_sandbox_ui_pointer_active()) return;
     HWND hwnd = GetForegroundWindow();
     POINT pt;
     RECT rc;
@@ -489,6 +492,12 @@ int nfl2k5_hle_XInputGetState(void)
         }
     }
     host_gamepad(&g);
+    {
+        int sandbox_input = nfl2k5_sandbox_input(g.wButtons, g.bAnalogButtons,
+            g.sThumbLX, g.sThumbLY, g.sThumbRX, g.sThumbRY);
+        if (sandbox_input) memset(&g, 0, sizeof g);
+        if (sandbox_input == 2) g.wButtons = 0x10u;
+    }
     if (memcmp(&g, &last, sizeof g)) {
         packet++;
         if (g.wButtons != last.wButtons || g.bAnalogButtons[0] != last.bAnalogButtons[0])

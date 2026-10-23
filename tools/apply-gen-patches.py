@@ -31,6 +31,26 @@ LENIENT = "--lenient" in sys.argv
 
 # (id, function, anchor line (stripped match), insert 'before' or 'after', code)
 PATCHES = [
+    ("SANDBOX_POSE_DRAW_BEGIN", "sub_0008FD90", "PUSH32(esp, 0x0008FFAEu); RECOMP_ABI_CALL(0x00021900u, sub_00021900); /* call 0x00021900 */", "before", """\
+    { extern uint32_t nfl2k5_sandbox_pose_begin_draw(uint32_t,uint32_t,uint32_t); edx = nfl2k5_sandbox_pose_begin_draw(MEM32(esi + 0x2Cu), ecx, edx); }
+"""),
+    ("SANDBOX_POSE_DRAW_END", "sub_0008FD90", "loc_0008FFB6: ;", "after", """\
+    { extern void nfl2k5_sandbox_pose_end_draw(void); nfl2k5_sandbox_pose_end_draw(); }
+"""),
+    ("SANDBOX_LAUNCH_ACCEPTED", "sub_002C0E70", "loc_002C0E7C: ;", "after", """\
+    { extern void nfl2k5_sandbox_menu_launch_accepted(void); nfl2k5_sandbox_menu_launch_accepted(); }
+"""),
+    ("SANDBOX_MAIN_FSM_SERVICE", "sub_0006E6A0", "loc_0006E6A0: ;", "after", """\
+    { extern void nfl2k5_sandbox_menu_service(void); if (ecx == 0x00A84B18u) { RECOMP_REGS_OUT(); nfl2k5_sandbox_menu_service(); RECOMP_REGS_IN(); } }
+"""),
+    # Sandbox changes only the gameplay update delta; input/audio/rendering
+    # continue through the normal scheduler while its simulation is frozen.
+    ("SANDBOX_FRAME_DELTA", "sub_00064CD0", "PUSH32(esp, 0x00064CF7u); RECOMP_ABI_CALL(0x00064BE0u, sub_00064BE0); /* call 0x00064BE0 */", "before", """\
+    { extern float nfl2k5_sandbox_world_frame_delta(float); MEMF(esp + 0xC) = nfl2k5_sandbox_world_frame_delta(MEMF(esp + 0xC)); }
+"""),
+    ("SANDBOX_VIEWPORT_CAMERA", "sub_00064F80", "PUSH32(esp, 0x00064FAFu); RECOMP_ABI_CALL(0x0002AC80u, sub_0002AC80); /* call 0x0002AC80 */", "before", """\
+    { extern void nfl2k5_sandbox_world_camera(uint32_t); RECOMP_REGS_OUT(); nfl2k5_sandbox_world_camera(ecx); RECOMP_REGS_IN(); }
+"""),
     ("CELEBRATION_PREVIEW_CUSTOM", "sub_001B6B40", "loc_001B6B40: ;", "after", """\
     if (ecx >= 37u) { extern uint32_t nfl2k5_celebration_resource(uint32_t); eax = nfl2k5_celebration_resource(ecx); esp += 4; return; }
 """),

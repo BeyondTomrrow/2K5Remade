@@ -3852,6 +3852,14 @@ int main(int argc, char **argv)
     if (!entry) { fprintf(stderr, "[BOOT] Recompiled entry point missing.\n"); return 4; }
     printf("[BOOT] XBE loaded; memory, kernel and recompiled entry 0x00016BD1 ready.\n");
     if (validate_only) {
+        extern int nfl2k5_sandbox_selftest(void);
+        extern int nfl2k5_sandbox_world_selftest(void);
+        extern int nfl2k5_sandbox_menu_validate(void);
+        extern int nfl2k5_sandbox_actor_properties_selftest(void);
+        extern int nfl2k5_sandbox_pose_selftest(void);
+        if (!nfl2k5_sandbox_selftest() || !nfl2k5_sandbox_world_selftest() ||
+            !nfl2k5_sandbox_menu_validate() || !nfl2k5_sandbox_actor_properties_selftest() ||
+            !nfl2k5_sandbox_pose_selftest()) return 10;
         extern int nfl2k5_test_memmove(uint32_t buffer);
         uint32_t test_buffer = xbox_HeapAlloc(4096, 16);
         if (!test_buffer || !nfl2k5_test_memmove(test_buffer)) return 8;
