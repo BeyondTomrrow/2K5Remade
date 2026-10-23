@@ -5,17 +5,31 @@ settings, modern controllers with in-game remapping, brand-new teams alongside
 the 32 clubs, a Team Creator, texture packs, drop-in mod packs, local music,
 organized saves, and selectable broadcast presentation packages.
 
-> **Preview release:** The game is playable, but this project is still under
-> active development and has known bugs. Back up your saves before testing.
+> **Preview release `0.7.0-sandbox-preview`:** The game is playable, but this
+> project is still under active development and has known bugs. Back up your
+> saves before testing.
+>
+> **This is the last build on the current (Direct3D 11) renderer line.** The
+> next line of development merges a new SDL3 renderer and begins Linux support,
+> so this release is a stable snapshot to fall back on.
+>
+> **What's new in this build:** a separate, opt-in **Sandbox** scene editor (see
+> below). **My NFL Eras is not included in this release** — it is still in
+> development and ships in a later build.
 
 ## What you need
 
 - 64-bit Windows 10 or Windows 11
-- A legally owned Xbox copy of ESPN NFL 2K5
+- Your own legally owned, clean USA retail Xbox copy of ESPN NFL 2K5
 - Either an extracted disc folder or your own Xbox ISO/XISO
 
 The project and installer do not include or download the retail game, and no
 game assets are distributed with it.
+
+The game boots against your own disc and verifies it by its XBE hash, so it
+must be a clean, unmodified USA retail disc. A patched or region-different XBE
+will not pass the check. (Supported `.2k5patch` mods are handled separately and
+paired with their own validated build; see **Native mod packages** below.)
 
 ## Install and play
 
@@ -209,6 +223,25 @@ scorebug (such as SOFTDRINK 2K28's).
 
 Press **F2** at any time (menu or game) to cycle to the next installed
 presentation; a short on-screen message names it.
+
+### Sandbox (new, opt-in)
+
+This release adds **Sandbox**, a separate opt-in pack for setting up and
+capturing scenes. It installs to `mods\sandbox` and, because its pack is
+present, adds a **Sandbox** row under **Game Modes** — like My NFL Eras, the
+feature is gated on its pack, and normal retail play is unchanged. To turn it
+off, set `sandbox=0` in `mods\features.ini`.
+
+Confirmed tools:
+
+- camera control,
+- scene setup and game-state control,
+- saving a scene.
+
+The player-manipulation tools (moving and posing players, and the clip picker)
+are **work in progress**. They depend on disc-derived pose data
+(`sandboxposes.bin`) that is not shipped with this release, so those tools stay
+inactive until that data is built; the tools above work without it.
 
 ### Discord Rich Presence
 

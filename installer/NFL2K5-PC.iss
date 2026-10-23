@@ -3,7 +3,7 @@
 ; junction to it at {app}\original\disc.
 
 #define MyAppName "ESPN NFL 2K5 Native PC"
-#define MyAppVersion "0.1.0-preview"
+#define MyAppVersion "0.7.0-sandbox-preview"
 #define MyAppExeName "NFL2K5.exe"
 
 [Setup]
@@ -42,9 +42,10 @@ Source: "assets\nfl2k5.ico"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\tools\extract-xiso.exe"; DestDir: "{app}\tools"; Flags: ignoreversion
 Source: "..\build\tools\NFL2K5-ModPack-Installer.exe"; DestDir: "{app}\tools"; Flags: ignoreversion
 Source: "..\build\tools\NFL2K5-TeamBuilder.exe"; DestDir: "{app}\tools"; Flags: ignoreversion
-; My NFL Eras first-run asset builder (tools\build-eras-builder.ps1): the feature pack is data
-; only, its assets are built from the player's discs by this exe (docs/eras/MOD-PACK-DESIGN.md 7)
-Source: "..\build\tools\NFL2K5-ErasBuilder.exe"; DestDir: "{app}\tools"; Flags: ignoreversion skipifsourcedoesntexist
+; My NFL Eras is NOT part of this release (still in development). Its first-run asset
+; builder (tools\build-eras-builder.ps1) is intentionally excluded so nothing Eras-branded
+; ships. Do not re-enable these lines until the Eras feature pack is released.
+; Source: "..\build\tools\NFL2K5-ErasBuilder.exe"; DestDir: "{app}\tools"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "..\tools\team-creator\vendor\LICENSE-2k-football-mod-tools.txt"; DestDir: "{app}\tools\licenses"; Flags: ignoreversion
 ; PS2/Xbox save import (saves\import) converts through this tool
 Source: "..\tools\nfl2k5-save-converter.exe"; DestDir: "{app}\tools"; Flags: ignoreversion
@@ -68,6 +69,18 @@ Source: "..\mods\presentations\*.txt"; DestDir: "{app}\mods\presentations"; Flag
 ; Teams: staged by tools\build-release.ps1 (the clubs' presentation files and the
 ; release teams it lists); test teams in mods\teams never ship.
 Source: "..\release\teams\*"; DestDir: "{app}\mods\teams"; Flags: ignoreversion recursesubdirs createallsubdirs
+; Sandbox: a separate, opt-in scene editor pack. Presence of pack.json makes the
+; Game Modes > Sandbox row available (like My NFL Eras is gated by its pack); the
+; player can turn it off with sandbox=0 in mods\features.ini. Only the manifest and
+; the controller/WebView UI ship by an explicit extension allow-list. The
+; disc-derived pose data (sandboxposes.bin) is intentionally NOT shipped, so the
+; pose/clip tools stay inactive; the confirmed camera/setup/game-state/scene-save
+; tools work without it.
+Source: "..\mods\sandbox\pack.json"; DestDir: "{app}\mods\sandbox"; Flags: ignoreversion
+Source: "..\mods\sandbox\ui\*.html"; DestDir: "{app}\mods\sandbox\ui"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\mods\sandbox\ui\*.css"; DestDir: "{app}\mods\sandbox\ui"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\mods\sandbox\ui\*.js"; DestDir: "{app}\mods\sandbox\ui"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\mods\sandbox\ui\*.md"; DestDir: "{app}\mods\sandbox\ui"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\assets\controls\*.png"; DestDir: "{app}\assets\controls"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\assets\controls\*.json"; DestDir: "{app}\assets\controls"; Flags: ignoreversion
 Source: "..\docs\third-party\kenney-input-prompts-LICENSE.txt"; DestDir: "{app}\docs\third-party"; Flags: ignoreversion
