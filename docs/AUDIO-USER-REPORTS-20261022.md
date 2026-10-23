@@ -162,3 +162,41 @@ Tools: `tools\audio\` `xemu_launch.ps1`, `xemu_oracle_run.sh`, `xemu_mon.py`, `x
 `xemu_key.ps1`, `xemu_vp_dump.py`, `vp_decode.py`, `vp_timeline.py`, `app_mute.ps1`,
 `app_sessions.ps1`, `proc_loopback\proc_loopback.cpp`, `ab_compare.py`, `hf_band.py`, `tone_track.py`,
 `voice_table.py`, `swing_vs_on.py`, `report_csv_plot.py`.
+
+
+## Follow-up: matching xemu's spectral cliff (2026-10-23)
+
+The largest remaining audible difference in `ab-after.png` was the top end: xemu's long-term spectrum
+falls off a cliff by ~10-11 kHz (11-20 kHz near -100 dBFS), ours ran flat to 20 kHz -- harsh / "glitched".
+On the console every voice is band-limited near the source Nyquist (sources are <=22 kHz), and the output
+has nothing above ~11 kHz. Three changes, measured on a matched 20 s demo play (xemu reference clip vs our
+build), clips `ab-xemu.wav` / `ab-ours-before.wav` (cubic) / `ab-ours-after.wav` (final), picture `ab-final.png`:
+
+1. **Windowed-sinc voice resampler** (apu_vp.c `voice_resample`): replaces the cubic interpolator for
+   upsampled voices with a 32-tap Kaiser-windowed sinc (beta 8, cutoff 0.42 of the source rate, 512
+   phases), which is what xemu's libsamplerate does. Offline the images drop to -84..-88 dB.
+   `RECOMP_APU_CUBIC=1` restores the old path.
+2. **Output low-pass at 11 kHz** (apu_dsp.c, 4th-order Butterworth on the final L/R, after the soft
+   limiter that itself makes harmonics): matches the cliff for every voice at once, including the 48 kHz
+   helper voices and the limiter products. `RECOMP_APU_NO_OUTLP=1` off.
+3. **-2.5 dB master trim** (`RECOMP_APU_OUT_GAIN`, default 0.75): the moderate play was ~4.5 dB hot.
+
+| band | xemu | before (cubic) | after (sinc+LPF+trim) |
+|---|---|---|---|
+| rms (mono) | -28.0 dBFS | -23.5 | -26.1 |
+| 0.5-8 kHz | -29.9 | -26.1 | -29.8 |
+| 8-11 kHz | -62.2 | -54.1 | -54.9 |
+| 11-15 kHz | -100.3 | -59.6 | -77.5 |
+| 15-20 kHz | -100.6 | -71.1 | -101.9 |
+| peak | -8.7 | -2.8 | -4.0 |
+
+15-20 kHz now matches xemu (-102 vs -101, a 31 dB drop from before); 0.5-8 kHz and the overall level
+match within 2 dB. 8-11 kHz (+7 dB) and 11-15 kHz (+22 dB) are still hot: that band holds the soft
+limiter's intermodulation products, which the 11 kHz filter only attenuates by 3-18 dB. Closing it
+would need a steeper output filter (risking a duller 9-10 kHz) or a cleaner limiter -- left open.
+`toolsudio\scene_levels.py` classifies each second (quiet field / play) from the voice-table dump so
+the level is compared on like scenes, not just one window.
+
+The comb-like 500-1000 Hz stripes the coordinator flagged are not ours-only: a peak-spacing count found
+9 peaks (median 67 Hz) in ours against 11 (59 Hz) in xemu over the same band -- crowd/voice content that
+differs by matchup, not our reverb (whose combs resonate at 29-34 Hz, feeding only the 20-150 Hz bump).

@@ -1,5 +1,5 @@
 diff --git a/src/apu/apu_vp.c b/src/apu/apu_vp.c
-index 4982e7b..fe91371 100644
+index 4982e7b..75b8a48 100644
 --- a/src/apu/apu_vp.c
 +++ b/src/apu/apu_vp.c
 @@ -511,6 +586,29 @@ static void fe_method(MCPXAPUState *d, uint32_t method, uint32_t argument)
@@ -32,58 +32,104 @@ index 4982e7b..fe91371 100644
          voice_set_mask(d, (uint16_t)d->regs[NV_PAPU_FECV],
                         NV_PAVS_VOICE_PAR_NEXT,
                         NV_PAVS_VOICE_PAR_NEXT_EBO, argument);
-@@ -1193,6 +1293,9 @@ typedef struct {
+@@ -1193,7 +1293,48 @@ typedef struct {
      float fifo[RS_FIFO][2];
      int fifo_n, fifo_i;
      bool ended;
-+    /* anti-imaging low-pass (two biquads = 4th-order Butterworth) for an
-+     * upsampled voice; coefficients for lp_rate */
-+    float lp_rate, lp_b0[2], lp_b1[2], lp_b2[2], lp_a1[2], lp_a2[2], lp_z[2][2][2];
++    /* band-limited (windowed-sinc) history for upsampled voices: the
++     * output point lies between sh[RS_TAPS/2-1] and sh[RS_TAPS/2] */
++    float sh[32][2];
++    int stereo_left;          /* > 0 while L != R was seen within the window */
  } VoiceResampler;
++
++/* Windowed-sinc interpolation for upsampled voices (source rate < 48 kHz).
++ * xemu's VP resamples each voice with libsamplerate's sinc converter: its
++ * output has nothing above the sources' Nyquist (a cliff at ~10-11 kHz in a
++ * match, where the fastest voices are 22 kHz); the cubic interpolator left
++ * images up to 20 kHz (16 dB more 11-20 kHz energy than xemu after a 4th-order
++ * low-pass, 39 dB before; docs/AUDIO-USER-REPORTS-20261022.md). 32 taps,
++ * Kaiser beta 8 (~80 dB stopband), cutoff 0.42 of the source rate (pass to
++ * ~0.34, stop from 0.50 = the source Nyquist), 512 phases with linear
++ * interpolation between them, each phase normalised to unity gain at DC.
++ * RECOMP_APU_CUBIC=1: the old cubic interpolator without any filter. */
++#define RS_TAPS 32
++#define RS_PHASES 512
++static float s_sinc_tab[RS_PHASES + 1][RS_TAPS];
++static double bessel_i0(double x)
++{
++    double sum = 1.0, term = 1.0;
++    for (int k = 1; k < 40; k++) { term *= (x / (2.0 * k)) * (x / (2.0 * k)); sum += term; }
++    return sum;
++}
++static void sinc_table_init(void)
++{
++    const double fc = 0.42, beta = 8.0, half = RS_TAPS / 2.0;
++    for (int p = 0; p <= RS_PHASES; p++) {
++        double t = (double)p / RS_PHASES, sum = 0.0;
++        for (int k = 0; k < RS_TAPS; k++) {
++            double x = (k - (RS_TAPS / 2 - 1)) - t;        /* distance from the output point */
++            double sx = 2.0 * fc * x;
++            double sinc = fabs(sx) < 1e-9 ? 1.0 : sin(3.14159265358979 * sx) / (3.14159265358979 * sx);
++            double u = x / half;
++            double win = fabs(u) >= 1.0 ? 0.0 : bessel_i0(beta * sqrt(1.0 - u * u)) / bessel_i0(beta);
++            s_sinc_tab[p][k] = (float)(2.0 * fc * sinc * win);
++            sum += s_sinc_tab[p][k];
++        }
++        for (int k = 0; k < RS_TAPS; k++) s_sinc_tab[p][k] = (float)(s_sinc_tab[p][k] / sum);
++    }
++}
  static VoiceResampler s_rs[MCPX_HW_MAX_VOICES];
  
-@@ -1271,9 +1374,202 @@ static int voice_resample(MCPXAPUState *d, uint16_t v, float samples[][2],
-         }
-         r->pos += step;
-     }
-+    /* Anti-imaging low-pass. The console's VP band-limits what it
-+     * upsamples: xemu's output has nothing above the sources' Nyquist
-+     * (a cliff at ~11 kHz for the 22 kHz crowd/commentary), ours carried
-+     * cubic-interpolation images up to 20 kHz (-80..-120 dB/Hz, a fizz on
-+     * every voice; docs/AUDIO-USER-REPORTS-20261022.md). Two biquads
-+     * (4th-order Butterworth) at 90 % of the source Nyquist, per voice,
-+     * only when the voice is upsampled. RECOMP_APU_NO_LOWPASS=1 turns it off. */
-+    {
-+        static int off = -1;
-+        if (off < 0) off = getenv("RECOMP_APU_NO_LOWPASS") != NULL;
-+        if (!off && rate > 1.05f) {
-+            if (fabsf(rate - r->lp_rate) > 0.01f * rate) {
-+                float fc = 0.45f * 48000.0f / rate;
-+                float w0 = 2.0f * 3.14159265f * fc / 48000.0f, cw = cosf(w0), sw = sinf(w0);
-+                static const float q[2] = { 0.54119610f, 1.30656296f };
-+                for (int s = 0; s < 2; s++) {
-+                    float alpha = sw / (2.0f * q[s]), a0 = 1.0f + alpha;
-+                    r->lp_b0[s] = (1.0f - cw) * 0.5f / a0; r->lp_b1[s] = (1.0f - cw) / a0; r->lp_b2[s] = r->lp_b0[s];
-+                    r->lp_a1[s] = -2.0f * cw / a0; r->lp_a2[s] = (1.0f - alpha) / a0;
-+                }
-+                r->lp_rate = rate;
+ static void voice_resampler_reset(uint16_t v)
+@@ -1225,6 +1366,12 @@ static int voice_resample(MCPXAPUState *d, uint16_t v, float samples[][2],
+     double step = (rate > 0.0f) ? 1.0 / (double)rate : 1.0;
+     if (step > 64.0) step = 64.0;
+     if (step < 1.0 / 64.0) step = 1.0 / 64.0;
++    static int cubic = -1;
++    if (cubic < 0) { cubic = getenv("RECOMP_APU_CUBIC") != NULL; if (!cubic) sinc_table_init(); }
++    /* upsampled voices only; 48 kHz (helper voices) and faster sources keep
++     * the cubic path. The sinc history is filled as the voice plays, so a
++     * switch between the paths mid-voice is harmless. */
++    bool use_sinc = !cubic && rate > 1.0001f;
+ 
+     for (int i = 0; i < requested_num; i++) {
+         while (r->pos >= 1.0) {
+@@ -1260,6 +1407,34 @@ static int voice_resample(MCPXAPUState *d, uint16_t v, float samples[][2],
+             memmove(r->hist[0], r->hist[1], sizeof(r->hist[0]) * 3);
+             r->hist[3][0] = in[0];
+             r->hist[3][1] = in[1];
++            if (use_sinc) {
++                memmove(r->sh[0], r->sh[1], sizeof(r->sh[0]) * (RS_TAPS - 1));
++                r->sh[RS_TAPS - 1][0] = in[0];
++                r->sh[RS_TAPS - 1][1] = in[1];
++                if (in[0] != in[1]) r->stereo_left = RS_TAPS;
++                else if (r->stereo_left > 0) r->stereo_left--;
 +            }
-+            for (int i = 0; i < requested_num; i++)
-+                for (int c = 0; c < 2; c++) {
-+                    float x = samples[i][c];
-+                    for (int s = 0; s < 2; s++) {
-+                        float *z = r->lp_z[s][c];
-+                        float y = r->lp_b0[s] * x + z[0];
-+                        z[0] = r->lp_b1[s] * x - r->lp_a1[s] * y + z[1];
-+                        z[1] = r->lp_b2[s] * x - r->lp_a2[s] * y;
-+                        x = y;
-+                    }
-+                    samples[i][c] = x;
-+                }
-+        } else if (off) {
-+            r->lp_rate = 0.0f;
 +        }
-+    }
++        if (use_sinc) {
++            float fp = (float)r->pos * RS_PHASES;
++            int ph = (int)fp;
++            float fr = fp - (float)ph, a = 0.0f, b = 0.0f;
++            if (ph >= RS_PHASES) { ph = RS_PHASES - 1; fr = 1.0f; }
++            const float *k0 = s_sinc_tab[ph], *k1 = s_sinc_tab[ph + 1];
++            if (r->stereo_left > 0) {
++                for (int k = 0; k < RS_TAPS; k++) {
++                    float h = k0[k] + (k1[k] - k0[k]) * fr;
++                    a += h * r->sh[k][0];
++                    b += h * r->sh[k][1];
++                }
++            } else {
++                for (int k = 0; k < RS_TAPS; k++) a += (k0[k] + (k1[k] - k0[k]) * fr) * r->sh[k][0];
++                b = a;
++            }
++            samples[i][0] = a;
++            samples[i][1] = b;
++            r->pos += step;
++            continue;
+         }
+         float t = (float)r->pos, t2 = t * t, t3 = t2 * t;
+         for (int c = 0; c < 2; c++) {
+@@ -1274,6 +1449,161 @@ static int voice_resample(MCPXAPUState *d, uint16_t v, float samples[][2],
      return requested_num;
  }
  
@@ -245,7 +291,7 @@ index 4982e7b..fe91371 100644
  /* ============================================================
   * Voice processing (main per-voice function)
   * ============================================================ */
-@@ -1297,6 +1593,23 @@ static void voice_process(MCPXAPUState *d,
+@@ -1297,6 +1627,23 @@ static void voice_process(MCPXAPUState *d,
  
      if (paused) return;
  
@@ -269,3 +315,65 @@ index 4982e7b..fe91371 100644
      /* Step filter envelope */
      float ef_value = voice_step_envelope(
          d, v, NV_PAVS_VOICE_CFG_ENV1, NV_PAVS_VOICE_CFG_ENVF,
+
+diff --git a/src/apu/apu_dsp.c b/src/apu/apu_dsp.c
+index 0b09d93..8c10e6a 100644
+--- a/src/apu/apu_dsp.c
++++ b/src/apu/apu_dsp.c
+@@ -282,6 +333,56 @@ void mcpx_apu_dsp_frame(MCPXAPUState *d,
+             if (right > 1.0f) right = 1.0f;
+             if (right < -1.0f) right = -1.0f;
+ 
++            /* Output low-pass at ~11 kHz. On the console nothing reaches the
++             * speakers above ~10-11 kHz: the voice sources are <=22 kHz
++             * (11 kHz Nyquist) and the VP/GP band-limit at the source rate, so
++             * xemu's output falls off a cliff by 11 kHz (11-15 kHz at -100 dBFS
++             * in a match). Ours sat 25-40 dB higher -- cubic-interpolation
++             * images (now band-limited per voice) and harmonics the soft limiter
++             * adds above the knee. A 4th-order Butterworth here matches the
++             * cliff for every voice at once, after the limiter that creates the
++             * harmonics. RECOMP_APU_NO_OUTLP=1 turns it off.
++             * docs/AUDIO-USER-REPORTS-20261022.md. */
++            {
++                static int off_lp = -1;
++                static float b0[2], b1[2], b2[2], a1[2], a2[2];
++                static float z[2][2][2];   /* [section][channel][2] */
++                if (off_lp < 0) {
++                    off_lp = getenv("RECOMP_APU_NO_OUTLP") != NULL;
++                    float fc = 11000.0f, w0 = 2.0f * 3.14159265f * fc / 48000.0f;
++                    float cw = cosf(w0), sw = sinf(w0);
++                    static const float q[2] = { 0.54119610f, 1.30656296f };   /* 4th-order Butterworth */
++                    for (int sct = 0; sct < 2; sct++) {
++                        float alpha = sw / (2.0f * q[sct]), a0 = 1.0f + alpha;
++                        b0[sct] = (1.0f - cw) * 0.5f / a0; b1[sct] = (1.0f - cw) / a0; b2[sct] = b0[sct];
++                        a1[sct] = -2.0f * cw / a0; a2[sct] = (1.0f - alpha) / a0;
++                    }
++                }
++                if (!off_lp) {
++                    float *ch[2] = { &left, &right };
++                    for (int c = 0; c < 2; c++) {
++                        float x = *ch[c];
++                        for (int sct = 0; sct < 2; sct++) {
++                            float y = b0[sct] * x + z[sct][c][0];
++                            z[sct][c][0] = b1[sct] * x - a1[sct] * y + z[sct][c][1];
++                            z[sct][c][1] = b2[sct] * x - a2[sct] * y;
++                            x = y;
++                        }
++                        *ch[c] = x;
++                    }
++                }
++            }
++            /* Master trim to xemu's level. A moderate demo play measured ~3-4 dB
++             * hotter than xemu in a matched 20 s window (mono -23.6 vs -28.0 dBFS,
++             * 2-8 kHz -32.3 vs -36.8); -2.5 dB brings the loud scenes in line while
++             * leaving the near-equal quiet scenes only slightly under. Env override
++             * RECOMP_APU_OUT_GAIN=<linear> (1.0 = none). docs/AUDIO-USER-REPORTS-20261022.md. */
++            {
++                static float g = -1.0f;
++                if (g < 0.0f) { const char *e = getenv("RECOMP_APU_OUT_GAIN"); g = e ? (float)atof(e) : 0.75f; }
++                left *= g; right *= g;
++            }
++
+             /* Convert to 16-bit and write (not accumulate) into frame buffer.
+              * Each of the 8 sub-frames writes its own 32-sample slice. */
+             d->monitor.frame_buf[off + i][0] = (int16_t)(left * 32767.0f);
