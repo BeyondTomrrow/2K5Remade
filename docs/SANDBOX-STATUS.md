@@ -241,3 +241,71 @@ frame-captured. It needs no HTML overlay and no analog sticks. **Next step:**
 in a session with fewer competing instances (higher FPS), reach one Sandbox
 match, let `AUTOTEST` run, and capture the per-control frames + markers to turn
 the NOT-CONFIRMED list above into CONFIRMED.
+
+## Session 2026-10-23 (Opus agent, cont.): AUTOTEST run end to end on a free machine
+
+Machine free (one instance, no competing NFL2K5). Rebuilt `build\Release\NFL2K5.exe`
+(incremental, EXITCODE 0), copied to `NFL2K5_sandbox.exe` (verified the 20
+`[SANDBOX-TEST]` strings are compiled in; the prior copy was stale). Launched ONE
+off-screen background instance on `--retail` from a sandbox `NFL2K5_ROOT`
+(`E:\eras-sbx\sbx-root`: junctions + sparse saves copy + **real copy** of
+`mods\sandbox`), `NFL2K5_SANDBOX_AUTOTEST=1`, `NFL2K5_PRIVATE_PACKS=1`, sandbox
+`-AppData`. Drove the menus by press file to a real Sandbox match
+(Game Modes > SANDBOX > SANDBOX SETUP > Team Select > Browns @ Texans) and let
+AUTOTEST run all 19 steps to `COMPLETE`. Real `saves\UDATA` signature verified
+unchanged before and after. Sheet: `logs\sandbox-verify-sheet.png`; per-control
+frames: `logs\sandbox-test\keepers\`. Perf note: ~5 fps, CPU-bound; menu D-pad
+edges drop at that frame rate, so one directional press per press-file write with
+a ~5 s dwell is the reliable pattern (rapid/batched repeats are eaten).
+
+### CONFIRMED on screen this session (frames + markers)
+
+- **Menu path / entry**: `Game Modes > SANDBOX` row (appended last), `SANDBOX SETUP`
+  cloned-Situation screen, `SANDBOX Team Select`, match start -> `[SANDBOX] Armed`
+  / `world entered (simulation paused)` / `captured live viewport camera`.
+- **Free camera + presets / move / FOV**: the rendered field view changes between
+  presets; the overhead preset visibly drives the top-down field view
+  (`sbx-06-pause.png`, `sbx-08/09`). Markers: camera move `x 0->500cm`, `FOV 60->72`.
+  (Steps 0-2 are masked by the pre-snap "Offensive controls / LOADING" intro card,
+  which stays up because the sim is paused on entry.)
+- **Select + frame on-field player**: `focus_player` listed 22 actors, selected
+  id=76 #96; camera reframed from overhead to the player (pixel delta 17-22 between
+  steps). Selection + camera framing work.
+- **Game-state edit on screen**: `home_score 0->3` via the command path is visible
+  on the native scorebug: `HOU 0` (`sbx-08-frame-step.png`) -> `HOU 3`
+  (`sbx-09-score-edit.png`).
+- **Scene save -> load**: `scene SAVE slot 1 -> OK`; after editing the score down,
+  `scene LOAD slot 1 -> OK` restored `home=3` and the camera. State round-trips.
+- **HTML editor overlay now LOADS** (the real-copy `mods\sandbox` fix): log shows
+  `[SANDBOX] Browser started ... mods\sandbox\ui`, `loading https://presentation.local/mods/sandbox/ui/index.html`,
+  `UI: loading` -> `UI: running`, with **no `web error 0/9`**. The junction bug is
+  fixed. It is not captured in the BMP because WebView2 composites outside the
+  off-screen framebuffer.
+
+### NOT CONFIRMED this session (honest, with cause)
+
+- **Pause / slow-mo / one-frame step**: commands executed (`speed=100/0/25%`,
+  one-frame step logged) but Sandbox arms at the **pre-snap play-call screen**,
+  where no play is running, so there is no motion to slow or step. No visible
+  effect to capture here. (Needs the sim armed during a live, snapped play.)
+- **Move / rotate player poser**: `pose_x x10 -> 0cm`, `pose_yaw x4 -> 0deg`;
+  **0.00 pixel change** across steps 12-17. `nfl2k5_sandbox_pose_get`/`_set` find
+  no valid live draw actor for the selected player at the pre-snap play-call
+  screen, so the private pose palette never engages (`pose_status` =
+  `Native model placement`). The route compiles and is wired, but produces no
+  on-field movement in this state.
+- **Animation clip picker**: 8 clips load, but `pose_clip -> clip=0`,
+  `scrub time=0.00s`, status `Native model placement`, 0.00 pixel change. Same root
+  cause as the poser: no valid player draw object at pre-snap.
+
+### Root cause and next step
+
+The Sandbox editor activates at the **pre-snap play-call screen** (that is when
+`world_enter()` reports the field camera ready). There the camera and game-state
+tools work and are visible, but the player-manipulation tools (move/rotate poser,
+clip picker) have no live draw actor to act on, and pause/slow-mo/step have no
+running play to affect. Next step: arm/activate the editor during a **live snapped
+play** (or drive the sim one play in, then hand control to Sandbox) so the poser,
+clip picker, pause and slow-mo have a running simulation and valid per-player draw
+objects to manipulate; re-run AUTOTEST there. The overlay should be re-verified in
+a foreground (non-off-screen) capture since WebView2 is not in the off-screen BMP.
