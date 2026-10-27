@@ -3,63 +3,77 @@
 #
 # Total Lost Samples: 0
 #
-# Samples: 2K of event 'cpu_atom/cycles/P'
-# Event count (approx.): 6091497711
+# Samples: 6K of event 'cpu_atom/cycles/P'
+# Event count (approx.): 27572930179
 #
-# Overhead  Shared Object                    Symbol                                                                                                                                                                                                                                                                                                       IPC   [IPC Coverage]
-# ........  ...............................  ...........................................................................................................................................................................................................................................................................................................  ....................
+# Overhead  Shared Object                  Symbol                                IPC   [IPC Coverage]
+# ........  .............................  ....................................  ....................
 #
-    14.23%  NFL2K5                           [.] mcpx_apu_vp_frame                                                                                                                                                                                                                                                                                        -      -            
-    11.77%  NFL2K5                           [.] voice_get_samples                                                                                                                                                                                                                                                                                        -      -            
-     4.85%  .glXXXXXX (deleted)              [.] 0x0000000000001fa9                                                                                                                                                                                                                                                                                       -      -            
-     4.55%  [vdso]                           [.] __vdso_clock_gettime                                                                                                                                                                                                                                                                                     -      -            
-     3.15%  .glXXXXXX (deleted)              [.] 0x0000000000001f71                                                                                                                                                                                                                                                                                       -      -            
-     2.13%  NFL2K5                           [.] kernel_thunk_dispatch                                                                                                                                                                                                                                                                                    -      -            
-     1.99%  .glXXXXXX (deleted)              [.] 0x0000000000001fa2                                                                                                                                                                                                                                                                                       -      -            
-     1.97%  .glXXXXXX (deleted)              [.] 0x0000000000001fa6                                                                                                                                                                                                                                                                                       -      -            
-     1.44%  .glXXXXXX (deleted)              [.] 0x0000000000001f76                                                                                                                                                                                                                                                                                       -      -            
-     1.43%  .glXXXXXX (deleted)              [.] 0x0000000000001fa4                                                                                                                                                                                                                                                                                       -      -            
-     1.28%  libc.so.6                        [.] getenv                                                                                                                                                                                                                                                                                                   -      -            
-     1.13%  .glXXXXXX (deleted)              [.] 0x0000000000001fa0                                                                                                                                                                                                                                                                                       -      -            
-     1.11%  .glXXXXXX (deleted)              [.] 0x0000000000001f7a                                                                                                                                                                                                                                                                                       -      -            
-     1.09%  .glXXXXXX (deleted)              [.] 0x0000000000001f73                                                                                                                                                                                                                                                                                       -      -            
-     0.72%  .glXXXXXX (deleted)              [.] 0x0000000000001f9a                                                                                                                                                                                                                                                                                       -      -            
-     0.58%  NFL2K5                           [.] mcpx_apu_dsp_frame                                                                                                                                                                                                                                                                                       -      -            
-     0.58%  NFL2K5                           [.] sub_004262F0                                                                                                                                                                                                                                                                                             -      -            
-     0.58%  NFL2K5                           [.] InterlockedIncrement                                                                                                                                                                                                                                                                                     -      -            
-     0.51%  libglslang.so.16.6.0             [.] 0x000000000017bcf1                                                                                                                                                                                                                                                                                       -      -            
-     0.50%  libc.so.6                        [.] pthread_mutex_unlock                                                                                                                                                                                                                                                                                     -      -            
+     3.40%  NFL2K5                         [.] mcpx_apu_vp_frame                 -      -            
+     3.18%  libc.so.6                      [.] pthread_mutex_unlock              -      -            
+     2.28%  [vdso]                         [.] __vdso_clock_gettime              -      -            
+     2.14%  libSDL3.so.0.4.18              [.] 0x000000000039f81c                -      -            
+     2.11%  NFL2K5                         [.] voice_get_samples                 -      -            
+     1.94%  libSDL3.so.0.4.18              [.] 0x000000000039f67b                -      -            
+     1.76%  libc.so.6                      [.] 0x00000000000bc1dd                -      -            
+     1.45%  libc.so.6                      [.] pthread_mutex_lock                -      -            
+     1.26%  libSDL3.so.0.4.18              [.] 0x000000000039f676                -      -            
+     1.11%  libSDL3.so.0.4.18              [.] 0x000000000039ddc5                -      -            
+     1.10%  libSDL3.so.0.4.18              [.] 0x0000000000370627                -      -            
+     1.09%  libnvidia-glcore.so.615.78.08  [.] 0x0000000000d95ace                -      -            
+     1.03%  libSDL3.so.0.4.18              [.] 0x000000000037e6e7                -      -            
+     1.03%  [unknown]                      [k] 0xffffffffc0d0dd47                -      -            
+     1.02%  libc.so.6                      [.] 0x00000000000bbaf6                -      -            
+     0.96%  libSDL3.so.0.4.18              [.] 0x000000000039f817                -      -            
+     0.96%  libc.so.6                      [.] 0x00000000001b1c87                -      -            
+     0.95%  libSDL3.so.0.4.18              [.] 0x000000000039f4ac                -      -            
+     0.91%  libnvidia-glcore.so.615.78.08  [.] 0x0000000000e7ad0e                -      -            
+     0.81%  libSDL3.so.0.4.18              [.] 0x0000000000370d17                -      -            
+     0.81%  libSDL3.so.0.4.18              [.] 0x000000000039886b                -      -            
+     0.81%  libSDL3.so.0.4.18              [.] 0x000000000039f821                -      -            
+     0.76%  libnvidia-glcore.so.615.78.08  [.] 0x0000000000da27e4                -      -            
+     0.71%  libSDL3.so.0.4.18              [.] 0x000000000039f680                -      -            
+     0.68%  libnvidia-glcore.so.615.78.08  [.] 0x00000000009f48c2                -      -            
+     0.66%  libSDL3.so.0.4.18              [.] 0x000000000036bba7                -      -            
+     0.65%  libnvidia-glcore.so.615.78.08  [.] 0x0000000000de3ec2                -      -            
+     0.63%  libnvidia-glcore.so.615.78.08  [.] 0x0000000000da2806                -      -            
+     0.61%  libSDL3.so.0.4.18              [.] 0x000000000037368c                -      -            
+     0.60%  libc.so.6                      [.] 0x00000000000bc1fe                -      -            
+     0.58%  libnvidia-glcore.so.615.78.08  [.] 0x0000000000fa19b6                -      -            
+     0.57%  libSDL3.so.0.4.18              [.] 0x000000000037071e                -      -            
+     0.54%  libnvidia-glcore.so.615.78.08  [.] 0x0000000000de3672                -      -            
+     0.53%  libnvidia-glcore.so.615.78.08  [.] 0x0000000000de3726                -      -            
+     0.52%  [unknown]                      [k] 0xffffffff9442affc                -      -            
+     0.51%  libSDL3.so.0.4.18              [.] 0x000000000036c1de                -      -            
 
 
-# Samples: 58K of event 'cpu_core/cycles/P'
-# Event count (approx.): 295232626372
+# Samples: 51K of event 'cpu_core/cycles/P'
+# Event count (approx.): 253639323178
 #
 # Overhead  Shared Object                  Symbol                                 IPC   [IPC Coverage]
 # ........  .............................  .....................................  ....................
 #
-    31.16%  NFL2K5                         [.] sub_004262F0                       -      -            
-     5.66%  [vdso]                         [.] __vdso_clock_gettime               -      -            
-     4.93%  libc.so.6                      [.] pthread_rwlock_rdlock              -      -            
-     2.66%  [unknown]                      [k] 0xffffffff94a001c8                 -      -            
-     2.56%  libc.so.6                      [.] __sched_yield                      -      -            
-     2.44%  libc.so.6                      [.] pthread_rwlock_unlock              -      -            
-     1.79%  [unknown]                      [k] 0xffffffff96004707                 -      -            
-     1.48%  libc.so.6                      [.] 0x00000000001b1c87                 -      -            
-     1.46%  NFL2K5                         [.] sample_texture.part.0              -      -            
-     1.46%  libc.so.6                      [.] process_vm_readv                   -      -            
-     1.42%  libc.so.6                      [.] __getpid                           -      -            
-     1.38%  NFL2K5                         [.] InterlockedCompareExchange         -      -            
-     1.24%  [unknown]                      [k] 0xffffffff94a00087                 -      -            
-     1.24%  NFL2K5                         [.] sg_texture_for_stage               -      -            
-     1.10%  NFL2K5                         [.] nv2a_ack_thread                    -      -            
-     0.99%  NFL2K5                         [.] GetTickCount                       -      -            
-     0.85%  NFL2K5                         [.] fence_mirrors_tick                 -      -            
-     0.79%  NFL2K5                         [.] fetch_attr                         -      -            
-     0.74%  [unknown]                      [k] 0xffffffff95ff1d26                 -      -            
-     0.62%  [unknown]                      [k] 0xffffffff94d14451                 -      -            
-     0.60%  [unknown]                      [k] 0xffffffff95ffa901                 -      -            
+    36.72%  NFL2K5                         [.] sub_004262F0                       -      -            
+     9.85%  [vdso]                         [.] __vdso_clock_gettime               -      -            
+     6.30%  libc.so.6                      [.] pthread_rwlock_rdlock              -      -            
+     3.03%  libc.so.6                      [.] pthread_rwlock_unlock              -      -            
+     2.98%  libc.so.6                      [.] __sched_yield                      -      -            
+     1.56%  libc.so.6                      [.] 0x00000000001b1c87                 -      -            
+     1.55%  NFL2K5                         [.] InterlockedCompareExchange         -      -            
+     1.29%  [unknown]                      [k] 0xffffffff95833468                 -      -            
+     1.12%  NFL2K5                         [.] sg_texture_key                     -      -            
+     1.12%  NFL2K5                         [.] sample_texture.part.0              -      -            
+     1.08%  NFL2K5                         [.] GetTickCount                       -      -            
+     1.02%  NFL2K5                         [.] nv2a_ack_thread                    -      -            
+     0.98%  NFL2K5                         [.] fence_mirrors_tick                 -      -            
+     0.95%  [unknown]                      [k] 0xffffffff942001c8                 -      -            
+     0.92%  [unknown]                      [k] 0xffffffff95820bd6                 -      -            
+     0.77%  [unknown]                      [k] 0xffffffff95829e2f                 -      -            
+     0.75%  libnvidia-glcore.so.615.78.08  [.] 0x00000000009f48c2                 -      -            
+     0.72%  libc.so.6                      [.] pthread_mutex_lock                 -      -            
+     0.53%  libc.so.6                      [.] clock_gettime                      -      -            
 
 
 #
-# (Tip: To group events which need to be collected together for accuracy use {}: perf record -e {cycles,branches}' ...)
+# (Tip: To see callchains in a more compact form: perf report -g folded)
 #
