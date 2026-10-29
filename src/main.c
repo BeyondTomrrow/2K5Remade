@@ -693,6 +693,10 @@ int main(int argc, char **argv)
 
     printf("ESPN NFL 2K5 Native Recompilation\n");
     printf("[BOOT] Mounted game disc root: %s\n", game_dir);
+    {   /* warm the file cache with the packed game data (kernel_file.c) */
+        extern void xbox_PrefetchGameData(const char *root);
+        xbox_PrefetchGameData(game_dir);
+    }
 
     FILE *file = fopen(xbe_path, "rb");
     if (!file) {
