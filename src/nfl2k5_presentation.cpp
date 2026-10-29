@@ -1136,10 +1136,13 @@ static void music_tick()
 }
 
 /* RECOMP_AUDIO_WAV recordings get the theme too (apu_xaudio2.c tap). */
+/* Runs on the audio thread for every block (the audio report ring records it
+ * always), so it never waits: a lock held elsewhere skips the mix for that
+ * block instead of stalling the speakers (AUDIO-REPORT-HOTKEY-20261022). */
 static void capture_mix(int16_t *buf, int frames)
 {
-    std::lock_guard<std::mutex> g(s_music.lock);
-    if (!s_music.voice || s_music.state < 2) return;
+    std::unique_lock<std::mutex> g(s_music.lock, std::try_to_lock);
+    if (!g.owns_lock() || !s_music.voice || s_music.state < 2) return;
     float v = s_music.cur_vol;
     for (int i = 0; i < frames * 2 && s_music.cap_pos < s_music.pcm.size(); i++, s_music.cap_pos++) {
         int x = buf[i] + (int)(s_music.pcm[s_music.cap_pos] * v);

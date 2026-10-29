@@ -618,6 +618,13 @@ PATCHES = [
     ("TEAM_SELECT_HOME_NEXT", "sub_002C2240", "PUSH32(esp, 0x002C22D5u); RECOMP_ABI_CALL(0x002C18D0u, sub_002C18D0); /* call 0x002C18D0 */", "before", """\
     { extern int nfl2k5_ts_step(int, int, int); int _ts; RECOMP_REGS_OUT(); _ts = nfl2k5_ts_step(0, 1, 0); RECOMP_REGS_IN(); if (_ts) goto loc_002C22D5; }
 """),
+    # D3D's wait for the GPU (loc_00426427): pure guest code, so the game
+    # thread kept the guest lock for the whole wait and the APU's interrupt
+    # could not run; the sound went silent after 40 ms whenever the GPU side
+    # fell behind (AUDIO-REPORT-HOTKEY-20261022). On the console the interrupt
+    # preempts the spin; here the loop offers the lock to a waiting interrupt.
+    ("GPU_WAIT_PREEMPT", "sub_004262F0", "loc_00426427: ;", "after", """    { extern void xbox_ggl_preempt_point(unsigned int); xbox_ggl_preempt_point(0x00426427u); }
+"""),
     ("TEAM_SELECT_AWAY_NEXT", "sub_002C2240", "PUSH32(esp, 0x002C2285u); RECOMP_ABI_CALL(0x002C1910u, sub_002C1910); /* call 0x002C1910 */", "before", """\
     { extern int nfl2k5_ts_step(int, int, int); int _ts; RECOMP_REGS_OUT(); _ts = nfl2k5_ts_step(1, 1, 0); RECOMP_REGS_IN(); if (_ts) goto loc_002C2285; }
 """),

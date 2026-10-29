@@ -227,6 +227,22 @@ static void host_keyboard_gamepad(XBOX_GAMEPAD *g)
 #undef KEY
 }
 
+/* Back + R3: save the last 90 s of audio and the diagnostics (F9 on the
+ * keyboard; docs/AUDIO-REPORT-HOTKEY-20261022.md). While the combination is
+ * held neither button reaches the game, and R3 does not skip the song. */
+static void audio_report_combo(XBOX_GAMEPAD *g)
+{
+    static int held;
+    extern void xbox_AudioReportRequest(void);
+    if ((g->wButtons & 0xA0) == 0xA0) {
+        if (!held) xbox_AudioReportRequest();
+        held = 1;
+    } else if (!(g->wButtons & 0xA0)) {
+        held = 0;
+    }
+    if (held) g->wButtons &= (WORD)~0xA0;
+}
+
 static void host_gamepad_port(int port, XBOX_GAMEPAD *g)
 {
     extern volatile long g_xbox_input_blocked;
@@ -248,6 +264,7 @@ static void host_gamepad_port(int port, XBOX_GAMEPAD *g)
     }
     if (port != 0)
         return;
+    audio_report_combo(g);
     {
         extern void nfl2k5_local_music_buttons(int l3, int r3);
         nfl2k5_local_music_buttons((g->wButtons & 0x40) != 0, (g->wButtons & 0x80) != 0);
