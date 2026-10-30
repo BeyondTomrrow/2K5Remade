@@ -802,7 +802,8 @@ static void android_pick_root(void)
                  "Internal storage > NFL2K5, and make sure NFL 2K5 has All files access "
                  "(Settings > Apps > NFL 2K5 > Permissions). The first start unpacks it.\n\n"
                  "Or copy default.xbe and the vc_53450030 folder into Internal storage > NFL2K5 > original.");
-        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "NFL 2K5: game files not found", msg, NULL);
+        extern void nfl2k5_android_notice(const char *title, const char *msg);
+        nfl2k5_android_notice("NFL 2K5: game files not found", msg);
         exit(1);
     }
 }
@@ -814,18 +815,18 @@ int main(int argc, char **argv)
     SetThreadExecutionState(ES_CONTINUOUS | ES_DISPLAY_REQUIRED | ES_SYSTEM_REQUIRED);
 #endif
 #if defined(__ANDROID__)
-    android_pick_root();
-    setenv("RECOMP_RENDERER", "vulkan", 0);   /* the GPU renderer (gx) on Vulkan; "cpu" for software */
     {
-        extern void nfl2k5_touch_pad_init(void);   /* on-screen controls (platform/android/touch_pad.c) */
-        nfl2k5_touch_pad_init();
-    }
-    {
+        /* the log first, so a start that stops at the game files says why */
         char lp[1024];
         FILE *lf;
         pthread_t t;
-        snprintf(lp, sizeof lp, "%s/nfl2k5.log", getenv("NFL2K5_ROOT"));
+        mkdir("/sdcard/NFL2K5", 0755);
+        snprintf(lp, sizeof lp, "%s/nfl2k5.log", getenv("NFL2K5_ROOT") ? getenv("NFL2K5_ROOT") : "/sdcard/NFL2K5");
         lf = fopen(lp, "w");
+        if (!lf) {
+            snprintf(lp, sizeof lp, "%s/nfl2k5.log", SDL_GetAndroidExternalStoragePath());
+            lf = fopen(lp, "w");
+        }
         setvbuf(stdout, NULL, _IOLBF, 0);
         setvbuf(stderr, NULL, _IONBF, 0);
         if (pipe(android_log_pipe) == 0) {
@@ -834,6 +835,14 @@ int main(int argc, char **argv)
             pthread_create(&t, NULL, android_log_thread, lf);
             pthread_detach(t);
         }
+        fprintf(stderr, "[ANDROID] log %s\n", lp);
+    }
+    android_pick_root();
+    fprintf(stderr, "[ANDROID] game folder %s\n", getenv("NFL2K5_ROOT"));
+    setenv("RECOMP_RENDERER", "vulkan", 0);   /* the GPU renderer (gx) on Vulkan; "cpu" for software */
+    {
+        extern void nfl2k5_touch_pad_init(void);   /* on-screen controls (platform/android/touch_pad.c) */
+        nfl2k5_touch_pad_init();
     }
 #endif
 

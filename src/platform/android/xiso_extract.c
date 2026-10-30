@@ -165,6 +165,59 @@ static int xiso_root(Xiso *x, uint32_t *sector, uint32_t *size)
     return fread(sector, 4, 1, x->f) == 1 && fread(size, 4, 1, x->f) == 1;
 }
 
+/* A message the player must see before the game's window exists: the
+ * system's dialog, or drawn in a window of its own when that cannot show;
+ * either way also in the log. Waits for a tap (or 60 s). */
+void nfl2k5_android_notice(const char *title, const char *msg)
+{
+    SDL_Window *w = NULL;
+    SDL_Renderer *r = NULL;
+    Uint64 t0;
+    fprintf(stderr, "[NOTICE] %s: %s\n", title, msg);
+    SDL_InitSubSystem(SDL_INIT_VIDEO);
+    if (SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, title, msg, NULL)) return;
+    fprintf(stderr, "[NOTICE] dialog failed (%s): drawing it\n", SDL_GetError());
+    if (!SDL_CreateWindowAndRenderer("NFL 2K5", 1280, 720, SDL_WINDOW_FULLSCREEN, &w, &r)) return;
+    t0 = SDL_GetTicks();
+    while (SDL_GetTicks() - t0 < 60000) {
+        SDL_Event e;
+        int ww = 0, hh = 0, line = 0, done = 0;
+        const char *p = msg;
+        while (SDL_PollEvent(&e))
+            if ((e.type == SDL_EVENT_FINGER_UP || e.type == SDL_EVENT_MOUSE_BUTTON_UP || e.type == SDL_EVENT_KEY_UP ||
+                 e.type == SDL_EVENT_GAMEPAD_BUTTON_UP) && SDL_GetTicks() - t0 > 1500)
+                done = 1;
+        if (done) break;
+        SDL_GetRenderOutputSize(r, &ww, &hh);
+        SDL_SetRenderScale(r, 1, 1);
+        SDL_SetRenderDrawColor(r, 10, 14, 30, 255);
+        SDL_RenderClear(r);
+        SDL_SetRenderScale(r, 2.5f, 2.5f);
+        SDL_SetRenderDrawColor(r, 255, 200, 60, 255);
+        SDL_RenderDebugText(r, 20, 20, title);
+        SDL_SetRenderDrawColor(r, 255, 255, 255, 255);
+        /* wrapped to the window's width */
+        while (*p) {
+            char buf[256];
+            int cols = (int)(ww / 2.5f / 8) - 6, n = 0, last_space = -1;
+            if (cols < 20) cols = 20;
+            if (cols > 250) cols = 250;
+            while (p[n] && p[n] != '\n' && n < cols) { if (p[n] == ' ') last_space = n; n++; }
+            if (p[n] && p[n] != '\n' && last_space > 0) n = last_space;
+            memcpy(buf, p, (size_t)n); buf[n] = 0;
+            SDL_RenderDebugText(r, 20, 50 + line++ * 12, buf);
+            p += n;
+            if (*p == '\n' || *p == ' ') p++;
+        }
+        SDL_SetRenderDrawColor(r, 160, 160, 160, 255);
+        SDL_RenderDebugText(r, 20, hh / 2.5f - 30, "Tap to close.");
+        SDL_RenderPresent(r);
+        SDL_Delay(50);
+    }
+    SDL_DestroyRenderer(r);
+    SDL_DestroyWindow(w);
+}
+
 static char s_ps2_iso[256];            /* a PlayStation 2 image seen while looking */
 static char s_wrong_iso[256];          /* an Xbox image of another version of the game */
 
@@ -314,14 +367,14 @@ int nfl2k5_android_unpack_iso(const char *root)
                      "%s is a different version of ESPN NFL 2K5 (its default.xbe does not match). "
                      "This port needs the original USA Xbox disc: on your PC that is "
                      "\"ESPN NFL 2K5 (USA).xiso.iso\". Put it in Download and open NFL 2K5 again.", s_wrong_iso);
-            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "NFL 2K5: different version of the game", msg, NULL);
+            nfl2k5_android_notice("NFL 2K5: different version of the game", msg);
             return -1;
         }
         if (s_ps2_iso[0]) {
             snprintf(msg, sizeof msg,
                      "%s is the PlayStation 2 version of ESPN NFL 2K5. This port runs the original Xbox "
                      "game: it needs the Xbox disc image (it holds default.xbe).", s_ps2_iso);
-            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "NFL 2K5: wrong disc image", msg, NULL);
+            nfl2k5_android_notice("NFL 2K5: wrong disc image", msg);
             return -1;
         }
         return 0;
@@ -338,7 +391,7 @@ int nfl2k5_android_unpack_iso(const char *root)
                  "Found %s, but unpacking it needs %.1f GB free and there is %.1f GB.\n\n"
                  "Free some space and open NFL 2K5 again. (After it unpacks, the .iso can be deleted.)",
                  iso, x.total / 1e9, (double)vf.f_bavail * vf.f_frsize / 1e9);
-        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "NFL 2K5: not enough space", msg, NULL);
+        nfl2k5_android_notice("NFL 2K5: not enough space", msg);
         fclose(x.f);
         rm_tree(part);
         return -1;
@@ -353,7 +406,7 @@ int nfl2k5_android_unpack_iso(const char *root)
     if (x.win) SDL_DestroyWindow(x.win);
     if (x.failed) {
         snprintf(msg, sizeof msg, "Unpacking %s failed: %s", iso, x.status);
-        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "NFL 2K5", msg, NULL);
+        nfl2k5_android_notice("NFL 2K5", msg);
         rm_tree(part);
         return -1;
     }
@@ -365,7 +418,7 @@ int nfl2k5_android_unpack_iso(const char *root)
     }
     if (rename(part, dest) != 0) {
         snprintf(msg, sizeof msg, "Could not finish unpacking (%s).", strerror(errno));
-        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "NFL 2K5", msg, NULL);
+        nfl2k5_android_notice("NFL 2K5", msg);
         return -1;
     }
     fprintf(stderr, "[ISO] done: %s\n", dest);
