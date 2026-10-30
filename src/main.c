@@ -807,6 +807,22 @@ static void crash_handler(int sig, siginfo_t *si, void *uctx)
 #endif
     crash_line("[CRASH] stack:\n");
     _Unwind_Backtrace(crash_frame, &n);
+    if (si && sig == SIGSEGV) {
+        /* what the address space looks like around the fault: whether the
+         * page is mapped at all, and what the neighbours are */
+        FILE *mf = fopen("/proc/self/maps", "r");
+        uintptr_t a = (uintptr_t)si->si_addr;
+        char ml[512];
+        crash_line("[CRASH] maps within 64 MB of the address:\n");
+        while (mf && fgets(ml, sizeof ml, mf)) {
+            unsigned long lo = 0, hi = 0;
+            if (sscanf(ml, "%lx-%lx", &lo, &hi) == 2 && hi + (64ul << 20) > a && lo < a + (64ul << 20)) {
+                crash_line("[CRASH]   ");
+                crash_line(ml);
+            }
+        }
+        if (mf) fclose(mf);
+    }
     sigaction(sig, &s_crash_prev[sig], NULL);
     raise(sig);
 }
