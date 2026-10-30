@@ -1213,6 +1213,37 @@ void nfl2k5_note_intr_en(const char *what, uint32_t a, uint32_t b)
         fprintf(stderr, "  [D3D] intr_en %s %08X (enable %08X)\n", what, a, b);
 }
 
+volatile long nfl2k5_isr_intr_off;
+volatile long nfl2k5_dpc_intr_on;
+
+/* D3D_VBLANK_WAIT_RESCUE: called on every retry of the frame loop's vblank
+ * wait. A second of PMC_INTR_EN == 0 with D3D wanting it on (device+0xB4)
+ * and no ISR pass outstanding (device+0xA4) is a lost re-enable: write it
+ * back the way the DPC does. */
+void nfl2k5_vblank_wait_rescue(void)
+{
+    static DWORD off_since;
+    static volatile LONG rescues;
+    const uint32_t dev = 0x004425D8u;
+    uint32_t want = MEM32(dev + 0xB4u);
+    if (MEM32(0xFD000140u) != 0 || !want || MEM32(dev + 0xA4u)) {
+        off_since = 0;
+        return;
+    }
+    if (!off_since) {
+        off_since = GetTickCount();
+        if (!off_since) off_since = 1;
+        return;
+    }
+    if (GetTickCount() - off_since < 1000)
+        return;
+    MEM32(0xFD000140u) = want;
+    off_since = 0;
+    if (InterlockedIncrement(&rescues) <= 32)
+        fprintf(stderr, "  [D3D] vblank interrupt was left off; re-enabled (isr off %ld, dpc on %ld)\n",
+                nfl2k5_isr_intr_off, nfl2k5_dpc_intr_on);
+}
+
 void nfl2k5_trace_gpu_wait_seed(uint32_t value)
 {
     nfl2k5_gpu_wait_seed_value = value;

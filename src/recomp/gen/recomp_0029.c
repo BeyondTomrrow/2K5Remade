@@ -412917,6 +412917,8 @@ loc_0042D4CE: ;
     _fa = (uint32_t)(esi) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* add result */
     PUSH32(esp, esi);
     MEM32(edi + 0x140) = 0;
+    /* NFL2K5-GENPATCH:D3D_ISR_INTR_OFF_COUNT */
+    { extern volatile long nfl2k5_isr_intr_off; nfl2k5_isr_intr_off++; }
     { uint32_t _icall_esp = g_esp;
     { uint32_t _icall_target = MEM32(0x4E3CBC); PUSH32(esp, 0x0042D4E9u); RECOMP_ICALL_SAFE(_icall_target, _icall_esp); } /* indirect call */
     }
@@ -414301,6 +414303,8 @@ loc_0042DE6E: ;
     ecx = MEM32(ebx + 0xB4);
     MEM32(ebx + 0xA4) = ebp;
     MEM32(edi + 0x140) = ecx;
+    /* NFL2K5-GENPATCH:D3D_DPC_INTR_ON_COUNT */
+    { extern volatile long nfl2k5_dpc_intr_on; nfl2k5_dpc_intr_on++; }
     POP32(esp, edi);
     POP32(esp, esi);
     POP32(esp, ebp);

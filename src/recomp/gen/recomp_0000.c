@@ -82935,6 +82935,8 @@ loc_00028E70: ;
     PUSH32(esp, 0x00028E7Au); RECOMP_ABI_CALL(0x000341A0u, sub_000341A0); /* call 0x000341A0 */
 
 loc_00028E7A: ;
+    /* NFL2K5-GENPATCH:D3D_VBLANK_WAIT_RESCUE */
+    { extern void nfl2k5_vblank_wait_rescue(void); nfl2k5_vblank_wait_rescue(); }
     eax = MEM32(0xA6A9B0);
     _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;
     _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test eax, eax (32-bit) */

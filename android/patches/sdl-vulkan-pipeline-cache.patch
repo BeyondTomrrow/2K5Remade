@@ -1,0 +1,161 @@
+diff --git a/src/gpu/vulkan/SDL_gpu_vulkan.c b/src/gpu/vulkan/SDL_gpu_vulkan.c
+index 53212a2..73d17dc 100644
+--- a/src/gpu/vulkan/SDL_gpu_vulkan.c
++++ b/src/gpu/vulkan/SDL_gpu_vulkan.c
+@@ -1131,6 +1131,10 @@ struct VulkanRenderer
+     VkPhysicalDeviceProperties2KHR physicalDeviceProperties;
+     VkPhysicalDeviceDriverPropertiesKHR physicalDeviceDriverProperties;
+     VkDevice logicalDevice;
++    // Pipeline cache kept on disk (SDL_GPU_VULKAN_PIPELINE_CACHE = file path)
++    VkPipelineCache pipelineCache;
++    char *pipelineCachePath;
++    SDL_AtomicInt pipelinesSinceCacheSave;
+     Uint8 integratedMemoryNotification;
+     Uint8 outOfDeviceLocalMemoryWarning;
+     Uint8 outofBARMemoryWarning;
+@@ -4994,6 +4998,8 @@ static bool VULKAN_INTERNAL_EndCommandBuffer(
+     return true;
+ }
+ 
++static void VULKAN_INTERNAL_SavePipelineCache(VulkanRenderer *renderer);
++
+ static void VULKAN_DestroyDevice(
+     SDL_GPUDevice *device)
+ {
+@@ -5002,6 +5008,8 @@ static void VULKAN_DestroyDevice(
+ 
+     VULKAN_Wait(device->driverData);
+ 
++    VULKAN_INTERNAL_SavePipelineCache(renderer);
++
+     for (Sint32 i = renderer->claimedWindowCount - 1; i >= 0; i -= 1) {
+         VULKAN_ReleaseWindow(device->driverData, renderer->claimedWindows[i]->window);
+     }
+@@ -5090,6 +5098,10 @@ static void VULKAN_DestroyDevice(
+     SDL_DestroyMutex(renderer->descriptorSetLayoutFetchLock);
+     SDL_DestroyMutex(renderer->windowLock);
+ 
++    if (renderer->pipelineCache) {
++        renderer->vkDestroyPipelineCache(renderer->logicalDevice, renderer->pipelineCache, NULL);
++    }
++    SDL_free(renderer->pipelineCachePath);
+     renderer->vkDestroyDevice(renderer->logicalDevice, NULL);
+     renderer->vkDestroyInstance(renderer->instance, NULL);
+ 
+@@ -6349,6 +6361,81 @@ static VkRenderPass VULKAN_INTERNAL_CreateTransientRenderPass(
+     return renderPass;
+ }
+ 
++// Pipeline cache on disk. Drivers like Qualcomm's spend most of a second on
++// each new pipeline; with the cache only the first run ever pays for one.
++static void VULKAN_INTERNAL_SavePipelineCache(VulkanRenderer *renderer)
++{
++    size_t size = 0;
++    void *data;
++    char *tmp;
++    if (!renderer->pipelineCache || !renderer->pipelineCachePath) {
++        return;
++    }
++    if (renderer->vkGetPipelineCacheData(renderer->logicalDevice, renderer->pipelineCache, &size, NULL) != VK_SUCCESS || size == 0) {
++        return;
++    }
++    data = SDL_malloc(size);
++    if (!data) {
++        return;
++    }
++    if (renderer->vkGetPipelineCacheData(renderer->logicalDevice, renderer->pipelineCache, &size, data) == VK_SUCCESS &&
++        SDL_asprintf(&tmp, "%s.tmp", renderer->pipelineCachePath) > 0) {
++        if (SDL_SaveFile(tmp, data, size)) {
++            SDL_RemovePath(renderer->pipelineCachePath);
++            SDL_RenamePath(tmp, renderer->pipelineCachePath);
++        }
++        SDL_free(tmp);
++    }
++    SDL_free(data);
++}
++
++static void VULKAN_INTERNAL_CreatePipelineCache(VulkanRenderer *renderer)
++{
++    VkPipelineCacheCreateInfo info;
++    const char *path = SDL_getenv_unsafe("SDL_GPU_VULKAN_PIPELINE_CACHE");   // set by the app with setenv()
++    size_t size = 0;
++    Uint8 *data = NULL;
++    SDL_zero(info);
++    info.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
++    if (path && *path) {
++        renderer->pipelineCachePath = SDL_strdup(path);
++        data = (Uint8 *)SDL_LoadFile(path, &size);
++        // Only hand the driver data it wrote itself: header length, version,
++        // vendor, device and cache UUID must all match this device.
++        if (data && size >= 32) {
++            const VkPhysicalDeviceProperties *pp = &renderer->physicalDeviceProperties.properties;
++            Uint32 hdr[4];
++            SDL_memcpy(hdr, data, sizeof(hdr));
++            if (hdr[0] >= 32 && hdr[1] == VK_PIPELINE_CACHE_HEADER_VERSION_ONE &&
++                hdr[2] == pp->vendorID && hdr[3] == pp->deviceID &&
++                SDL_memcmp(data + 16, pp->pipelineCacheUUID, VK_UUID_SIZE) == 0) {
++                info.initialDataSize = size;
++                info.pInitialData = data;
++            }
++        }
++    }
++    if (renderer->vkCreatePipelineCache(renderer->logicalDevice, &info, NULL, &renderer->pipelineCache) != VK_SUCCESS) {
++        renderer->pipelineCache = VK_NULL_HANDLE;
++    }
++    SDL_LogInfo(SDL_LOG_CATEGORY_GPU, "Vulkan pipeline cache: %s (%u bytes loaded)",
++                renderer->pipelineCachePath ? renderer->pipelineCachePath : "memory only",
++                (unsigned)info.initialDataSize);
++    SDL_free(data);
++}
++
++static void VULKAN_INTERNAL_NotePipelineCreated(VulkanRenderer *renderer)
++{
++    // Saved after the first new pipeline and every 4th: an Android app is
++    // usually killed, not shut down, so a save only at device destruction
++    // would rarely happen.
++    if (renderer->pipelineCachePath) {
++        int n = SDL_AddAtomicInt(&renderer->pipelinesSinceCacheSave, 1) + 1;
++        if (n == 1 || n % 4 == 0) {
++            VULKAN_INTERNAL_SavePipelineCache(renderer);
++        }
++    }
++}
++
+ static SDL_GPUGraphicsPipeline *VULKAN_CreateGraphicsPipeline(
+     SDL_GPURenderer *driverData,
+     const SDL_GPUGraphicsPipelineCreateInfo *createinfo)
+@@ -6636,7 +6723,7 @@ static SDL_GPUGraphicsPipeline *VULKAN_CreateGraphicsPipeline(
+     // TODO: enable pipeline caching
+     vulkanResult = renderer->vkCreateGraphicsPipelines(
+         renderer->logicalDevice,
+-        VK_NULL_HANDLE,
++        renderer->pipelineCache,
+         1,
+         &vkPipelineCreateInfo,
+         NULL,
+@@ -6657,6 +6744,7 @@ static SDL_GPUGraphicsPipeline *VULKAN_CreateGraphicsPipeline(
+     }
+ 
+     SDL_SetAtomicInt(&graphicsPipeline->referenceCount, 0);
++    VULKAN_INTERNAL_NotePipelineCreated(renderer);
+ 
+     if (renderer->debugMode && renderer->supportsDebugUtils && SDL_HasProperty(createinfo->props, SDL_PROP_GPU_GRAPHICSPIPELINE_CREATE_NAME_STRING)) {
+         VkDebugUtilsObjectNameInfoEXT nameInfo;
+@@ -6771,7 +6859,7 @@ static SDL_GPUComputePipeline *VULKAN_CreateComputePipeline(
+ 
+     vulkanResult = renderer->vkCreateComputePipelines(
+         renderer->logicalDevice,
+-        (VkPipelineCache)VK_NULL_HANDLE,
++        renderer->pipelineCache,
+         1,
+         &vkShaderCreateInfo,
+         NULL,
+@@ -13495,6 +13583,8 @@ static SDL_GPUDevice *VULKAN_CreateDevice(bool debugMode, bool preferLowPower, S
+         return NULL;
+     }
+ 
++    VULKAN_INTERNAL_CreatePipelineCache(renderer);
++
+     // FIXME: just move this into this function
+     result = (SDL_GPUDevice *)SDL_calloc(1, sizeof(SDL_GPUDevice));
+     ASSIGN_DRIVER(VULKAN)

@@ -987,6 +987,16 @@ int main(int argc, char **argv)
     android_pick_root();
     fprintf(stderr, "[ANDROID] game folder %s\n", getenv("NFL2K5_ROOT"));
     setenv("RECOMP_RENDERER", "vulkan", 0);   /* the GPU renderer (gx) on Vulkan; "cpu" for software */
+    {   /* Compiled pipelines kept across runs (SDL Vulkan, local patch): the
+         * Adreno driver spends ~0.7 s on each new one, which froze the game
+         * whenever a new scene appeared. */
+        char cache[1024];
+        const char *root = getenv("NFL2K5_ROOT") ? getenv("NFL2K5_ROOT") : "/sdcard/NFL2K5";
+        snprintf(cache, sizeof cache, "%s/cache", root);
+        mkdir(cache, 0775);
+        snprintf(cache, sizeof cache, "%s/cache/vk_pipelines.bin", root);
+        setenv("SDL_GPU_VULKAN_PIPELINE_CACHE", cache, 0);
+    }
     {
         extern void nfl2k5_touch_pad_init(void);   /* on-screen controls (platform/android/touch_pad.c) */
         nfl2k5_touch_pad_init();

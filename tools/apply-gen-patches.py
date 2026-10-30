@@ -833,6 +833,21 @@ PATCHES = [
       nfl2k5_note_intr_en("restore", eax, MEM32(edi + 0xB4));
       if (eax == 0) eax = MEM32(edi + 0xB4); }
 """),
+    # Counters for the vblank ISR's disable and its DPC's re-enable, read with
+    # gdb when vblanks stop being claimed.
+    ("D3D_ISR_INTR_OFF_COUNT", "sub_0042D3E0", "MEM32(edi + 0x140) = 0;", "after", """\
+    { extern volatile long nfl2k5_isr_intr_off; nfl2k5_isr_intr_off++; }
+"""),
+    ("D3D_DPC_INTR_ON_COUNT", "sub_0042DDB0", "MEM32(edi + 0x140) = ecx;", "after", """\
+    { extern volatile long nfl2k5_dpc_intr_on; nfl2k5_dpc_intr_on++; }
+"""),
+    # Safety net in the frame loop's vblank wait (the loop every lost-vblank
+    # hang sat in): interrupts off with no ISR/DPC pass pending for a long
+    # stretch of this wait means the re-enable was lost; restore the enable
+    # D3D's DPC would write (device 0x004425D8 + 0xB4).
+    ("D3D_VBLANK_WAIT_RESCUE", "sub_00028DE0", "loc_00028E7A: ;", "after", """\
+    { extern void nfl2k5_vblank_wait_rescue(void); nfl2k5_vblank_wait_rescue(); }
+"""),
     ("D3D_DISABLE_INTR_EN_LOG", "sub_00426D10", "loc_00426D10: ;", "after", """\
     { extern void nfl2k5_note_intr_en(const char *, uint32_t, uint32_t);
       nfl2k5_note_intr_en("disable", MEM32(esp + 4), MEM32(esp)); }
