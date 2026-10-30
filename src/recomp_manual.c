@@ -1204,6 +1204,15 @@ void nfl2k5_trace_gpu_notify_register(uint32_t callback)
 
 /* sub_00028DE0 loc_00028EE5: records the value MEM32(0xA6A9B0) is reseeded
  * to right before the drain-wait loop can block on it again. */
+/* D3D_RESTORE_INTR_EN / D3D_DISABLE_INTR_EN_LOG (tools/apply-gen-patches.py):
+ * who leaves PMC_INTR_EN at 0, after which no vblank is claimed again. */
+void nfl2k5_note_intr_en(const char *what, uint32_t a, uint32_t b)
+{
+    static volatile LONG n;
+    if (InterlockedIncrement(&n) <= 64)
+        fprintf(stderr, "  [D3D] intr_en %s %08X (enable %08X)\n", what, a, b);
+}
+
 void nfl2k5_trace_gpu_wait_seed(uint32_t value)
 {
     nfl2k5_gpu_wait_seed_value = value;

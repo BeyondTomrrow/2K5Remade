@@ -395475,6 +395475,9 @@ void sub_00426D10(void)
     RECOMP_INTERP_GATE(0x00426D10u);
 
 loc_00426D10: ;
+    /* NFL2K5-GENPATCH:D3D_DISABLE_INTR_EN_LOG */
+    { extern void nfl2k5_note_intr_en(const char *, uint32_t, uint32_t);
+      nfl2k5_note_intr_en("disable", MEM32(esp + 4), MEM32(esp)); }
     eax = MEM32(esp + 4);
     MEM32(eax + 0x140) = 0;
     esp += 8; return; /* ret 4 */
@@ -416676,6 +416679,10 @@ loc_0042EAE9: ;
     eax = MEM32(edi + 0x154);
     MEM32(esi + 0x200) = eax;
     eax = MEM32(edi + 0x158);
+    /* NFL2K5-GENPATCH:D3D_RESTORE_INTR_EN */
+    { extern void nfl2k5_note_intr_en(const char *, uint32_t, uint32_t);
+      nfl2k5_note_intr_en("restore", eax, MEM32(edi + 0xB4));
+      if (eax == 0) eax = MEM32(edi + 0xB4); }
     MEM32(esi + 0x140) = eax;
     { uint32_t _icall_esp = g_esp;
     PUSH32(esp, ebx);

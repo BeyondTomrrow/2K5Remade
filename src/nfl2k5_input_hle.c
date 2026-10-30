@@ -140,7 +140,11 @@ static WORD file_press(BYTE analog[8])
     g_last_script_press = now;
     if (!step_start)
         step_start = now;
-    if (!pressing && now - step_start >= 250) {
+    /* NFL2K5_PRESS_HOLD_MS: longer presses for a slow test machine (an emulated
+     * ARM64 VM draws a frame a second; a 200 ms press fell between polls) */
+    static int hold = -1;
+    if (hold < 0) { const char *h = getenv("NFL2K5_PRESS_HOLD_MS"); hold = h && atoi(h) > 0 ? atoi(h) : 200; }
+    if (!pressing && now - step_start >= (Uint64)(hold + 50)) {
         pressing = 1;
         step_start = now;
     }
@@ -163,7 +167,7 @@ static WORD file_press(BYTE analog[8])
         else if (!strcmp(name, "rt")) analog[7] = 255;
         else if (!strcmp(name, "l3")) buttons |= 0x40;
         else if (!strcmp(name, "r3")) buttons |= 0x80;
-        if (now - step_start >= 200) {
+        if (now - step_start >= (Uint64)hold) {
             pressing = 0;
             step_start = now;
             head = (head + 1) % 64;

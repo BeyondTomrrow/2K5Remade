@@ -817,6 +817,26 @@ PATCHES = [
 """),
     ("SCOREBUG_HIDE_LAYOUT2", "sub_000FC200", "loc_000FC329: ;", "after", """    { extern void nfl2k5_scorebug_hide(void); nfl2k5_scorebug_hide(); }
 """),
+    # D3D's hardware re-init saves PMC_INTR_EN (device+0x158 = regs+0x140) and
+    # sub_0042E97A writes the saved value back. The vblank ISR (0x42D3E0)
+    # zeroes PMC_INTR_EN until its DPC (0x42DDB0) restores device+0xB4; a save
+    # taken inside that window restores 0 after the DPC has run, and no vblank
+    # is ever claimed again -- the frame loop then waits on its vblank counter
+    # (0xA6A9B0) forever. Seen on the ARM64 VM after the VIP popup
+    # (2026-10-30); timing-dependent, so any slow device can hit it.
+    ("D3D_SAVE_INTR_EN", "sub_004332D4", "MEM32(esi + 0x158) = eax;", "after", """\
+    if (eax == 0) MEM32(esi + 0x158) = MEM32(esi + 0xB4);   /* ISR window: save the enable the DPC restores */
+"""),
+    # The restore side of the same pair, for a saved 0 from any other path.
+    ("D3D_RESTORE_INTR_EN", "sub_0042E97A", "eax = MEM32(edi + 0x158);", "after", """\
+    { extern void nfl2k5_note_intr_en(const char *, uint32_t, uint32_t);
+      nfl2k5_note_intr_en("restore", eax, MEM32(edi + 0xB4));
+      if (eax == 0) eax = MEM32(edi + 0xB4); }
+"""),
+    ("D3D_DISABLE_INTR_EN_LOG", "sub_00426D10", "loc_00426D10: ;", "after", """\
+    { extern void nfl2k5_note_intr_en(const char *, uint32_t, uint32_t);
+      nfl2k5_note_intr_en("disable", MEM32(esp + 4), MEM32(esp)); }
+"""),
     ("SCOREBUG_HIDE_UPDATE", "sub_000FCE70", "loc_000FCE70: ;", "after", """    { extern void nfl2k5_scorebug_hide(void); nfl2k5_scorebug_hide(); }
 """),
     ("LIVE_QB_SAMPLE", "sub_000FCE70", "loc_000FCE70: ;", "after", """    /* Sample both title-maintained QB records on the guest execution thread. */

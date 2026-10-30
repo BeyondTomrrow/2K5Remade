@@ -38,6 +38,7 @@ static float s_stick_cx, s_stick_cy, s_stick_dx, s_stick_dy;   /* where the stic
 static int s_stick_active;
 static unsigned s_dpad;                        /* wButtons bits 0..3 */
 static int s_pressed[C_COUNT];
+static int s_back_key;                   /* the system Back button/gesture: the game's B */
 static Uint64 s_last_touch;
 static volatile int s_gen = 1;                 /* bumped by every change: redraw */
 
@@ -146,6 +147,11 @@ static bool SDLCALL on_event(void *ud, SDL_Event *e)
     int i, slot = -1;
     float x, y;
     (void)ud;
+    if ((e->type == SDL_EVENT_KEY_DOWN || e->type == SDL_EVENT_KEY_UP) && e->key.scancode == SDL_SCANCODE_AC_BACK) {
+        /* Back (trapped: SDL_ANDROID_TRAP_BACK_BUTTON) closed the app; it is B instead */
+        s_back_key = e->type == SDL_EVENT_KEY_DOWN;
+        return true;
+    }
     if (e->type != SDL_EVENT_FINGER_DOWN && e->type != SDL_EVENT_FINGER_MOTION &&
             e->type != SDL_EVENT_FINGER_UP && e->type != SDL_EVENT_FINGER_CANCELED)
         return true;
@@ -320,6 +326,7 @@ void nfl2k5_touch_pad_init(void)
     if (s_lock) return;
     s_lock = SDL_CreateMutex();
     SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");   /* touches are not mouse clicks (A) */
+    SDL_SetHint(SDL_HINT_ANDROID_TRAP_BACK_BUTTON, "1");
     SDL_AddEventWatch(on_event, NULL);
     xbox_PresentSetHudCallback(hud);
 }
@@ -332,6 +339,7 @@ void nfl2k5_touch_pad_merge(uint16_t *buttons, uint8_t analog[8], int16_t *lx, i
     if (!s_lock) return;
     SDL_LockMutex(s_lock);
     for (i = 0; i < 8; i++) if (s_pressed[amap[i]]) analog[i] = 255;
+    if (s_back_key) analog[1] = 255;
     *buttons |= (uint16_t)s_dpad;
     if (s_pressed[C_START]) *buttons |= 0x10;
     if (s_pressed[C_BACK]) *buttons |= 0x20;
