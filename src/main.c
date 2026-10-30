@@ -756,6 +756,74 @@ static void *android_log_thread(void *arg)
     return NULL;
 }
 
+/* A crash writes where it happened into the log: the signal, the faulting
+ * address and the call stack as offsets in libmain.so (symbolised on the PC
+ * with llvm-symbolizer and the unstripped library), then dies as before. The
+ * game's own SIGSEGV handler, installed later, passes faults it does not
+ * handle on to this one. */
+#include <dlfcn.h>
+#include <unwind.h>
+static struct sigaction s_crash_prev[32];
+
+static void crash_line(const char *s) { (void)!write(2, s, strlen(s)); }
+
+static void crash_pc(uintptr_t pc)
+{
+    char line[512];
+    Dl_info di;
+    if (dladdr((void *)pc, &di) && di.dli_fname)
+        snprintf(line, sizeof line, "[CRASH]   %s+0x%lx (%s)\n", strrchr(di.dli_fname, '/') ? strrchr(di.dli_fname, '/') + 1 : di.dli_fname,
+                 (unsigned long)(pc - (uintptr_t)di.dli_fbase), di.dli_sname ? di.dli_sname : "?");
+    else
+        snprintf(line, sizeof line, "[CRASH]   %p\n", (void *)pc);
+    crash_line(line);
+}
+
+static _Unwind_Reason_Code crash_frame(struct _Unwind_Context *c, void *arg)
+{
+    int *n = (int *)arg;
+    uintptr_t pc = _Unwind_GetIP(c);
+    if (pc) crash_pc(pc);
+    return ++*n < 40 ? _URC_NO_REASON : _URC_END_OF_STACK;
+}
+
+static void crash_handler(int sig, siginfo_t *si, void *uctx)
+{
+    char line[256];
+    int n = 0;
+    ucontext_t *uc = (ucontext_t *)uctx;
+    snprintf(line, sizeof line, "[CRASH] signal %d (code %d) at address %p, thread %d\n", sig,
+             si ? si->si_code : 0, si ? si->si_addr : NULL, (int)gettid());
+    crash_line(line);
+#if defined(__aarch64__)
+    if (uc) {
+        crash_line("[CRASH] pc:\n");
+        crash_pc((uintptr_t)uc->uc_mcontext.pc);
+        crash_line("[CRASH] lr:\n");
+        crash_pc((uintptr_t)uc->uc_mcontext.regs[30]);
+    }
+#else
+    (void)uc;
+#endif
+    crash_line("[CRASH] stack:\n");
+    _Unwind_Backtrace(crash_frame, &n);
+    sigaction(sig, &s_crash_prev[sig], NULL);
+    raise(sig);
+}
+
+static void android_crash_reporter(void)
+{
+    static const int sigs[] = { SIGSEGV, SIGBUS, SIGILL, SIGFPE, SIGABRT };
+    struct sigaction sa;
+    unsigned i;
+    memset(&sa, 0, sizeof sa);
+    sa.sa_sigaction = crash_handler;
+    sa.sa_flags = SA_SIGINFO;
+    sigemptyset(&sa.sa_mask);
+    for (i = 0; i < sizeof sigs / sizeof sigs[0]; i++)
+        sigaction(sigs[i], &sa, &s_crash_prev[sigs[i]]);
+}
+
 /* The game folder: the first of these holding original/default.xbe. The
  * app's own folder needs no permission (adb push or a file manager);
  * /sdcard/NFL2K5 needs "All files access" on Android 11+. */
@@ -827,15 +895,21 @@ int main(int argc, char **argv)
             snprintf(lp, sizeof lp, "%s/nfl2k5.log", SDL_GetAndroidExternalStoragePath());
             lf = fopen(lp, "w");
         }
-        setvbuf(stdout, NULL, _IOLBF, 0);
+        setvbuf(stdout, NULL, _IONBF, 0);
         setvbuf(stderr, NULL, _IONBF, 0);
-        if (pipe(android_log_pipe) == 0) {
+        if (lf) {
+            /* straight into the file: a log thread lost the last lines
+             * before a crash (2026-10-30), the ones that say where */
+            dup2(fileno(lf), 1);
+            dup2(fileno(lf), 2);
+        } else if (pipe(android_log_pipe) == 0) {
             dup2(android_log_pipe[1], 1);
             dup2(android_log_pipe[1], 2);
             pthread_create(&t, NULL, android_log_thread, lf);
             pthread_detach(t);
         }
         fprintf(stderr, "[ANDROID] log %s\n", lp);
+        android_crash_reporter();
     }
     android_pick_root();
     fprintf(stderr, "[ANDROID] game folder %s\n", getenv("NFL2K5_ROOT"));
