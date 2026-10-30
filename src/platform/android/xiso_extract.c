@@ -18,6 +18,7 @@
 #include <sys/stat.h>
 #include <sys/statvfs.h>
 #include <unistd.h>
+#include <openssl/sha.h>
 
 #define XISO_SECTOR 2048ull
 static const char k_magic[] = "MICROSOFT*XBOX*MEDIA";
@@ -165,6 +166,72 @@ static int xiso_root(Xiso *x, uint32_t *sector, uint32_t *size)
 }
 
 static char s_ps2_iso[256];            /* a PlayStation 2 image seen while looking */
+static char s_wrong_iso[256];          /* an Xbox image of another version of the game */
+
+/* The executables the recompiled code was made from (src/main.c): the
+ * retail USA default.xbe, and the same with the built-in widescreen patch. */
+static int xbe_digest_ok(const unsigned char d[32])
+{
+    static const char *const ok[] = {
+        "73105b17a3161c546fea792a1c84ce37f9966a67c416f474cdbfab74b911a4a9",
+        "81d6e16c25ca7ea1014d0ced915f910f5d354eaeabeb9adfcbb6956e2a0b54f8" };
+    char hex[65];
+    int i;
+    for (i = 0; i < 32; i++) snprintf(hex + 2 * i, 3, "%02x", d[i]);
+    return !strcmp(hex, ok[0]) || !strcmp(hex, ok[1]);
+}
+
+/* 1: the file at `path` is one of those executables. */
+int nfl2k5_android_xbe_file_ok(const char *path)
+{
+    FILE *f = fopen(path, "rb");
+    unsigned char *buf, d[32];
+    long n;
+    int ok;
+    if (!f) return 0;
+    fseeko(f, 0, SEEK_END); n = (long)ftello(f); fseeko(f, 0, SEEK_SET);
+    buf = (unsigned char *)malloc(n > 0 ? (size_t)n : 1);
+    ok = buf && n > 0 && fread(buf, 1, (size_t)n, f) == (size_t)n;
+    fclose(f);
+    if (ok) { SHA256(buf, (size_t)n, d); ok = xbe_digest_ok(d); }
+    free(buf);
+    return ok;
+}
+
+/* The image's default.xbe (in its root directory) is one of them. */
+static int xiso_xbe_ok(Xiso *x)
+{
+    uint32_t rs, rz, off = 0;
+    uint8_t *d;
+    int ok = 0, guard = 0;
+    if (!xiso_root(x, &rs, &rz) || !(d = xiso_read_dir(x, rs, rz))) return 0;
+    while (off + 14 <= rz && guard++ < 4096) {
+        uint16_t left, right;
+        uint32_t start, fsize;
+        uint8_t nlen = d[off + 13];
+        int c;
+        memcpy(&left, d + off, 2); memcpy(&right, d + off + 2, 2);
+        memcpy(&start, d + off + 4, 4); memcpy(&fsize, d + off + 8, 4);
+        if (off + 14 + nlen > rz) break;
+        /* the directory is a binary tree ordered by case-insensitive name */
+        c = strncasecmp("default.xbe", (const char *)d + off + 14, nlen);
+        if (c == 0 && nlen != 11) c = nlen < 11 ? 1 : -1;
+        if (c == 0) {
+            unsigned char *buf = (unsigned char *)malloc(fsize ? fsize : 1), dg[32];
+            if (buf && fseeko(x->f, (off_t)(x->base + start * XISO_SECTOR), SEEK_SET) == 0 &&
+                    fread(buf, 1, fsize, x->f) == fsize) {
+                SHA256(buf, fsize, dg);
+                ok = xbe_digest_ok(dg);
+            }
+            free(buf);
+            break;
+        }
+        if (c < 0) { if (!left) break; off = (uint32_t)left * 4; }
+        else { if (!right) break; off = (uint32_t)right * 4; }
+    }
+    free(d);
+    return ok;
+}
 
 static int ends_iso(const char *n)
 {
@@ -198,6 +265,12 @@ static int find_iso(char *best, size_t n)
                         !memcmp(id + 1, "CD001", 5) && !memcmp(id + 8, "PLAYSTAT", 8))
                     snprintf(s_ps2_iso, sizeof s_ps2_iso, "%s", e->d_name);
                 if (f) fclose(f);
+                continue;
+            }
+            if (!xiso_xbe_ok(&x)) {          /* another version: the code would not match it */
+                fclose(x.f);
+                snprintf(s_wrong_iso, sizeof s_wrong_iso, "%s", e->d_name);
+                fprintf(stderr, "[ISO] %s: not the retail USA disc, skipped\n", p);
                 continue;
             }
             fclose(x.f);
@@ -236,6 +309,14 @@ int nfl2k5_android_unpack_iso(const char *root)
     uint32_t rs, rz;
     struct statvfs vf;
     if (!find_iso(iso, sizeof iso)) {
+        if (s_wrong_iso[0]) {
+            snprintf(msg, sizeof msg,
+                     "%s is a different version of ESPN NFL 2K5 (its default.xbe does not match). "
+                     "This port needs the original USA Xbox disc: on your PC that is "
+                     "\"ESPN NFL 2K5 (USA).xiso.iso\". Put it in Download and open NFL 2K5 again.", s_wrong_iso);
+            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "NFL 2K5: different version of the game", msg, NULL);
+            return -1;
+        }
         if (s_ps2_iso[0]) {
             snprintf(msg, sizeof msg,
                      "%s is the PlayStation 2 version of ESPN NFL 2K5. This port runs the original Xbox "

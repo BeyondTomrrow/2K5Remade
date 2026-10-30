@@ -768,9 +768,16 @@ static void android_pick_root(void)
     cands[n++] = SDL_GetAndroidExternalStoragePath();
     cands[n++] = "/sdcard/NFL2K5";
     cands[n++] = "/storage/emulated/0/NFL2K5";
+    extern int nfl2k5_android_xbe_file_ok(const char *path);   /* platform/android/xiso_extract.c */
     for (int i = 0; i < n; i++) {
         if (!cands[i]) continue;
         snprintf(probe, sizeof probe, "%s/original/default.xbe", cands[i]);
+        if (access(probe, R_OK) == 0 && !nfl2k5_android_xbe_file_ok(probe)) {
+            /* another version of the game (it closed at once, 2026-10-30):
+             * a right disc image found below replaces it */
+            fprintf(stderr, "[BOOT] %s is not the retail USA executable\n", probe);
+            continue;
+        }
         if (access(probe, R_OK) == 0) {
             setenv("NFL2K5_ROOT", cands[i], 1);
             setenv("NFL2K5_PORTABLE", "1", 1);   /* settings and saves beside the game */
