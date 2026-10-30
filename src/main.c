@@ -297,7 +297,7 @@ static bool install_audio_mmio_handler(void)
     memset(&sa, 0, sizeof(sa));
     sa.sa_sigaction = posix_audio_mmio_sigaction;
     sigemptyset(&sa.sa_mask);
-    sa.sa_flags = SA_SIGINFO | SA_NODEFER;
+    sa.sa_flags = SA_SIGINFO | SA_NODEFER | SA_ONSTACK;   /* the thread's signal stack where it has one */
     if (sigaction(SIGSEGV, &sa, &g_prev_segv_sa) != 0) return false;
     if (sigaction(SIGTRAP, &sa, &g_prev_trap_sa) != 0) {
         sigaction(SIGSEGV, &g_prev_segv_sa, NULL);
@@ -818,7 +818,7 @@ static void android_crash_reporter(void)
     unsigned i;
     memset(&sa, 0, sizeof sa);
     sa.sa_sigaction = crash_handler;
-    sa.sa_flags = SA_SIGINFO;
+    sa.sa_flags = SA_SIGINFO | SA_ONSTACK;
     sigemptyset(&sa.sa_mask);
     for (i = 0; i < sizeof sigs / sizeof sigs[0]; i++)
         sigaction(sigs[i], &sa, &s_crash_prev[sigs[i]]);
@@ -910,6 +910,23 @@ int main(int argc, char **argv)
         }
         fprintf(stderr, "[ANDROID] log %s\n", lp);
         android_crash_reporter();
+        {
+            /* Android's own log of the run before this one -- the system's crash
+             * report (a stack overflow or an abort inside the GPU driver, which
+             * the handler above cannot catch) is in it -- kept beside ours. */
+            FILE *in = popen("logcat -d -v threadtime -t 6000 2>&1", "r");
+            if (in) {
+                char pl[1024], buf[4096];
+                size_t n;
+                FILE *out;
+                snprintf(pl, sizeof pl, "%s", lp);
+                if (strrchr(pl, '/')) strcpy(strrchr(pl, '/') + 1, "previous-run-system.log");
+                out = fopen(pl, "w");
+                while ((n = fread(buf, 1, sizeof buf, in)) > 0) if (out) fwrite(buf, 1, n, out);
+                pclose(in);
+                if (out) { fclose(out); fprintf(stderr, "[ANDROID] system log of the previous run: %s\n", pl); }
+            }
+        }
     }
     android_pick_root();
     fprintf(stderr, "[ANDROID] game folder %s\n", getenv("NFL2K5_ROOT"));
