@@ -1,0 +1,22 @@
+/* Measured 640x360 source scaled 3x into the 1920x1080 broadcast canvas.
+ * Base x153-490/y309-343; explicit portrait can overhang to source y294.
+ * Source typeface is not available; existing package sans is a fallback.
+ */
+.cbs-receiver-table{position:absolute;left:459px;top:927px;width:1011px;height:102px;color:#fff;font-family:Arial,Helvetica,sans-serif;filter:drop-shadow(0 1px 1px #0008);}
+.cbs-receiver-art{position:absolute;left:0;top:0;width:240px;height:102px;background:linear-gradient(#ffffff0b,#00000016),var(--cbs-receiver-team,#002c5f);border-top:1px solid #ffffff45;border-bottom:1px solid #0009;}
+.cbs-receiver-logo{position:absolute;left:0;top:0;width:144px;height:102px;object-fit:contain;object-position:center;opacity:0;}
+.cbs-receiver-portrait{position:absolute;left:81px;bottom:0;width:159px;height:147px;object-fit:contain;object-position:center bottom;opacity:0;filter:drop-shadow(-1px 0 1px #0007);}
+.cbs-receiver-image-ready{opacity:1;}
+.cbs-receiver-table img[hidden]{display:none;}
+.cbs-receiver-position{position:absolute;left:240px;top:0;width:84px;height:102px;padding-top:8px;background:linear-gradient(#fafaf5,#d8ddd9);color:#101820;font-size:30px;font-weight:700;line-height:43px;letter-spacing:.3px;text-align:center;}
+.cbs-receiver-name{position:absolute;left:327px;top:0;width:159px;height:102px;padding:12px 8px 6px 15px;background:linear-gradient(#ffffff06,#00000014),var(--cbs-receiver-team,#002c5f);overflow:hidden;}
+.cbs-receiver-first{height:35px;font-size:25px;font-weight:700;line-height:35px;letter-spacing:-.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.cbs-receiver-last{height:43px;font-size:29px;font-weight:700;line-height:43px;letter-spacing:-.6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.cbs-receiver-columns{position:absolute;left:486px;top:0;width:525px;height:102px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));background:linear-gradient(#202224,#101113);border-top:1px solid #ffffff35;border-bottom:1px solid #0008;}
+.cbs-receiver-column{min-width:0;text-align:center;white-space:nowrap;}
+.cbs-receiver-label{height:43px;font-size:22px;font-weight:400;line-height:41px;letter-spacing:-.2px;border-bottom:1px solid #ffffff32;}
+.cbs-receiver-value{height:57px;font-size:33px;font-weight:700;line-height:54px;letter-spacing:-.3px;font-variant-numeric:tabular-nums;}
+.cbs-receiver-value-long{font-size:27px;}
+.cbs-stat-receiver.entering .cbs-receiver-table{animation:cbs-receiver-crossfade 200ms linear both;}
+@keyframes cbs-receiver-crossfade{from{opacity:0;}to{opacity:1;}}
+@media(prefers-reduced-motion:reduce){html:not([data-preview-motion="full"]) .cbs-receiver-table{animation:none!important;}}

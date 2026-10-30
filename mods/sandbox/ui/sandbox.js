@@ -52,6 +52,17 @@
     });
   }
 
+  /* Position the category buttons evenly around the ring, starting at the top.
+   * The ring box is 860x860 (see CSS #browser); buttons are centre-anchored. */
+  function layoutWheel(count) {
+    var nodes = $('tabs').children, n = nodes.length, C = 430, R = 388;
+    for (var i = 0; i < n; i++) {
+      var a = (-90 + i * 360 / Math.max(1, count || n)) * Math.PI / 180;
+      nodes[i].style.left = (C + R * Math.cos(a)) + 'px';
+      nodes[i].style.top = (C + R * Math.sin(a)) + 'px';
+    }
+  }
+
   function selected(s, list) { return list[Math.max(0, Math.min(list.length - 1, int(s.selection, 0)))]; }
   function adjust(row, direction) {
     if (!row || !row.enabled) return;
@@ -100,13 +111,13 @@
     addPrompt(p, ps ? '○' : 'B', 'Back', 'back', ps);
     addPrompt(p, 'D-pad', 'Browse / adjust', '', false);
     addPrompt(p, ps ? 'L1 / R1' : 'LB / RB', 'Categories', '', false);
-    addPrompt(p, ps ? 'Options' : 'Menu', 'Close browser', '', false);
+    addPrompt(p, 'L3+R3', 'Close wheel', '', false);
     $('quick-prompt').textContent = s.grabMode ?
-      (ps ? 'Left stick Move · L2/R2 Height · Right stick Turn · × Drop · ○ Cancel · Options Browser' :
-            'LS Move · LT/RT Height · RS Turn · A Drop · B Cancel · Menu Browser') : s.reticle === false ?
-      (ps ? 'Options Browser · Share Pause' : 'Menu Browser · View Pause') :
-      (ps ? 'Left stick Move · Right stick Look · L2/R2 Height · L1/R1 Zoom · Options Browser · Share Pause · △ Step' :
-            'LS Move · RS Look · LT/RT Height · LB/RB Zoom · Menu Browser · View Pause · Y Step');
+      (ps ? 'Left stick Move · L2/R2 Height · Right stick Turn · × Drop · ○ Cancel · L3+R3 Wheel' :
+            'LS Move · LT/RT Height · RS Turn · A Drop · B Cancel · L3+R3 Wheel') : s.reticle === false ?
+      (ps ? 'L3+R3 Wheel · Share Pause' : 'L3+R3 Wheel · View Pause') :
+      (ps ? 'Left stick Move · Right stick Look · L2/R2 Height · L1/R1 Zoom · L3+R3 Wheel · Share Pause · △ Step' :
+            'LS Move · RS Look · LT/RT Height · LB/RB Zoom · L3+R3 Wheel · View Pause · Y Step');
   }
   function details(row) {
     var d = $('item-details'); d.replaceChildren();
@@ -122,11 +133,15 @@
     last = s;
     var active = s.active === true || s.active === 1;
     var open = active && (s.menuOpen === true || s.menuOpen === 1 || setupState(s));
+    var drawing = active && (s.drawMode === true || s.drawMode === 1);
     $('sandbox').hidden = !active || !!s.photoMode;
-    $('browser').hidden = !open;
-    $('quick-status').hidden = open || !!s.hideHints;
-    $('reticle').hidden = open || s.reticle === false;
-    if (!open) {
+    $('browser').hidden = !open || drawing;
+    $('telestrator').hidden = !drawing;
+    $('draw-toolbar').hidden = !drawing;
+    $('quick-status').hidden = open || drawing || !!s.hideHints;
+    $('reticle').hidden = open || drawing || s.reticle === false;
+    if (drawing) { var dc = int(s.drawClear, 0); if (dc !== lastClear) { lastClear = dc; clearCanvas(); } }
+    if (!open && !drawing) {
       $('mouse-pointer').hidden = true;
       if (pointerHover) pointerHover.classList.remove('pointer-hover');
       pointerHover = null;
@@ -150,6 +165,7 @@
         b.addEventListener('click', function () { send('tab', t.id - int(last && last.tab, 0)); });
         tabNav.appendChild(b);
       });
+      layoutWheel(ts.length);
     }
     var list = rows(s), choice = selected(s, list), rowBox = $('rows'), priorScroll = rowBox.scrollTop;
     renderedRows = list;
@@ -195,14 +211,47 @@
     details(choice); buttonPrompts(s);
   }
 
+  /* ---- Telestrator (draw on the frozen play) ---- */
+  var drawColor = '#ffd400', drawLast = null, lastClear = -1;
+  function drawCtx() { var c = $('telestrator'); return c && c.getContext ? c.getContext('2d') : null; }
+  function clearCanvas() { var c = $('telestrator'), x = drawCtx(); if (c && x) x.clearRect(0, 0, c.width, c.height); drawLast = null; }
+  function setActiveColor(btn) {
+    Array.prototype.forEach.call(root.document.querySelectorAll('.draw-color'), function (b) { b.classList.toggle('active', b === btn); });
+  }
+  function drawPointer(event) {
+    var cursor = $('mouse-pointer');
+    if (!event.visible) { cursor.hidden = true; drawLast = null; return true; }
+    var x = finite(event.x, -1), y = finite(event.y, -1);
+    if (x < 0 || x >= 1920 || y < 0 || y >= 1080) { cursor.hidden = true; drawLast = null; return false; }
+    cursor.hidden = false; cursor.className = ''; cursor.style.left = x + 'px'; cursor.style.top = y + 'px';
+    var scale = Math.min(root.innerWidth / 1920, root.innerHeight / 1080);
+    var target = root.document.elementFromPoint(x * scale, y * scale);
+    var button = target && typeof target.closest === 'function' ? target.closest('#draw-toolbar button') : null;
+    var pressed = int(event.pressed, 0) & 7;    /* edge: just-pressed (for one-shot clicks) */
+    var held = int(event.held, 0) & 7;          /* current held buttons (for continuous drawing) */
+    if (button) { if (pressed & 1) button.click(); drawLast = null; return true; }  /* toolbar: click, don't draw */
+    if (held & 1) {                              /* left button held -> draw a continuous stroke */
+      var ctx = drawCtx();
+      if (ctx) {
+        ctx.strokeStyle = drawColor; ctx.lineWidth = 6; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+        ctx.beginPath(); ctx.moveTo(drawLast ? drawLast[0] : x, drawLast ? drawLast[1] : y); ctx.lineTo(x, y); ctx.stroke();
+        drawLast = [x, y];
+      }
+    } else drawLast = null;
+    if (pressed & 2) send('toggle_draw', 0);     /* right-click exits */
+    return true;
+  }
+
   function pointer(event) {
-    if (!event || !last || !last.active || !last.menuOpen || last.photoMode) return false;
+    if (!event || !last || !last.active || last.photoMode) return false;
     var generation = int(event.generation, -1), current = int(last.generation, 0);
     if (generation !== current) return false;
     if (pointerGeneration !== generation) { pointerGeneration = generation; pointerSequence = 0; }
     var sequence = int(event.sequence, 0);
     if (sequence <= pointerSequence) return false;
     pointerSequence = sequence;
+    if (last.drawMode === true || last.drawMode === 1) return drawPointer(event);
+    if (!last.menuOpen) return false;
     var cursor = $('mouse-pointer');
     if (!event.visible) { cursor.hidden = true; return true; }
     var x = finite(event.x, -1), y = finite(event.y, -1);
@@ -244,7 +293,18 @@
     if (data && data.type === 'state') render(data.state);
     else if (data && data.type === 'event' && data.event && data.event.type === 'sandboxPointer') pointer(data.event);
   });
+  /* Telestrator toolbar wiring (also usable by the mouse directly for preview). */
+  (function () {
+    var colors = root.document.querySelectorAll('.draw-color');
+    Array.prototype.forEach.call(colors, function (b) {
+      b.addEventListener('click', function () { drawColor = b.getAttribute('data-color'); setActiveColor(b); });
+    });
+    if (colors[0]) setActiveColor(colors[0]);
+    var clear = $('draw-clear'), done = $('draw-done');
+    if (clear) clear.addEventListener('click', function () { send('clear_draw', 0); });
+    if (done) done.addEventListener('click', function () { send('toggle_draw', 0); });
+  })();
   /* Browser review/test harness. No sample scene is injected into game use. */
-  root.NFL2K5SandboxUI = { render: render, rows: rows, tabs: tabs, send: send, setupState: setupState, pointer: pointer };
+  root.NFL2K5SandboxUI = { render: render, rows: rows, tabs: tabs, send: send, setupState: setupState, pointer: pointer, drawPointer: drawPointer };
   fit(); render({ active: false });
 })(window);

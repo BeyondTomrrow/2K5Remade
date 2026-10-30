@@ -110,6 +110,28 @@ static WORD auto_press(BYTE analog[8])
  * having focus, which a background process cannot reliably take. */
 static DWORD g_last_script_press;   /* GetTickCount of the last scripted press */
 
+/* NFL2K5_NO_HOST_PAD=1 ignores host controllers for 15 s after each scripted
+ * press (see host_gamepad). NFL2K5_NO_HOST_PAD=always never reads or rumbles
+ * them: unattended background tests (RECOMP_BACKGROUND) while someone plays
+ * another game on this PC with a pad -- the 15 s rule let that pad drive the
+ * hidden test game between scripted presses (2026-10-15). */
+static int host_pad_mode(void)
+{
+    static int mode = -1;
+    if (mode < 0) {
+        const char *v = getenv("NFL2K5_NO_HOST_PAD");
+        mode = !v ? 0 : _stricmp(v, "always") == 0 ? 2 : 1;
+    }
+    return mode;
+}
+
+static int host_pads_ignored(void)
+{
+    int mode = host_pad_mode();
+    if (mode == 2) return 1;
+    return mode == 1 && g_last_script_press && GetTickCount() - g_last_script_press < 15000;
+}
+
 static WORD file_press(BYTE analog[8])
 {
     static char queue[64][8];
@@ -301,12 +323,10 @@ static void audio_report_combo(XBOX_GAMEPAD *g)
 static void host_gamepad_port(int port, XBOX_GAMEPAD *g)
 {
     extern volatile long g_xbox_input_blocked;
-    static int no_host_pad = -1;
     memset(g, 0, sizeof *g);
     if (g_xbox_input_blocked)
         return;
-    if (no_host_pad < 0) no_host_pad = getenv("NFL2K5_NO_HOST_PAD") != NULL;
-    nfl2k5_controls_get(port, g, !(no_host_pad && g_last_script_press && GetTickCount() - g_last_script_press < 15000));
+    nfl2k5_controls_get(port, g, !host_pads_ignored());
     if (port == 0) {
         host_keyboard_gamepad(g);
         host_mouse_gamepad(g);
@@ -345,11 +365,7 @@ static void host_gamepad(XBOX_GAMEPAD *g)
      * (2026-09-25). Only for 15 s after the last scripted press, though --
      * ignoring the pad for the whole run left the user on the keyboard in
      * every game a script had launched (2026-10-01). */
-    static int no_host_pad = -1;
-    if (no_host_pad < 0) no_host_pad = getenv("NFL2K5_NO_HOST_PAD") != NULL;
-    if (!(no_host_pad && g_last_script_press &&
-          GetTickCount() - g_last_script_press < 15000) &&
-        xbox_InputGetState(0, &pad) == 0)
+    if (!host_pads_ignored() && xbox_InputGetState(0, &pad) == 0)
         *g = pad.Gamepad;
     host_keyboard_gamepad(g);
     host_mouse_gamepad(g);
@@ -492,6 +508,25 @@ int nfl2k5_hle_XInputGetState(void)
         }
     }
     host_gamepad(&g);
+    {   /* Coach Mode: per-frame play-call hand-off, sideline camera and the
+         * fast-forward toggle. Reads the pad only; never consumes input. A
+         * no-op unless NFL2K5_COACH_MODE is on (src/nfl2k5_coach_mode.c). */
+        extern void nfl2k5_coach_service(uint16_t, const uint8_t[8]);
+        nfl2k5_coach_service(g.wButtons, g.bAnalogButtons);
+    }
+    {   /* Pro Broadcast camera: per-frame automated TV cameras during live play
+         * (Free Cam flies with the pad). No-op unless an angle is selected
+         * (src/nfl2k5_broadcast_cam.c). */
+        extern void nfl2k5_broadcast_cam_service_pad(uint32_t, int, int, int, int, int, int);
+        nfl2k5_broadcast_cam_service_pad(g.wButtons, g.sThumbLX, g.sThumbLY,
+                                         g.sThumbRX, g.sThumbRY,
+                                         g.bAnalogButtons[6], g.bAnalogButtons[7]);
+    }
+    {   /* ESPN 25th Anniversary moment audio: play a clip when a SOFTDRINK
+         * moment (Beast Quake, SB LVIII OT) is launched (nfl2k5_moment_audio.c). */
+        extern void nfl2k5_moment_audio_service(void);
+        nfl2k5_moment_audio_service();
+    }
     {
         int sandbox_input = nfl2k5_sandbox_input(g.wButtons, g.bAnalogButtons,
             g.sThumbLX, g.sThumbLY, g.sThumbRX, g.sThumbRY);
@@ -520,7 +555,8 @@ int nfl2k5_hle_XInputSetState(void)
     fb = MEM32(g_esp + 8u);
     /* XINPUT_FEEDBACK: header (dwStatus, hEvent, Reserved[58]) then
      * XINPUT_RUMBLE { wLeftMotorSpeed, wRightMotorSpeed } at +66. */
-    nfl2k5_controls_rumble((int)(MEM32(g_esp + 4u) & 3u), MEM16(fb + 66u), MEM16(fb + 68u));
+    if (host_pad_mode() != 2)
+        nfl2k5_controls_rumble((int)(MEM32(g_esp + 4u) & 3u), MEM16(fb + 66u), MEM16(fb + 68u));
     MEM32(fb) = 0;                                  /* XINPUT_FEEDBACK_HEADER.dwStatus */
     g_eax = 0;
     g_esp += 12u;                                   /* ret 8 */

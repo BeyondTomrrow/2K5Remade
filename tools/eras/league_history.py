@@ -8,7 +8,7 @@ pro-football-reference.com pages (PFR itself sits behind a Cloudflare challenge)
     teams_<code>.html     https://www.pro-football-reference.com/teams/<code>/
     index.json            {page_name: {"snapshot": ts, "url": wayback_url}}
 
-Writes data/eras/league/nfl_seasons_1970_1980.json and
+Writes data/eras/league/nfl_seasons_1970_1980.json (seasons 1970-1981; the file keeps its name) and
 data/eras/league/franchise_events_1970_2025.json. Every structural fact (team, name,
 conference, division, record, playoff game) comes from the PFR pages; the narrative
 sources for events are listed in EVENT_NOTES below and were read by hand.
@@ -137,12 +137,13 @@ def playoffs(s):
 ROUND_NAMES = {'WildCard': 'Wild Card playoffs', 'Division': 'Divisional playoffs',
                'ConfChamp': 'Conference championships', 'SuperBowl': 'Super Bowl'}
 
-ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII', 'XIII', 'XIV', 'XV']
+ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII', 'XIII', 'XIV', 'XV', 'XVI']
 # Super Bowl sites as listed by ESPN's winners table (dates/scores match PFR's playoff table).
 SB_SITE = {5: 'Orange Bowl, Miami', 6: 'Tulane Stadium, New Orleans', 7: 'Los Angeles Memorial Coliseum',
            8: 'Rice Stadium, Houston', 9: 'Tulane Stadium, New Orleans', 10: 'Orange Bowl, Miami',
            11: 'Rose Bowl, Pasadena, Calif.', 12: 'Superdome, New Orleans', 13: 'Orange Bowl, Miami',
-           14: 'Rose Bowl, Pasadena, Calif.', 15: 'Superdome, New Orleans'}
+           14: 'Rose Bowl, Pasadena, Calif.', 15: 'Superdome, New Orleans',
+           16: 'Silverdome, Pontiac, Mich.'}
 SRC_ESPN_SB = 'https://www.espn.com/nfl/superbowl/history/winners'
 SRC_HOF_WILDCARD = 'https://www.profootballhof.com/news/wild-card-golden-nuggets'
 SRC_WIKI_PLAYOFFS = 'https://en.wikipedia.org/wiki/NFL_playoffs'
@@ -216,7 +217,7 @@ def playoff_format(season):
 
 def build_seasons():
     seasons = []
-    for y in range(1970, 1981):
+    for y in range(1970, 1982):
         rows, s = standings(y)
         confs = []
         games_played = set()
@@ -474,7 +475,7 @@ def main():
     json.dump({
         'schema': 'nfl2k5_eras_league_seasons/v1',
         'generated_by': 'tools/eras/league_history.py',
-        'scope': 'NFL regular seasons 1970-1980: teams, conferences, divisions, records, postseason',
+        'scope': 'NFL regular seasons 1970-1981: teams, conferences, divisions, records, postseason',
         'conventions': {
             'id': 'stable franchise id (see franchise_events_1970_2025.json)',
             'city/name': 'as Pro-Football-Reference lists the team that season',

@@ -8,15 +8,47 @@
 </head>
 <body>
   <main id="sandbox" hidden>
-    <section id="browser" aria-label="Sandbox browser" hidden>
-      <header class="heading"><div><p class="eyebrow">NFL 2K5</p><h1 id="title">SANDBOX</h1></div><div class="status"><span id="simulation">PAUSED</span><span id="location"></span></div></header>
+    <canvas id="telestrator" width="1920" height="1080" hidden aria-hidden="true"></canvas>
+    <section id="draw-toolbar" hidden aria-label="Telestrator">
+      <span class="draw-label">TELESTRATOR</span>
+      <button class="draw-color" type="button" data-color="#ffd400" style="background:#ffd400" aria-label="Yellow"></button>
+      <button class="draw-color" type="button" data-color="#ff3b30" style="background:#ff3b30" aria-label="Red"></button>
+      <button class="draw-color" type="button" data-color="#34c759" style="background:#34c759" aria-label="Green"></button>
+      <button class="draw-color" type="button" data-color="#0a84ff" style="background:#0a84ff" aria-label="Blue"></button>
+      <button class="draw-color" type="button" data-color="#ffffff" style="background:#fff" aria-label="White"></button>
+      <button id="draw-clear" type="button">Clear</button>
+      <button id="draw-done" type="button">Done</button>
+    </section>
+    <section id="browser" aria-label="Sandbox wheel" hidden>
+      <div class="ring" aria-hidden="true"><span class="ring-glow"></span></div>
       <nav id="tabs" aria-label="Sandbox categories"></nav>
-      <div class="workspace">
-        <section class="catalog"><header class="catalog-heading"><h2 id="category">Teams</h2><div class="page-controls"><button id="page-up" type="button" aria-label="Previous page">↑</button><span id="count"></span><button id="page-down" type="button" aria-label="Next page">↓</button></div></header><div id="rows" role="listbox" aria-label="Available items"></div><p id="empty" hidden>No items available in this scene.</p></section>
-        <aside class="inspector"><div class="inspector-mark" id="item-mark">2K5</div><p class="eyebrow" id="item-type">SANDBOX</p><h2 id="item-title">Build your scene</h2><p id="item-description">Choose a stadium, then use the browser to edit the scene.</p><dl id="item-details"></dl><div id="capability-note" hidden></div><div class="inspector-actions"><button id="activate" type="button">Select</button><div class="adjust"><button id="decrease" type="button" aria-label="Decrease">−</button><output id="value"></output><button id="increase" type="button" aria-label="Increase">+</button></div></div></aside>
+      <div class="hub">
+        <header class="hub-top">
+          <div class="hub-id"><p class="eyebrow" id="title">SANDBOX</p><span id="location"></span></div>
+          <span id="simulation">PAUSED</span>
+        </header>
+        <div class="hub-cat">
+          <h2 id="category">Teams</h2>
+          <div class="page-controls"><button id="page-up" type="button" aria-label="Previous page">↑</button><span id="count"></span><button id="page-down" type="button" aria-label="Next page">↓</button></div>
+        </div>
+        <div id="rows" role="listbox" aria-label="Available items"></div>
+        <p id="empty" hidden>No items available in this scene.</p>
+        <aside class="inspector">
+          <div class="insp-head">
+            <div class="inspector-mark" id="item-mark">2K5</div>
+            <div class="insp-head-text"><p class="eyebrow" id="item-type">SANDBOX</p><h3 id="item-title">Build your scene</h3></div>
+          </div>
+          <div class="inspector-actions">
+            <button id="activate" type="button">Select</button>
+            <div class="adjust"><button id="decrease" type="button" aria-label="Decrease">−</button><output id="value"></output><button id="increase" type="button" aria-label="Increase">+</button></div>
+          </div>
+          <p id="item-description">Choose a stadium, then use the wheel to edit the scene.</p>
+          <div id="capability-note" hidden></div>
+          <dl id="item-details"></dl>
+        </aside>
+        <footer id="prompts"></footer>
       </div>
       <div class="notification" id="message" role="status"></div>
-      <footer id="prompts"></footer>
     </section>
     <section id="quick-status" aria-label="Sandbox controls"><span class="mode-label" id="mode-label">SANDBOX</span><span id="quick-sim"></span><span id="quick-prompt"></span></section>
     <div id="reticle" aria-hidden="true"><i></i><b></b></div>

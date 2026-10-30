@@ -1,0 +1,64 @@
+/* Measured 1.05s replay-in shield and separate 1.05s replay-out wordmark.
+   Reference PLR04ljZ5DI94.42–95.43/107.43–108.43. Return starts with an
+   opaque blue optical plane behind the huge metallic letters (~67ms), then
+   reveals footage through the translucent center as the letters contract. */
+#cbs-replay-wipe {position:absolute;inset:0;z-index:82;pointer-events:none;overflow:hidden;perspective:1250px;}
+#cbs-replay-wipe[hidden] {display:none!important;}
+#cbs-replay-wipe .cr-lens {position:absolute;left:600px;top:180px;width:720px;height:720px;border-radius:50%;background:radial-gradient(ellipse,#163dceae 0%,#0c45b892 29%,#0879e03b 59%,transparent 73%);opacity:0;}
+#cbs-replay-wipe .cr-return-cover {position:absolute;inset:0;background:#0f45c1;opacity:0;}
+#cbs-replay-wipe .cr-orbits {position:absolute;inset:0;width:1920px;height:1080px;fill:none;stroke:#f8ffffd9;stroke-width:2;opacity:0;}
+#cbs-replay-wipe .cr-shield {position:absolute;left:750px;top:255px;width:420px;height:570px;transform-origin:50% 50%;opacity:0;transform-style:preserve-3d;}
+#cbs-replay-wipe .cr-shield img {position:absolute;inset:0;width:100%;height:100%;object-fit:contain;}
+#cbs-replay-wipe .cr-shield-depth {transform:translate(8px,5px);filter:brightness(.35) drop-shadow(3px 2px 1px #c7dae3);}
+#cbs-replay-wipe .cr-shield-face {filter:drop-shadow(-2px -1px 0 white) drop-shadow(2px 2px 0 #4d687e) drop-shadow(0 0 10px #297cff99);}
+#cbs-replay-wipe .cr-wordmark {position:absolute;left:90px;top:442px;width:1740px;height:192px;transform-origin:50% 50%;opacity:0;}
+#cbs-replay-wipe .cr-wordmark>div {position:absolute;inset:0;mask:url('assets/branding/cbs-sports.svg') center/contain no-repeat;-webkit-mask:url('assets/branding/cbs-sports.svg') center/contain no-repeat;}
+#cbs-replay-wipe .cr-word-depth {transform:translate(10px,5px);background:linear-gradient(#9fdbe5,#33404a 35%,#b2d1dc 48%,#38444c 61%,#d4e9ef);}
+#cbs-replay-wipe .cr-word-face {background:linear-gradient(180deg,#fcffff 0%,#b6c9ce 17%,#f8feff 24%,#d0dade 42%,#7a939d 56%,#e6f1f2 75%,#b5d5dc);}
+#cbs-replay-wipe .cr-word-outline {position:absolute;inset:0;width:100%;height:100%;opacity:0;overflow:visible;}
+.replay-in .cr-wordmark,.replay-out .cr-shield {display:none;}
+#cbs-replay-wipe.replay-in.running .cr-shield {animation:cr-shield-in 1050ms linear both;}
+#cbs-replay-wipe.replay-in.running .cr-lens {animation:cr-lens-in 1050ms linear both;}
+#cbs-replay-wipe.replay-in.running .cr-orbits {animation:cr-orbits-in 1050ms linear both;}
+#cbs-replay-wipe.replay-out.running .cr-wordmark {animation:cr-word-out 1050ms linear both;}
+#cbs-replay-wipe.replay-out.running .cr-return-cover {animation:cr-return-cover-out 1050ms linear both;}
+#cbs-replay-wipe.replay-out.running .cr-lens {animation:cr-lens-out 1050ms linear both;}
+#cbs-replay-wipe.replay-out.running .cr-orbits {animation:cr-orbits-out 1050ms linear both;}
+#cbs-replay-wipe.replay-out.running .cr-word-face {animation:cr-metal-face 1050ms linear both;}
+#cbs-replay-wipe.replay-out.running .cr-word-depth {animation:cr-metal-depth 1050ms linear both;}
+#cbs-replay-wipe.replay-out.running .cr-word-outline {animation:cr-metal-contour 1050ms linear both;}
+@keyframes cr-shield-in {
+  0% {opacity:0;transform:scale(.06) rotateY(-82deg);}
+  6% {opacity:1;transform:scale(.13) rotateY(-65deg);}
+  19% {opacity:1;transform:scale(.43) rotateY(-15deg);}
+  34% {opacity:1;transform:scale(.68) rotateY(0);}
+  48% {opacity:1;transform:scale(.84) rotateY(-4deg);}
+  60% {opacity:1;transform:scale(.99) rotateY(0);}
+  69% {opacity:1;transform:scale(1.32) rotateY(0);}
+  76% {opacity:1;transform:scale(2.25) rotateY(0);}
+  82% {opacity:1;transform:scale(5.5) rotateY(0);}
+  86% {opacity:1;transform:scale(13) rotateY(0);}
+  88%,100% {opacity:0;transform:scale(16) rotateY(0);}
+}
+@keyframes cr-lens-in {0%,13%{opacity:0;transform:scale(.2);}25%{opacity:.8;transform:scale(.65);}60%{opacity:1;transform:scale(1.2);}83%{opacity:.8;transform:scale(2.1);}97%,100%{opacity:0;transform:scale(2.6);}}
+@keyframes cr-orbits-in {0%,13%{opacity:0;transform:scale(.23);}23%{opacity:1;transform:scale(.6);}50%{opacity:1;transform:scale(1.1);}78%{opacity:1;transform:scale(1.8);}92%{opacity:.6;transform:scale(2.2);}100%{opacity:0;transform:scale(2.4);}}
+@keyframes cr-word-out {
+  0%{opacity:1;transform:scale(19) rotateY(18deg);}
+  4%{opacity:1;transform:scale(9) rotateY(12deg);}
+  11%{opacity:1;transform:scale(2) rotateY(5deg);}
+  22%{opacity:1;transform:scale(1.17) rotateY(0);}
+  38%{opacity:1;transform:scale(1.02) rotateY(0);}
+  59%{opacity:1;transform:scale(.92) rotateY(0);}
+  70%{opacity:.92;transform:scale(.86) rotateY(0);}
+  83%{opacity:.7;transform:scale(.78) rotateY(0);}
+  94%,100%{opacity:0;transform:scale(.73) rotateY(0);}
+}
+@keyframes cr-lens-out {0%{opacity:1;transform:scale(5);}12%{opacity:1;transform:scale(1.4);}30%{opacity:.9;transform:scale(1.1);}60%{opacity:.2;transform:scale(.9);}80%,100%{opacity:0;transform:scale(.8);}}
+/* Source107.433/107.467s conceal the picture;107.500s reveals the live shot.
+   Keep40ms safely inside full cover; drop this plane before100ms. */
+@keyframes cr-return-cover-out {0%,6.4%{opacity:1;}9.2%,100%{opacity:0;}}
+@keyframes cr-orbits-out {0%,8%{opacity:0;transform:scale(.65);}18%{opacity:.8;transform:scale(.85);}38%{opacity:1;transform:scale(1.1);}62%{opacity:1;transform:scale(1.55);}83%{opacity:.65;transform:scale(2);}100%{opacity:0;transform:scale(2.3);}}
+@keyframes cr-metal-face {0%,55%{opacity:1;}76%{opacity:.45;}88%,100%{opacity:0;}}
+@keyframes cr-metal-depth {0%,55%{opacity:1;}75%{opacity:.65;}91%,100%{opacity:0;}}
+@keyframes cr-metal-contour {0%,51%{opacity:0;}66%{opacity:.65;}80%{opacity:.9;}94%,100%{opacity:0;}}
+@media(prefers-reduced-motion:reduce) {html:not([data-preview-motion="full"]) #cbs-replay-wipe {display:none!important;}}

@@ -5,7 +5,8 @@
   'use strict';
   var api = window.NFL2K5, canvas = document.getElementById('canvas');
   if (!api || !canvas) return;
-  var latest = api.state, current = null, timer = 0, profileTimers = [], watermarkTimer = 0, matchKey = '', opened = false, pendingIntro = null, replay = false;
+  var latest = api.state, current = null, timer = 0, introTimer = 0, profileTimers = [], watermarkTimer = 0, matchKey = '', opened = false, pendingIntro = null, replay = false;
+  var summary = null, pendingSummary = null, summaryQueueTimer = 0;
   var ALIAS = {STL:'LAR',SD:'LAC',OAK:'LV',JAC:'JAX',WSH:'WAS'};
   var COLORS = {LAR:'#1f4fae',CIN:'#da541b',ARI:'#97233f',ATL:'#a71930',BAL:'#3b2a8f',BUF:'#00338d',CAR:'#0085ca',CHI:'#c83803',CLE:'#ff3c00',DAL:'#003594',DEN:'#fb4f14',DET:'#0076b6',GB:'#2f5a3e',HOU:'#a71930',IND:'#0b4a8f',JAX:'#006778',KC:'#e31837',LV:'#6b6f74',LAC:'#0080c6',MIA:'#008e97',MIN:'#4f2683',NE:'#0c2f5e',NO:'#9f8958',NYG:'#0b2265',NYJ:'#125740',PHI:'#004c54',PIT:'#d9a300',SF:'#aa0000',SEA:'#1d4f91',TB:'#d50a0a',TEN:'#4b92db',WAS:'#7a1a1a'};
   function node(tag, cls, parent, value) { var n = document.createElement(tag);if(cls)n.className=cls;if(value!=null)n.textContent=String(value);if(parent)parent.appendChild(n);return n; }
@@ -17,7 +18,8 @@
   function logo(t) { return code(t)?'assets/logos/'+code(t)+'.png':t&&t.logo||''; }
   function setImage(n,src,fallback) { n.onerror=function(){if(fallback&&n.getAttribute('src')!==fallback){n.setAttribute('src',fallback);return;}n.style.visibility='hidden';n.removeAttribute('src');};n.style.visibility=src?'':'hidden';if(src)n.setAttribute('src',src);else n.removeAttribute('src'); }
   function teamImage(n,t) { setImage(n,logo(t),t&&t.logo); }
-  function activeMatch() { var s=latest,cx=s&&s.context||{};return !!(s&&s.valid===true&&s.away&&s.home&&s.gameStatus!=='inactive'&&!cx.playSelection&&!cx.paused); }
+  function transitionActive() { return !!(window.SNFTransitions&&window.SNFTransitions.active()); }
+  function activeMatch() { var s=latest,cx=s&&s.context||{};return !!(s&&s.valid===true&&s.away&&s.home&&s.gameStatus!=='inactive'&&!cx.playSelection&&!cx.paused&&!transitionActive()); }
   function pregameStage() { return latest&&latest.context&&latest.context.pregameStage||''; }
   function pregameWindow() {
     if(!activeMatch()||latest.phase!==0||!Number.isInteger(latest.quarter)||latest.quarter<0||latest.quarter>1||latest.gameStatus==='final')return false;
@@ -31,7 +33,7 @@
   function brand(parent,cls) { var n=node('div',cls,parent);var p=img('nbc-brand',n);p.setAttribute('src','assets/branding/nbc-peacock-user.png');var mark=img('snf-wordmark',n);mark.setAttribute('alt','SNF');mark.setAttribute('src','assets/branding/snf-wordmark.svg');return n; }
   var watermark=brand(canvas,'snf-corner');watermark.setAttribute('id','snf-watermark');watermark.setAttribute('aria-hidden','true');
   function updateWatermark() { var on=activeMatch()&&current!=='intro'&&!replay;watermark.classList.toggle('on',on);watermark.setAttribute('aria-hidden',String(!on)); }
-  function reset() { clearTimeout(timer);timer=0;profileTimers.forEach(clearTimeout);profileTimers=[];profileRows.classList.remove('swap');[intro,timeout,profile].forEach(function(n){n.classList.remove('on');n.setAttribute('aria-hidden','true');});if(current!==null){current=null;notify();}updateWatermark(); }
+  function reset() { clearTimeout(timer);timer=0;clearTimeout(introTimer);introTimer=0;clearTimeout(summaryQueueTimer);summaryQueueTimer=0;pendingSummary=null;summary=null;profileTimers.forEach(clearTimeout);profileTimers=[];profileRows.classList.remove('swap');timeout.classList.remove('period-summary','leaving');timeout.removeAttribute('data-summary');[intro,timeout,profile].forEach(function(n){n.classList.remove('on');n.setAttribute('aria-hidden','true');});if(current!==null){current=null;notify();}updateWatermark(); }
   function show(kind,element,e,fallback) { clearTimeout(timer);current=kind;element.classList.remove('on');void element.offsetWidth;element.classList.add('on');element.setAttribute('aria-hidden','false');updateWatermark();notify();var n=Number(e.duration||e.displaySeconds);timer=setTimeout(reset,isFinite(n)&&n>0?Math.min(n,30)*1000:fallback); }
 
   var intro=node('div','snf-broadcast-scene',canvas);intro.setAttribute('id','snf-intro');intro.setAttribute('aria-hidden','true');
@@ -51,7 +53,7 @@
     }).sort(function(a,b){return b.player.overall-a.player.overall||a.index-b.index;})[0];
   }
   function open(e) {
-    if(!introWindow()||opened)return false;
+    if(!introWindow()||opened||summary||pendingSummary||window.SNFPregameInserts&&window.SNFPregameInserts.active())return false;
     reset();
     introTeams.forEach(function(n,i){
       var side=i?'home':'away',t=latest[side],entry=bestPlayer(t,e,side),p=entry&&entry.player;
@@ -65,9 +67,16 @@
     introTitle.textContent=e.title||'';introVenue.textContent=e.venue||latest.venue||latest.stadiumName||'';
     intro.classList.toggle('no-venue',!introVenue.textContent);opened=true;pendingIntro=null;show('intro',intro,e,6000);return true;
   }
+  function queueIntro() {
+    if(!introWindow()||opened||introTimer||summary||pendingSummary||window.SNFPregameInserts&&window.SNFPregameInserts.active())return;
+    /* The native state is posted before that frame's popup events. Give the
+       owning player fact time to arrive instead of flashing a matchup title
+       over it. This delay never substitutes for a proven warmup camera. */
+    introTimer=setTimeout(function(){introTimer=0;open(pendingIntro||{});},350);
+  }
   function requestIntro(e) {
-    if(opened||!pregameWindow()||['crowd','warmup','panning'].indexOf(pregameStage())<0)return;
-    pendingIntro=e; if(introWindow())open(e);
+    if(opened||summary||pendingSummary||!pregameWindow()||['crowd','warmup','panning'].indexOf(pregameStage())<0)return;
+    pendingIntro=e;queueIntro();
   }
 
   var timeout=node('div','snf-broadcast-scene',canvas);timeout.setAttribute('id','snf-timeout');timeout.setAttribute('aria-hidden','true');
@@ -75,8 +84,45 @@
   var timeoutTitle=node('div','timeout-title',timeout),timeoutClock=node('div','timeout-clock',timeout);
   var timeoutTeams=['away','home'].map(function(side){var n=node('div','timeout-team '+side,timeout);return {root:n,logo:img('timeout-logo',n),name:node('div','timeout-name',n),score:node('div','timeout-score',n),marks:node('div','timeout-marks',n)};});
   var timeoutDetail=node('div','timeout-detail',timeout);
-  function updateTimeout() { if(!latest)return;timeoutTeams.forEach(function(n,i){var t=latest[i?'home':'away'];n.root.style.setProperty('--timeout-team',color(t));teamImage(n.logo,t);n.name.textContent=code(t);n.score.textContent=value(t.score)?String(t.score):'\u2014';n.marks.innerHTML='';if(Number.isInteger(t.timeouts)&&t.timeouts>=0&&t.timeouts<=3){for(var j=0;j<3;j++)node('i',j>=t.timeouts?'used':'',n.marks);}});timeoutClock.textContent=[period(latest),time(latest.gameClock)].filter(Boolean).join('  '); }
-  function showTimeout(e) { if(!activeMatch())return;reset();updateTimeout();var t=latest[e.team];timeoutTitle.textContent='TIMEOUT';timeoutDetail.textContent=t?(t.city&&t.name?t.city+' '+t.name:code(t)).toUpperCase():'';show('timeout',timeout,e,5000); }
+  function updateTimeout() { if(!latest)return;timeoutTeams.forEach(function(n,i){var t=latest[i?'home':'away'];n.root.style.setProperty('--timeout-team',color(t));teamImage(n.logo,t);n.name.textContent=code(t);n.score.textContent=value(t.score)?String(t.score):'\u2014';n.marks.innerHTML='';if(Number.isInteger(t.timeouts)&&t.timeouts>=0&&t.timeouts<=3){for(var j=0;j<3;j++)node('i',j>=t.timeouts?'used':'',n.marks);}});timeoutClock.textContent=summary?'':[period(latest),time(latest.gameClock)].filter(Boolean).join('  '); }
+  function showTimeout(e) { if(!activeMatch()||summary||pendingSummary)return;reset();updateTimeout();var t=latest[e.team];timeoutTitle.textContent='TIMEOUT';timeoutDetail.textContent=t?(t.city&&t.name?t.city+' '+t.name:code(t)).toUpperCase():'';show('timeout',timeout,e,5000); }
+
+  /* Native posts the new period state, then QUARTER_ENDED, an optional
+     HALFTIME/OVERTIME, and QUARTER_STARTED in one event turn. Coalesce that
+     bundle before painting. In particular the new state's 15:00 clock is
+     not the clock of the period that just ended. Only GAME_ENDED says FINAL. */
+  function summaryFor(e) {
+    var kind=e.name,quarter=Number(e.quarter),title='',priority=1,fallback=5000;
+    if(kind==='GAME_ENDED'){title='FINAL';priority=4;fallback=8000;}
+    else if(kind==='HALFTIME'){title='HALFTIME';priority=3;fallback=7000;}
+    else if(kind==='OVERTIME'){title='OVERTIME';priority=3;fallback=6500;}
+    else if(kind==='QUARTER_ENDED')title=Number.isInteger(quarter)&&quarter>=1&&quarter<=4?'END OF '+quarter+['','ST','ND','RD','TH'][quarter]+' QUARTER':Number.isInteger(quarter)&&quarter>4?'END OF OVERTIME':'END OF PERIOD';
+    else return null;
+    var seconds=Number(e.duration||e.displaySeconds);
+    return {kind:kind,title:title,priority:priority,duration:Number.isFinite(seconds)&&seconds>0?Math.min(seconds,30)*1000:fallback};
+  }
+  function showSummary(next) {
+    if(!activeMatch())return;
+    reset();summary=next;current='period-summary';
+    timeout.classList.add('period-summary');timeout.setAttribute('data-summary',next.kind);
+    timeoutTitle.textContent=next.title;timeoutDetail.textContent='';updateTimeout();
+    void timeout.offsetWidth;timeout.classList.add('on');timeout.setAttribute('aria-hidden','false');updateWatermark();notify();
+    timer=setTimeout(function(){
+      /* Keep ownership while the two team rows leave. Releasing it at the
+         start of the CSS exit would reveal the scorebug underneath them. */
+      timeout.classList.add('leaving');
+      timer=setTimeout(reset,700);
+    },next.duration);
+  }
+  function requestSummary(e) {
+    if(!activeMatch())return;
+    var next=summaryFor(e);if(!next)return;
+    var owned=pendingSummary||summary;
+    if(owned&&(owned.priority>next.priority||owned.kind===next.kind&&owned.title===next.title))return;
+    pendingSummary=next;
+    if(summaryQueueTimer)return;
+    summaryQueueTimer=setTimeout(function(){summaryQueueTimer=0;var next=pendingSummary;pendingSummary=null;if(next)showSummary(next);},0);
+  }
 
   var profile=node('div','snf-broadcast-scene',canvas);profile.setAttribute('id','snf-player-profile');profile.setAttribute('aria-hidden','true');
   node('div','profile-glass',profile);node('div','profile-flag',profile);node('div','profile-curve',profile);
@@ -85,7 +131,7 @@
     add('HEIGHT',p.height);add('WEIGHT',p.weight);add('AGE',p.age);add('EXPERIENCE',p.experience!=null?p.experience:Number.isInteger(p.yearsPro)&&p.yearsPro>=0?p.yearsPro+' YEARS':null);add('COLLEGE',p.college);add('HOMETOWN',p.hometown);
     var supplied=e.rows||p.profile||[];if(Array.isArray(supplied))supplied.forEach(function(r){if(r&&value(r.label))add(String(r.label).toUpperCase(),r.value!=null?r.value:Array.isArray(r.values)?r.values[0]:null);});
     if(Array.isArray(p.fields))p.fields.forEach(function(r){if(r&&value(r.label))add(String(r.label).toUpperCase(),r.value);});return rows.slice(0,24); }
-  function showProfile(e) { reset();if(!activeMatch()||!(latest.context&&latest.context.scorebugVisible===true)||!e.player)return;var p=Object.assign({},e.player),name=p.fullName||p.name;if(!value(name))return;
+  function showProfile(e) { if(summary||pendingSummary)return;reset();if(!activeMatch()||!(latest.context&&latest.context.scorebugVisible===true)||!e.player)return;var p=Object.assign({},e.player),name=p.fullName||p.name;if(!value(name))return;
     if(p.fullName&&p.name&&String(p.fullName).trim().split(/\s+/).pop().toLowerCase()!==String(p.name).trim().split(/\s+/).pop().toLowerCase()){name=p.name;p.portrait='';p.render='';p.number=null;p.position='';}
     var t=e.teamData||latest[e.team];profile.style.setProperty('--profile-team',color(t));profile.style.setProperty('--profile-rgb',rgb(t));teamImage(profileLogo,t);setImage(profilePortrait,p.render||p.portrait||'');profile.classList.toggle('no-photo',!(p.render||p.portrait));profileName.textContent=String(name).toUpperCase();profileTab.textContent=[p.position,Number.isInteger(p.number)&&p.number>=0&&p.number<=99?p.number:null].filter(value).join('\n');
     var rows=profileData(p,e),pages=Math.max(1,Math.ceil(rows.length/8)),caption=e.caption||e.title||'PLAYER PROFILE';
@@ -99,18 +145,22 @@
     var changed=key&&matchKey&&key!==matchKey||prev&&s.quarter>0&&s.quarter<prev.quarter;
     if(!activeMatch()||changed){reset();pendingIntro=null;clearTimeout(watermarkTimer);replay=false;if(changed||!s.valid)opened=false;else opened=true;}
     if(key)matchKey=key;
-    if(!pregameWindow()||['coin_toss','kickoff'].indexOf(pregameStage())>=0){pendingIntro=null;if(activeMatch())opened=true;if(current==='intro')reset();}
-    if(current==='intro'&&!introWindow())reset();
-    if(introWindow()&&!opened&&!(window.SNFPregameInserts&&window.SNFPregameInserts.active()))open(pendingIntro||{});
-    if(current==='timeout')updateTimeout();updateWatermark();
+    if(!pregameWindow()||['coin_toss','kickoff'].indexOf(pregameStage())>=0){pendingIntro=null;clearTimeout(introTimer);introTimer=0;if(activeMatch())opened=true;if(current==='intro')reset();}
+    if(!introWindow()){clearTimeout(introTimer);introTimer=0;if(current==='intro')reset();}
+    queueIntro();
+    if(current==='timeout'||current==='period-summary')updateTimeout();updateWatermark();
   });
-  document.addEventListener('snf-pregame-change',function(){if(window.SNFPregameInserts&&window.SNFPregameInserts.active()){pendingIntro=null;opened=true;reset();}});
+  document.addEventListener('snf-pregame-change',function(){if(window.SNFPregameInserts&&window.SNFPregameInserts.active())reset();else queueIntro();});
+  document.addEventListener('snf-transition-change',function(){if(transitionActive()){pendingIntro=null;reset();}else updateWatermark();});
   api.onEvent(function(e){if(!e)return;
+    if(['QUARTER_ENDED','HALFTIME','OVERTIME','GAME_ENDED'].indexOf(e.name)>=0){requestSummary(e);return;}
+    if(e.name==='QUARTER_STARTED')return;
     if(e.name==='MATCHUP_INTRO'||e.name==='BROADCAST_INTRO'||e.name==='PREGAME_INTRO_READY'||e.name==='GAME_STARTED'){requestIntro(e);return;}
-    if(e.name==='COIN_TOSS'||e.name==='PLAYER_FACT'||e.name==='PLAY_STARTED'){pendingIntro=null;reset();return;}
+    if(e.name==='PLAYER_FACT'){if(!summary&&!pendingSummary)reset();return;}
+    if(e.name==='COIN_TOSS'||e.name==='PLAY_STARTED'){pendingIntro=null;opened=true;reset();return;}
     if(e.name==='TIMEOUT'){showTimeout(e);return;}
     if(e.name==='PLAYER_PROFILE'||e.name==='PLAYER_BIO'){showProfile(e);return;}
     if(e.name==='REPLAY_STARTED'||e.name==='REPLAY_ENDED'){reset();if(activeMatch()){replay=true;clearTimeout(watermarkTimer);updateWatermark();watermarkTimer=setTimeout(function(){replay=false;updateWatermark();},1100);}return;}
-    if(['LINEUP','PLAYER_STAT','PLAYER_FEATURE','PLAYER_COMPARISON','TEAM_STATS','TOUCHDOWN','FIELD_GOAL','SAFETY','EXTRA_POINT','TWO_POINT_CONVERSION','GAME_ENDED','QUARTER_ENDED'].indexOf(e.name)>=0)reset();
+    if(['LINEUP','PLAYER_STAT','PLAYER_FEATURE','PLAYER_COMPARISON','TEAM_STATS','TOUCHDOWN','FIELD_GOAL','SAFETY','EXTRA_POINT','TWO_POINT_CONVERSION'].indexOf(e.name)>=0&&!summary&&!pendingSummary)reset();
   });
 })();

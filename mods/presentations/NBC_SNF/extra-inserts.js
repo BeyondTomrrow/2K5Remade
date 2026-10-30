@@ -30,6 +30,8 @@
   function permitted(activeInsert) {
     var s = latest, cx = s && s.context || {};
     return !!(s && s.valid === true && s.away && s.home && !cx.playSelection && !cx.paused &&
+      !(window.SNFTransitions && window.SNFTransitions.active()) &&
+      !(window.SNFBroadcastScenes && window.SNFBroadcastScenes.active() === 'period-summary') &&
       (cx.scorebugVisible === true || activeInsert));
   }
   function notify() {
@@ -121,6 +123,9 @@
   }
 
   window.SNFExtraInserts = { active:function () { return current; }, reset:reset };
+  document.addEventListener('snf-transition-change', function () {
+    if (window.SNFTransitions && window.SNFTransitions.active()) reset();
+  });
   api.onState(function (s, prev) {
     latest = s;
     var key = s.away && s.home ? text(s.away.abbreviation) + '|' + text(s.home.abbreviation) : '';

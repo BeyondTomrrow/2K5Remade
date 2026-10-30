@@ -66,6 +66,7 @@ Nfl2k5SandboxActorProperties player_baselines[142]{};
 bool player_baseline_valid[142]{};
 uint32_t baseline_clock=0;
 bool grab_mode=false,pose_snap=false;
+bool draw_mode=false; unsigned draw_clear=0;   /* telestrator: draw on the screen */
 float grab_pending_dt=0,camera_pending_dt=0;
 Scene grab_before{};
 std::string selected_name;
@@ -243,6 +244,11 @@ void camera_tick(float dt) {
         w.x=a.x+(b.x-a.x)*t;w.y=a.y+(b.y-a.y)*t;w.z=a.z+(b.z-a.z)*t;
         w.yaw=camera_lerp_angle(a.yaw,b.yaw,t);w.pitch=a.pitch+(b.pitch-a.pitch)*t;w.fov=a.fov+(b.fov-a.fov)*t;
         if(shot_elapsed>=shot_seconds)camera_motion=0;
+    } else if(camera_motion==4) {
+        /* Cinematic orbit around a fixed world point (the ball spot), no actor. */
+        orbit_angle=std::fmod(orbit_angle+dt*.2f,2*pi);
+        w.x=tracked_x+std::sin(orbit_angle)*orbit_radius;w.y=tracked_y+orbit_height;w.z=tracked_z+std::cos(orbit_angle)*orbit_radius;
+        aim_camera(w,tracked_x,tracked_y,tracked_z);
     } else {
         Nfl2k5SandboxActor a{};
         if(!selected_actor(a)){camera_motion=0;message="Selected player left the field; camera motion stopped";return;}
@@ -344,6 +350,13 @@ void build_rows() {
         add("Yards to gain",ready?number(std::fabs(s.line-s.ball)/91.44f):"Loading","distance",1,"Adjusts line to gain in yards",ready);
         add("Home timeouts",ready?std::to_string(s.home_to):"Loading","home_timeouts",1,"Session only",ready);
         add("Away timeouts",ready?std::to_string(s.away_to):"Loading","away_timeouts",1,"Session only",ready);
+        add("Scenario: start of game","Q1 15:00","scenario",4,"Reset to the opening-kickoff clock and first down",ready);
+        add("Scenario: two-minute drill","Q4 2:00","scenario",1,"Jump to the fourth quarter with two minutes left",ready);
+        add("Scenario: hurry-up","Q4 0:30","scenario",5,"Thirty seconds left in the fourth quarter",ready);
+        add("Scenario: final play","Q4 0:03","scenario",3,"Three seconds left for one last play",ready);
+        add("Scenario: overtime","OT 10:00","scenario",2,"Start overtime with a full period clock",ready);
+        add("Flip score","Swap H/A","flip_score",0,"Swap the home and away scores and timeouts",ready);
+        add("Tie game","Match scores","tie_score",0,"Set the away score equal to the home score",ready);
     } else if(tab==1) {
         Nfl2k5SandboxActor selected{},actors[NFL2K5_SANDBOX_MAX_ACTORS];
         bool has_selected=selected_actor(selected);
@@ -359,6 +372,7 @@ void build_rows() {
         } else {
             add("Player list","Back","player_list",0,"Choose another loaded field player");
             add("Selected player",has_selected?selected.name:"Player left the field","",0,"Match-only changes. Original roster and save files remain separate",false);
+            add("Next / previous player","Cycle","cycle_player",1,"Left / right frames the next or previous on-field player",true);
             add("Follow player",camera_motion==2?"On":"Off","follow_player",0,"Track this player's movement",has_selected);
             add("Orbit player",camera_motion==1?"On":"Off","orbit_player",0,"Moving camera shot, including when simulation is paused",has_selected);
             add("Close-up","Frame player","closeup_player",0,"Frame a player portrait",has_selected);
@@ -370,6 +384,8 @@ void build_rows() {
             add("Pose offset Z",number(pose.z/100.f)+" m","pose_z",1,"Experimental visual shift; bounded to five metres",can_pose);
             add("Pose rotation",number(pose.yaw)+" degrees","pose_yaw",1,"Rotate the private visual pose",can_pose);
             add("Pose scale",number(pose.scale)+"x","pose_scale",1,"Quarter-size through three times size; does not change collision or ratings",can_pose);
+            add("Size: giant","3x","pose_preset",1,"One-tap three-times size (visual only)",can_pose);
+            add("Size: mini","0.5x","pose_preset",2,"One-tap half size (visual only)",can_pose);
             int clip_count=nfl2k5_sandbox_pose_clip_count();
             std::string clip_label=pose.clip?std::string(nfl2k5_sandbox_pose_clip_name((int)pose.clip-1)):"Off";
             add("Animation clip",clip_count?clip_label:"Clips unavailable","pose_clip",1,"Freeze the player on a baked animation clip (visual preview); offset, rotation and scale still apply",can_pose&&clip_count>0);
@@ -395,22 +411,31 @@ void build_rows() {
         Nfl2k5SandboxWorldState w{};nfl2k5_sandbox_world_get_state(&w);
         add("Simulation",speed?std::to_string(speed)+"%":"Paused","toggle_pause",0,"Pause keeps input, rendering and audio threads running");
         add("Simulation speed",std::to_string(speed)+"%","speed",25,"0 / 25 / 50 / 75 / 100 percent");
+        add("Bullet time",speed==25?"On":"Off","slowmo",0,"One tap drops to 25% slow-mo and back to full speed");
         add("Advance one frame","Step","step",0,"Advances one native simulation update while paused");
         add("Free camera",free_camera?"On":"Off","camera",0,"Left stick fly; right stick look; triggers rise / descend; bumpers zoom",w.ready!=0);
         add("Field of view",number(w.fov)+" degrees","fov",1,"15-110 degrees. Bumpers zoom while the browser is closed",w.camera_ready!=0);
+        add("Lens: telephoto","Zoom in","lens",1,"Snap to a tight 28-degree zoomed lens",w.camera_ready!=0);
+        add("Lens: wide","Zoom out","lens",2,"Snap to a wide 90-degree lens for full-field framing",w.camera_ready!=0);
         add("Camera speed",number(fly_speed/100.f)+" m/s","fly_speed",100,"Fine positioning through fast stadium travel; 1-200 metres per second");
         add("Camera: sideline","Wide shot","camera_preset",1,"Frame the line of scrimmage from the sideline",w.camera_ready!=0);
         add("Camera: end zone","Wide shot","camera_preset",2,"Frame the field from behind the end zone",w.camera_ready!=0);
         add("Camera: overhead","Tactical shot","camera_preset",3,"High field view centred on the ball spot",w.camera_ready!=0);
+        add("Camera: broadcast blimp","Sky shot","camera_preset",4,"Very high stadium view centred on the ball spot",w.camera_ready!=0);
         add("Save camera A",camera_shot_saved[0]?"Replace shot":"Store shot","store_camera",0,"Session camera bookmark A. Scene files also preserve the current camera",w.camera_ready!=0);
         add("Save camera B",camera_shot_saved[1]?"Replace shot":"Store shot","store_camera",1,"Session camera bookmark B",w.camera_ready!=0);
         add("Recall camera A","Recall","recall_camera",0,"Return to shot A without changing score or game time",camera_shot_saved[0]);
         add("Recall camera B","Recall","recall_camera",1,"Return to shot B without changing score or game time",camera_shot_saved[1]);
         add("Camera take duration",std::to_string(shot_seconds)+" seconds","shot_seconds",1,"5-30 seconds for a smooth move between shots A and B");
         add("Play camera A to B",camera_motion==3?"Playing":"Play take","camera_take",0,"Smooth camera-only move; works while the game is paused",camera_shot_saved[0]&&camera_shot_saved[1]);
+        add("Orbit the field",camera_motion==4?"Orbiting":"Cinematic","orbit_field",0,"Slow automatic camera orbit around the ball spot; runs while paused",w.camera_ready!=0);
         add("Stop camera motion","Stop","stop_camera",0,"Cancel orbit, player follow or a recorded camera take",camera_motion!=0);
+        add("Level camera","Straighten","level_camera",0,"Remove camera tilt while keeping the current position",w.camera_ready!=0);
+        add("Mirror to far side","Flip","mirror_camera",0,"Reflect the shot across the field to the opposite sideline",w.camera_ready!=0);
         add("Reset to game camera","Reset","reset_camera",0,"Recapture the normal native camera on the next frame",w.ready!=0);
         add("Photo mode",photo?"On":"Off","photo",0,"Hide Sandbox and broadcast HUD. Back / Circle returns.");
+        add("Telestrator",draw_mode?"On":"Off","toggle_draw",0,"Draw on the frozen play like a replay marker. Drag to draw; B exits, X clears.");
+        add("Clear drawing","Clear","clear_draw",0,"Erase all telestrator marks",draw_mode);
         add("Record 10 seconds","Capture","record",10,"Uses the existing game video capture");
     } else {
         add("Scene slot",std::to_string(scene_slot),"slot",1,"Five independent Sandbox scene files; original saves untouched");
@@ -429,7 +454,7 @@ void publish(bool force=false) {
     build_rows();
     std::string out="{\"active\":"+std::string(active?"true":"false")+",\"menuOpen\":"+(open?"true":"false")+",\"photoMode\":"+(photo?"true":"false")+
         ",\"paused\":"+(speed==0?"true":"false")+",\"speed\":"+std::to_string(speed)+",\"style\":"+quote(nfl2k5_controls_style()==1?"playstation":"xbox")+
-        ",\"generation\":"+std::to_string(generation.load())+",\"tab\":"+std::to_string(tab)+",\"selection\":"+std::to_string(selection)+",\"message\":"+quote(message)+",\"reticle\":"+(free_camera?"true":"false")+",\"grabMode\":"+(grab_mode?"true":"false")+",\"selectedPlayer\":"+quote(selected_name)+",\"rows\":[";
+        ",\"generation\":"+std::to_string(generation.load())+",\"tab\":"+std::to_string(tab)+",\"selection\":"+std::to_string(selection)+",\"message\":"+quote(message)+",\"reticle\":"+(free_camera?"true":"false")+",\"grabMode\":"+(grab_mode?"true":"false")+",\"drawMode\":"+(draw_mode?"true":"false")+",\"drawClear\":"+std::to_string(draw_clear)+",\"selectedPlayer\":"+quote(selected_name)+",\"rows\":[";
     for(size_t i=0;i<rows.size();i++) {if(i)out+=',';auto&r=rows[i];
         bool adjustable=r.cmd=="home_score"||r.cmd=="away_score"||r.cmd=="quarter"||r.cmd=="clock"||r.cmd=="down"||r.cmd=="ball"||r.cmd=="distance"||r.cmd=="home_timeouts"||r.cmd=="away_timeouts"||r.cmd=="speed"||r.cmd=="slot"||r.cmd=="fov"||r.cmd=="fly_speed"||r.cmd=="shot_seconds"||r.cmd=="rating"||r.cmd=="pose_x"||r.cmd=="pose_y"||r.cmd=="pose_z"||r.cmd=="pose_yaw"||r.cmd=="pose_scale"||r.cmd=="pose_clip"||r.cmd=="pose_clip_time";
         out+="{\"label\":"+quote(r.name)+",\"value\":"+quote(r.value)+",\"command\":"+quote(r.cmd)+",\"commandValue\":"+std::to_string(r.arg)+",\"description\":"+quote(r.description)+",\"enabled\":"+(r.enabled?"true":"false")+",\"adjustable\":"+(adjustable?"true":"false")+"}";}
@@ -465,7 +490,7 @@ void execute(const std::string &name,int value) {
         else message="Rating edit refused; player or style changed";
         return;
     }
-    if(name=="grab_player"||name=="pose_x"||name=="pose_y"||name=="pose_z"||name=="pose_yaw"||name=="pose_scale"||name=="pose_reset"||name=="pose_clip"||name=="pose_clip_time") {
+    if(name=="grab_player"||name=="pose_x"||name=="pose_y"||name=="pose_z"||name=="pose_yaw"||name=="pose_scale"||name=="pose_preset"||name=="pose_reset"||name=="pose_clip"||name=="pose_clip_time") {
         uint32_t clk=rd(0xE6028C);Nfl2k5SandboxPose pose{};Scene before;
         if(!nfl2k5_sandbox_pose_get(clk,selected_player,&pose)||!snapshot(before)){message="Player is unavailable for photo posing";return;}
         if(name=="grab_player") {
@@ -479,6 +504,7 @@ void execute(const std::string &name,int value) {
         else if(name=="pose_z")pose.z=std::clamp(pose.z+dir*10.f,-500.f,500.f);
         else if(name=="pose_yaw")pose.yaw=std::clamp(pose.yaw+dir*15.f,-180.f,180.f);
         else if(name=="pose_scale")pose.scale=std::clamp(pose.scale+dir*.05f,.25f,3.f);
+        else if(name=="pose_preset")pose.scale=value==1?3.f:value==2?.5f:1.f;
         else if(name=="pose_clip") {
             int count=nfl2k5_sandbox_pose_clip_count();
             if(count<=0){message="Animation clips unavailable (draftposes.bin missing)";return;}
@@ -498,19 +524,30 @@ void execute(const std::string &name,int value) {
     }
     if(name=="toggle_pause"){speed=speed?0:100;nfl2k5_sandbox_world_set_timescale(speed/100.f);return;}
     if(name=="speed"||name=="timescale"){speed=name=="speed"?(speed+value+125)%125:std::clamp(value,0,100);nfl2k5_sandbox_world_set_timescale(speed/100.f);return;}
+    if(name=="slowmo"){speed=speed==25?100:25;nfl2k5_sandbox_world_set_timescale(speed/100.f);message=speed==25?"Bullet time: 25% speed":"Full speed";return;}
+    if(name=="cycle_player"){
+        Nfl2k5SandboxActor al[NFL2K5_SANDBOX_MAX_ACTORS];
+        int c=nfl2k5_sandbox_actors_list(rd(0xE6028C),al,NFL2K5_SANDBOX_MAX_ACTORS);
+        if(c<=0){message="No on-field players to cycle";return;}
+        std::sort(al,al+c,[](const Nfl2k5SandboxActor &a,const Nfl2k5SandboxActor &b){return a.side!=b.side?a.side<b.side:a.index<b.index;});
+        int cur=-1;for(int i=0;i<c;i++)if(al[i].side*71+al[i].index==selected_player){cur=i;break;}
+        int nxt=cur<0?0:(((cur+(value<0?-1:1))%c)+c)%c;
+        execute("focus_player",al[nxt].side*71+al[nxt].index);return;
+    }
     if(name=="step"){speed=0;nfl2k5_sandbox_world_step();return;}
     if(name=="camera"){camera_motion=0;free_camera=!free_camera;nfl2k5_sandbox_world_set_camera(free_camera?1:0);return;}
     if(name=="stop_camera"){camera_motion=0;message="Camera motion stopped";return;}
     if(name=="reset_camera"){camera_motion=0;free_camera=true;nfl2k5_sandbox_world_set_camera(0);nfl2k5_sandbox_world_set_camera(1);message="Recapturing native field camera";return;}
     if(name=="fly_speed"){fly_speed=std::clamp(fly_speed+(value<0?-100:100),100,20000);nfl2k5_sandbox_world_set_fly_speed((float)fly_speed);return;}
     if(name=="shot_seconds"){shot_seconds=std::clamp(shot_seconds+(value<0?-1:1),5,30);return;}
-    if(name=="fov"||name=="camera_preset"||name=="store_camera"||name=="recall_camera"||name=="camera_take"||name=="focus_player"||name=="closeup_player"||name=="follow_player"||name=="orbit_player") {
+    if(name=="fov"||name=="lens"||name=="level_camera"||name=="mirror_camera"||name=="orbit_field"||name=="camera_preset"||name=="store_camera"||name=="recall_camera"||name=="camera_take"||name=="focus_player"||name=="closeup_player"||name=="follow_player"||name=="orbit_player") {
         Nfl2k5SandboxWorldState w{};nfl2k5_sandbox_world_get_state(&w);
         if(!w.camera_ready){free_camera=true;nfl2k5_sandbox_world_set_camera(1);message="Waiting for the field camera; select again when ready";return;}
         Scene before;bool can_undo=snapshot(before);int previous_motion=camera_motion;camera_motion=0;
         if((name=="follow_player"&&previous_motion==2)||(name=="orbit_player"&&previous_motion==1)) {
             message="Player camera motion stopped";return;
         }
+        if(name=="orbit_field"&&previous_motion==4){message="Field orbit stopped";return;}
         if(name=="store_camera") {
             if(value<0||value>1)return;camera_shots[value]=w;camera_shot_saved[value]=true;
             message=value?"Camera B stored for this session":"Camera A stored for this session";return;
@@ -522,11 +559,21 @@ void execute(const std::string &name,int value) {
             if(!camera_shot_saved[0]||!camera_shot_saved[1])return;
             w=camera_shots[0];camera_motion=3;shot_elapsed=0;open=false;
         } else if(name=="fov") w.fov=std::clamp(w.fov+(value<0?-1.f:1.f),15.f,110.f);
+        else if(name=="lens") w.fov=value==1?28.f:value==2?90.f:60.f;
+        else if(name=="level_camera") w.pitch=0;
+        else if(name=="mirror_camera"){w.x=-w.x;w.yaw=-w.yaw;}
+        else if(name=="orbit_field") {
+            float spot=can_undo?before.ball:0;
+            tracked_x=0;tracked_y=80;tracked_z=spot;orbit_radius=4000;orbit_height=1800;orbit_angle=0;camera_motion=4;open=false;
+            w.x=std::sin(orbit_angle)*orbit_radius;w.y=tracked_y+orbit_height;w.z=spot+std::cos(orbit_angle)*orbit_radius;
+            aim_camera(w,tracked_x,tracked_y,tracked_z);
+        }
         else if(name=="camera_preset") {
             float spot=can_undo?before.ball:0;
             if(value==1){w.x=-3400;w.y=1600;w.z=spot-1500;}
             else if(value==2){w.x=0;w.y=1000;w.z=-6200;}
             else if(value==3){w.x=0;w.y=6500;w.z=spot-600;}
+            else if(value==4){w.x=0;w.y=13000;w.z=spot-100;}
             else return;
             w.fov=60;aim_camera(w,0,80,spot);
         } else {
@@ -554,6 +601,14 @@ void execute(const std::string &name,int value) {
         return;
     }
     if(name=="photo"){photo=!photo;open=false;return;}
+    if(name=="toggle_draw"){
+        draw_mode=!draw_mode;
+        if(draw_mode){open=false;photo=false;speed=0;nfl2k5_sandbox_world_set_timescale(0);
+            message="Telestrator: drag to draw on the frozen play. Clear from Tools; B / Circle exits.";}
+        else message="Telestrator off";
+        return;
+    }
+    if(name=="clear_draw"){draw_clear++;message="Drawing cleared";return;}
     if(name=="record"){xbox_PresentRecord(10);message="Recording 10 seconds";return;}
     if(name=="slot"){scene_slot=(scene_slot+(value>0?1:4)-1)%5+1;return;}
     if(name=="save_scene"||name=="load_scene"){scene_slot=std::clamp(value,1,5);message=scene_file(name=="save_scene")?(name=="save_scene"?"Scene saved":"Scene restored"):"Scene unavailable or invalid; nothing restored";return;}
@@ -565,6 +620,21 @@ void execute(const std::string &name,int value) {
         if(nfl2k5_sandbox_menu_quit_for_reselect()) {
             message="Team / stadium change queued for the next scene boundary.";
         } else message="Scene is not ready for team / stadium changes";
+        return;
+    }
+    if(name=="scenario"||name=="flip_score"||name=="tie_score") {
+        Scene before;if(!snapshot(before)){message="Game state is still loading";return;}Scene s=before;
+        const char *m;
+        if(name=="flip_score"){std::swap(s.home,s.away);std::swap(s.home_to,s.away_to);m="Scores flipped";}
+        else if(name=="tie_score"){s.away=s.home;m="Scores tied";}
+        else if(value==1){s.period=4;s.clock=120;m="Two-minute drill set";}       /* two-minute drill */
+        else if(value==2){s.period=5;s.clock=600;m="Overtime set";}               /* overtime, full period clock */
+        else if(value==3){s.period=4;s.clock=3;m="Final-play clock set";}          /* final play */
+        else if(value==4){s.period=1;s.clock=900;s.down=1;m="Reset to opening kickoff";}
+        else if(value==5){s.period=4;s.clock=30;m="Hurry-up (0:30) set";}
+        else return;
+        if(apply_scene(s,false)){remember(before);message=m;}
+        else message="State changed during edit; edit refused";
         return;
     }
     Scene before;if(!snapshot(before)){message="Game state is still loading";return;}Scene s=before;
@@ -651,6 +721,7 @@ extern "C" void nfl2k5_sandbox_match_lifecycle(int entered) {
 }
 extern "C" int nfl2k5_sandbox_active(){return active?1:0;}
 extern "C" int nfl2k5_sandbox_ui_open(){return active&&open?1:0;}
+extern "C" int nfl2k5_sandbox_ui_draw(){return active&&draw_mode?1:0;}
 extern "C" int nfl2k5_sandbox_ui_visible(){return active&&!photo?1:0;}
 extern "C" int nfl2k5_sandbox_hide_hud(){return active?1:0;}
 extern "C" const char *nfl2k5_sandbox_json(){static thread_local std::string copy;std::lock_guard<std::mutex>lock(json_lock);copy=json;return copy.c_str();}
@@ -669,7 +740,7 @@ extern "C" void nfl2k5_sandbox_command_for_generation(const char *cmd,int value,
 extern "C" int nfl2k5_sandbox_input(uint16_t buttons,const uint8_t a[8],int16_t lx,int16_t ly,int16_t rx,int16_t ry) {
     if(armed&&match_loaded&&!active&&nfl2k5_sandbox_world_enter()) {
         active=true;open=true;photo=false;speed=0;free_camera=true;last_tick=0;
-        message="Sandbox: LB/RB or L1/R1 changes tabs. Close the browser to fly the camera.";
+        message="Sandbox: L3+R3 opens/closes the wheel. LB/RB spins categories; close it to fly the camera.";
         nfl2k5_sandbox_world_set_timescale(0);nfl2k5_sandbox_world_set_camera(1);
     }
     if(!active)return 0;
@@ -681,7 +752,12 @@ extern "C" int nfl2k5_sandbox_input(uint16_t buttons,const uint8_t a[8],int16_t 
         nfl2k5_sandbox_world_input(0,0,0,0,0,0);
         nfl2k5_sandbox_world_tick(dt);publish();return 1;
     }
+    uint32_t prevb=previous_buttons;
     uint32_t edge=b&~previous_buttons;previous_buttons=b;
+    /* L3+R3 together opens/closes the compact wheel (both thumbstick clicks:
+     * LEFT_THUMB 0x40 | RIGHT_THUMB 0x80). Fires once when the pair completes,
+     * never while a grabbed photo pose owns the sticks. Start/Menu still works. */
+    if((b&0xC0u)==0xC0u&&(prevb&0xC0u)!=0xC0u&&!grab_mode)execute("toggle_menu",0);
     if(edge&0x10u)execute("toggle_menu",0);
     if((edge&0x20u)&&!grab_mode)execute("toggle_pause",0);
     if(photo&&(edge&(1u<<17)))execute("back",0);
@@ -701,6 +777,10 @@ extern "C" int nfl2k5_sandbox_input(uint16_t buttons,const uint8_t a[8],int16_t 
         grab_tick(dt,lx,ly,rx,a);
         if(edge&(1u<<16))finish_grab(false);
         else if(edge&(1u<<17))finish_grab(true);
+    } else if(draw_mode) {
+        nfl2k5_sandbox_world_input(0,0,0,0,0,0);     /* frozen play; the mouse draws via the overlay */
+        if(edge&(1u<<17))execute("toggle_draw",0);   /* B / Circle exits */
+        if(edge&(1u<<18))execute("clear_draw",0);    /* X / Square clears */
     } else if(free_camera) {
         auto axis=[](int v){return std::abs(v)<6000?0.f:v/32768.f;};
         if(axis(lx)||axis(ly)||axis(rx)||axis(ry)||(a[7]-a[6])||a[4]>80||a[5]>80)camera_motion=0;
@@ -714,7 +794,7 @@ extern "C" int nfl2k5_sandbox_input(uint16_t buttons,const uint8_t a[8],int16_t 
     at_tick();
     nfl2k5_sandbox_world_tick(dt);camera_tick(dt);publish(edge!=0||!pending.empty());
     if(request_native_pause){request_native_pause=false;return 2;}
-    return active&&(open||free_camera||photo||grab_mode);
+    return active&&(open||free_camera||photo||grab_mode||draw_mode);
 }
 extern "C" void nfl2k5_sandbox_shutdown(){nfl2k5_sandbox_end();nfl2k5_sandbox_ui_shutdown();}
 extern "C" int nfl2k5_sandbox_selftest() {

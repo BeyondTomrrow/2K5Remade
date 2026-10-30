@@ -1,0 +1,42 @@
+/* Measured phases: CBS LV/NE TD 2025. Layered SVG text remains editable.
+   Typography/glass shading are reconstructed, not an extracted CBS 3D render. */
+#cbs-motion { position:absolute; inset:0; width:1920px; height:1080px; pointer-events:none; z-index:20; overflow:hidden; }
+#cbs-td { position:absolute; inset:0; opacity:0; visibility:hidden; }
+#cbs-td.running { visibility:visible; animation:tdEnvelope 5.1s linear both; }
+.td-word { position:absolute; inset:0; width:1920px; height:1080px; overflow:visible; transform-origin:50% 90%; }
+.td-word text { font-family:Arial,Helvetica,sans-serif; font-size:270px; font-weight:700; paint-order:stroke fill; }
+.td-depth { fill:none; stroke:#a8b5c294; stroke-width:10; }
+.td-face { fill:url(#td-glass); stroke:#f5fbffd9; stroke-width:3; }
+.td-edge { fill:none; stroke:#f9fdff9c; stroke-width:1.3; }
+.td-logo { position:absolute; width:370px; height:370px; object-fit:contain; left:775px; top:705px; filter:drop-shadow(0 3px 3px #0008); }
+.td-player { position:absolute; left:540px; top:615px; width:840px; height:420px; }
+.td-player[hidden] { display:none; }
+.td-portrait { position:absolute; bottom:114px; left:300px; width:240px; height:280px; object-fit:contain; object-position:bottom; }
+.td-portrait[hidden] { display:none; }
+.td-name { position:absolute; left:0; right:0; bottom:0; min-height:114px; padding:35px; background:linear-gradient(#242729,#020303); clip-path:polygon(4% 0,96% 0,100% 50%,96% 100%,4% 100%,0 50%); box-shadow:inset 0 0 0 3px #c6cdd1; text-align:center; font:700 38px/42px Arial,sans-serif; color:white; white-space:nowrap; }
+.td-rule { position:absolute; left:0; bottom:4px; right:0; height:3px; background:#eff8ffc9; box-shadow:0 -3px 9px #d9f4ff65; }
+.td-chevrons { position:absolute; top:910px; width:120px; height:150px; display:flex; gap:12px; opacity:.7; }
+.td-chevrons.left { left:35px; }.td-chevrons.right { right:35px; transform:scaleX(-1); }
+.td-chevrons i { display:block; width:30px; height:130px; background:#ecf6ff8c; clip-path:polygon(70% 0,100% 0,30% 50%,100% 100%,70% 100%,0 50%); }
+#cbs-td.running .td-logo { animation:tdLogo 5.1s cubic-bezier(.18,.7,.2,1) both; }
+#cbs-td.running .td-word { animation:tdTitle 5.1s cubic-bezier(.18,.7,.2,1) both; }
+#cbs-td.running .td-player { animation:tdPlayer 5.1s ease both; }
+#cbs-td.running .td-chevrons { animation:tdArrows 5.1s ease both; }
+#eyebar.motion-contract .live-plate { animation:tdContract .34s ease-in both; }
+#eyebar.motion-covered { opacity:0; }
+#eyebar.motion-return .live-plate { animation:tdReturn .44s ease-out both; }
+#eyebar.points-away .away .score,#eyebar.points-home .home .score { font-size:69px; letter-spacing:-3px; }
+#eyebar.points-away::before,#eyebar.points-home::after { content:''; position:absolute; top:20px; width:44px; height:82px; background:repeating-linear-gradient(90deg,transparent 0 9px,#f2f8ff8c 9px 12px); clip-path:polygon(50% 0,100% 0,50% 50%,100% 100%,50% 100%,0 50%); }
+#eyebar.points-away::before { left:-60px; }#eyebar.points-home::after { right:-60px; transform:scaleX(-1); }
+@keyframes tdEnvelope { 0%,5%{opacity:0} 8%,87%{opacity:1} 96%,100%{opacity:0} }
+@keyframes tdLogo { 0%,5%{opacity:0;transform:perspective(800px) rotateY(-110deg) scale(.28)} 10%{opacity:1;transform:perspective(800px) rotateY(-70deg) scale(.55)} 18%,28%{opacity:1;transform:none} 36%,87%{opacity:.18;transform:none} 96%,100%{opacity:0;transform:scale(.2)} }
+@keyframes tdTitle { 0%,12%{opacity:0;transform:scaleX(.1) scaleY(.8)} 17%{opacity:.7;transform:scaleX(.65)} 25%,87%{opacity:1;transform:none} 96%,100%{opacity:0;transform:scaleX(.12)} }
+@keyframes tdPlayer { 0%,35%{opacity:0;transform:translateY(30px) scaleX(.5)} 40%,87%{opacity:1;transform:none} 96%,100%{opacity:0;transform:scaleX(.3)} }
+@keyframes tdArrows { 0%,6%{opacity:0} 18%,87%{opacity:.6} 96%,100%{opacity:0} }
+@keyframes tdContract { 0%{clip-path:inset(0);transform:none} 100%{clip-path:inset(0 33%);transform:scaleY(.7)} }
+@keyframes tdReturn { from{clip-path:inset(0 35%)} to{clip-path:inset(0)} }
+#cbs-td.reduced.running { animation:none; opacity:1; }
+#cbs-td.reduced.running * { animation:none; }
+#cbs-td.reduced.running .td-logo { opacity:.25; }
+#cbs-td.reduced.leaving { opacity:0; }
+@media(prefers-reduced-motion:reduce){html:not([data-preview-motion="full"]) #eyebar.motion-contract .live-plate,html:not([data-preview-motion="full"]) #eyebar.motion-return .live-plate{animation:none}}

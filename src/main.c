@@ -1923,6 +1923,13 @@ void nfl2k5_hw_watch_rescan(void)
     hw_watch_rescan();
 }
 
+/* A watch armed from game code once the address is known (study use). */
+void nfl2k5_hw_watch_at(uint32_t guest_va, const char *name)
+{
+    if (g_hw_watch_active) return;
+    hw_watch_install(guest_va, name);
+}
+
 extern RECOMP_TLS uint32_t g_eax, g_ecx, g_edx, g_esp, g_ebx, g_esi, g_edi;
 extern volatile LONG nfl2k5_frontend_samples;
 extern volatile uint32_t nfl2k5_frontend_queue, nfl2k5_frontend_pending;
@@ -3320,6 +3327,11 @@ int main(int argc, char **argv)
     {   /* <root>/Music folders -> Xbox custom soundtracks (saves/Soundtracks) */
         extern void nfl2k5_local_music_start(const char *root, const char *save_dir);
         nfl2k5_local_music_start(root, save_dir);
+    }
+    {   /* ESPN 25th Anniversary moment audio: <root>\moment-audio\*.mp3 played
+         * when a SOFTDRINK moment is launched (src/nfl2k5_moment_audio.c). */
+        extern void nfl2k5_moment_audio_install(const char *root);
+        nfl2k5_moment_audio_install(root);
     }
     {   /* controllers (Xbox, PlayStation), keyboard, mouse; F1 Controls pages */
         extern void nfl2k5_controls_start(void);

@@ -32,10 +32,14 @@ typedef struct {
 } ErasTeam;
 
 typedef struct {
-    char id[48];                  /* 1980w01-dolphins-bills */
-    int week;
+    char id[48];                  /* 1980w01-dolphins-bills; playoffs (M14): 1980wc-/1980dv-/1980cc-/1980sb-<away>-<home> */
+    int week;                     /* 1..16; playoffs 17 wild card, 18 divisional, 19 conference, 20 Super Bowl */
     char date[12];
     int away, home;               /* team indices */
+    int round;                    /* M14: 0 regular season, 1 wild card, 2 divisional, 3 conference, 4 Super Bowl */
+    int seed_away, seed_home;     /* M14: playoff seeds (0 for a regular-season game) */
+    char site[48];                /* M14: a neutral venue (the Super Bowl's), "" = the home team's stadium */
+    char label[32];               /* M14: "SUPER BOWL XV", "AFC WILD CARD", ... ("" in the regular season) */
 } ErasGame;
 
 typedef struct { int w, l, t, pf, pa; } ErasRecord;
@@ -71,10 +75,26 @@ extern const struct NfHostServices *g_eras_svc;
  * cannot use: the hub shows this and offers nothing else). */
 const char *nfl2k5_eras_limited(void);
 
-/* The season package (loaded once; 0 on success). */
+/* The season package (loaded once per season; 0 on success). nfl2k5_eras_package_load loads the
+ * league's season (NFL2K5_ERAS_SEASON when no league is loaded); _load_season a given one (M14). */
 int nfl2k5_eras_package_load(void);
+int nfl2k5_eras_package_load_season(int season);
 int nfl2k5_eras_package_ok(void);
 const char *nfl2k5_eras_package_dir(void);
+/* M14: the league's season (NFL2K5_ERAS_SEASON when no league is loaded); every label, the
+ * draft year and the roster paths follow it. */
+int nfl2k5_eras_season(void);
+/* M14: the regular season's game count (the package schedule); playoff games are appended after it
+ * by src/nfl2k5_eras_playoffs.c (nfl2k5_eras_add_game, returns the index or -1). */
+int nfl2k5_eras_regular_game_count(void);
+int nfl2k5_eras_regular_complete(void);        /* every regular-season game played */
+int nfl2k5_eras_season_complete(void);         /* the Super Bowl played */
+int nfl2k5_eras_add_game(const ErasGame *g);
+/* M14 rollover (src/nfl2k5_eras_rollover.c): the league moves to `season` (package league\<season>):
+ * league.ini rewritten, the package loaded, a fresh results.csv; 0 on success. */
+int nfl2k5_eras_league_set_season(int season);
+/* A league file's path without creating folders (for reads and existence checks). */
+char *nfl2k5_eras_league_peek(const char *rel, char *out, unsigned n);
 
 int nfl2k5_eras_team_count(void);
 const ErasTeam *nfl2k5_eras_team(int i);
@@ -122,6 +142,10 @@ uint32_t nfl2k5_eras_league_seed(void);
 int nfl2k5_eras_roster_season(void);
 int nfl2k5_eras_roster_path(int team, char *out, size_t n);
 int nfl2k5_eras_depth_seed_path(int team, char *out, size_t n);
+/* M14: the roster / depth seed the package ships for the league's season (never the league's own
+ * rosters\<season>\ files); 0 when the file exists. */
+int nfl2k5_eras_package_roster_path(int team, char *out, size_t n);
+int nfl2k5_eras_package_depth_path(int team, char *out, size_t n);
 
 /* Results, from results.csv (re-read by nfl2k5_eras_refresh). */
 void nfl2k5_eras_refresh(void);

@@ -1,0 +1,26 @@
+/* In-game placement for this package (loaded after scorebug.css, before
+ * layout.css). scorebug.css was written as a standalone demo page: a dark
+ * full-window background, the bug centred, demo buttons. Inside NFL2K5 the
+ * page is a transparent 1920x1080 broadcast canvas instead. */
+html, body { background: transparent !important; min-height: 0; overflow: hidden; }
+
+.demo-field {
+  position: relative;
+  width: 1920px;
+  height: 1080px;
+  min-height: 0;
+  display: block;
+  background: none;
+}
+
+/* Bottom centre of the 16:9 broadcast area. Adjust in Presentation Studio. */
+#scorebug {
+  position: absolute;
+  left: 655px;
+  top: 925px;
+  transition: opacity 0.35s ease, transform 0.35s ease;
+}
+#scorebug.off-air { opacity: 0; transform: translateY(30px); }
+
+/* The demo buttons are for the standalone page only. */
+.controls { display: none !important; }

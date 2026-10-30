@@ -1,6 +1,6 @@
 # -Pack <name>: build a mod pack's code (tools/analyze.ps1 -Xbe <its default.xbe>
 # -Analysis analysis-<name> -Gen build\gen-<name>) into build\<Configuration>-<name>.
-param([ValidateSet('Release','Debug')][string]$Configuration = 'Release', [switch]$Game, [switch]$Optimize, [switch]$DebugGen, [string]$Pack = '')
+param([ValidateSet('Release','Debug')][string]$Configuration = 'Release', [switch]$Game, [switch]$Optimize, [switch]$DebugGen, [string]$Pack = '', [switch]$StageOnly)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 $vs = $null
@@ -45,8 +45,12 @@ if ($Game) {
     & python "$root/tools/gen-reg-locals.py" --gen $genDir --out $localsDir
     if ($LASTEXITCODE) { throw 'tools/gen-reg-locals.py failed.' }
   }
-  $audioSource = (Get-Content -Raw -Path "$genDir/recomp_*.c")
-  if (-not ($audioSource -join "").Contains('nfl2k5_ack_ac97_reset(eax + 0xFEC0010Bu)')) {
+  # Windows PowerShell accepts -Raw with a single path, but not with a
+  # wildcard.  Read the generated translation units explicitly so pack builds
+  # work with both Windows PowerShell and the bundled pwsh runtime.
+  $audioSource = Get-ChildItem -LiteralPath $genDir -Filter 'recomp_*.c' -File |
+    ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }
+  if (-not (($audioSource -join "").Contains('nfl2k5_ack_ac97_reset(eax + 0xFEC0010Bu)'))) {
     if ($Pack) { Write-Warning 'AC97 reset hook is not in this pack build.' }
     else { throw 'AC97 reset hook missing after regeneration. Restore the verified reset-write patch described in docs/PROGRESS.md.' }
   }
@@ -91,7 +95,12 @@ if ($LASTEXITCODE) { throw 'Build failed; see logs.' }
 & "$buildDir\NFL2K5_toolchain_check.exe"
 if ($LASTEXITCODE) { throw 'Native toolchain check failed.' }
 if (-not $Game -and -not (Test-Path "$root\build\$Configuration\NFL2K5_Rebuild.exe")) { throw 'Native reconstruction build missing.' }
-if ($Game -and $Pack) {
+if ($Game -and $Pack -and $StageOnly) {
+  # Compile and verify without overwriting an installed executable that may
+  # be running in another test. Installation remains the normal default.
+  Write-Host "Staged native code pack: $buildDir\NFL2K5.exe"
+}
+if ($Game -and $Pack -and -not $StageOnly) {
   # Put the native code build beside the installed overlay.  The in-game
   # Features > Mod Packs screen switches between this executable and the
   # retail build; players never need the compiler or a launcher script.

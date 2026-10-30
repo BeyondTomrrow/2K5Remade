@@ -16,6 +16,7 @@ extern "C" const char *nfl2k5_sandbox_json(void);
 extern "C" void nfl2k5_sandbox_command_for_generation(const char *command, int value, unsigned generation);
 extern "C" int nfl2k5_sandbox_active(void);
 extern "C" int nfl2k5_sandbox_ui_open(void);
+extern "C" int nfl2k5_sandbox_ui_draw(void);
 extern "C" int nfl2k5_sandbox_ui_visible(void);
 extern "C" void *xbox_FramebufferWindowHwnd(void);
 
@@ -81,7 +82,7 @@ void pointer_tick(const std::string &state, ULONGLONG now)
     HWND window = (HWND)xbox_FramebufferWindowHwnd();
     unsigned gen = 0;
     POINT p;
-    bool eligible = s_host && nfl2k5_sandbox_active() && nfl2k5_sandbox_ui_open() &&
+    bool eligible = s_host && nfl2k5_sandbox_active() && (nfl2k5_sandbox_ui_open() || nfl2k5_sandbox_ui_draw()) &&
         nfl2k5_sandbox_ui_visible() && window && GetForegroundWindow() == window &&
         s_viewport.w > 1 && s_viewport.h > 1 && snapshot_generation(state, gen) &&
         s_host->status() == "running";
@@ -102,8 +103,10 @@ void pointer_tick(const std::string &state, ULONGLONG now)
     float x = (p.x - s_viewport.x) * 1920.f / s_viewport.w;
     float y = (p.y - s_viewport.y) * 1080.f / s_viewport.h;
     bool inside = std::isfinite(x) && std::isfinite(y) && x >= 0 && x < 1920 && y >= 0 && y < 1080;
-    if (!pressed && now - s_pointer_post < 33) return;
-    if (!pressed && s_pointer_x == (inside ? (int)x : -1) && s_pointer_y == (inside ? (int)y : -1)) {
+    /* While a button is HELD (dragging, e.g. telestrator drawing) send every tick for a smooth
+     * line; otherwise throttle and dedupe idle movement. */
+    if (!pressed && !(buttons & 1u) && now - s_pointer_post < 33) return;
+    if (!pressed && !(buttons & 1u) && s_pointer_x == (inside ? (int)x : -1) && s_pointer_y == (inside ? (int)y : -1)) {
         return;
     }
     unsigned twice = 0;
@@ -115,9 +118,9 @@ void pointer_tick(const std::string &state, ULONGLONG now)
     }
     char event[256];
     snprintf(event, sizeof event,
-        "{\"type\":\"sandboxPointer\",\"generation\":%u,\"sequence\":%u,\"visible\":%s,\"x\":%d,\"y\":%d,\"pressed\":%u,\"doubleClick\":%s}",
+        "{\"type\":\"sandboxPointer\",\"generation\":%u,\"sequence\":%u,\"visible\":%s,\"x\":%d,\"y\":%d,\"pressed\":%u,\"held\":%u,\"doubleClick\":%s}",
         gen, ++s_pointer_sequence, inside ? "true" : "false", inside ? (int)x : -1, inside ? (int)y : -1,
-        inside ? pressed : 0u, twice ? "true" : "false");
+        inside ? pressed : 0u, inside ? (buttons & 7u) : 0u, twice ? "true" : "false");
     s_host->post_event(event);
     s_pointer_post = now;
     s_pointer_x = inside ? (int)x : -1;
@@ -206,7 +209,7 @@ extern "C" void nfl2k5_sandbox_ui_viewport(float x, float y, float width, float 
 extern "C" int nfl2k5_sandbox_ui_pointer_active(void)
 {
     HWND window = (HWND)xbox_FramebufferWindowHwnd();
-    return s_pointer_active.load() && nfl2k5_sandbox_active() && nfl2k5_sandbox_ui_open() &&
+    return s_pointer_active.load() && nfl2k5_sandbox_active() && (nfl2k5_sandbox_ui_open() || nfl2k5_sandbox_ui_draw()) &&
         window && GetForegroundWindow() == window ? 1 : 0;
 }
 

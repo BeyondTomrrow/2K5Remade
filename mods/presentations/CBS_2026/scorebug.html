@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NFL on CBS 2026</title>
+<link rel="stylesheet" href="scorebug.css">
+<link rel="stylesheet" href="motion.css">
+<link rel="stylesheet" href="wipes.css">
+<link rel="stylesheet" href="review-card.css">
+<link rel="stylesheet" href="pregame-cards.css">
+<link rel="stylesheet" href="replay-wipe.css">
+<link rel="stylesheet" href="stats.css">
+<link rel="stylesheet" href="stats-large.css">
+<link rel="stylesheet" href="stats-team.css">
+<link rel="stylesheet" href="stats-receiver.css">
+<script src="preview-clock.js"></script>
+</head>
+<body>
+<div id="canvas">
+  <div id="network" aria-hidden="true"><img src="assets/branding/cbs-sports.svg" alt="CBS Sports"></div>
+  <section id="eyebar" class="hidden" aria-label="NFL game score" aria-hidden="true">
+    <div class="live-plate">
+      <div class="team away">
+        <img class="logo" alt=""><span class="team-fallback"></span>
+        <div class="score"></div><div class="record"></div>
+        <div class="timeouts" aria-label="Away timeouts"><i></i><i></i><i></i></div>
+        <div class="possession"></div>
+      </div>
+      <div class="center">
+        <div class="top-band"><div id="down"></div><img id="center-brand" src="assets/branding/cbs-sports-metallic.svg" alt="CBS Sports"></div>
+        <div class="clock-row"><div id="quarter"></div><i class="clock-divider"></i><div id="game-clock"></div><div id="play-clock"></div></div>
+      </div>
+      <div class="team home">
+        <img class="logo" alt=""><span class="team-fallback"></span>
+        <div class="score"></div><div class="record"></div>
+        <div class="timeouts" aria-label="Home timeouts"><i></i><i></i><i></i></div>
+        <div class="possession"></div>
+      </div>
+    </div>
+    <div class="opening-strip" aria-hidden="true"><div class="opening-track"><div class="opening-sheen"></div></div><img class="opening-eye" src="assets/branding/cbs-eye.svg" alt=""><img class="opening-logo away-logo" alt=""><img class="opening-brand" src="assets/branding/cbs-sports.svg" alt=""><img class="opening-logo home-logo" alt=""></div>
+  </section>
+  <div id="cbs-motion" data-motion="none" data-phase="idle"></div>
+</div>
+<script src="../_runtime/nfl2k5-presentation.js"></script>
+<script src="period-board.js"></script>
+<script src="motion.js"></script>
+<script src="wipes.js"></script>
+<script src="replay-wipe.js"></script>
+<script src="replay-native.js"></script>
+<script src="review-card.js"></script>
+<script src="camera-mark.js"></script>
+<script src="pregame-cards.js"></script>
+<script src="stats-large.js"></script>
+<script src="stats-team.js"></script>
+<script src="stats-receiver.js"></script>
+<script src="stats.js"></script>
+<script src="scorebug.js"></script>
+<script src="preview-scenes.js"></script>
+</body>
+</html>

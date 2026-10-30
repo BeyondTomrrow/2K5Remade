@@ -47,6 +47,45 @@ for p in (HERE, ROOT / "tools" / "team-creator" / "vendor", ROOT / "tools" / "te
 import coliseum_build as CB  # noqa: E402
 import coliseum_neutral as CN  # noqa: E402
 import ncaa_source as N  # noqa: E402
+from ncaa_source import Part  # noqa: E402
+
+
+def expand_upper_deck(src, z_thresh=24.0, scale_h=1.35, flare=0.28, log=print):
+    """Graft a taller modern second deck onto the bowl: clone the real upper seating
+    rows (crowd + seats + rails) and stack them ON TOP of each part (lifted so the
+    copy's base sits at the part's own crown, then raised scale_h x and flared out),
+    reusing the actual bowl curve and crowd texture. NCAA space (yards, Z up)."""
+    DECK_MATS = ("STDCROWD_CROWD_HOME", "STDCROWD_CROWD_AWAY", "SEATING_bmp_MATERIAL")
+    added, newtri = 0, 0
+    for part in list(src.parts):
+        if part.material not in DECK_MATS:
+            continue
+        top = max((part.positions[i][2] for f in part.faces for i in f), default=0.0)
+        if top < z_thresh + 6:
+            continue
+        span = max(1.0, top - z_thresh)
+        keep = [f for f in part.faces if all(part.positions[i][2] >= z_thresh for i in f)]
+        if not keep:
+            continue
+        idx, pos, uv, col, nor = {}, [], [], [], []
+        for f in keep:
+            for i in f:
+                if i in idx:
+                    continue
+                idx[i] = len(pos)
+                x, y, z = part.positions[i]
+                dz = z - z_thresh
+                sc = 1.0 + flare * dz / span                 # lean the new deck outward with height
+                pos.append((x * sc, y * sc, top + dz * scale_h))   # base at the crown, rise scale_h x
+                uv.append(part.uvs[i])
+                col.append(part.colours[i])
+                if part.normals:
+                    nor.append(part.normals[i])
+        faces = [tuple(idx[i] for i in f) for f in keep]
+        src.parts.append(Part(part.name + "_UD2", part.material, part.shader, part.texture, pos, uv, col, faces, nor))
+        added += 1
+        newtri += len(faces)
+    log(f"  modern expansion: +{added} upper-deck parts, +{newtri} triangles (z>={z_thresh:.0f}, x{scale_h} height)")
 
 DATA = ROOT / "data" / "eras" / "stadiums"
 MODS = ROOT / "mods" / "eras" / "stadiums"
@@ -188,6 +227,24 @@ STADIUMS = [
          sky=_sky("Mobile: flat town with palms", tall=0.06, palms=8, seed=76), nfl="Senior Bowl (future)",
          art={"MOBILE_ealogo2": "drop", "MOBILE_sb2": "board", "RAIL": "fan", "MOBILE_wall2": "flat",
               "MOBILE_wall5": "flat", "MOBILE_wall8": "flat", "MOBILE_wall11": "flat", "MOBILE_wall13": "flat"}),
+    # Alabama's OWN home stadium (not an NFL-neutral conversion): keep its real Bryant-Denny look,
+    # only replace the EA-logo scoreboards and ad rails; end zones read ALABAMA. Host row 61 (Rebel
+    # Field, Birmingham AL) is free (the 17 NFL-home packs use rows 44-60). Day/night SRES 3.
+    dict(slug="bryant_denny", folder="Bryant_Denny", code="s77", name="BRYANT-DENNY STADIUM",
+         display="Bryant-Denny Stadium", location="Tuscaloosa, AL", capacity=100077, entries=(0x24, 0x28),
+         ncaa="Bryant-Denny Stadium (STAD.SRES 3, ALBAMA)", clone="Pro Player Stadium", host="Rebel Field",
+         indoor=0, grass=1, endzone="ALABAMA", tag="ALABAMA", crowd="ALABAMA",
+         endzone_fill=[150, 18, 48], midfield_logo="build/alabama/logo_A.png",  # modern crimson end zones + script-A
+         # Uses the accurate NCAA 07 (2006) Bryant-Denny model. (The scratch_stadium.py generator and
+         # configure_scratch/build_scratch remain available via scratch=True, but the user chose the real
+         # NCAA import. No invented geometry.)
+         sky=_sky("Tuscaloosa: flat town, trees", foothills=True, tall=0.05, seed=77),
+         nfl="Alabama Crimson Tide (college)",
+         # Keep Alabama's own banners (RAIL~06 elephant, ~07 University of Alabama, ~08 BAMA); only strip
+         # the EA SPORTS rail (~01) and the EA placeholder sponsor banners, and swap the EA/ticket-ad
+         # scoreboards for the plain lamp board.
+         art={"RAIL~01": "fan", "BNR_G": "fan", "BNR_S": "fan",
+              "ALBAMA_SB03_bmp": "board", "ALBAMA_SB04_bmp": "board"}),
 ]
 BY_SLUG = {s["slug"]: s for s in STADIUMS}
 
@@ -486,6 +543,13 @@ def configure(st, src, report):
                                       ("#1\nFANS", (20, 20, 20)), (f"{crowd}\nCROWD", (20, 70, 30))]),
     }
     CN.SKYLINE = st["sky"]
+    CN.ENDZONE_FILL = st.get("endzone_fill")          # painted end zone (e.g. Alabama crimson); None = grass
+    CN.MIDFIELD_LOGO = None
+    if st.get("midfield_logo"):
+        from PIL import Image
+        p = ROOT / st["midfield_logo"]
+        if p.is_file():
+            CN.MIDFIELD_LOGO = Image.open(p)
     report.update(wall_cm=round(wall), WALL_X=CB.WALL_X, PROP_START=CB.PROP_START,
                   lawn_ellipse=[round(v) for v in ellipse])
 
@@ -496,7 +560,76 @@ def _entry(e):
     return raw_dir() / f"{e:08X}.tmd"
 
 
+def configure_scratch(st, bowl, report):
+    """Point coliseum_build / coliseum_neutral's module settings at a from-scratch bowl (no NCAA src).
+
+    Mirrors configure() but without venue_geometry(src): the wall / props / lawn footprint come from the
+    generator's own inner edge and outer radius, and no texture art table is consulted."""
+    inner = bowl.P["SX"] + bowl.P["R0"]                     # inner edge across (x); props squeezed inside it
+    CB.WALL_X = 2800.0
+    CB.PROP_START = 2200.0
+    outer_x = inner + bowl.P["low_rows"] * bowl.P["low_tread"] + bowl.P["setback"] + \
+        bowl.P["up_rows"] * bowl.P["up_tread"]
+    outer_z = bowl.P["SZ"] + bowl.P["R0"] + bowl.P["low_rows"] * bowl.P["low_tread"] + bowl.P["setback"] + \
+        bowl.P["up_rows"] * bowl.P["up_tread"]
+    CB.GRASS_ELLIPSE = (outer_x + 2500.0, outer_z + 2500.0, 0.0)
+    CB.SHAPE_PREFIX = st["code"]
+    CB.EA_BOARD = None
+    CB.BIG_TEXTURES = set()
+    CN.ENDZONE_TEXT = st["endzone"]
+    t, c = st["tag"], st["crowd"]
+    crowd = c if len(c) <= 9 else c.split()[0]
+    CN.BANNERS = {
+        "banner_home_team": (1, 2, [(f"LET'S GO\n{t}!", (20, 30, 90)), ("DE-FENSE!", (150, 20, 20))]),
+        "banner_away_team": (1, 2, [(f"WELCOME\nTO {t}", (20, 70, 30)), ("BEAT 'EM!", (20, 20, 20))]),
+        "banner_home_player": (2, 2, [("TOUCH-\nDOWN!", (150, 20, 20)), ("WE LOVE\nFOOTBALL", (20, 30, 90)),
+                                      ("#1\nFANS", (20, 20, 20)), (f"{crowd}\nCROWD", (20, 70, 30))]),
+    }
+    CN.SKYLINE = st["sky"]
+    CN.ENDZONE_FILL = st.get("endzone_fill")
+    CN.MIDFIELD_LOGO = None
+    if st.get("midfield_logo"):
+        from PIL import Image
+        p = ROOT / st["midfield_logo"]
+        if p.is_file():
+            CN.MIDFIELD_LOGO = Image.open(p)
+    report.update(scratch=True, WALL_X=CB.WALL_X, PROP_START=CB.PROP_START,
+                  lawn_ellipse=[round(v) for v in CB.GRASS_ELLIPSE])
+
+
+def build_scratch(st, only=None, log=print):
+    """Build a from-scratch venue: no NCAA load / art pass / convert; the generator provides tris/mats/textures."""
+    import game_assets as G
+    import scratch_stadium as bowl
+    archive = G.Archive(CB.DISC)
+    out = DATA / st["slug"] / "build"
+    out.mkdir(parents=True, exist_ok=True)
+    report = dict(code=st["code"], base=BASE, name=st["name"], ncaa="from-scratch parametric bowl "
+                  "(scratch_stadium.py)", source="generated", bundles={})
+    configure_scratch(st, bowl, report)
+    dry = CN.retail_dry(archive, BASE)
+    for v in only or VARIANTS:
+        tris, mats, textures = bowl.generate(v)
+        retail = archive.read(f"{BASE}{v}.iff")
+        rep = {}
+        data = CB.build_bundle(retail, tris, mats, textures, rep, variant=v, dry=dry)
+        path = out / f"{st['code']}{v}.iff"
+        path.write_bytes(data)
+        rep.update(file=path.name, size=len(data), retail_size=len(retail), sha256=hashlib.sha256(data).hexdigest())
+        report["bundles"][v] = rep
+        log(f"  {path.name}: {len(data)} bytes (retail {len(retail)}), {rep['new_shapes']} shapes, "
+            f"{rep['new_vertices']} vertices, {rep['triangles']} triangles")
+    old = out / "build_report.json"
+    if only and old.is_file():
+        prev = json.loads(old.read_text(encoding="utf-8"))
+        prev["bundles"].update(report["bundles"])
+        report["bundles"] = prev["bundles"]
+    old.write_text(json.dumps(report, indent=2, default=str), encoding="utf-8")
+
+
 def build(st, only=None, log=print):
+    if st.get("scratch"):
+        return build_scratch(st, only, log)
     import game_assets as G
     archive = G.Archive(CB.DISC)
     out = DATA / st["slug"] / "build"
@@ -504,6 +637,9 @@ def build(st, only=None, log=print):
     day_e, night_e = st["entries"]
     sources = {"day": N.load(_entry(day_e))}
     sources["night"] = sources["day"] if night_e == day_e else N.load(_entry(night_e))
+    if st.get("expand"):             # modern expansion: graft a taller upper deck onto the bowl
+        for src in {id(x): x for x in sources.values()}.values():
+            expand_upper_deck(src, log=log, **(st["expand"] if isinstance(st["expand"], dict) else {}))
     report = dict(code=st["code"], base=BASE, name=st["name"], ncaa=st["ncaa"],
                   source=dict(day=str(_entry(day_e)), night=str(_entry(night_e))), bundles={})
     routes = {}

@@ -47,6 +47,8 @@
 #include "recomp_funcs.h"
 #include "nfl2k5_eras.h"
 #include "nfl2k5_eras_sheets.h"
+#include "nfl2k5_eras_playoffs.h"
+#include "nfl2k5_eras_awards.h"
 
 extern uint32_t xbox_HeapAlloc(uint32_t size, uint32_t alignment);
 extern recomp_func_t recomp_lookup(uint32_t xbox_va);
@@ -60,6 +62,7 @@ extern recomp_func_t recomp_lookup(uint32_t xbox_va);
 #define SHEET_TEAM      0x00537958u
 #define PAGE_WEEK       0x00537640u
 #define COL_HELMET_AWAY 0x00536E00u   /* type 0xA, draw sub_0024BBE0: away helmet of (tab value, row) */
+#define COL_HELMET_HOME 0x00537010u   /* type 0xA, draw sub_0024BDA0: home helmet + score (M14 bracket) */
 #define COL_TEXT_TMPL   0x00536EB0u   /* type 1 "AWAY" */
 #define FN_MSG8         0x00327690u
 #define FN_PAGE_LEAVE   0x0024C440u
@@ -114,17 +117,39 @@ extern recomp_func_t recomp_lookup(uint32_t xbox_va);
 #define PSEUDO_ROW0     16            /* standings rows: 16..21 (unused by a 16-week season) */
 #define MAX_PSEUDO      6
 #define STR_CH          48
-#define NCOLS           7
+#define NCOLS           7             /* the Standings columns */
+#define MAXCOL          8             /* columns per page */
 
-enum { SC_SCHED, SC_STAND, SC_N };
+/* M14: the pseudo-row pages. Each page has its own sheet copy (tabs -> FN_TABVAL.. with the page
+ * current), page record (rows FN_ROWS, its text columns beside the retail helmet columns) and a
+ * block of grid rows 16..21 whose "away" team feeds the retail helmet column. */
+enum { SC_SCHED, SC_STAND, SC_PLAYOFF, SC_AWARDS, SC_N };
+enum { PG_STAND_DIV, PG_STAND_CONF, PG_PICTURE, PG_BRACKET, PG_AWARDS, PG_LEADERS, PG_N };
 enum {
     FN_MSG1, FN_MSG2, FN_MSG3, FN_MSG4, FN_MSG5, FN_MSG6, FN_MSGS,          /* per screen: SC * FN_MSGS + .. */
     FN_SCHED_TEAM_INIT = SC_N * FN_MSGS, FN_SCHED_WEEK_INIT, FN_SCHED_FRAME,
-    FN_DIV_INIT, FN_CONF_INIT, FN_STAND_FRAME, FN_STAND_DRAW,
+    FN_PG_INIT0, FN_PG_INIT_END = FN_PG_INIT0 + PG_N,                        /* one init per pseudo page */
+    FN_STAND_FRAME = FN_PG_INIT_END, FN_STAND_DRAW,
     FN_ACT, FN_TABVAL, FN_TABCOUNT, FN_TABNEXT, FN_TABPREV, FN_ROWS,
-    FN_COL0, FN_COUNT = FN_COL0 + NCOLS
+    FN_COL0, FN_COUNT = FN_COL0 + PG_N * MAXCOL                              /* column getters: page * MAXCOL + col */
 };
 enum { COL_TEAM, COL_W, COL_L, COL_T, COL_PCT, COL_PF, COL_PA };
+
+typedef struct {
+    int screen, ncols, ntabs, tab, row0, single;   /* single: every tab fills the same pseudo row (leaders) */
+    const char *banner, *help;
+    uint32_t sheet, page, col[MAXCOL], out[MAXCOL][GRID_SLOTS], w_help;
+} Pg;
+
+static const struct { int pg; const char *h; float w; uint32_t align; } k_pgcols[] = {
+    { PG_PICTURE, "SEED", 44.0f, 3 }, { PG_PICTURE, "TEAM", 150.0f, 1 }, { PG_PICTURE, "W", 34.0f, 3 }, { PG_PICTURE, "L", 34.0f, 3 },
+    { PG_PICTURE, "T", 34.0f, 3 }, { PG_PICTURE, "CLINCHED", 140.0f, 1 },
+    { PG_BRACKET, "MATCHUP", 230.0f, 1 }, { PG_BRACKET, "DATE", 84.0f, 3 }, { PG_BRACKET, "RESULT", 110.0f, 1 },
+    { PG_AWARDS, "AWARD", 170.0f, 1 }, { PG_AWARDS, "PLAYER", 140.0f, 1 }, { PG_AWARDS, "TEAM", 90.0f, 1 }, { PG_AWARDS, "SEASON", 170.0f, 1 },
+    { PG_LEADERS, "#", 30.0f, 3 }, { PG_LEADERS, "PLAYER", 150.0f, 1 }, { PG_LEADERS, "TEAM", 100.0f, 1 }, { PG_LEADERS, "POS", 44.0f, 3 },
+    { PG_LEADERS, "TOTAL", 70.0f, 3 },
+};
+static const char *const k_posname[17] = { "QB", "K", "P", "WR", "CB", "FS", "SS", "HB", "FB", "TE", "OLB", "ILB", "C", "G", "T", "DT", "DE" };
 
 static struct {
     int built, log, mode;
@@ -134,9 +159,16 @@ static struct {
     uint32_t sheet_week, sheet_team, sheet_stand, page_stand;
     uint32_t col[NCOLS], hdr[NCOLS];
     uint32_t out[NCOLS][GRID_SLOTS];
+    Pg pg[PG_N];                      /* M14 */
+    int cur_pg;                       /* the pseudo page on the sheet now */
+    const void *pdata[MAX_PSEUDO][GRID_SLOTS];   /* M14: the award / leader behind a pseudo row cell */
+    int pgame[MAX_PSEUDO][GRID_SLOTS];           /* M14: the bracket's game index per cell (-1) */
+    ErasSeed seeds[2][GRID_SLOTS];
+    int nseeds[2];
+    uint32_t w_pgtitle, w_pgright;
     uint32_t rec[NFL2K5_ERAS_MAX_TEAMS], wcity[NFL2K5_ERAS_MAX_TEAMS], wnick[NFL2K5_ERAS_MAX_TEAMS], wabbr[NFL2K5_ERAS_MAX_TEAMS];
     uint32_t txt, wbuf, w_ctx_mini, w_file_mini, w_unknown, mini_slot;
-    uint32_t w_for_conf, w_for_div, w_banner, w_tab[MAX_PSEUDO + 2];
+    uint32_t w_for_conf, w_for_div, w_banner, w_tab[MAX_PSEUDO + 2 + SC_N];
     int mini_mine;
     /* the swap */
     int swapped, cycles, statics_saved;
@@ -311,16 +343,54 @@ static int cmp_team(const void *pa, const void *pb)
     return strcmp(nfl2k5_eras_team(a)->name, nfl2k5_eras_team(b)->name);
 }
 
+static void pseudo_clear(int k)
+{
+    uint32_t c = B_GRID + 8u * (uint32_t)((PSEUDO_ROW0 + k) * GRID_SLOTS), j;
+    for (j = 0; j < 8u * GRID_SLOTS; j += 4) MEM32(c + j) = 0;
+    for (j = 0; j < 2u * GRID_SLOTS; j += 2) MEM16(B_FLAGS + 2u * (uint32_t)((PSEUDO_ROW0 + k) * GRID_SLOTS) + j) = 0;
+    for (j = 0; j < GRID_SLOTS; j++) { s.pdata[k][j] = NULL; s.pgame[k][j] = -1; }
+    s.prow_n[k] = 0;
+}
+
+/* a pseudo row's cells: the team in both halves (type 0: helmet only, never a score) and the end mark */
+static void pseudo_cells(int k)
+{
+    int i;
+    for (i = 0; i < s.prow_n[k]; i++) {
+        uint32_t cell = (uint32_t)((PSEUDO_ROW0 + k) * GRID_SLOTS + i);
+        int g = s.pgame[k][i];
+        MEM8(B_GRID + 8u * cell + 0) = 0;
+        MEM8(B_GRID + 8u * cell + 1) = (uint8_t)s.prow[k][i];
+        MEM8(B_GRID + 8u * cell + 2) = (uint8_t)s.prow[k][i];
+        MEM8(B_FLAGS + 2u * cell + 1) = 1;             /* away known: the helmet column draws it */
+        if (g >= 0) {
+            /* M14 bracket: a real game cell (home, away, date; played = type 3 with both scores, so the
+             * retail helmet columns draw the scores and highlight the winner) */
+            const ErasGame *e = nfl2k5_eras_game(g);
+            int hp, ap;
+            MEM8(B_GRID + 8u * cell + 1) = (uint8_t)e->home;
+            MEM8(B_GRID + 8u * cell + 2) = (uint8_t)e->away;
+            MEM8(B_GRID + 8u * cell + 3) = (uint8_t)(e->date[0] ? atoi(e->date + 5) : 1);
+            MEM8(B_GRID + 8u * cell + 4) = (uint8_t)(e->date[0] ? atoi(e->date + 8) : 1);
+            MEM8(B_GRID + 8u * cell + 6) = 13;
+            MEM8(B_FLAGS + 2u * cell + 0) = 1;
+            if (nfl2k5_eras_result(g, &hp, &ap) == NFL2K5_ERAS_PLAYED) {
+                MEM8(B_GRID + 8u * cell + 0) = 3;
+                MEM8(B_SCORES + 10u * cell + 0) = (uint8_t)(hp < 0 ? 0 : hp > 255 ? 255 : hp);
+                MEM8(B_SCORES + 10u * cell + 5) = (uint8_t)(ap < 0 ? 0 : ap > 255 ? 255 : ap);
+            }
+        }
+    }
+    if (s.prow_n[k] < GRID_SLOTS) MEM8(B_GRID + 8u * (uint32_t)((PSEUDO_ROW0 + k) * GRID_SLOTS + s.prow_n[k])) = 7;
+}
+
 /* The standings order into grid rows 16.. (page 0: one row per division, page 1: one per conference). */
 static void fill_standings_rows(void)
 {
     int k, i, n = nfl2k5_eras_team_count(), rows = s.stand_page ? 2 : s.ndiv;
     nfl2k5_eras_standings(s_rec_now);
     for (k = 0; k < MAX_PSEUDO; k++) {
-        uint32_t c = B_GRID + 8u * (uint32_t)((PSEUDO_ROW0 + k) * GRID_SLOTS), j;
-        for (j = 0; j < 8u * GRID_SLOTS; j += 4) MEM32(c + j) = 0;
-        for (j = 0; j < 2u * GRID_SLOTS; j += 2) MEM16(B_FLAGS + 2u * (uint32_t)((PSEUDO_ROW0 + k) * GRID_SLOTS) + j) = 0;
-        s.prow_n[k] = 0;
+        pseudo_clear(k);
         if (k < rows) {
             for (i = 0; i < n && s.prow_n[k] < GRID_SLOTS; i++) {
                 const ErasTeam *t = nfl2k5_eras_team(i);
@@ -329,15 +399,57 @@ static void fill_standings_rows(void)
             }
             qsort(s.prow[k], (size_t)s.prow_n[k], sizeof(int), cmp_team);
         }
-        for (i = 0; i < s.prow_n[k]; i++) {
-            uint32_t cell = (uint32_t)((PSEUDO_ROW0 + k) * GRID_SLOTS + i);
-            MEM8(B_GRID + 8u * cell + 0) = 0;              /* scheduled: helmet only, never a score */
-            MEM8(B_GRID + 8u * cell + 1) = (uint8_t)s.prow[k][i];
-            MEM8(B_GRID + 8u * cell + 2) = (uint8_t)s.prow[k][i];
-            MEM8(B_FLAGS + 2u * cell + 1) = 1;             /* away known: the helmet column draws it */
-        }
-        if (s.prow_n[k] < GRID_SLOTS) MEM8(B_GRID + 8u * (uint32_t)((PSEUDO_ROW0 + k) * GRID_SLOTS + s.prow_n[k])) = 7;
+        pseudo_cells(k);
     }
+}
+
+/* M14: the Playoff Picture (rows 0, 1: AFC / NFC seeds and the hunt) and the bracket (rows 2..5: the
+ * four rounds' games). */
+static void fill_playoff_rows(void)
+{
+    int k, c, g;
+    nfl2k5_eras_standings(s_rec_now);
+    for (k = 0; k < MAX_PSEUDO; k++) pseudo_clear(k);
+    for (c = 0; c < 2; c++) {
+        s.nseeds[c] = nfl2k5_eras_playoff_picture(c, s.seeds[c], GRID_SLOTS - 1, 7);
+        for (k = 0; k < s.nseeds[c]; k++) { s.prow[c][k] = s.seeds[c][k].team; s.pdata[c][k] = &s.seeds[c][k]; }
+        s.prow_n[c] = s.nseeds[c];
+    }
+    for (g = nfl2k5_eras_regular_game_count(); g < nfl2k5_eras_game_count(); g++) {
+        const ErasGame *e = nfl2k5_eras_game(g);
+        int r = e->round;
+        if (r < 1 || r > 4 || s.prow_n[1 + r] >= GRID_SLOTS - 1) continue;
+        s.prow[1 + r][s.prow_n[1 + r]] = e->away;
+        s.pgame[1 + r][s.prow_n[1 + r]++] = g;
+    }
+    for (k = 0; k < MAX_PSEUDO; k++) pseudo_cells(k);
+}
+
+/* M14: awards (row 0) and the leaders of the current category (row 1). */
+static void fill_awards_rows(void)
+{
+    int k, i, n;
+    static const ErasPlayerSeason *lead[GRID_SLOTS];
+    nfl2k5_eras_standings(s_rec_now);
+    nfl2k5_eras_awards_build();
+    for (k = 0; k < MAX_PSEUDO; k++) pseudo_clear(k);
+    for (i = 0; i < nfl2k5_eras_awards_count() && i < GRID_SLOTS - 1; i++) {
+        const ErasAward *a = nfl2k5_eras_award(i);
+        s.prow[0][i] = a->p ? a->p->team : a->coach_team >= 0 ? a->coach_team : 0;
+        s.pdata[0][i] = a;
+        s.prow_n[0] = i + 1;
+    }
+    n = nfl2k5_eras_leaders(s.pg[PG_LEADERS].tab, lead, GRID_SLOTS - 1);
+    for (i = 0; i < n; i++) { s.prow[1][i] = lead[i]->team; s.pdata[1][i] = lead[i]; }
+    s.prow_n[1] = n;
+    for (k = 0; k < MAX_PSEUDO; k++) pseudo_cells(k);
+}
+
+static void fill_pseudo_rows(void)
+{
+    if (s.screen == SC_STAND) fill_standings_rows();
+    else if (s.screen == SC_PLAYOFF) fill_playoff_rows();
+    else if (s.screen == SC_AWARDS) fill_awards_rows();
 }
 
 static void fill_block(void)
@@ -358,7 +470,8 @@ static void fill_block(void)
     MEM32(B_TEAMS) = (uint32_t)n;
     MEM32(B_WEEKS) = (uint32_t)weeks;
     MEM32(B_WEEK) = (uint32_t)cur;
-    MEM32(B_YEAR) = (uint32_t)(NFL2K5_ERAS_SEASON - 2004);   /* the date line adds 2004 */
+    MEM32(B_YEAR) = (uint32_t)(nfl2k5_eras_season() - 2004);   /* the date line adds 2004 (M14: the league's season) */
+    { char b[32]; snprintf(b, sizeof b, "%d Season", nfl2k5_eras_season()); wput(s.w_tab[MAX_PSEUDO + 1], b, 16); }
     MEM32(B_SELWEEK) = (uint32_t)cur;
     s.focus = focus_team();
     MEM32(B_SELTEAM) = s.rec[s.focus];
@@ -390,7 +503,7 @@ static void fill_block(void)
     }
     for (i = 0; i < GRID_ROWS; i++)
         if (ns[i] < GRID_SLOTS) MEM8(B_GRID + 8u * (uint32_t)(i * GRID_SLOTS + ns[i])) = 7;
-    if (s.screen == SC_STAND) fill_standings_rows();
+    if (s.screen != SC_SCHED) fill_pseudo_rows();
 }
 
 /* ---- the swap ------------------------------------------------------------ */
@@ -432,6 +545,15 @@ static void swap_out(const char *why)
 }
 
 int nfl2k5_eras_sheets_swapped(void) { return s.swapped; }
+
+/* M15: an Eras team record for another screen's UI team (the backdrop colours and name);
+ * rebuilt from the clubs when no swap is live (a swap keeps its own copies). 0 = none. */
+uint32_t nfl2k5_eras_sheets_team_rec(int team)
+{
+    if (!s.built || team < 0 || team >= NFL2K5_ERAS_MAX_TEAMS || team >= nfl2k5_eras_team_count()) return 0;
+    if (!s.swapped && build_records() < 0) return 0;
+    return s.rec[team];
+}
 
 /* ---- mini.iff ------------------------------------------------------------ */
 
@@ -529,21 +651,34 @@ static void sched_week_init(uint32_t fsm)
 
 static int stand_tab(void) { return s.stand_page ? s.tab_conf : s.tab_div; }
 
-static void stand_init(uint32_t fsm, int page)
+/* M14: the pseudo row a page's current tab shows (the grid row minus 16) */
+static int pg_row(int pg)
 {
-    int k = 0, i;
-    s.stand_page = page;
+    const Pg *p = &s.pg[pg];
+    if (pg == PG_STAND_DIV || pg == PG_STAND_CONF) return stand_tab();
+    return p->single ? p->row0 : p->row0 + p->tab;
+}
+
+static void pg_init(uint32_t fsm, int pg)
+{
+    Pg *p = &s.pg[pg];
+    int k = 0, i, r;
+    s.cur_pg = pg;
+    if (pg == PG_STAND_DIV || pg == PG_STAND_CONF) s.stand_page = pg == PG_STAND_CONF;
     MEM32(PAGE_MODE) = 0;
     free_sheet();
-    fill_standings_rows();
-    construct(s.sheet_stand, fsm);
+    fill_pseudo_rows();
+    construct(p->sheet, fsm);
     gcall(sub_000F32C0, fsm, 0);
-    gcall(sub_00174DF0, WIDGET, (uint32_t)stand_tab());
-    for (i = 0; i < s.prow_n[stand_tab()]; i++) if (s.prow[stand_tab()][i] == s.focus) k = i;
+    r = pg_row(pg);
+    gcall(sub_00174DF0, WIDGET, (uint32_t)(PSEUDO_ROW0 + r));
+    if (r >= 0 && r < MAX_PSEUDO) for (i = 0; i < s.prow_n[r]; i++) if (s.prow[r][i] == s.focus) k = i;
     gcall(sub_001707C0, WIDGET, (uint32_t)k);
     gcall(sub_003278F0, 0, 0);
-    SH_LOG("standings page %s, tab %d\n", page ? "conference" : "division", stand_tab());
+    SH_LOG("page %d (%s), tab %d, row %d (%d rows)\n", pg, p->banner ? p->banner : "standings", p->tab, r, r >= 0 && r < MAX_PSEUDO ? s.prow_n[r] : -1);
 }
+
+static void stand_init(uint32_t fsm, int page) { pg_init(fsm, page ? PG_STAND_CONF : PG_STAND_DIV); }
 
 static void help(uint32_t fsm, uint32_t slot, uint32_t text)
 {
@@ -561,7 +696,8 @@ static uint32_t page_frame(int screen, uint32_t fsm)
     help(fsm, 0xD, 0);
     help(fsm, 0xB, 0);
     if (screen == SC_SCHED) help(fsm, 0xF, mode == 0 ? W_FOR_TEAM : mode == 1 ? W_FOR_WEEKLY : 0);
-    else help(fsm, 0xF, s.stand_page ? s.w_for_div : s.w_for_conf);
+    else if (screen == SC_STAND) help(fsm, 0xF, s.stand_page ? s.w_for_div : s.w_for_conf);
+    else help(fsm, 0xF, s.pg[s.cur_pg ^ 1].w_help);   /* the other page of the pair */
     for (pad = 0; pad < 8; pad++) {
         uint32_t b, filt = ctx ? MEM32(ctx + 0x590) : 0;
         if (filt) {
@@ -622,15 +758,125 @@ static void draw_title(uint32_t x, uint32_t y, uint32_t text, uint32_t align)
     gcall(sub_003273C0, x, y);
 }
 
+extern int nfl2k5_eras_awards_box_games(int *played);
+extern void nfl2k5_eras_awards_coach(int team, char *out, size_t n);
+
 static void stand_draw(uint32_t fsm)
 {
     int tab = stand_tab();
+    const Pg *p = &s.pg[s.cur_pg];
+    char left[48], right[48];
     draw_record_line();
-    if (s.stand_page) wput(s.w_tab[MAX_PSEUDO], tab ? "NFC" : "AFC", 8);
-    draw_title(0xA7, 0x2E, s.stand_page ? s.w_tab[MAX_PSEUDO] : s.w_tab[tab < s.ndiv ? tab : 0], 3);
-    draw_title(0x258, 0x2E, s.w_tab[MAX_PSEUDO + 1], 2);
-    MEM32(S_TITLE) = s.w_banner;
+    if (s.screen == SC_STAND) {
+        if (s.stand_page) wput(s.w_tab[MAX_PSEUDO], tab ? "NFC" : "AFC", 8);
+        draw_title(0xA7, 0x2E, s.stand_page ? s.w_tab[MAX_PSEUDO] : s.w_tab[tab < s.ndiv ? tab : 0], 3);
+        draw_title(0x258, 0x2E, s.w_tab[MAX_PSEUDO + 1], 2);
+        MEM32(S_TITLE) = s.w_banner;
+    } else {
+        /* M14: the tab's name on the left, the season / the source note on the right */
+        switch (s.cur_pg) {
+        case PG_PICTURE: snprintf(left, sizeof left, "%s", p->tab ? "NFC" : "AFC"); break;
+        case PG_BRACKET: snprintf(left, sizeof left, "%s", p->tab == 3 ? nfl2k5_eras_super_bowl_name() : nfl2k5_eras_round_name(p->tab + 1)); break;
+        case PG_AWARDS: snprintf(left, sizeof left, "%d SEASON AWARDS", nfl2k5_eras_season()); break;
+        default: snprintf(left, sizeof left, "%s", nfl2k5_eras_leader_category(p->tab)); break;
+        }
+        if (s.cur_pg == PG_AWARDS || s.cur_pg == PG_LEADERS) {
+            int played, box = nfl2k5_eras_awards_box_games(&played);
+            snprintf(right, sizeof right, "%d of %d games with box scores", box, played);
+        } else if (s.cur_pg == PG_PICTURE) snprintf(right, sizeof right, "%s", nfl2k5_eras_regular_complete() ? "Final seeds" : "If the playoffs started today");
+        else snprintf(right, sizeof right, "%d Season", nfl2k5_eras_season());
+        for (tab = 0; left[tab]; tab++) if (left[tab] >= 'a' && left[tab] <= 'z') left[tab] = (char)(left[tab] - 32);
+        wput(s.w_pgtitle, left, 48);
+        wput(s.w_pgright, right, 48);
+        draw_title(0xA7, 0x2E, s.w_pgtitle, 3);
+        draw_title(0x258, 0x2E, s.w_pgright, 2);
+        MEM32(S_TITLE) = s.w_tab[MAX_PSEUDO + 2 + s.screen];
+    }
     if (MEM32(SHEET_ALIVE)) gcall(sub_00176380, WIDGET, fsm);
+}
+
+/* M14: the text columns of the pseudo pages */
+static uint32_t pg_col_text(int pg, int col, uint32_t prow, uint32_t row)
+{
+    int k = (int)prow - PSEUDO_ROW0;
+    char b[STR_CH * 2];
+    uint32_t out;
+    const Pg *p = &s.pg[pg];
+    if (col < 0 || col >= p->ncols || row >= GRID_SLOTS) return W_EMPTY;
+    out = p->out[col][row];
+    if (k < 0 || k >= MAX_PSEUDO || (int)row >= s.prow_n[k]) return W_EMPTY;
+    b[0] = 0;
+    switch (pg) {
+    case PG_PICTURE: {
+        const ErasSeed *e = (const ErasSeed *)s.pdata[k][row];
+        const ErasTeam *t = nfl2k5_eras_team(s.prow[k][row]);
+        const ErasRecord *r = &s_rec_now[s.prow[k][row]];
+        if (!e) break;
+        switch (col) {
+        case 0: if (e->seed) snprintf(b, sizeof b, "%d", e->seed); else snprintf(b, sizeof b, "--"); break;
+        case 1: snprintf(b, sizeof b, "%s\n%s", t->city, t->name); break;
+        case 2: snprintf(b, sizeof b, "%d", r->w); break;
+        case 3: snprintf(b, sizeof b, "%d", r->l); break;
+        case 4: snprintf(b, sizeof b, "%d", r->t); break;
+        default:
+            if (e->clinched & 4) snprintf(b, sizeof b, "Home Field Adv.");
+            else if (e->clinched & 2) snprintf(b, sizeof b, "Division Title");
+            else if (e->clinched & 1) snprintf(b, sizeof b, "Playoff Berth");
+            else if (e->seed) snprintf(b, sizeof b, "%s", e->division_winner ? "Leads division" : "Wild card spot");
+            else snprintf(b, sizeof b, "In the hunt");
+            break;
+        }
+        break;
+    }
+    case PG_BRACKET: {
+        int g = s.pgame[k][row], hp, ap;
+        const ErasGame *e = g >= 0 ? nfl2k5_eras_game(g) : NULL;
+        if (!e) break;
+        switch (col) {
+        case 0:
+            if (e->round == 4) snprintf(b, sizeof b, "%s vs %s\n%s", nfl2k5_eras_team(e->away)->name, nfl2k5_eras_team(e->home)->name, e->site[0] ? e->site : "");
+            else snprintf(b, sizeof b, "(%d) %s at (%d) %s", e->seed_away, nfl2k5_eras_team(e->away)->name, e->seed_home, nfl2k5_eras_team(e->home)->name);
+            break;
+        case 1: snprintf(b, sizeof b, "%s", e->date); break;
+        default:
+            if (nfl2k5_eras_result(g, &hp, &ap) == NFL2K5_ERAS_PLAYED)
+                snprintf(b, sizeof b, "%s %d-%d", nfl2k5_eras_team(hp > ap ? e->home : e->away)->name, hp > ap ? hp : ap, hp > ap ? ap : hp);
+            else snprintf(b, sizeof b, "%s", e->round == 4 && e->label[0] ? e->label : "to be played");
+            break;
+        }
+        break;
+    }
+    case PG_AWARDS: {
+        const ErasAward *a = (const ErasAward *)s.pdata[k][row];
+        char coach[48];
+        if (!a) break;
+        switch (col) {
+        case 0: snprintf(b, sizeof b, "%s", a->award); break;
+        case 1:
+            if (a->p) snprintf(b, sizeof b, "%s %s (%s)", a->p->first, a->p->last, a->p->pos >= 0 && a->p->pos < 17 ? k_posname[a->p->pos] : "?");
+            else if (a->coach_team >= 0) { nfl2k5_eras_awards_coach(a->coach_team, coach, sizeof coach); snprintf(b, sizeof b, "%s", coach[0] ? coach : "(head coach)"); }
+            else snprintf(b, sizeof b, "--");
+            break;
+        case 2: snprintf(b, sizeof b, "%s", a->p || a->coach_team >= 0 ? nfl2k5_eras_team(s.prow[k][row])->name : ""); break;
+        default: snprintf(b, sizeof b, "%s", a->stat); break;
+        }
+        break;
+    }
+    case PG_LEADERS: {
+        const ErasPlayerSeason *q = (const ErasPlayerSeason *)s.pdata[k][row];
+        if (!q) break;
+        switch (col) {
+        case 0: snprintf(b, sizeof b, "%u", (unsigned)row + 1); break;
+        case 1: snprintf(b, sizeof b, "%s %s", q->first, q->last); break;
+        case 2: snprintf(b, sizeof b, "%s", nfl2k5_eras_team(q->team)->name); break;
+        case 3: snprintf(b, sizeof b, "%s", q->pos >= 0 && q->pos < 17 ? k_posname[q->pos] : "?"); break;
+        default: snprintf(b, sizeof b, "%d", nfl2k5_eras_leader_value(p->tab, q)); break;
+        }
+        break;
+    }
+    }
+    wput(out, b, STR_CH);
+    return out;
 }
 
 /* ---- standings sheet getters --------------------------------------------- */
@@ -686,7 +932,9 @@ static void page_init(int screen, uint32_t fsm)
 {
     int page = (int)MEM32(S_PAGE);
     if (screen == SC_SCHED) { if (page == 0) sched_team_init(fsm); else sched_week_init(fsm); }
-    else stand_init(fsm, page ? 1 : 0);
+    else if (screen == SC_STAND) stand_init(fsm, page ? 1 : 0);
+    else if (screen == SC_PLAYOFF) pg_init(fsm, page ? PG_BRACKET : PG_PICTURE);
+    else pg_init(fsm, page ? PG_LEADERS : PG_AWARDS);
 }
 
 static void event(int screen, int msg, uint32_t fsm)
@@ -695,9 +943,10 @@ static void event(int screen, int msg, uint32_t fsm)
     case 1:                                            /* sub_00327A00, with the Eras team */
         save_statics();
         swap_in(screen, "created");
-        MEM32(S_E10) = 0; MEM32(S_E14) = 0; MEM32(S_PAGE_PREV) = 0; MEM32(S_PAGE) = 0;
+        MEM32(S_E10) = 0; MEM32(S_E14) = 0; MEM32(S_PAGE_PREV) = 0;
+        if (screen != SC_PLAYOFF) MEM32(S_PAGE) = 0;   /* M14: the Playoffs row may open on the bracket page */
         MEM32(S_BUTTONS) = 0; MEM32(S_BTN_BUSY) = 0;
-        MEM32(S_TITLE) = screen == SC_STAND ? s.w_banner : W_TITLE_EMPTY;
+        MEM32(S_TITLE) = screen == SC_STAND ? s.w_banner : screen >= SC_PLAYOFF ? s.w_tab[MAX_PSEUDO + 2 + screen] : W_TITLE_EMPTY;
         MEM32(SHEET_ALIVE) = 0; MEM32(PAGE_MODE) = 0; MEM32(SHEET_RESTORE) = 0; MEM32(SHEET_C17904) = 0;   /* sub_0024C3A0 */
         MEM32(UI_TEAM) = s.rec[s.focus];
         gcall(sub_00327980, s.rec[s.focus], 0);
@@ -728,7 +977,7 @@ static void event(int screen, int msg, uint32_t fsm)
         restore_statics();
         break;
     }
-    if (msg != 6) SH_LOG("%s msg %d\n", screen == SC_SCHED ? "schedule" : "standings", msg);
+    if (msg != 6) SH_LOG("%s msg %d\n", screen == SC_SCHED ? "schedule" : screen == SC_STAND ? "standings" : screen == SC_PLAYOFF ? "playoffs" : "awards", msg);
 }
 
 static uint32_t dispatch(int id, uint32_t ecx, uint32_t edx)
@@ -738,20 +987,27 @@ static uint32_t dispatch(int id, uint32_t ecx, uint32_t edx)
     case FN_SCHED_TEAM_INIT: sched_team_init(ecx); return 0;
     case FN_SCHED_WEEK_INIT: sched_week_init(ecx); return 0;
     case FN_SCHED_FRAME: return page_frame(SC_SCHED, ecx);
-    case FN_DIV_INIT: stand_init(ecx, 0); return 0;
-    case FN_CONF_INIT: stand_init(ecx, 1); return 0;
-    case FN_STAND_FRAME: return page_frame(SC_STAND, ecx);
+    case FN_STAND_FRAME: return page_frame(s.screen, ecx);
     case FN_STAND_DRAW: stand_draw(ecx); return 0;
     case FN_ACT:
         SH_LOG("A on (%u, %u): no action in Eras\n", (unsigned)ecx, (unsigned)edx);
         return 0;
-    case FN_TABVAL: return (uint32_t)(PSEUDO_ROW0 + stand_tab());
-    case FN_TABCOUNT: return s.stand_page ? 2u : (uint32_t)s.ndiv;
+    case FN_TABVAL: return (uint32_t)(PSEUDO_ROW0 + pg_row(s.cur_pg));
+    case FN_TABCOUNT:
+        if (s.cur_pg == PG_STAND_DIV) return (uint32_t)s.ndiv;
+        if (s.cur_pg == PG_STAND_CONF) return 2u;
+        return (uint32_t)s.pg[s.cur_pg].ntabs;
     case FN_TABNEXT: case FN_TABPREV: {
-        int n = s.stand_page ? 2 : s.ndiv, *t = s.stand_page ? &s.tab_conf : &s.tab_div;
-        if (n > 0) *t = (*t + (id == FN_TABNEXT ? 1 : n - 1)) % n;
-        if (s.stand_page) s.tab_div = s.tab_conf * (s.ndiv / 2);
-        else s.tab_conf = s.ndiv ? s.tab_div / ((s.ndiv + 1) / 2) : 0;
+        if (s.cur_pg == PG_STAND_DIV || s.cur_pg == PG_STAND_CONF) {
+            int n = s.stand_page ? 2 : s.ndiv, *t = s.stand_page ? &s.tab_conf : &s.tab_div;
+            if (n > 0) *t = (*t + (id == FN_TABNEXT ? 1 : n - 1)) % n;
+            if (s.stand_page) s.tab_div = s.tab_conf * (s.ndiv / 2);
+            else s.tab_conf = s.ndiv ? s.tab_div / ((s.ndiv + 1) / 2) : 0;
+        } else {
+            Pg *p = &s.pg[s.cur_pg];
+            if (p->ntabs > 0) p->tab = (p->tab + (id == FN_TABNEXT ? 1 : p->ntabs - 1)) % p->ntabs;
+            if (p->single) fill_pseudo_rows();        /* the leaders: one pseudo row, refilled per category */
+        }
         return 0;
     }
     case FN_ROWS: {
@@ -759,7 +1015,9 @@ static uint32_t dispatch(int id, uint32_t ecx, uint32_t edx)
         return k >= 0 && k < MAX_PSEUDO ? (uint32_t)s.prow_n[k] : 0u;
     }
     default:
+        if (id >= FN_PG_INIT0 && id < FN_PG_INIT_END) { pg_init(ecx, id - FN_PG_INIT0); return 0; }
         if (id >= FN_COL0 && id < FN_COL0 + NCOLS) return col_text(id - FN_COL0, ecx, edx);
+        if (id >= FN_COL0 + MAXCOL && id < FN_COL0 + PG_N * MAXCOL) return pg_col_text((id - FN_COL0) / MAXCOL, (id - FN_COL0) % MAXCOL, ecx, edx);
         return 0;
     }
 }
@@ -810,13 +1068,13 @@ static uint32_t sheet_copy(uint32_t src)
     return p;
 }
 
-static uint32_t text_column(int col, const char *header, float width, uint32_t align)
+static uint32_t text_column(int getter, const char *header, float width, uint32_t align)
 {
     uint32_t c = alloc(0xB0, 16), h = wstr(header);
     if (!c || !h) return 0;
     gcopy(c, COL_TEXT_TMPL, 0xB0);
     MEM32(c + 0x04) = align;
-    MEM32(c + 0x08) = fn_addr(FN_COL0 + col);
+    MEM32(c + 0x08) = fn_addr(getter);
     MEM32(c + 0x0C) = 0x00020039u;                     /* (tab value, row) */
     MEM32(c + 0x50) = fbits(width);
     MEM32(c + 0x70) = h;
@@ -840,7 +1098,7 @@ int nfl2k5_eras_sheets_install(void)
     e = getenv("NFL2K5_ERAS_STANDINGS"); s.stand_on = !(e && !_stricmp(e, "list"));
     e = getenv("NFL2K5_ERAS_SHEET_MODE"); s.mode = e && atoi(e) == 1 ? 1 : 2;   /* 2 Franchise (tested path), 1 Tournament mapping */
     if (nfl2k5_eras_package_load()) { fprintf(stderr, "[ERAS] sheets: no season package; the list screens stay\n"); return -1; }
-    s.size = 96u * 1024u;
+    s.size = 160u * 1024u;   /* M14: four screens, six pseudo pages */
     s.mem = xbox_HeapAlloc(s.size, 16);
     if (!s.mem) { fprintf(stderr, "[ERAS] sheets: no guest memory\n"); return -1; }
 
@@ -877,11 +1135,11 @@ int nfl2k5_eras_sheets_install(void)
         MEM32(s.pages[SC_SCHED] + 0x18) = fn_addr(FN_SCHED_FRAME);
         MEM32(s.pages[SC_SCHED] + 0x1C) = FN_PAGE_DRAW;
         /* Standings pages: Division, Conference */
-        MEM32(s.pages[SC_STAND] + 0x00) = fn_addr(FN_DIV_INIT);
+        MEM32(s.pages[SC_STAND] + 0x00) = fn_addr(FN_PG_INIT0 + PG_STAND_DIV);
         MEM32(s.pages[SC_STAND] + 0x04) = FN_PAGE_LEAVE;
         MEM32(s.pages[SC_STAND] + 0x08) = fn_addr(FN_STAND_FRAME);
         MEM32(s.pages[SC_STAND] + 0x0C) = fn_addr(FN_STAND_DRAW);
-        MEM32(s.pages[SC_STAND] + 0x10) = fn_addr(FN_CONF_INIT);
+        MEM32(s.pages[SC_STAND] + 0x10) = fn_addr(FN_PG_INIT0 + PG_STAND_CONF);
         MEM32(s.pages[SC_STAND] + 0x14) = FN_PAGE_LEAVE;
         MEM32(s.pages[SC_STAND] + 0x18) = fn_addr(FN_STAND_FRAME);
         MEM32(s.pages[SC_STAND] + 0x1C) = fn_addr(FN_STAND_DRAW);
@@ -899,12 +1157,61 @@ int nfl2k5_eras_sheets_install(void)
         MEM32(s.page_stand + 0x30) = fn_addr(FN_ROWS);  /* desc 0x00010009 kept: (tab value) */
         MEM32(s.page_stand + 0x9C) = COL_HELMET_AWAY;   /* the retail helmet column, unchanged */
         for (c = 0; c < NCOLS; c++) {
-            s.col[c] = text_column(c, k_cols[c].h, k_cols[c].w, k_cols[c].align);
+            s.col[c] = text_column(FN_COL0 + c, k_cols[c].h, k_cols[c].w, k_cols[c].align);
             if (!s.col[c]) ok = 0;
             MEM32(s.page_stand + 0xA0 + 4u * (uint32_t)c) = s.col[c];
             for (i = 0; i < GRID_SLOTS; i++) if (!(s.out[c][i] = alloc(2u * STR_CH, 4))) ok = 0;
         }
         MEM32(s.page_stand + 0xA0 + 4u * NCOLS) = 0;
+        /* M14: the Playoff Picture / Bracket and the Awards / Leaders pages */
+        for (c = 0; c < PG_N; c++) {
+            Pg *p = &s.pg[c];
+            static const struct { int screen, row0, ntabs, single; const char *banner, *help; } k_pg[PG_N] = {
+                { SC_STAND, 0, 0, 0, NULL, NULL }, { SC_STAND, 0, 0, 0, NULL, NULL },
+                { SC_PLAYOFF, 0, 2, 0, "PLAYOFFS", "for the Playoff Picture" }, { SC_PLAYOFF, 2, 4, 0, "PLAYOFFS", "for the Bracket" },
+                { SC_AWARDS, 0, 1, 0, "AWARDS", "for Season Awards" }, { SC_AWARDS, 1, 8, 1, "AWARDS", "for League Leaders" },
+            };
+            size_t j;
+            int nc = 0;
+            memset(p, 0, sizeof *p);
+            p->screen = k_pg[c].screen; p->row0 = k_pg[c].row0; p->ntabs = k_pg[c].ntabs; p->single = k_pg[c].single;
+            p->banner = k_pg[c].banner; p->help = k_pg[c].help;
+            if (c == PG_STAND_DIV || c == PG_STAND_CONF) { p->sheet = s.sheet_stand; p->page = s.page_stand; continue; }
+            p->w_help = wstr(p->help);
+            p->sheet = sheet_copy(SHEET_WEEK);
+            p->page = alloc(0x9C + 4u * (MAXCOL + 4u), 16);
+            if (!p->sheet || !p->page || !p->w_help) { ok = 0; continue; }
+            MEM32(p->sheet + 0x30) = fn_addr(FN_TABVAL); MEM32(p->sheet + 0x34) = 0;
+            MEM32(p->sheet + 0x60) = fn_addr(FN_TABCOUNT); MEM32(p->sheet + 0x64) = 0;
+            MEM32(p->sheet + 0x78) = fn_addr(FN_TABNEXT); MEM32(p->sheet + 0x7C) = 0;
+            MEM32(p->sheet + 0x8C) = fn_addr(FN_TABPREV); MEM32(p->sheet + 0x90) = 0;
+            MEM32(p->sheet + 0xF4) = p->page;
+            gcopy(p->page, PAGE_WEEK, 0x9C);
+            MEM32(p->page + 0x30) = fn_addr(FN_ROWS);
+            MEM32(p->page + 0x9C) = COL_HELMET_AWAY;
+            for (j = 0; j < sizeof k_pgcols / sizeof k_pgcols[0]; j++) {
+                if (k_pgcols[j].pg != c || nc >= MAXCOL) continue;
+                p->col[nc] = text_column(FN_COL0 + c * MAXCOL + nc, k_pgcols[j].h, k_pgcols[j].w, k_pgcols[j].align);
+                if (!p->col[nc]) ok = 0;
+                for (i = 0; i < GRID_SLOTS; i++) if (!(p->out[nc][i] = alloc(2u * STR_CH, 4))) ok = 0;
+                MEM32(p->page + 0xA0 + 4u * (uint32_t)nc) = p->col[nc];
+                nc++;
+            }
+            p->ncols = nc;
+            if (c == PG_BRACKET) MEM32(p->page + 0xA0 + 4u * (uint32_t)nc++) = COL_HELMET_HOME;   /* the home helmet and score after the text */
+            MEM32(p->page + 0xA0 + 4u * (uint32_t)nc) = 0;
+        }
+        for (c = SC_PLAYOFF; c <= SC_AWARDS; c++) {
+            int p0 = c == SC_PLAYOFF ? PG_PICTURE : PG_AWARDS;
+            MEM32(s.pages[c] + 0x00) = fn_addr(FN_PG_INIT0 + p0);
+            MEM32(s.pages[c] + 0x04) = FN_PAGE_LEAVE;
+            MEM32(s.pages[c] + 0x08) = fn_addr(FN_STAND_FRAME);
+            MEM32(s.pages[c] + 0x0C) = fn_addr(FN_STAND_DRAW);
+            MEM32(s.pages[c] + 0x10) = fn_addr(FN_PG_INIT0 + p0 + 1);
+            MEM32(s.pages[c] + 0x14) = FN_PAGE_LEAVE;
+            MEM32(s.pages[c] + 0x18) = fn_addr(FN_STAND_FRAME);
+            MEM32(s.pages[c] + 0x1C) = fn_addr(FN_STAND_DRAW);
+        }
     }
     for (i = 0; i < NFL2K5_ERAS_MAX_TEAMS; i++) {
         s.rec[i] = alloc(TEAM_SIZE + 12u, 16);
@@ -922,22 +1229,49 @@ int nfl2k5_eras_sheets_install(void)
     s.w_banner = wstr("STANDINGS");
     for (i = 0; i < s.ndiv; i++) s.w_tab[i] = wstr(s.div_name[i]);
     s.w_tab[MAX_PSEUDO] = alloc(32, 4);
-    {
-        char b[32];
-        snprintf(b, sizeof b, "%d Season", NFL2K5_ERAS_SEASON);
-        s.w_tab[MAX_PSEUDO + 1] = wstr(b);
-    }
-    if (!s.txt || !s.wbuf || !s.mini_slot || !s.w_tab[MAX_PSEUDO + 1]) ok = 0;
+    s.w_tab[MAX_PSEUDO + 1] = alloc(32, 4);            /* "<season> Season", written at every swap (M14: the season moves) */
+    s.w_tab[MAX_PSEUDO + 2 + SC_PLAYOFF] = wstr("PLAYOFFS");
+    s.w_tab[MAX_PSEUDO + 2 + SC_AWARDS] = wstr("AWARDS");
+    s.w_pgtitle = alloc(2u * 48u, 4);
+    s.w_pgright = alloc(2u * 48u, 4);
+    if (!s.txt || !s.wbuf || !s.mini_slot || !s.w_tab[MAX_PSEUDO + 1] || !s.w_pgtitle || !s.w_pgright || !s.w_tab[MAX_PSEUDO + 2 + SC_AWARDS]) ok = 0;
     if (!ok) { fprintf(stderr, "[ERAS] sheets: build failed (%u bytes used)\n", (unsigned)s.used); s.mem = 0; return -1; }
     s.built = 1;
-    fprintf(stderr, "[ERAS] sheets: Schedule %08X, Standings %08X (%d divisions), season block mode %d, "
+    fprintf(stderr, "[ERAS] sheets: Schedule %08X, Standings %08X (%d divisions), Playoffs %08X, Awards %08X, season block mode %d, "
             "office rows: schedule %s, standings %s; %u bytes\n", (unsigned)s.desc[SC_SCHED], (unsigned)s.desc[SC_STAND],
-            s.ndiv, s.mode, s.sched_on ? "copy" : "list", s.stand_on ? "copy" : "list", (unsigned)s.used);
+            s.ndiv, (unsigned)s.desc[SC_PLAYOFF], (unsigned)s.desc[SC_AWARDS], s.mode, s.sched_on ? "copy" : "list", s.stand_on ? "copy" : "list", (unsigned)s.used);
     return 0;
 }
 
 int nfl2k5_eras_sheets_schedule_on(void) { return s.built && s.sched_on; }
 int nfl2k5_eras_sheets_standings_on(void) { return s.built && s.stand_on; }
+int nfl2k5_eras_sheets_playoffs_on(void) { return s.built; }
+
+/* M14 */
+void nfl2k5_eras_sheets_push_playoffs(uint32_t fsm, int bracket)
+{
+    int u = nfl2k5_eras_user_team();
+    s.pg[PG_PICTURE].tab = u >= 0 && !strcmp(nfl2k5_eras_team(u)->conference, "NFC") ? 1 : 0;
+    {   /* the bracket opens on the round being played */
+        int g = nfl2k5_eras_next_game(), r = 0;
+        if (g >= 0 && nfl2k5_eras_game(g)->round > 0) r = nfl2k5_eras_game(g)->round - 1;
+        else if (g < 0 && nfl2k5_eras_season_complete()) r = 3;
+        s.pg[PG_BRACKET].tab = r;
+    }
+    s.cur_pg = bracket ? PG_BRACKET : PG_PICTURE;
+    MEM32(S_PAGE) = bracket ? 1u : 0u;
+    SH_LOG("push Playoffs %08X (page %d)\n", (unsigned)s.desc[SC_PLAYOFF], bracket);
+    gcall(sub_0006E390, fsm, s.desc[SC_PLAYOFF]);
+}
+
+void nfl2k5_eras_sheets_push_awards(uint32_t fsm)
+{
+    s.pg[PG_AWARDS].tab = 0;
+    s.cur_pg = PG_AWARDS;
+    MEM32(S_PAGE) = 0;
+    SH_LOG("push Awards %08X\n", (unsigned)s.desc[SC_AWARDS]);
+    gcall(sub_0006E390, fsm, s.desc[SC_AWARDS]);
+}
 
 void nfl2k5_eras_sheets_push_schedule(uint32_t fsm)
 {

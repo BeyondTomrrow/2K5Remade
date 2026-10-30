@@ -150,26 +150,35 @@ PADS = ("pad_north", "pad_south")
 # --- end zones and midfield ----------------------------------------------------------------------------------
 
 ENDZONE_TEXT = "LOS ANGELES"
+# Optional, set per venue (configure()): a solid end-zone fill colour (RGB, e.g.
+# Alabama crimson) instead of grass, and a midfield logo image (PIL RGBA). Both
+# default off so every NFL-neutral venue keeps its grass end zones / no logo.
+ENDZONE_FILL = None
+ENDZONE_TEXT_S = None        # different text for the south end zone (if the model has its own textures)
+MIDFIELD_LOGO = None
 
 
-def endzone_art(ref):
+def endzone_art(ref, text=None):
     """768x128 RGBA (three 256x128 thirds) for the dry field: the retail grass, "LOS ANGELES" in white block
     letters with a dark keyline, no underline bar. ``ref`` = the retail dry thirds side by side."""
     from PIL import Image, ImageDraw, ImageFilter
+    txtstr = text if text is not None else ENDZONE_TEXT
     h, w = ref.shape[0], ref.shape[1]
     clean = ref[:, :80, :3]                                   # s24 N_L: columns 0..85 are bare grass
     tile = np.concatenate([clean, clean[:, ::-1]], axis=1)
     reps = int(math.ceil(w / tile.shape[1]))
     grass = np.tile(tile, (1, reps, 1))[:, :w].astype(np.float64)
+    if ENDZONE_FILL is not None:                              # a painted end zone (e.g. Alabama crimson) over the grass
+        grass[:] = np.array(ENDZONE_FILL, np.float64)[None, None, :]
     # letters: rendered big, squeezed into the retail lettering box (x 95..690, y 8..120)
     font = _font("impact.ttf", 220)
     probe = Image.new("L", (10, 10))
-    l, t, r, b = (int(math.floor(v)) for v in ImageDraw.Draw(probe).textbbox((0, 0), ENDZONE_TEXT, font=font,
+    l, t, r, b = (int(math.floor(v)) for v in ImageDraw.Draw(probe).textbbox((0, 0), txtstr, font=font,
                                                                               stroke_width=12))
     txt = Image.new("L", (r - l + 8, b - t + 8), 0)
     key = Image.new("L", txt.size, 0)
-    ImageDraw.Draw(key).text((4 - l, 4 - t), ENDZONE_TEXT, font=font, fill=255, stroke_width=12, stroke_fill=255)
-    ImageDraw.Draw(txt).text((4 - l, 4 - t), ENDZONE_TEXT, font=font, fill=255)
+    ImageDraw.Draw(key).text((4 - l, 4 - t), txtstr, font=font, fill=255, stroke_width=12, stroke_fill=255)
+    ImageDraw.Draw(txt).text((4 - l, 4 - t), txtstr, font=font, fill=255)
     box_w, box_h = 600, 108
     natural = (r - l) / max(b - t, 1) * box_h * 1.1        # a short name keeps block proportions (LOS ANGELES fills)
     box_w = int(min(box_w, max(300, natural)))
@@ -200,9 +209,26 @@ def neutral_field(body, system_bytes, sc, variant, dry, report):
     for k, m in enumerate(NEEDED["field"][:3]):          # endzone_S_* share these three textures
         patch_texture_in_place(body, system_bytes, sc, m, art[:, 256 * k:256 * (k + 1)], opaque=True)
     logo = scene_rgba(sc, "center_logo")
-    logo[...] = 0                                         # no midfield logo (alpha-tested: nothing drawn)
+    logo[...] = 0                                         # start transparent (alpha-tested)
+    midfield = "none (transparent)"
+    if MIDFIELD_LOGO is not None:                         # a midfield logo (e.g. Alabama's script A)
+        from PIL import Image, ImageFilter
+        h2, w2 = logo.shape[:2]
+        src = MIDFIELD_LOGO.convert("RGBA").copy()
+        a = np.asarray(src)                               # crop away any transparent padding
+        ys, xs = np.nonzero(a[..., 3] > 20)
+        if len(xs):
+            src = src.crop((int(xs.min()), int(ys.min()), int(xs.max()) + 1, int(ys.max()) + 1))
+        # thicken the strokes so the mark reads bold on grass, then scale to fill ~94% of the texture
+        src.putalpha(src.getchannel("A").filter(ImageFilter.MaxFilter(5)))
+        fill = 0.94 * min(w2, h2) / max(src.size)
+        src = src.resize((max(1, int(src.width * fill)), max(1, int(src.height * fill))), Image.LANCZOS)
+        canvas = Image.new("RGBA", (w2, h2), (0, 0, 0, 0))
+        canvas.alpha_composite(src, ((w2 - src.width) // 2, (h2 - src.height) // 2))
+        logo[...] = np.asarray(canvas, np.uint8)
+        midfield = "custom logo"
     patch_texture_in_place(body, system_bytes, sc, "center_logo", logo, opaque=False)
-    report["field"] = dict(endzones=ENDZONE_TEXT, center_logo="none (transparent)")
+    report["field"] = dict(endzones=ENDZONE_TEXT, endzone_fill=ENDZONE_FILL, center_logo=midfield)
 
 
 # --- goal-post pads (loose TXTR) -------------------------------------------------------------------------------

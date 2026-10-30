@@ -29,6 +29,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "xinput_xbox.h"
+#include "nfl2k5_sandbox_ui.h"
 
 #pragma comment(lib, "setupapi.lib")
 #pragma comment(lib, "hid.lib")
@@ -510,6 +511,7 @@ static void keyboard_into(XBOX_GAMEPAD *g)
 
 static void mouse_into(XBOX_GAMEPAD *g)
 {
+    if (nfl2k5_sandbox_ui_pointer_active()) return;
     HWND hwnd = GetForegroundWindow();
     POINT pt;
     RECT rc;

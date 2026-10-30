@@ -38,7 +38,7 @@ INDEX = os.path.join(CACHE, 'starters_sources.json')
 LINEAGE_INDEX = os.path.join(CACHE, 'lineage_sources.json')
 CDX = 'https://web.archive.org/cdx/search/cdx?url=pro-football-reference.com/%s&output=json&filter=statuscode:200'
 UA = {'User-Agent': 'nfl2k5-eras-research/1.0', 'Accept-Encoding': 'gzip'}
-MAX_TRIES = 10                     # captures tried per page, newest first
+MAX_TRIES = int(os.environ.get('PFR_MAX_TRIES', '10'))   # captures tried per page, newest first (M14: env override for pages whose newest captures are all challenge pages)
 TEAM_BEFORE = '20250301'           # team pages captured since 2025 hold no kicking/punting tables
 SECOND_MIN_GAP_DAYS = 365          # the second roster copy is at least a year older than the primary
 

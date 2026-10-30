@@ -37,8 +37,15 @@
 #include "nfl2k5_eras.h"
 #include "nfl2k5_eras_launch.h"
 #include "nfl2k5_eras_office.h"
+#include "nfl2k5_eras_draftshow.h"
 #include "nfl2k5_eras_depth.h"
 #include "nfl2k5_eras_sheets.h"
+#include "nfl2k5_eras_draft.h"
+#include "nfl2k5_eras_draft_sheets.h"
+#include "nfl2k5_eras_draft_room.h"
+#include "nfl2k5_eras_playoffs.h"
+#include "nfl2k5_eras_awards.h"
+#include "nfl2k5_eras_rollover.h"
 
 extern uint32_t xbox_HeapAlloc(uint32_t size, uint32_t alignment);
 
@@ -60,10 +67,18 @@ extern uint32_t xbox_HeapAlloc(uint32_t size, uint32_t alignment);
 /* EM_DEPTH: the Depth Chart team picker in front of the game's own Depth Chart (M6);
  * EM_HOOK: never pushed, its row update hides retail rows in Eras games
  * (nfl2k5_eras_menu_game_rows). */
-enum { EM_HUB, EM_OFFICE, EM_SCHEDULE, EM_AFC, EM_NFC, EM_YOURTEAM, EM_SETTINGS, EM_DEPTH, EM_HOOK, EM_SCREENS };
+enum { EM_HUB, EM_OFFICE, EM_SCHEDULE, EM_AFC, EM_NFC, EM_YOURTEAM, EM_SETTINGS, EM_DEPTH, EM_HOOK, EM_DRAFT, EM_SCREENS };
 #define EM_LEAGUE EM_OFFICE
 /* office rows */
-enum { OR_PLAY, OR_SCHEDULE, OR_AFC, OR_NFC, OR_TEAM, OR_DEPTH, OR_LOOK, OR_ROSTERS, OR_ROWS };
+enum { OR_PLAY, OR_SCHEDULE, OR_AFC, OR_NFC, OR_PLAYOFFS, OR_TEAM, OR_DEPTH, OR_LOOK, OR_DRAFTROOM, OR_AWARDS, OR_ROLLOVER, OR_DRAFT, OR_ROSTERS, OR_ROWS };
+/* OR_DRAFTROOM: the draft (M13); OR_DRAFT: the draft show preview (M11); M14: OR_PLAYOFFS (the Playoff Picture /
+ * bracket, from week 13), OR_AWARDS and OR_ROLLOVER (after the Super Bowl). Rows are hidden by their row update so
+ * no more than ten show at once (the nav bar's height). */
+static char s_draft_msg[EM_STR_CHARS];   /* why the Draft row refused, until the next refresh */
+static char s_roll_msg[EM_STR_CHARS];    /* M14: the rollover row's message, until the next refresh */
+#define TOKEN_PLAYOFFS 200
+#define TOKEN_AWARDS   201
+#define PLAYOFF_PICTURE_WEEK 13
 /* depth chart picker rows */
 enum { DR_TEAM, DR_EDIT, DR_QB, DR_RESET, DR_NOTE, DR_ROWS };
 #define PAD_WORDS 0x00B37A78u   /* the game's button word per pad (stride 0x244); LT 0x4000, RT 0x8000 */
@@ -259,10 +274,18 @@ static void hub_refresh(void)
                                   : s_new_confirm ? "Replace league? Press A again" : "New League (1980)");
 }
 
+/* M14: the office's week (1..16), 17..20 in the playoffs, 21 once the Super Bowl is played */
+static int league_week(void)
+{
+    int g = nfl2k5_eras_next_game();
+    if (g >= 0) return nfl2k5_eras_game(g)->week;
+    return nfl2k5_eras_season_complete() ? 21 : 17;
+}
+
 static void league_refresh(void)
 {
-    char b[EM_STR_CHARS], t[48];
-    int g;
+    char b[EM_STR_CHARS];
+    int g, season = nfl2k5_eras_season();
     nfl2k5_eras_refresh();
     g = nfl2k5_eras_next_game();
     if (g < 0) snprintf(b, sizeof b, "Season complete");
@@ -272,6 +295,7 @@ static void league_refresh(void)
         /* The office list (nav_bar_c) clips at about 24 characters
          * (o1-office2.png): "Play: Lions at Rams", abbreviations when the
          * nicknames are long; the week is in the screen title. */
+        else if (e->round == 4) snprintf(b, sizeof b, "Play: %s", nfl2k5_eras_super_bowl_name()[0] ? nfl2k5_eras_super_bowl_name() : "Super Bowl");
         else {
             const ErasTeam *a = nfl2k5_eras_team(e->away), *h = nfl2k5_eras_team(e->home);
             snprintf(b, sizeof b, "Play: %s at %s", a->name, h->name);
@@ -280,14 +304,34 @@ static void league_refresh(void)
         }
     }
     em_put(s_em[EM_OFFICE].label[OR_PLAY], b);
-    (void)t;
     snprintf(b, sizeof b, "Your Team: %s", nfl2k5_eras_user_team() >= 0 ? nfl2k5_eras_team(nfl2k5_eras_user_team())->name : "None (watch)");
     em_put(s_em[EM_OFFICE].label[OR_TEAM], b);
     snprintf(b, sizeof b, "Office Look: %s", nfl2k5_eras_office_look_name(nfl2k5_eras_office_look()));
     em_put(s_em[EM_OFFICE].label[OR_LOOK], b);
-    if (g >= 0) snprintf(b, sizeof b, "1980 Season  -  Week %d", nfl2k5_eras_game(g)->week);
-    else snprintf(b, sizeof b, "1980 Season");
+    /* M13: the draft row: "1981 Draft" (the office list clips at about 24 characters) */
+    if (s_draft_msg[0]) snprintf(b, sizeof b, "%s", s_draft_msg);
+    else snprintf(b, sizeof b, "%d Draft%s", nfl2k5_eras_draft_year(), nfl2k5_eras_history() ? " (Alt. History)" : "");
+    em_put(s_em[EM_OFFICE].label[OR_DRAFTROOM], b);
+    /* M14: playoffs, awards, rollover */
+    em_put(s_em[EM_OFFICE].label[OR_PLAYOFFS], nfl2k5_eras_regular_complete() ? "Playoff Bracket" : "Playoff Picture");
+    snprintf(b, sizeof b, "%d Awards", season);
+    em_put(s_em[EM_OFFICE].label[OR_AWARDS], b);
+    if (s_roll_msg[0]) snprintf(b, sizeof b, "%s", s_roll_msg);
+    else {
+        char why[EM_STR_CHARS];
+        if (nfl2k5_eras_rollover_ready(why, sizeof why) == 0) snprintf(b, sizeof b, "Start the %d Season", nfl2k5_eras_rollover_season());
+        else snprintf(b, sizeof b, "Start %d: %s", nfl2k5_eras_rollover_season(), why);
+    }
+    em_put(s_em[EM_OFFICE].label[OR_ROLLOVER], b);
+    if (g >= 0 && nfl2k5_eras_game(g)->round == 4) snprintf(b, sizeof b, "%s  -  %s vs %s", nfl2k5_eras_game(g)->label[0] ? nfl2k5_eras_game(g)->label : "SUPER BOWL",
+                                                            nfl2k5_eras_team(nfl2k5_eras_game(g)->away)->name, nfl2k5_eras_team(nfl2k5_eras_game(g)->home)->name);
+    else if (g >= 0 && nfl2k5_eras_game(g)->round > 0) snprintf(b, sizeof b, "%d Playoffs  -  %s", season, nfl2k5_eras_round_name(nfl2k5_eras_game(g)->round));
+    else if (g >= 0) snprintf(b, sizeof b, "%d Season  -  Week %d", season, nfl2k5_eras_game(g)->week);
+    else if (nfl2k5_eras_season_complete() && nfl2k5_eras_champion() >= 0)
+        snprintf(b, sizeof b, "%d Season  -  %s Champions", season, nfl2k5_eras_team(nfl2k5_eras_champion())->name);
+    else snprintf(b, sizeof b, "%d Season", season);
     em_put(s_em[EM_OFFICE].title, b);
+    if (nfl2k5_eras_season_complete()) nfl2k5_eras_awards_write();   /* awards.csv once the Super Bowl is played */
 }
 
 /* The Depth Chart picker: the user's team when the league has one, else any
@@ -389,7 +433,7 @@ static int value_count(int scr, int row)
     switch (scr) {
     case EM_YOURTEAM: return row == 0 ? nfl2k5_eras_team_count() + 1 : 2;
     case EM_SCHEDULE: return row == 0 ? (nfl2k5_eras_week_count() > 0 ? nfl2k5_eras_week_count() : 1) : 2;
-    case EM_SETTINGS: return row == 0 ? OFFICE_LOOKS : 2;
+    case EM_SETTINGS: return row == 0 ? OFFICE_LOOKS : row == 1 ? 3 : row == 2 ? 2 : row == 3 ? 11 : 2;
     default: return 2;
     }
 }
@@ -399,6 +443,9 @@ static int value_get(int scr, int row)
     if (scr == EM_YOURTEAM && row == 0) return nfl2k5_eras_user_team() + 1;
     if (scr == EM_SCHEDULE && row == 0) return s_week - 1;
     if (scr == EM_SETTINGS && row == 0) return look_setting();
+    if (scr == EM_SETTINGS && row == 1) return nfl2k5_eras_draftshow_mode();
+    if (scr == EM_SETTINGS && row == 2) return nfl2k5_eras_history();        /* M13: Historical / Alternate History */
+    if (scr == EM_SETTINGS && row == 3) return nfl2k5_eras_sleepers();       /* M13: 0 Off .. 10 */
     return 0;
 }
 
@@ -420,6 +467,17 @@ static int value_set(int scr, int row, int v)
         EM_LOG("office look setting: %s\n", nfl2k5_eras_office_look_name(v));
         return 1;
     }
+    if (scr == EM_SETTINGS && row == 1) {                  /* M12: Draft Show, league.ini draft_show */
+        if (nfl2k5_eras_draftshow_set_mode(v)) return 0;
+        EM_LOG("draft show setting: %s\n", nfl2k5_eras_draftshow_mode_name(v));
+        return 1;
+    }
+    if (scr == EM_SETTINGS && row == 2) {                  /* M13: history mode (locked once the draft has opened) */
+        if (nfl2k5_eras_draft_is_open() || nfl2k5_eras_set_history(v)) return 0;
+        league_refresh();
+        return 1;
+    }
+    if (scr == EM_SETTINGS && row == 3) return nfl2k5_eras_set_sleepers(v) == 0;   /* M13: sleepers */
     return 0;
 }
 
@@ -448,7 +506,12 @@ static void value_name(int scr, int row, int v, char *b, size_t n)
         if (row == 0) {
             if (v == OFFICE_LOOK_AUTO) snprintf(b, n, "Auto (%s)", nfl2k5_eras_office_look_name(nfl2k5_eras_office_auto_look()));
             else snprintf(b, n, "%s", nfl2k5_eras_office_look_name(v));
-        } else snprintf(b, n, "Browse with LT / RT in the office");
+        } else if (row == 1) {
+            if (nfl2k5_eras_draftshow_mode_forced()) snprintf(b, n, "%s (NFL2K5_ERAS_DRAFTSHOW)", nfl2k5_eras_draftshow_mode_name(v));
+            else snprintf(b, n, "%s", nfl2k5_eras_draftshow_mode_name(v));
+        } else if (row == 2) snprintf(b, n, "%s", v ? "Alternate History" : "Historical");
+        else if (row == 3) { if (v == 0) snprintf(b, n, "Off"); else snprintf(b, n, "%d per draft (Alt. History)", v); }
+        else snprintf(b, n, "Browse with LT / RT in the office");
         break;
     case EM_AFC: case EM_NFC: {
         int t = s_stand_row[scr == EM_NFC][row];
@@ -566,18 +629,46 @@ static void office_arrive(uint32_t fsm, int token)
         }
         if (token - 1 == EM_DEPTH) { s_depth_msg[0] = 0; depth_refresh(); }
         push(fsm, token - 1);
+    } else if (token == TOKEN_PLAYOFFS) {
+        /* M14: the Playoff Picture, or the bracket once the regular season is complete */
+        nfl2k5_eras_sheets_push_playoffs(fsm, nfl2k5_eras_regular_complete());
+        em_sound(SND_SELECT);
+    } else if (token == TOKEN_AWARDS) {
+        nfl2k5_eras_sheets_push_awards(fsm);
+        em_sound(SND_SELECT);
     }
 }
 
 static void office_row(int row, uint32_t fsm)
 {
     /* Depth Chart: the Gameplan stop (notebook / contract), as Franchise's Gameplan -> Depth Chart */
-    static const int kind[OR_ROWS] = { OFFICE_STOP_PLAY, OFFICE_STOP_SCHEDULE, OFFICE_STOP_STANDINGS, OFFICE_STOP_STANDINGS,
-                                       OFFICE_STOP_TEAM, OFFICE_STOP_TEAM, OFFICE_STOP_SETTINGS, -1 };
-    static const int target[OR_ROWS] = { 0, EM_SCHEDULE, EM_AFC, EM_NFC, EM_YOURTEAM, EM_DEPTH, EM_SETTINGS, -1 };
+    static const int kind[OR_ROWS] = { OFFICE_STOP_PLAY, OFFICE_STOP_SCHEDULE, OFFICE_STOP_STANDINGS, OFFICE_STOP_STANDINGS, OFFICE_STOP_STANDINGS,
+                                       OFFICE_STOP_TEAM, OFFICE_STOP_TEAM, OFFICE_STOP_SETTINGS, -1, OFFICE_STOP_STANDINGS, -1, -1, -1 };
+    static const int target[OR_ROWS] = { 0, EM_SCHEDULE, EM_AFC, EM_NFC, -1, EM_YOURTEAM, EM_DEPTH, EM_SETTINGS, -1, -1, -1, EM_DRAFT, -1 };
     int token;
     if (row < 0 || row >= OR_ROWS) return;
     if (nfl2k5_eras_office_busy()) return;
+    if (row == OR_ROLLOVER) {
+        /* M14: the season rollover (no camera move: it rewrites the league and refreshes the office) */
+        int r = nfl2k5_eras_rollover(s_roll_msg, sizeof s_roll_msg);
+        EM_LOG("rollover row: %d %s\n", r, s_roll_msg);
+        if (r == 0) {
+            g_eras_svc->toast("My NFL Eras", s_roll_msg, nfl2k5_eras_history() ? "Alternate History: the league's rosters carried forward" : "Historical: the real rosters", 6000);
+            s_roll_msg[0] = 0;
+            em_sound(SND_SELECT);
+        } else em_sound(SND_CURSOR);
+        league_refresh();
+        return;
+    }
+    if ((row == OR_PLAYOFFS || row == OR_AWARDS) && !nfl2k5_eras_sheets_playoffs_on()) { em_sound(SND_CURSOR); return; }
+    if (row == OR_DRAFTROOM) {
+        /* M13: the draft (The Big Board / candidates / recap on the retail sheet engine) */
+        int r = nfl2k5_eras_draft_room_push(fsm, s_draft_msg, sizeof s_draft_msg);   /* M15 (M13 sheets as the fallback) */
+        EM_LOG("draft row: %d %s\n", r, s_draft_msg);
+        if (r == 0) { s_draft_msg[0] = 0; em_sound(SND_SELECT); }
+        else { league_refresh(); em_sound(SND_CURSOR); }
+        return;
+    }
     if (row == OR_ROSTERS) {
         /* "Rosters: unverified community roster" is a label row */
         EM_LOG("label row %d/%d pressed (no action)\n", EM_OFFICE, row);
@@ -585,7 +676,8 @@ static void office_row(int row, uint32_t fsm)
         return;
     }
     if (row == OR_PLAY && nfl2k5_eras_next_game() < 0) { em_sound(SND_CURSOR); return; }
-    token = row == OR_PLAY ? TOKEN_LAUNCH : target[row] + 1;
+    if (row == OR_DRAFT && !nfl2k5_eras_draftshow_ready()) { em_sound(SND_CURSOR); return; }
+    token = row == OR_PLAY ? TOKEN_LAUNCH : row == OR_PLAYOFFS ? TOKEN_PLAYOFFS : row == OR_AWARDS ? TOKEN_AWARDS : target[row] + 1;
     EM_LOG("office row %d pressed\n", row);
     if (!nfl2k5_eras_office_go(kind[row], token)) office_arrive(fsm, token);   /* no room: at once */
 }
@@ -593,6 +685,7 @@ static void office_row(int row, uint32_t fsm)
 static void row_action(int scr, int row, uint32_t fsm)
 {
     if (scr == EM_OFFICE) { office_row(row, fsm); return; }
+    if (scr == EM_DRAFT) return;                           /* A skips a pick: read by the show itself */
     if (scr == EM_DEPTH) {
         if (row == DR_TEAM) depth_step(+1);
         else if (row == DR_EDIT) {
@@ -667,7 +760,13 @@ static void row_update(int scr, int row, uint32_t item)
     int hide = 0, grey = 0;
     if (scr == EM_HUB && row == 0) hide = !nfl2k5_eras_league_exists() || nfl2k5_eras_limited()[0];
     else if (scr == EM_HUB && row == 1) grey = !nfl2k5_eras_package_ok();
-    else if (scr == EM_OFFICE && row == OR_PLAY) grey = nfl2k5_eras_next_game() < 0;
+    else if (scr == EM_OFFICE && row == OR_PLAY) { grey = nfl2k5_eras_next_game() < 0; hide = nfl2k5_eras_season_complete(); }
+    else if (scr == EM_OFFICE && row == OR_DRAFT) { grey = !nfl2k5_eras_draftshow_ready(); hide = league_week() >= PLAYOFF_PICTURE_WEEK; }
+    else if (scr == EM_OFFICE && row == OR_DRAFTROOM) grey = !nfl2k5_eras_draft_sheets_ready();
+    else if (scr == EM_OFFICE && row == OR_PLAYOFFS) hide = league_week() < PLAYOFF_PICTURE_WEEK || !nfl2k5_eras_sheets_playoffs_on();   /* M14 */
+    else if (scr == EM_OFFICE && row == OR_AWARDS) hide = !nfl2k5_eras_season_complete() || !nfl2k5_eras_sheets_playoffs_on();
+    else if (scr == EM_OFFICE && row == OR_ROLLOVER) hide = !nfl2k5_eras_season_complete();
+    else if (scr == EM_OFFICE && row == OR_ROSTERS) hide = nfl2k5_eras_season_complete();
     else if (scr == EM_HOOK) hide = 1;                     /* a retail row hidden in an Eras game */
     MEM32(item + 0x08) = (uint32_t)hide;
     MEM32(item + 0x0C) = (uint32_t)grey;
@@ -689,6 +788,8 @@ static void event(int scr, int msg, uint32_t fsm)
             nfl2k5_eras_after_game("office shown");
             if (s_office_room) nfl2k5_eras_office_refresh(fsm);
             s_play_msg[0] = 0;
+            s_draft_msg[0] = 0;
+            s_roll_msg[0] = 0;
             league_refresh();
             break;
         case 4: if (s_office_room) nfl2k5_eras_office_shown(fsm); break;
@@ -714,6 +815,9 @@ static void event(int scr, int msg, uint32_t fsm)
     case EM_AFC: case EM_NFC:
         if (msg == 3) { nfl2k5_eras_refresh(); standings_labels(scr == EM_NFC); }
         break;
+    case EM_DRAFT:
+        nfl2k5_eras_draftshow_event(msg, fsm);
+        break;
     case EM_DEPTH:
         if (msg == 3) {
             /* back from the game's Depth Chart: save the edit, release the slot */
@@ -737,7 +841,7 @@ static void event(int scr, int msg, uint32_t fsm)
 /* The hub (0) or League (1) descriptor, for the launch's return and clean-up. */
 uint32_t nfl2k5_eras_menu_header(int which)
 {
-    return which == 0 ? s_em[EM_HUB].header : which == 1 ? s_em[EM_LEAGUE].header : 0;
+    return which == 0 ? s_em[EM_HUB].header : which == 1 ? s_em[EM_LEAGUE].header : which == 2 ? s_em[EM_DRAFT].header : 0;   /* 2: the draft show (M13) */
 }
 
 /* M6: in an Eras game, rows that would break the league are hidden through
@@ -797,6 +901,8 @@ static void em_fn(void)
 recomp_func_t nfl2k5_eras_menu_lookup(uint32_t address)
 {
     uint32_t off = address - EM_FN_BASE, scr = off / 0x1000u, in = off % 0x1000u;
+    if (address >= NFL2K5_ERAS_DRAFT_ROOM_BASE) return nfl2k5_eras_draft_room_lookup(address);   /* M15 */
+    if (address >= NFL2K5_ERAS_DRAFT_SHEETS_BASE) return nfl2k5_eras_draft_sheets_lookup(address);   /* M13 */
     if (address >= NFL2K5_ERAS_SHEETS_BASE) return nfl2k5_eras_sheets_lookup(address);   /* M7 */
     if (scr >= EM_SCREENS || !s_em[scr].header) return NULL;
     if (in < 0x800u) {
@@ -915,10 +1021,27 @@ void nfl2k5_eras_menu_install(int retail)
         ok &= em_row(EM_HOOK, 0, RK_ACTION, "", 0, 1, 0);
     }
 
+    /* M11: the draft show. A link list with one row and a layout name that is not loaded, so
+     * no list is drawn over the stage; flags 0x10: Back pops, background mode 0 (the stage is
+     * drawn by its msg 7). */
+    {
+        static const int draft_msgs[] = { 1, 2, 3, 4, 5, 6, 7, 10 };
+        ok &= em_begin(EM_DRAFT, FEATURES, "1981 NFL Draft", 1, draft_msgs, 8);
+        ok &= em_row(EM_DRAFT, 0, RK_ACTION, "Next Pick", 0, 0, 0);
+        if (ok) {
+            MEM32(s_em[EM_DRAFT].header + 0x18) = em_wstr("eras_draftshow");
+            MEM32(s_em[EM_DRAFT].header + 0x1C) = 0;
+            MEM32(s_em[EM_DRAFT].header + 0x28) = 0x10;
+        }
+    }
+
     /* Office settings: the Office Look (league.ini office_look). */
-    ok &= em_begin(EM_SETTINGS, GAME_OPTIONS, "Office", 2, NULL, 0);
+    ok &= em_begin(EM_SETTINGS, GAME_OPTIONS, "Office", 5, NULL, 0);
     ok &= em_row(EM_SETTINGS, 0, RK_VALUE, "Office Look", 0, 1, OFFICE_LOOKS);
-    ok &= em_row(EM_SETTINGS, 1, RK_VALUE, "Eras", 0, 0, 2);
+    ok &= em_row(EM_SETTINGS, 1, RK_VALUE, "Draft Show", 0, 1, 3);   /* M12: league.ini draft_show */
+    ok &= em_row(EM_SETTINGS, 2, RK_VALUE, "History", 0, 1, 2);      /* M13: league.ini history */
+    ok &= em_row(EM_SETTINGS, 3, RK_VALUE, "Sleepers", 0, 1, 11);    /* M13: league.ini sleepers */
+    ok &= em_row(EM_SETTINGS, 4, RK_VALUE, "Eras", 0, 0, 2);
 
     /* The league screen: the office (M3-office). A link list like the Front
      * Office (0x52533C): flags 0x10 (Back pops, background mode 0: the room is
@@ -932,10 +1055,15 @@ void nfl2k5_eras_menu_install(int retail)
     ok &= em_row(EM_OFFICE, OR_SCHEDULE, RK_ACTION, "Schedule", 0, 0, 0);
     ok &= em_row(EM_OFFICE, OR_AFC, RK_ACTION, "AFC Standings", 0, 0, 0);
     ok &= em_row(EM_OFFICE, OR_NFC, RK_ACTION, "NFC Standings", 0, 0, 0);
+    ok &= em_row(EM_OFFICE, OR_PLAYOFFS, RK_ACTION, "Playoff Picture", 0, 1, 0);   /* M14 */
     ok &= em_row(EM_OFFICE, OR_TEAM, RK_ACTION, "Your Team", 0, 0, 0);
     ok &= em_row(EM_OFFICE, OR_DEPTH, RK_ACTION, "Depth Chart", 0, 0, 0);
     ok &= em_row(EM_OFFICE, OR_LOOK, RK_ACTION, "Office Look", 0, 0, 0);
-    ok &= em_row(EM_OFFICE, OR_ROSTERS, RK_ACTION, s_office_room ? "Unverified rosters" : "Rosters: unverified community roster", 0, 0, 0);
+    ok &= em_row(EM_OFFICE, OR_DRAFTROOM, RK_ACTION, "1981 Draft", 0, 1, 0);   /* M13 */
+    ok &= em_row(EM_OFFICE, OR_AWARDS, RK_ACTION, "Awards", 0, 1, 0);          /* M14 */
+    ok &= em_row(EM_OFFICE, OR_ROLLOVER, RK_ACTION, "Start the Next Season", 0, 1, 0);   /* M14 */
+    ok &= em_row(EM_OFFICE, OR_DRAFT, RK_ACTION, "Draft Show (preview)", 0, 1, 0);
+    ok &= em_row(EM_OFFICE, OR_ROSTERS, RK_ACTION, s_office_room ? "Unverified rosters" : "Rosters: unverified community roster", 0, 1, 0);
     if (ok && s_office_room) {
         MEM32(s_em[EM_OFFICE].header + 0x18) = em_wstr("front_office");
         MEM32(s_em[EM_OFFICE].header + 0x1C) = 0;
@@ -947,17 +1075,30 @@ void nfl2k5_eras_menu_install(int retail)
     if (!ok) { fprintf(stderr, "[ERAS] menu: build failed (%u bytes used)\n", (unsigned)s_heap_used); memset(s_em, 0, sizeof s_em); return; }
     hub_refresh();
     nfl2k5_eras_sheets_install();   /* M7: the Schedule copy and Standings (fall back to the lists on failure) */
+    nfl2k5_eras_draft_sheets_install();   /* M13: the draft screens (the row greys out on failure) */
+    nfl2k5_eras_draft_room_install();     /* M15: the retail-copy draft screens (fall back to M13 when not built) */
 
     if (strcmp(place, "main") && strcmp(place, "main-scroll")) {
         /* 6 rows -> 7: fits the navigation layout without the 0x04 flag */
         rows = em_insert_link(GAME_MODES, -1, s_em[EM_HUB].header, em_wstr("My NFL Eras"));
         fprintf(stderr, "[ERAS] menu: \"My NFL Eras\" at the end of Game Modes (%d rows)\n", rows);
+        /* the test switches (M11 / M13), as in the Main Menu branch below */
+        if (getenv("NFL2K5_ERAS_DRAFTSHOW_TEST") && s_em[EM_DRAFT].header)
+            em_insert_link(MAIN_MENU, 0, s_em[EM_DRAFT].header, em_wstr("Draft Show (test)"));
+        if (getenv("NFL2K5_ERAS_HUB_TEST"))
+            em_insert_link(MAIN_MENU, 0, s_em[EM_HUB].header, em_wstr("My NFL Eras (test)"));
     } else {
         /* After The Crib, not before it: the celebrity-phone icon is drawn
          * beside the third row (index 2) whatever that row is, so The Crib
          * keeps index 2 (seen in M3 review: with Eras at index 2 the
          * phone sat beside "My NFL Eras"). */
         rows = em_insert_link(MAIN_MENU, 3, s_em[EM_HUB].header, em_wstr("My NFL Eras"));
+        /* test switch (M11): the draft show as the Main Menu's first row, one A press from the menu */
+        if (getenv("NFL2K5_ERAS_DRAFTSHOW_TEST") && s_em[EM_DRAFT].header)
+            rows = em_insert_link(MAIN_MENU, 0, s_em[EM_DRAFT].header, em_wstr("Draft Show (test)"));
+        /* test switch (M13): the hub as the Main Menu's first row (background tests cannot see the cursor) */
+        if (getenv("NFL2K5_ERAS_HUB_TEST"))
+            rows = em_insert_link(MAIN_MENU, 0, s_em[EM_HUB].header, em_wstr("My NFL Eras (test)"));
         if (!strcmp(place, "main-scroll")) MEM32(MAIN_MENU + 0x28) |= 0x4u;
         fprintf(stderr, "[ERAS] menu: \"My NFL Eras\" in the Main Menu after The Crib (%d rows, flags %02X)\n",
                 rows, (unsigned)MEM32(MAIN_MENU + 0x28));

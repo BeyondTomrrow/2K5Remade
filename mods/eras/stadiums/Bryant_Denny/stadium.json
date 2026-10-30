@@ -1,0 +1,13 @@
+{
+  "name": "BRYANT-DENNY STADIUM",
+  "display": "Bryant-Denny Stadium",
+  "location": "Tuscaloosa, AL",
+  "code": "s77",
+  "clone": "Pro Player Stadium",
+  "host": "Rebel Field",
+  "capacity": 100077,
+  "indoor": 0,
+  "grass": 1,
+  "nfl": "Alabama Crimson Tide (college)",
+  "source": "NCAA Football 07 Bryant-Denny Stadium (STAD.SRES 3, ALBAMA); tools/eras/stadiums/ncaa_stadiums.py"
+}

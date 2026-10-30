@@ -40,6 +40,8 @@ typedef struct {
 
 /* The draft year of the loaded league (the season after it). */
 int nfl2k5_eras_draft_year(void);
+/* M14: the Mod Tools' position-weighted overall estimate of 28 ratings (the draft's value scale). */
+int nfl2k5_eras_draft_overall(int pos_code, const uint8_t *r);
 /* Open the draft of the loaded league: the class (the league's copy, written on the first open with
  * the sleepers drawn), the order and the picks made so far. 0 = open; else nothing to show (msg says why). */
 int nfl2k5_eras_draft_open(char *msg, unsigned n);

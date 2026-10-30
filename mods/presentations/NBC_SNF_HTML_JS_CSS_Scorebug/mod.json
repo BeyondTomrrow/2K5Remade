@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "id": "nbc_snf_html_js_css_scorebug",
+  "name": "NBC_SNF_HTML_JS_CSS_Scorebug",
+  "type": "html",
+  "version": "0.1.0",
+  "author": "",
+  "description": "Imported HTML presentation.",
+  "enabled": true,
+  "entry": "index.html",
+  "canvas": {
+    "width": 1920,
+    "height": 1080,
+    "fit": "broadcast_safe_16x9"
+  },
+  "dependencies": [],
+  "assets": {},
+  "compatibility": {
+    "game": "NFL2K5-PC",
+    "presentation_api": 1
+  }
+}

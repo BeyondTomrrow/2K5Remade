@@ -328,8 +328,9 @@ static uint32_t publish(int side, uint32_t team)
 
 static int local_flow(void)
 {
+    extern int nfl2k5_sandbox_menu_open(void);
     uint32_t m = MEM32(TS_MODE);
-    return (m == 1 || m == 3 || m == 7) && gcall(sub_00128C70, 0, 0) == 0;
+    return (m == 1 || m == 3 || m == 7 || (m == 8 && nfl2k5_sandbox_menu_open())) && gcall(sub_00128C70, 0, 0) == 0;
 }
 
 /* ---- study: every historic team, as the game loads it ------------------
@@ -852,6 +853,13 @@ uint32_t nfl2k5_teams_stadium_pack(const char *name, int *id_out)
     if (!name || !*name) return 0;
     for (r = 0; r < nfl2k5_pack_root_count() && h == INVALID_HANDLE_VALUE; r++) {
         nfl2k5_pack_root_path(r, "stadiums", dir, sizeof dir);
+        snprintf(pat, sizeof pat, "%s\\*", dir);
+        h = FindFirstFileA(pat, &fd);
+    }
+    if (h == INVALID_HANDLE_VALUE) {
+        /* No feature-module pack roots (e.g. a Quick Game with Eras off): the
+         * installed stadium packs still live here, so a custom team can name one. */
+        snprintf(dir, sizeof dir, "mods\\eras\\stadiums");
         snprintf(pat, sizeof pat, "%s\\*", dir);
         h = FindFirstFileA(pat, &fd);
     }

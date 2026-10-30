@@ -229,6 +229,14 @@ static int camera_apply(uint32_t camera)
 void nfl2k5_sandbox_world_camera(uint32_t camera)
 {
     unsigned char original[SB_CAMERA_BYTES]; float f[4], n; int i;
+    if (getenv("NFL2K5_BROADCAST_DEBUG")) {
+        static DWORD last; DWORD t = GetTickCount();
+        if (t - last > 1000) {
+            last = t;
+            fprintf(stderr, "[SBCAM] hook camera=%08X camera_on=%d match=%d ready=%d\n",
+                    camera, s_world.camera_on, match_current(), s_world.state.camera_ready);
+        }
+    }
     if (!s_world.camera_on || !match_current() || !camera || !read_guest(camera, original, sizeof original)) return;
     /* Own only the first actual viewport. A second split-screen camera must
      * not steal restoration ownership or get overwritten as a side effect. */
@@ -236,7 +244,13 @@ void nfl2k5_sandbox_world_camera(uint32_t camera)
     f[0]=-atf(original,0x48);f[1]=-atf(original,0x58);f[2]=-atf(original,0x68);
     n=sqrtf(f[0]*f[0]+f[1]*f[1]+f[2]*f[2]);
     f[3]=atf(original,0x270);
-    if (!isfinite(n) || n<0.5f || n>2.0f || !isfinite(f[3]) || f[3]<0.05f || f[3]>100) return;
+    if (!isfinite(n) || n<0.5f || n>2.0f || !isfinite(f[3]) || f[3]<0.05f || f[3]>100) {
+        if (getenv("NFL2K5_BROADCAST_DEBUG")) {
+            static DWORD last; DWORD t = GetTickCount();
+            if (t - last > 1000) { last = t; fprintf(stderr, "[SBCAM] reject fwd-norm=%.3f focal=%.3f\n", n, f[3]); }
+        }
+        return;
+    }
     for(i=0;i<3;++i) if(!isfinite(atf(original,0x80u+(unsigned)i*4u)) || fabsf(atf(original,0x80u+(unsigned)i*4u))>100000) return;
     if (!s_world.state.camera_ready) {
         s_world.state.x=atf(original,0x80);s_world.state.y=atf(original,0x84);s_world.state.z=atf(original,0x88);

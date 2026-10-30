@@ -974,13 +974,16 @@ def main():
     rebuilt, info = fill.rebuild_fixed_span_filled(desk_rec, out, encoder='auto')
     print('build-office-ibmpc: coach_d80s compressed into %d of %d bytes' % (info.filled_bytes, info.stored_size))
 
-    # pack: the four original records, then coach_d80s
-    body = b''.join(r + b'\0' * (-len(r) & 15) for r in [r for o, t, r in recs][:4])
+    # pack: the original records (build-office-pack.py's list: the four of the office and, since
+    # M15, the rookie_pane / rookie_pane_news layouts of the draft screens), then coach_d80s
+    # (an older coach_d80s is dropped and made again)
+    keep = [r for o, t, r in recs][:4] + [r for o, t, r in recs[4:] if t == 'LAYT']
+    body = b''.join(r + b'\0' * (-len(r) & 15) for r in keep)
     body += rebuilt + b'\0' * (-len(rebuilt) & 15)
     open(PACK, 'wb').write(body)
     os.makedirs(ERA, exist_ok=True)
     build_atlas(Image.open(PHOTO).convert('RGB')).save(os.path.join(ERA, 'computer_monitor.png'))
-    print('build-office-ibmpc: wrote %s (5 records) and %s' % (PACK, os.path.join(ERA, 'computer_monitor.png')))
+    print('build-office-ibmpc: wrote %s (%d records) and %s' % (PACK, len(keep) + 1, os.path.join(ERA, 'computer_monitor.png')))
     return 0
 
 

@@ -112,7 +112,9 @@ static void draft_file(const char *name, char *out, size_t n)
 
 static int file_exists(const char *path) { return GetFileAttributesA(path) != INVALID_FILE_ATTRIBUTES; }
 
-int nfl2k5_eras_draft_year(void) { return NFL2K5_ERAS_SEASON + 1; }
+int nfl2k5_eras_draft_year(void) { return nfl2k5_eras_season() + 1; }   /* M14: the league's season + 1 */
+
+int nfl2k5_eras_draft_overall(int pos_code, const uint8_t *r) { return overall(pos_code, r); }
 
 /* ---- the class --------------------------------------------------------------- */
 
@@ -598,8 +600,7 @@ static int write_team_rosters(int team, FILE *rel_log)
     int season = s_dr.year;
     if (!t) return -1;
     /* the season's roster rows (the package's: nfl2k5_eras_roster_path for the package season) */
-    snprintf(path, sizeof path, "%s\\%s", nfl2k5_eras_package_dir(), t->roster_file);
-    for (k = 0; path[k]; k++) if (path[k] == '/') path[k] = '\\';
+    nfl2k5_eras_package_roster_path(team, path, sizeof path);   /* M14: the league season's package roster */
     if (fopen_s(&f, path, "rb") || !f) { nfl2k5_eras_log("draft rookies %s: no roster %s", t->id, path); return -1; }
     if (!fgets(header, sizeof header, f)) { fclose(f); return -1; }
     while (n < ROSTER_MAX + 40 && fgets(rows[n].line, sizeof rows[n].line, f)) {
@@ -689,7 +690,7 @@ static int write_team_rosters(int team, FILE *rel_log)
     nfl2k5_eras_league_path(relp, out, sizeof out);
     if (!fopen_s(&f, out, "wb") && f) {
         fprintf(f, "%s.csv: the %d roster (%s) plus the %d draft class rookies drafted by this league (draft\\%d\\picks.csv); ratings: community PS2 roster (unverified); estimated picks flagged.\n",
-                t->id, NFL2K5_ERAS_SEASON, path, s_dr.year, s_dr.year);
+                t->id, nfl2k5_eras_season(), path, s_dr.year, s_dr.year);
         for (k = 0, i = 0; k < n; k++) {
             if (!rows[k].keep) continue;
             if (rows[k].rookie) {
@@ -718,7 +719,7 @@ static int write_team_rosters(int team, FILE *rel_log)
         int next_rank[17];
         for (k = 0; k < 17; k++) next_rank[k] = 0;
         for (i = 0; i < nd; i++) if (depth[i].rank + 1 > next_rank[depth[i].pos] && depth[i].pos >= 0 && depth[i].pos < 17) next_rank[depth[i].pos] = depth[i].rank + 1;
-        fprintf(f, "# My NFL Eras depth chart of %s %s for %d: the %d depth with the draft's rookies behind the veterans\n", t->city, t->name, season, NFL2K5_ERAS_SEASON);
+        fprintf(f, "# My NFL Eras depth chart of %s %s for %d: the %d depth with the draft's rookies behind the veterans\n", t->city, t->name, season, nfl2k5_eras_season());
         fprintf(f, "row,first,last,pos,number,rank,side\n");
         for (k = 0; k < n; k++) {
             int rank = -1, side = 0;
@@ -777,6 +778,6 @@ int nfl2k5_eras_draft_write_rosters(void)
         if (!fopen_s(&f, path, "wb") && f) { fprintf(f, "%d teams\n", n); fclose(f); }
     }
     nfl2k5_eras_log("draft %d complete: %d season roster files written under the league (rosters\\%d, depth\\%d), %d failed; the %d package is unchanged",
-                    s_dr.year, n, s_dr.year, s_dr.year, fail, NFL2K5_ERAS_SEASON);
+                    s_dr.year, n, s_dr.year, s_dr.year, fail, nfl2k5_eras_season());
     return n;
 }

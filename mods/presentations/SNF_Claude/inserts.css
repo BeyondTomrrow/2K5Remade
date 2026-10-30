@@ -1,0 +1,541 @@
+/* ---- live quarterback lower third -----------------------------------
+ * Modern SNF uses an unboxed, low-profile player/stat insert immediately
+ * above the scorebug.  It shares the scorebug's safe-area placement and
+ * leaves the field visible through the dark glass. */
+#qb-stat { position: absolute; left: calc(var(--bug-x) - 72px); top: 817px;
+  width: 520px; height: 82px; pointer-events: none; opacity: 0;
+  transform: translateY(15px); transition: opacity .28s ease, transform .34s cubic-bezier(.2,.85,.25,1);
+  color: #f6f8fb; font-family: "Bahnschrift", "Arial Narrow", Arial, sans-serif;
+  background: linear-gradient(105deg, rgba(7,18,34,.96), rgba(18,28,43,.88) 74%, rgba(25,35,52,.28));
+  clip-path: polygon(8% 0,100% 0,94% 100%,0 100%); filter: drop-shadow(0 4px 8px rgba(0,0,0,.42)); }
+#qb-stat.on { opacity: 1; transform: none; }
+#qb-stat .qs-sheen { position:absolute; inset:0; background:linear-gradient(120deg,rgba(82,179,226,.25),transparent 38%,rgba(255,255,255,.06) 65%,transparent); }
+#qb-stat .qs-portrait { position:absolute; left:10px; bottom:0; width:94px; height:94px; object-fit:contain;
+  filter:drop-shadow(4px 0 5px rgba(0,0,0,.45)); }
+#qb-stat.no-photo .qs-portrait { display:none; }
+#qb-stat .qs-position { position:absolute; left:104px; top:9px; padding:2px 5px; font:700 13px/1 Arial,sans-serif;
+  background:#e7ebef; color:#111923; }
+#qb-stat .qs-name { position:absolute; left:137px; top:5px; width:235px; overflow:hidden; text-overflow:ellipsis;
+  font:700 22px/27px "Bahnschrift Condensed","Arial Narrow",Arial,sans-serif; letter-spacing:.5px; text-transform:uppercase; }
+#qb-stat .qs-season { position:absolute; left:372px; top:10px; font:italic 500 11px/1 Arial,sans-serif; color:#c8d0da; }
+#qb-stat .qs-rule { position:absolute; left:101px; right:25px; top:34px; height:1px; background:linear-gradient(90deg,#9faab8,rgba(159,170,184,0)); }
+#qb-stat .qs-fields { position:absolute; left:101px; right:31px; top:40px; height:36px; display:flex; }
+#qb-stat .qs-fields span { flex:1; text-align:center; border-right:1px solid rgba(195,206,218,.25); }
+#qb-stat .qs-fields span:last-child { border:0; }
+#qb-stat .qs-fields b { display:block; font:500 9px/12px Arial,sans-serif; color:#aeb9c6; }
+#qb-stat .qs-fields strong { display:block; font:700 20px/22px "Bahnschrift",Arial,sans-serif; }
+#qb-stat .qs-brand { position:absolute; right:-28px; bottom:-4px; font:italic 800 13px/1 Arial,sans-serif; color:#e6edf4; }
+#qb-stat .qs-brand i { display:inline-block; width:12px; height:12px; margin-right:3px; border-radius:50%;
+  background:conic-gradient(#7137a7,#168ed2,#23a55a,#f6d128,#ef7221,#d52d55,#7137a7); vertical-align:-2px; }
+#qb-stat .qs-brand em { font-style:italic; }
+
+/* ---- player feature / native ESPN card replacement ------------------ */
+#player-feature { position:absolute; left:310px; top:190px; width:1300px; height:650px; overflow:hidden;
+  pointer-events:none; opacity:0; transform:scale(.975) translateY(18px);
+  transition:opacity .3s ease,transform .45s cubic-bezier(.18,.86,.24,1); color:#f8f9fb;
+  font-family:"Bahnschrift","Arial Narrow",Arial,sans-serif; filter:drop-shadow(0 18px 32px rgba(0,0,0,.58)); }
+#player-feature.on { opacity:1; transform:none; }
+.pf-backdrop { position:absolute; inset:0; clip-path:polygon(4% 0,100% 0,96% 100%,0 100%);
+  background:linear-gradient(118deg,#06152a 0,#122942 36%,#321523 70%,#780e29 100%);
+  border:2px solid rgba(197,213,230,.52); box-shadow:inset 0 0 70px rgba(0,0,0,.48); }
+.pf-stadium { position:absolute; inset:0; opacity:.22;
+  background:radial-gradient(ellipse at 50% 108%,rgba(96,178,225,.8),transparent 48%),
+    repeating-linear-gradient(165deg,transparent 0 58px,rgba(255,255,255,.08) 59px 61px); }
+.pf-wedge { position:absolute; left:0; top:0; width:430px; height:650px;
+  clip-path:polygon(0 0,100% 0,72% 100%,0 100%); background:linear-gradient(145deg,rgba(3,13,28,.97),rgba(17,44,73,.84));
+  border-right:2px solid rgba(117,202,242,.38); }
+.pf-logo { position:absolute; left:74px; top:54px; width:170px; height:110px; object-fit:contain; opacity:.45;
+  filter:grayscale(.2) drop-shadow(0 5px 10px #000); }
+.pf-portrait { position:absolute; left:28px; bottom:0; width:405px; height:465px; object-fit:contain; image-rendering:auto;
+  filter:drop-shadow(12px 2px 16px rgba(0,0,0,.7)); }
+#player-feature.no-photo .pf-portrait { display:none; }
+.pf-kicker { position:absolute; left:470px; top:58px; font:italic 600 17px/1 Arial,sans-serif; letter-spacing:2px; color:#8fd3f1; }
+.pf-title { position:absolute; left:466px; top:86px; font:italic 800 47px/1 "Bahnschrift Condensed","Arial Narrow",Arial,sans-serif;
+  letter-spacing:.5px; text-transform:uppercase; }
+.pf-name { position:absolute; left:470px; top:158px; font:700 31px/1 "Bahnschrift Condensed","Arial Narrow",Arial,sans-serif;
+  text-transform:uppercase; }
+.pf-position { position:absolute; left:470px; top:196px; font:600 16px/1 Arial,sans-serif; color:#c4d0dc; letter-spacing:1px; }
+.pf-table { position:absolute; left:470px; top:250px; width:700px; }
+.pf-table div { height:61px; border-top:1px solid rgba(214,224,235,.32); display:flex; align-items:center; }
+.pf-table div:last-child { border-bottom:1px solid rgba(214,224,235,.32); }
+.pf-table span { width:455px; font:500 20px/1 Arial,sans-serif; color:#d2d8df; letter-spacing:.4px; }
+.pf-table b { flex:1; text-align:right; padding-right:28px; font:700 29px/1 "Bahnschrift",Arial,sans-serif; }
+.pf-brand { position:absolute; right:60px; top:52px; font:italic 800 21px/1 Arial,sans-serif; }
+.pf-brand i { display:inline-block; width:20px; height:20px; margin-right:5px; border-radius:50%; vertical-align:-4px;
+  background:conic-gradient(#7137a7,#168ed2,#23a55a,#f6d128,#ef7221,#d52d55,#7137a7); }
+#bug .half, #bug .half > *, #bug > * { position: absolute; }
+#bug .half { left: 0; top: 0; width: 576px; height: 94px;
+  transition: transform 0.55s var(--ease), opacity 0.4s ease; }
+.half.away { --c: var(--away); }
+.half.home { --c: var(--home); }
+
+/* ---- scoring drive (after a touchdown or field goal) ---- */
+.drive-stack { left: -192px; top: 19px; width: 150px; height: 60px; opacity: 0; z-index: 2;
+  clip-path: inset(0 0 0 100%); transition: clip-path 0.5s var(--ease), opacity 0.2s ease; }
+.drive-stack .row { position: absolute; left: 0; width: 150px; height: 30px; overflow: hidden; }
+.drive-stack .row.away { top: 0; --c: var(--away); border-top-left-radius: 4px; }
+.drive-stack .row.home { top: 30px; --c: var(--home); }
+.drive-stack .row { background: linear-gradient(90deg, var(--c) 0%, var(--c) 55%, color-mix(in srgb, var(--c) 45%, #10131a) 100%); }
+.drive-stack .row::after { content: ""; position: absolute; inset: 0; box-shadow: inset 0 1px 0 rgba(255,255,255,0.25); }
+.drive-stack .row.home::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 1px; background: rgba(0,0,0,0.45); z-index: 1; }
+.drive-stack .row .logo { position: absolute; left: -6px; top: -8px; height: 44px; filter: drop-shadow(1px 1px 1px rgba(0,0,0,0.5)); }
+.drive-stack .pts { position: absolute; right: 46px; top: 2px; font: 900 22px/26px var(--nbc-font); color: #fff;
+  text-shadow: 0.7px 1px 1px rgba(0,0,0,0.6); transition: transform 0.4s var(--ease); }
+.drive-stack .pts.tick { animation: tick 0.7s var(--ease); }
+@keyframes tick { 0% { transform: translateY(10px); opacity: 0; } 100% { transform: translateY(0); opacity: 1; } }
+
+.drive-bar { left: 30px; top: 19px; width: 750px; height: 60px; opacity: 0; z-index: 2; overflow: hidden; --c: var(--g);
+  border-top-right-radius: 4px; clip-path: inset(0 100% 0 0); transition: clip-path 0.65s var(--ease), opacity 0.2s ease;
+  background:
+    linear-gradient(to bottom, rgba(255,255,255,0.20) 0, rgba(255,255,255,0.04) 10%, rgba(255,255,255,0) 40%, rgba(0,0,0,0.25) 100%),
+    linear-gradient(90deg, color-mix(in srgb, var(--c) 55%, #0a0d15) 0%, var(--c) 18%, var(--c) 82%, color-mix(in srgb, var(--c) 85%, white) 100%); }
+.drive-bar::after { content: ""; position: absolute; inset: 0; box-shadow: inset 0 1px 0 rgba(255,255,255,0.3); pointer-events: none; }
+.drive-bar > * { position: absolute; transition: opacity 0.35s ease, filter 0.35s ease, transform 0.45s var(--ease); }
+.drive-bar .drive-logo { left: 20px; top: 0; width: 84px; height: 60px; overflow: hidden; }
+.drive-bar .drive-logo .logo { position: absolute; height: 78px; top: -9px; right: -10px; filter: drop-shadow(1px 2px 2px rgba(0,0,0,0.5)); }
+.drive-bar .drive-title { left: 118px; top: 0; height: 60px; font: italic 900 25px/60px var(--nbc-font); color: #fff; letter-spacing: 0.5px;
+  text-shadow: 0.7px 1px 1px rgba(0,0,0,0.6); }
+.drive-bar .stat { top: 0; width: 86px; height: 60px; text-align: center; border-left: 1.5px solid rgba(255,255,255,0.35); }
+.drive-bar .stat.plays { left: 430px; } .drive-bar .stat.yds { left: 516px; } .drive-bar .stat.top { left: 602px; }
+.drive-bar .lbl { position: absolute; left: 0; right: 0; top: 10px; font: 600 11px/1 var(--tab-font); color: #dfe7f1; letter-spacing: 0.4px; }
+.drive-bar .val { position: absolute; left: 0; right: 0; top: 26px; font: 900 21px/1 var(--nbc-font); color: #fff; text-shadow: 0.7px 1px 1px rgba(0,0,0,0.6); }
+.drive-bar .stat .lbl, .drive-bar .stat .val, .drive-bar .drive-title { opacity: 0; transform: translateX(-8px); transition: opacity 0.35s ease, transform 0.45s var(--ease), filter 0.35s ease; }
+.drive-bar .corner { right: 0; top: 0; width: 60px; height: 60px; pointer-events: none;
+  background: linear-gradient(135deg, transparent 0 47%, rgba(255,255,255,0.85) 48.5%, rgba(255,255,255,0.18) 50%, rgba(255,255,255,0.06) 100%); }
+
+/* ---- scoring takeover, measured from designer module 512019f9 ----
+ * The rendered source has separate shaded, blue and bright chrome phases.
+ * Pixel-derived edges retain the actual logo details; these painted layers
+ * are not the original broadcaster's extruded 3D artwork. */
+.takeover { left:-160px; top:-93px; width:896px; height:244px; pointer-events:none; opacity:0; z-index:5;
+  --word-x-scale:1; --contract-x:-288px; --light:color-mix(in srgb,var(--g) 55%,#c9dcff); transition:opacity .12s linear; }
+.takeover .neon-logo { position:absolute; left:50%; top:147px; width:248px; height:248px; opacity:0;
+  transform:translate(-50%,-50%) scale(.74); transition:opacity .18s linear,transform .46s var(--ease); }
+.scoring-logo-shaded,.scoring-logo-light { position:absolute; inset:0; width:100%; height:100%; object-fit:contain;
+  transition:opacity .22s linear,filter .28s linear; }
+.scoring-logo-shaded { opacity:1; filter:grayscale(.88) brightness(.5) drop-shadow(3px 4px 1px #10151c); }
+.scoring-logo-light { opacity:0; overflow:visible; filter:drop-shadow(0 0 4px var(--g)) drop-shadow(0 0 11px var(--g)); }
+.takeover.no-logo .neon-logo { visibility:hidden; }
+.takeover .big-word { position:absolute; left:0; right:0; top:96px; text-align:center; white-space:nowrap;
+  font:900 90px/1 var(--nbc-font); letter-spacing:1px; opacity:0;
+  transform:perspective(600px) rotateX(65deg) scaleX(var(--word-x-scale)) scale(.46);
+  transform-origin:50% 60%; transition:opacity .15s linear,transform .30s var(--ease); }
+.big-word .word-letter { display:inline-block; position:relative; color:transparent; white-space:pre;
+  background:linear-gradient(to bottom,#cad2df 0%,#68717f 38%,#353e4a 55%,#a7b2c2 78%,#5a6574 100%);
+  -webkit-background-clip:text; background-clip:text; -webkit-text-stroke:.7px #7b899c;
+  filter:drop-shadow(1.8px 2.2px 0 #080e18); transition:background .2s linear,filter .2s linear; }
+.big-word .word-letter::before { content:attr(data-letter); position:absolute; inset:0; z-index:-1; color:transparent;
+  -webkit-text-stroke:1.7px #111d30; transform:translate(2.5px,2.6px); }
+.big-word .word-letter::after { content:attr(data-letter); position:absolute; inset:0; color:transparent;
+  -webkit-text-stroke:.75px color-mix(in srgb,var(--g) 30%,#c5ddff); opacity:.45; transition:opacity .2s linear; }
+.takeover.on { opacity:1; }
+.takeover.on .neon-logo { opacity:1; transform:translate(-50%,-50%) scale(1); }
+.takeover.intro-chrome .big-word,.takeover.blue .big-word,.takeover.chrome .big-word {
+  opacity:1; transform:perspective(600px) rotateX(0) scaleX(var(--word-x-scale)) scale(1); }
+.takeover.blue .scoring-logo-shaded,.takeover.chrome .scoring-logo-shaded { opacity:0; }
+.takeover.blue .scoring-logo-light,.takeover.chrome .scoring-logo-light { opacity:1; }
+.takeover.blue .word-letter { background:linear-gradient(to bottom,var(--light),var(--g) 24%,color-mix(in srgb,var(--g) 72%,#050a24) 60%,var(--g));
+  -webkit-background-clip:text; background-clip:text; -webkit-text-stroke:.8px var(--light);
+  filter:drop-shadow(2px 3px 0 #081125) drop-shadow(0 0 3px var(--g)) drop-shadow(0 0 10px var(--g)); }
+.takeover.chrome .word-letter { background:linear-gradient(to bottom,#f8fbff 0%,#bac8dc 22%,#f7fbff 43%,#7389b0 57%,#eef5ff 74%,#9aaece 100%);
+  -webkit-background-clip:text; background-clip:text; -webkit-text-stroke:.8px var(--light);
+  filter:drop-shadow(2px 3px 0 #10172a) drop-shadow(0 0 3px var(--g)) drop-shadow(0 0 9px var(--g)); }
+.takeover.chrome .word-letter::after { opacity:1; }
+.takeover.leaving .word-letter { animation:snfScoringLetterOut .30s linear calc(var(--letter) * .02s) both; }
+.takeover.contracting .neon-logo { opacity:.86;
+  transform:translate(-50%,-50%) translateX(var(--contract-x)) translateY(-5px) scale(.32);
+  transition:transform .50s var(--ease),opacity .50s linear; }
+@keyframes snfScoringLetterOut {
+  0% { opacity:1; clip-path:inset(0); }
+  50% { opacity:.7; clip-path:inset(0 0 0 46%); filter:blur(.6px) drop-shadow(0 0 3px var(--g)); }
+  100% { opacity:0; clip-path:inset(0 0 0 100%); filter:blur(2px); }
+}
+.scoring-panels { inset:0; width:576px; height:94px; pointer-events:none; z-index:3; }
+.scoring-slice { position:absolute; top:0; height:94px; overflow:hidden; transform-origin:50% 50%;
+  animation:snfScoringSliceFold .45s var(--ease) var(--slice-delay) both; }
+.scoring-slice .half { transition:none!important; opacity:1!important; transform:none!important; }
+#bug.scoring-sequence.scoring-slices > .half { opacity:0; transform:none; }
+#bug.scoring-sequence .half { transition:opacity .25s linear,transform .45s var(--ease); }
+@keyframes snfScoringSliceFold {
+  0% { opacity:1; transform:none; }
+  38% { opacity:1; transform:translateX(calc(var(--drift) * .16)) scaleX(.88); }
+  100% { opacity:0; transform:translateX(var(--drift)) scaleX(.035); }
+}
+.scoring-marks { left:-50px; top:48px; width:830px; height:1px; z-index:6; opacity:0; pointer-events:none; }
+.scoring-marks .inward { position:absolute; top:-3px; width:15px; height:7px; background:#dce8f4;
+  clip-path:polygon(0 0,100% 50%,0 100%); filter:drop-shadow(0 0 2px #fff); }
+.scoring-marks .left { left:265px; }.scoring-marks .right { left:440px; transform:rotate(180deg); }
+.scoring-marks .spark { position:absolute; left:354px; top:-4px; width:8px; height:8px; border:1px solid #e6f0fb;
+  transform:rotate(45deg); background:linear-gradient(45deg,transparent 42%,#eef7ff 44% 55%,transparent 57%); }
+#bug.scoring-sequence.folding .scoring-marks,#bug.scoring-sequence.closing .scoring-marks { animation:snfScoringMarks .62s linear both; }
+#bug.scoring-sequence.folding .scoring-marks .left,#bug.scoring-sequence.closing .scoring-marks .left { animation:snfScoringArrow .62s linear both; }
+#bug.scoring-sequence.folding .scoring-marks .right,#bug.scoring-sequence.closing .scoring-marks .right { animation:snfScoringArrowBack .62s linear both; }
+@keyframes snfScoringMarks { 0%,100% { opacity:0; } 26%,65% { opacity:.8; } }
+@keyframes snfScoringArrow { to { transform:translateX(70px); } }
+@keyframes snfScoringArrowBack { to { transform:translateX(-70px) rotate(180deg); } }
+
+/* ---- sequence states, set by scorebug.js ---- */
+#bug.split .half.away { transform: translateX(-90px); opacity: 0; }
+#bug.split .half.home { transform: translateX(90px); opacity: 0; }
+#bug.split .rail, #bug.split .tab, #bug.split .playclock { opacity: 0; }
+#bug.wordphase .pod { opacity: 0; transform: scale(0.6); }
+#bug.compact .pod { opacity: 1; transform: translateX(-287px) translateY(2px) scale(0.86); }
+#bug.compact .drive-stack, #bug.compact .drive-bar { opacity: 1; clip-path: inset(0 0 0 0); }
+#bug.stats .drive-bar .drive-title { opacity: 1; transform: none; }
+#bug.stats .drive-bar .stat .lbl, #bug.stats .drive-bar .stat .val { opacity: 1; transform: none; }
+#bug.stats .drive-bar .stat.yds .lbl, #bug.stats .drive-bar .stat.yds .val { transition-delay: 0.15s; }
+#bug.stats .drive-bar .stat.top .lbl, #bug.stats .drive-bar .stat.top .val { transition-delay: 0.3s; }
+#bug.closing .drive-bar > * { opacity: 0 !important; filter: blur(5px); }
+#bug.closing .drive-bar { clip-path: inset(0 100% 0 0); transition-delay: 0.25s; }
+#bug.closing .drive-stack { clip-path: inset(0 0 0 100%); transition-delay: 0.25s; }
+
+/* ---- starting lineup (LINEUP event) ----------------------------------
+ * Canvas pixels, measured from 1920x1080 frames of the 2025 SNF player
+ * introductions: bar 888-1016 (upper tone to ~953), 2 px edge, ribbon
+ * 1018-1080; silver logo panel behind a curved swoosh from x 1584 at the
+ * top to 1432 at the bottom; tab 810-1115 x 880-922; name caps 931-972,
+ * centred on x 962; sub-line caps 981-1010. Each team gets its own colours:
+ * the bar in its main colour (--lu-base), shading darker into the ribbon,
+ * the swoosh and edge in its second colour (--lu-accent). Dallas keeps the
+ * reference's exact values (bar 0A2C3E over 042232, edge 002646, ribbon
+ * 001421 with 394D58 text), set from scorebug.js. */
+#lineup { position: absolute; left: var(--pad, 0px); top: 0; width: 1920px; height: 1080px; pointer-events: none;
+  opacity: 0; transition: opacity 0.45s ease;
+  --lu-base: #0a2c3e; --lu-accent: #2f86ff;
+  --lu-top: color-mix(in srgb, var(--lu-base) 84%, #000);
+  --lu-bot: color-mix(in srgb, var(--lu-base) 62%, #000);
+  --lu-ribbon: color-mix(in srgb, var(--lu-base) 30%, #000);
+  --lu-ink: color-mix(in srgb, var(--lu-base) 40%, #8f9ca6);
+  --lu-edge: color-mix(in srgb, var(--lu-accent) 50%, var(--lu-base));
+  --lu-swoosh: var(--lu-accent);
+  --lu-font: "Bahnschrift", "Arial Narrow", "Arial", sans-serif; }
+#lineup.on { opacity: 1; }
+#lineup > *, #lineup .lu-bar > * { position: absolute; }
+#lineup .lu-bar { left: 0; top: 888px; width: 1920px; height: 128px; overflow: hidden;
+  background: linear-gradient(to bottom, var(--lu-top) 0, var(--lu-top) 50%, var(--lu-bot) 51%, var(--lu-bot) 100%);
+  transform: translateX(-100%); transition: transform 0.6s cubic-bezier(0.22, 0.9, 0.24, 1); }
+#lineup.on .lu-bar { transform: none; }
+#lineup .lu-ghost { left: 96px; top: -18px; width: 320px; height: 160px; opacity: 0.16; filter: grayscale(1) brightness(2.2); }
+#lineup .lu-ghost img, #lineup .lu-logo img { width: 100%; height: 100%; object-fit: contain; }
+#lineup .lu-panel { left: 1420px; top: 0; width: 500px; height: 128px; }
+#lineup .lu-swoosh { stroke: var(--lu-swoosh); }
+#lineup .lu-line { left: 0; top: 1016px; width: 1920px; height: 2px; background: var(--lu-edge); }
+#lineup .lu-ribbon { left: 0; top: 1018px; width: 1920px; height: 62px; overflow: hidden; background: var(--lu-ribbon); }
+#lineup .lu-track { left: 0; top: 0; height: 62px; width: max-content; white-space: nowrap; display: flex; align-items: center;
+  animation: lu-scroll 30s linear infinite; }
+#lineup .lu-track span { flex: none; font: italic 700 20px/1 var(--lu-font); letter-spacing: 1px; color: var(--lu-ink); padding: 0 58px; }
+#lineup .lu-track i { flex: none; width: 22px; height: 22px; display: block; background: var(--lu-ink);
+  clip-path: polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); opacity: 0.9; }
+@keyframes lu-scroll { to { transform: translateX(-50%); } }
+#lineup .lu-logo { left: 1530px; top: 790px; width: 316px; height: 276px;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.45)); transform: scale(0.6); opacity: 0;
+  transition: transform 0.5s 0.25s cubic-bezier(0.3, 1.5, 0.5, 1), opacity 0.3s 0.25s; }
+#lineup.on .lu-logo { transform: none; opacity: 1; }
+#lineup .lu-portrait { left: 70px; top: 660px; width: 420px; height: 420px; object-fit: contain;
+  filter: drop-shadow(8px 0 18px rgba(0, 0, 0, 0.35)); transition: opacity 0.25s, transform 0.35s; }
+#lineup .lu-card { left: 562px; top: 0; width: 800px; height: 1080px; transition: opacity 0.25s; }
+#lineup .lu-card > * { position: absolute; left: 0; width: 800px; text-align: center; }
+#lineup .lu-tab { left: 248px; width: 305px; top: 880px; height: 42px;
+  clip-path: polygon(0 0, 100% 0, 94% 100%, 6% 100%);
+  background: linear-gradient(to bottom, #f6f8f9, #c9d0d4); color: #0d2434;
+  font: 400 31px/42px var(--lu-font); }
+#lineup .lu-tab .pos { font-weight: 700; margin-right: 10px; }
+#lineup .lu-name { top: 918px; font: italic 700 64px/1 var(--lu-font); font-stretch: condensed; letter-spacing: 0.5px;
+  text-transform: uppercase; background: linear-gradient(to bottom, #ffffff 30%, #bfe2fb); -webkit-background-clip: text;
+  background-clip: text; color: transparent; transform: skewX(-6deg); }
+#lineup .lu-sub { top: 974px; font: italic 700 40px/1 var(--lu-font); font-stretch: semi-condensed; color: #e9f3fa;
+  text-transform: uppercase; transform: skewX(-6deg); }
+#lineup.swap .lu-card, #lineup.swap .lu-portrait { opacity: 0; }
+#lineup.swap .lu-portrait { transform: translateX(-40px); }
+/* Layering as in the reference: the logo's lower points pass behind the
+ * edge and ribbon; the player stands in front of everything. */
+#lineup .lu-bar { z-index: 1; }
+#lineup .lu-logo { z-index: 2; }
+#lineup .lu-line, #lineup .lu-ribbon { z-index: 3; }
+#lineup .lu-card { z-index: 4; }
+#lineup .lu-portrait { z-index: 5; left: 90px; top: 690px; width: 390px; height: 390px; }
+/* The 2024 SNF lineup (user reference, Lions): the bar stays inside the
+ * picture and fades out at both ends rather than running edge to edge. */
+#lineup .lu-bar, #lineup .lu-line, #lineup .lu-ribbon {
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 9%, #000 91%, transparent 100%);
+  mask-image: linear-gradient(90deg, transparent 0, #000 9%, #000 91%, transparent 100%); }
+
+/* Reference correction, 2026-10-04.  These measurements follow the supplied
+ * Hurts lower third and Mahomes playoff panel.  Keep their open/transparent
+ * broadcast geometry; do not turn either into a boxed team-colour card. */
+/* Compact SNF stat insert: smoke-black glass melts into the player's team
+ * colour.  This is deliberately not the older silver/ESPN rail. */
+#qb-stat { left:430px; top:812px; width:810px; height:118px; overflow:visible; clip-path:none; filter:drop-shadow(0 7px 10px rgba(0,0,0,.56));
+  background:none !important; transform:translateX(-86px); transform-origin:left center; }
+#qb-stat.on { transform:none; }
+#qb-stat::before { content:""; position:absolute; left:164px; top:17px; width:624px; height:79px;
+  background:linear-gradient(90deg,rgba(7,10,14,.94) 0%,rgba(11,15,20,.88) 52%,var(--qs-team,#981b2f) 132%);
+  clip-path:polygon(0 0,98% 0,100% 50%,98% 100%,0 100%); box-shadow:inset 0 1px 0 rgba(255,255,255,.28),inset 0 -1px 0 rgba(255,255,255,.18); }
+#qb-stat::after { content:""; position:absolute; left:0; top:17px; width:204px; height:79px; z-index:0;
+  background:linear-gradient(110deg,var(--qs-team,#981b2f) 0%,var(--qs-team,#981b2f) 62%,rgba(8,11,15,.9) 100%); opacity:.90;
+  clip-path:polygon(0 0,100% 0,82% 100%,0 100%); }
+#qb-stat .qs-sheen { left:0; top:0; width:210px; height:116px; z-index:1; background:none; overflow:hidden; }
+#qb-stat .qs-sheen::before { content:""; position:absolute; left:3px; top:14px; width:189px; height:86px;
+  background:linear-gradient(90deg,rgba(255,255,255,.20),transparent 50%); clip-path:polygon(0 0,100% 0,82% 100%,0 100%); }
+#qb-stat .qs-sheen::after { content:""; position:absolute; top:15px; left:-120px; width:64px; height:82px; transform:skewX(-22deg);
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.38),transparent); opacity:0; }
+#qb-stat .qs-team-logo { position:absolute; left:5px; top:20px; width:120px; height:72px; z-index:2; object-fit:contain;
+  filter:drop-shadow(2px 3px 3px rgba(0,0,0,.5)); }
+#qb-stat .qs-portrait { left:47px; bottom:0; width:128px; height:128px; z-index:3; object-position:center bottom; }
+#qb-stat .qs-position { left:174px; top:31px; z-index:4; padding:4px 6px; font-size:13px; line-height:14px; background:#111820; color:#fff; border-left:2px solid #e7ecef; }
+#qb-stat .qs-name { left:237px; top:29px; z-index:4; width:327px; font-size:23px; line-height:25px; color:#f4f6f8; text-shadow:0 1px 2px #000; }
+#qb-stat .qs-season { left:610px; top:34px; z-index:4; width:132px; font:italic 700 12px/14px Arial,sans-serif; color:#f1f3f5; text-align:right; }
+#qb-stat .qs-rule { left:233px; right:35px; top:57px; z-index:4; background:linear-gradient(90deg,rgba(255,255,255,.62),rgba(255,255,255,.08)); }
+#qb-stat .qs-fields { left:225px; right:42px; top:63px; height:30px; z-index:4; }
+#qb-stat .qs-fields span { border-right:1px solid rgba(255,255,255,.22); }
+#qb-stat .qs-fields b { font-size:9px; line-height:11px; color:#d5d9dd; font-weight:800; }
+#qb-stat .qs-fields strong { font-size:20px; line-height:20px; color:#fff; text-shadow:0 1px 2px #000; }
+#qb-stat .qs-brand { display:none; }
+
+/* 2022 SNF reveal: colour wall arrives first, followed by the cut-out,
+ * a chrome rail wipe, and finally the stat values from left to right. */
+#qb-stat::before, #qb-stat::after { transform-origin:left center; transform:scaleX(.02); transition:transform .32s cubic-bezier(.14,.82,.23,1); }
+#qb-stat.on::after { transform:scaleX(1); }
+#qb-stat.on::before { transform:scaleX(1); transition-delay:.12s; }
+#qb-stat.on .qs-sheen::after { opacity:1; animation:snfStatSheen .48s ease-out .22s both; }
+#qb-stat .qs-team-logo { opacity:0; transform:translateX(-24px) scale(.86); transition:opacity .16s ease .08s,transform .36s cubic-bezier(.15,.82,.18,1) .08s; }
+#qb-stat .qs-portrait { opacity:0; transform:translateY(28px) scale(.92); transition:opacity .16s ease .17s,transform .42s cubic-bezier(.11,.88,.22,1) .17s; }
+#qb-stat .qs-position, #qb-stat .qs-name, #qb-stat .qs-season, #qb-stat .qs-rule { opacity:0; transform:translateX(-20px); transition:opacity .12s ease .28s,transform .3s cubic-bezier(.18,.82,.25,1) .28s; }
+#qb-stat .qs-season { transform:translateX(18px); }
+#qb-stat .qs-fields span { opacity:0; transform:translateY(10px); transition:opacity .14s ease,transform .28s cubic-bezier(.18,.82,.25,1); }
+#qb-stat .qs-fields span:nth-child(1) { transition-delay:.39s; }
+#qb-stat .qs-fields span:nth-child(2) { transition-delay:.45s; }
+#qb-stat .qs-fields span:nth-child(3) { transition-delay:.51s; }
+#qb-stat .qs-fields span:nth-child(4) { transition-delay:.57s; }
+#qb-stat.on .qs-team-logo, #qb-stat.on .qs-portrait, #qb-stat.on .qs-position, #qb-stat.on .qs-name, #qb-stat.on .qs-season, #qb-stat.on .qs-rule, #qb-stat.on .qs-fields span { opacity:1; transform:none; }
+@keyframes snfStatSheen { from { left:-120px; } to { left:220px; } }
+
+#player-feature { left:0; top:0; width:1920px; height:1080px; filter:none; transform:translateY(20px); overflow:hidden; }
+#player-feature.on { transform:none; }
+.pf-backdrop { left:475px; top:150px; right:auto; bottom:auto; width:1260px; height:790px; border:0; z-index:1;
+  clip-path:polygon(3% 0,91% 0,100% 50%,91% 100%,3% 100%,0 50%);
+  background:linear-gradient(105deg,rgba(41,12,28,.97),rgba(70,16,35,.97) 56%,rgba(126,20,43,.95));
+  box-shadow:inset 0 0 80px rgba(0,0,0,.36); }
+.pf-backdrop::after { content:""; position:absolute; right:0; top:0; width:175px; height:100%;
+  background:linear-gradient(105deg,transparent 0 22%,rgba(222,226,231,.93) 23% 66%,rgba(162,10,39,.95) 67%);
+  clip-path:polygon(43% 0,100% 0,100% 100%,0 100%,54% 50%); }
+.pf-stadium { left:0; top:0; width:1920px; height:1080px; opacity:1; z-index:0;
+  background:linear-gradient(to bottom,rgba(7,54,111,.96) 0 14%,rgba(5,23,45,.10) 14% 87%,rgba(7,54,111,.96) 87% 100%); }
+.pf-wedge { left:35px; top:150px; width:670px; height:790px; border:0; z-index:1; clip-path:polygon(0 0,88% 0,100% 100%,0 100%);
+  background:linear-gradient(120deg,rgba(117,8,27,.98),rgba(196,27,48,.96)); }
+.pf-logo { left:25px; top:270px; width:430px; height:360px; opacity:.62; z-index:1; }
+.pf-portrait { left:45px; bottom:115px; width:650px; height:900px; z-index:2; object-fit:contain; object-position:center bottom; }
+.pf-title { left:650px; top:205px; font-size:52px; line-height:55px; z-index:3; }
+.pf-kicker { left:653px; top:262px; font-size:24px; color:#fff; letter-spacing:.5px; z-index:3; }
+.pf-name { left:95px; top:875px; width:430px; font-size:27px; z-index:4; }
+.pf-position { left:95px; top:910px; width:430px; font-size:16px; z-index:4; }
+.pf-table { left:665px; top:350px; width:740px; z-index:3; }
+.pf-table div { height:88px; border:0; display:grid; grid-template-columns:1fr 150px 150px; align-items:center; }
+.pf-table div:last-child { border:0; }
+.pf-table span { width:auto; font-size:27px; color:#c8cbd1; }
+.pf-table b,.pf-table em { padding:0; text-align:center; font:700 36px/1 "Bahnschrift",Arial,sans-serif; font-style:normal; }
+.pf-table .pf-head { height:45px; }
+.pf-table .pf-head b,.pf-table .pf-head em { font:500 19px/1 Arial,sans-serif; color:#b8bbc1; }
+.pf-brand { right:85px; top:64px; z-index:4; font-size:28px; }
+
+/* Broadcast reference corrections, October 2026.  These values replace the
+   previous boxed/silver mockups.  Live footage remains visible through glass. */
+.nbc-brand { object-fit:contain; }
+#qb-stat { left:380px; top:736px; width:1160px; height:160px; filter:drop-shadow(0 4px 6px rgba(0,0,0,.42));
+  transform:translateX(-32px); transition:opacity .16s ease,transform .4s cubic-bezier(.18,.84,.23,1); }
+#qb-stat.on { transform:none; }
+#qb-stat::before { left:228px; top:50px; width:908px; height:100px;
+  background:linear-gradient(100deg,rgba(5,8,13,.89),rgba(9,12,17,.82) 48%,rgba(var(--qs-rgb,90,28,39),.72) 100%);
+  clip-path:polygon(0 0,98% 0,100% 50%,98% 100%,0 100%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.26),inset 0 -2px 0 rgba(var(--qs-rgb,90,28,39),.95); }
+#qb-stat::after { left:0; top:50px; width:294px; height:100px;
+  background:linear-gradient(115deg,rgba(204,211,216,.84),rgba(var(--qs-rgb,90,28,39),.86) 67%,rgba(9,12,17,.90)); opacity:1;
+  clip-path:polygon(0 0,100% 0,78% 100%,0 100%); }
+#qb-stat .qs-team-logo { left:7px; top:39px; width:164px; height:111px; }
+#qb-stat .qs-portrait { left:56px; bottom:10px; width:194px; height:208px; }
+#qb-stat.no-photo .qs-team-logo { left:43px; width:180px; }
+#qb-stat .qs-position { left:238px; top:51px; padding:1px 5px; border:0; white-space:pre-line; background:rgba(0,0,0,.42);
+  font:700 21px/22px Arial,sans-serif; min-width:37px; text-align:center; }
+#qb-stat .qs-name { left:294px; top:51px; width:445px; font:700 30px/35px Arial,sans-serif; letter-spacing:.4px; }
+#qb-stat .qs-season { left:760px; top:60px; width:323px; font:italic 400 18px/21px Arial,sans-serif; }
+#qb-stat .qs-rule { left:288px; right:70px; top:91px; height:1px; }
+#qb-stat .qs-fields { left:285px; right:63px; top:98px; height:49px; }
+#qb-stat .qs-fields span { border-right:1px solid rgba(0,0,0,.45); transition-delay:.36s; }
+#qb-stat .qs-fields span:nth-child(2) { transition-delay:.40s; }
+#qb-stat .qs-fields span:nth-child(3) { transition-delay:.44s; }
+#qb-stat .qs-fields span:nth-child(4) { transition-delay:.48s; }
+#qb-stat .qs-fields span:nth-child(5) { transition-delay:.52s; }
+#qb-stat .qs-fields b { font:400 17px/20px Arial,sans-serif; color:#d0d3d8; }
+#qb-stat .qs-fields strong { font:700 30px/31px Arial,sans-serif; }
+#qb-stat .qs-sheen { width:1150px; height:152px; }
+#qb-stat .qs-sheen::before { top:50px; width:289px; height:100px; }
+#qb-stat .qs-sheen::after { top:50px; height:100px; }
+#qb-stat .qs-curve { position:absolute; right:12px; top:50px; width:50px; height:100px; z-index:2;
+  opacity:0; transform:translateX(16px); transition:opacity .15s ease .25s,transform .35s ease .25s; }
+#qb-stat.on .qs-curve { opacity:.95; transform:none; }
+@keyframes snfStatSheen { from { left:-120px; } to { left:1200px; } }
+
+/* The designer's Mahomes context insert adds a coloured topic rail and a
+ * pale note tab. They only appear when the event supplies those facts. */
+.qs-topic,.qs-note { display:none; }
+#qb-stat.with-topic { top:710px; height:190px; }
+#qb-stat.with-topic::before,#qb-stat.with-topic::after { height:125px; }
+#qb-stat.with-topic .qs-curve { height:125px; }
+#qb-stat.with-topic .qs-topic { display:block; position:absolute; left:286px; right:62px; top:94px; height:23px; text-align:center;
+  font:700 18px/23px Arial,sans-serif; letter-spacing:.3px; background:linear-gradient(90deg,rgba(var(--qs-rgb),.3),var(--qs-team),rgba(var(--qs-rgb),.3)); }
+#qb-stat.with-topic .qs-fields { top:123px; }
+#qb-stat.with-topic.with-note { top:688px; }
+#qb-stat.with-note .qs-note { display:block; position:absolute; left:572px; right:62px; top:175px; height:26px; padding:0 12px 0 25px;
+  background:#dae3ec; color:#132332; clip-path:polygon(0 0,100% 0,100% 100%,4% 100%); text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  font:400 15px/26px Arial,sans-serif; opacity:0; transform:translateY(-8px); transition:opacity .18s .6s,transform .3s .6s; }
+#qb-stat.on.with-note .qs-note { opacity:1; transform:none; }
+#qb-stat.with-note:not(.with-topic) .qs-note { top:150px; }
+
+/* Large feature: team flag/portrait, curved dark-glass table, staged columns. */
+#player-feature { left:175px; top:230px; width:1570px; height:660px; overflow:visible; transform:none; }
+.pf-stadium { inset:-230px -175px auto; width:1920px; height:1080px; background:radial-gradient(ellipse at 50% 50%,transparent 34%,rgba(1,7,15,.32)); }
+.pf-backdrop { left:380px; top:0; width:1190px; height:660px; clip-path:polygon(0 0,92% 0,100% 50%,92% 100%,0 100%);
+  background:linear-gradient(110deg,rgba(7,10,16,.94),rgba(var(--pf-rgb,80,20,35),.88));
+  transform:scaleX(.02); transform-origin:left center; transition:transform .55s cubic-bezier(.16,.84,.24,1) .08s; }
+.pf-backdrop::after { width:130px; background:linear-gradient(110deg,transparent 22%,#cdd4db 23% 63%,var(--pf-team,#851d32) 65%);
+  transform:translateX(70px); transition:transform .55s ease .25s; }
+.pf-wedge { left:0; top:0; width:475px; height:660px;
+  background:linear-gradient(130deg,var(--pf-team,#851d32),rgba(var(--pf-rgb,80,20,35),.84));
+  transform:translateX(-55px); opacity:0; transition:transform .45s cubic-bezier(.16,.84,.24,1),opacity .18s; }
+.pf-logo { left:16px; top:117px; width:277px; height:227px; opacity:0; transform:translateX(-25px); transition:opacity .35s .13s,transform .45s .13s; }
+.pf-portrait { left:18px; bottom:0; width:443px; height:740px; opacity:0; transform:translateY(44px); transition:opacity .23s .18s,transform .55s cubic-bezier(.16,.84,.24,1) .18s; }
+.pf-title { left:500px; top:29px; width:910px; font:700 43px/46px Arial,sans-serif; }
+.pf-kicker { left:500px; top:79px; font:italic 700 22px/24px Arial,sans-serif; }
+.pf-name { left:35px; top:580px; width:383px; font:700 27px/29px Arial,sans-serif; }
+.pf-position { left:35px; top:614px; width:383px; font:700 17px/20px Arial,sans-serif; }
+.pf-title,.pf-kicker,.pf-name,.pf-position { opacity:0; transform:translateX(-22px); transition:opacity .2s .30s,transform .4s .30s; }
+.pf-table { left:500px; top:128px; width:870px; overflow:hidden; }
+.pf-table div { height:83px; grid-template-columns:1fr 155px 155px; opacity:0; transform:translateY(18px); transition:opacity .16s,transform .34s cubic-bezier(.16,.84,.24,1); }
+.pf-table div:nth-child(1) { transition-delay:.36s; }.pf-table div:nth-child(2) { transition-delay:.40s; }
+.pf-table div:nth-child(3) { transition-delay:.46s; }.pf-table div:nth-child(4) { transition-delay:.52s; }
+.pf-table div:nth-child(5) { transition-delay:.58s; }.pf-table div:nth-child(6) { transition-delay:.64s; }
+.pf-table span { font:400 24px/27px Arial,sans-serif; }
+.pf-table b,.pf-table em { font:700 33px/36px Arial,sans-serif; }
+#player-feature.single-column .pf-table div { grid-template-columns:1fr 210px; }
+#player-feature.single-column .pf-table em { display:none; }
+.pf-brand { right:0; top:-165px; display:flex; align-items:center; gap:8px; }
+.pf-brand .nbc-brand { width:45px; height:28px; }
+#player-feature.on .pf-backdrop { transform:scaleX(1); }
+#player-feature.on .pf-backdrop::after { transform:none; }
+#player-feature.on .pf-logo { opacity:.66; transform:none; }
+#player-feature.on .pf-portrait,#player-feature.on .pf-wedge,#player-feature.on .pf-title,#player-feature.on .pf-kicker,#player-feature.on .pf-name,#player-feature.on .pf-position,#player-feature.on .pf-table div { opacity:1; transform:none; }
+
+/* Short status strip shares the glass and curved endcap used by inserts. */
+#snf-notice { position:absolute; left:632px; top:805px; width:656px; height:70px; opacity:0; transform:translateY(18px); transition:opacity .18s,transform .35s cubic-bezier(.16,.84,.24,1); pointer-events:none; }
+#snf-notice.on { opacity:1; transform:none; }
+.notice-glass { position:absolute; inset:0; background:linear-gradient(100deg,rgba(6,11,19,.91),rgba(22,35,50,.80)); clip-path:polygon(0 0,98% 0,100% 50%,98% 100%,0 100%); border-bottom:2px solid #a5b1c0; }
+#snf-notice .nbc-brand { position:absolute; left:22px; top:21px; width:51px; height:30px; }
+.notice-title { position:absolute; left:95px; right:65px; top:14px; text-align:center; font:700 25px/28px Arial,sans-serif; color:#f8f9fc; }
+.notice-detail { position:absolute; left:95px; right:65px; top:43px; text-align:center; font:400 13px/15px Arial,sans-serif; color:#d0d5dc; }
+.notice-curve { position:absolute; right:10px; top:0; height:70px; width:22px; border-right:8px solid #bfc7d1; border-radius:0 85% 85% 0; }
+
+/* Replay transition recreation. Typography/3D camera assets are not shipped
+   by the broadcaster; this is an original code rendering of the curve motif. */
+#snf-wipe { position:absolute; left:calc(-1 * var(--pad,0px)); top:0; width:calc(1920px + 2 * var(--pad,0px)); height:1080px; pointer-events:none; visibility:hidden; z-index:100; overflow:hidden; }
+#snf-wipe.on { visibility:visible; }
+.wipe-direction { position:absolute; inset:0; }
+#snf-wipe[data-direction="out"] .wipe-direction { transform:scaleX(-1); }
+.wipe-plane { position:absolute; inset:-100% -35%; border-radius:18%; transform:translateX(-150%) rotate(-24deg); }
+.wipe-plane.back { background:linear-gradient(135deg,#ecf1f7,#778796 42%,#243d51); }
+.wipe-plane.front { background:linear-gradient(120deg,#101c2b,#06111f 55%,#354d68); margin:90px; border:5px solid #c4d0de; }
+.wipe-light { position:absolute; inset:-100% -35%; border-radius:18%; border:12px solid #a7dbf0; filter:blur(5px); transform:translateX(-150%) rotate(-24deg); }
+.wipe-lockup { position:absolute; left:calc(650px + var(--pad,0px)); top:350px; width:620px; text-align:center; color:#f2f5f8; opacity:0; }
+.wipe-lockup .nbc-brand { display:block; margin:auto auto 15px; width:112px; height:66px; }
+.wipe-wordmark { display:block; width:620px; height:198px; object-fit:contain; filter:drop-shadow(0 2px 0 #c5ced6) drop-shadow(0 4px 0 #6c7e8f) drop-shadow(0 8px 14px #0009); }
+#snf-wipe.on .wipe-plane.back { animation:snfWipePlane 1s cubic-bezier(.55,.03,.4,.98) both; }
+#snf-wipe.on .wipe-plane.front { animation:snfWipePlane 1s cubic-bezier(.55,.03,.4,.98) .04s both; }
+#snf-wipe.on .wipe-light { animation:snfWipePlane 1s cubic-bezier(.55,.03,.4,.98) .08s both; }
+#snf-wipe.on .wipe-lockup { animation:snfWipeLockup 1s linear both; }
+@keyframes snfWipePlane { 0% { transform:translateX(-150%) rotate(-24deg); } 44%,56% { transform:translateX(0) rotate(-24deg); } 100% { transform:translateX(150%) rotate(-24deg); } }
+@keyframes snfWipeLockup { 0%,26% { opacity:0; transform:scale(.93); } 40%,58% { opacity:1; transform:scale(1); } 78%,100% { opacity:0; transform:scale(1.05); } }
+#snf-wipe.on[data-reduced-motion="true"] { background:#0a1624; animation:snfWipeDissolve .16s ease both; }
+#snf-wipe[data-reduced-motion="true"] .wipe-direction,#snf-wipe[data-reduced-motion="true"] .wipe-lockup { display:none; }
+@keyframes snfWipeDissolve { 0%,100% { opacity:0; } 35%,55% { opacity:1; } }
+
+.drive-bar .corner { background:linear-gradient(105deg,transparent 0 45%,#e6ebf1 46% 62%,rgba(179,188,199,.4) 64%); border-radius:0 80% 80% 0; }
+/* Attached THIS DRIVE, measured in designer module 5aab110b at 1920x368.
+   The module's base bug is 780 px wide: positions below use the existing
+   576 px bug coordinate system. The stacked rows retain the full pod
+   height; the caption sits above the glass, not inside its stat lane. */
+.drive-player { display:none; left:8px; top:0; width:402px; height:60px; }
+.drive-player .portrait { position:absolute; left:0; bottom:0; width:120px; height:103px; object-fit:contain; }
+.drive-player .position { position:absolute; left:127px; top:11px; width:43px; height:40px; border-right:.7px solid rgba(229,236,246,.75);
+  white-space:pre-line; text-align:center; font:700 20px/20px Arial,sans-serif; color:#f5f7fb; }
+.drive-player .name { position:absolute; left:188px; top:6px; width:220px; color:#f5f7fb; overflow:hidden; white-space:nowrap; }
+.drive-player .first-name { font:400 22px/24px Arial,sans-serif; }
+.drive-player .last-name { font:900 27px/28px var(--nbc-font); }
+#bug.player-drive .drive-player { display:block; opacity:0; transform:translateX(-16px); filter:blur(3px);
+  transition:opacity .28s ease .22s,transform .4s var(--ease) .22s,filter .28s ease .22s; }
+#bug.player-drive.compact:not(.closing) .drive-player { opacity:1; transform:none; filter:none; }
+#bug.player-drive .drive-stack { left:-200px; top:2.5px; width:150px; height:88px; transition-duration:.44s,.2s; }
+#bug.player-drive .drive-stack .row { height:44px; width:150px; }
+#bug.player-drive .drive-stack .row.home { top:44px; }
+#bug.player-drive .drive-stack .row .logo { top:-9px; left:-4px; height:64px; }
+#bug.player-drive .drive-stack .pts { top:4px; right:15px; font-size:32px; line-height:36px; }
+#bug.player-drive.compact .pod { transform:translateX(-290px); }
+#bug.player-drive .drive-bar { width:738px; background:none; border-top-right-radius:6px;
+  transition:clip-path .44s var(--ease),opacity .2s ease; }
+#bug.player-drive .drive-bar::before { content:""; position:absolute; inset:0; opacity:0; pointer-events:none;
+  background:linear-gradient(to bottom,rgba(238,246,255,.15),rgba(238,246,255,.035) 43%,rgba(7,13,23,.20) 47%,rgba(7,13,23,.56) 100%),
+    linear-gradient(100deg,color-mix(in srgb,var(--c) 32%,#071222),color-mix(in srgb,var(--c) 78%,#153556) 31%,color-mix(in srgb,var(--c) 76%,#11223b) 76%,color-mix(in srgb,var(--c) 58%,#8ba6c6));
+  transition:opacity .28s ease .18s; }
+#bug.player-drive.compact:not(.closing) .drive-bar::before { opacity:1; }
+#bug.player-drive .drive-bar::after { border-top:.7px solid rgba(238,244,250,.95); border-bottom:.7px solid rgba(157,177,201,.32);
+  border-top-right-radius:6px; box-shadow:none; }
+#bug.player-drive .drive-bar > * { z-index:1; }
+#bug.player-drive .drive-bar .drive-player { z-index:2; }
+#bug.player-drive .drive-logo { display:none; }
+#bug.player-drive .drive-bar .drive-title { left:83px; top:-23px; width:245px; height:23px; text-align:center;
+  font:italic 700 20px/23px Arial,sans-serif; letter-spacing:.1px; overflow:visible; isolation:isolate; }
+#bug.player-drive .drive-title::before { content:""; position:absolute; inset:0; z-index:-1;
+  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='245' height='23' viewBox='0 0 245 23'%3E%3Cpath d='M0 23V2H221C232 2 234 17 245 23' fill='%2313161a' fill-opacity='.82' stroke='%23d9e0e8' stroke-width='.7'/%3E%3C/svg%3E") no-repeat; }
+#bug.player-drive .drive-bar .stat.plays { left:417px; width:128px; }
+#bug.player-drive .drive-bar .stat.yds { left:545px; width:82px; }
+#bug.player-drive .drive-bar .stat.top { left:627px; width:111px; }
+#bug.player-drive .drive-bar .lbl { top:10px; font:400 18px/20px Arial,sans-serif; letter-spacing:0; }
+#bug.player-drive .drive-bar .val { top:29px; font-size:25px; line-height:28px; }
+#bug.player-drive .drive-bar .corner { width:85px; background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='85' height='60' viewBox='0 0 85 60'%3E%3Cpath d='M0 .5C44 .5 56 39 85 50' fill='none' stroke='%23e6edf5' stroke-width='.7'/%3E%3C/svg%3E") no-repeat; border-radius:0; }
+#bug.player-drive.compact:not(.closing) .drive-bar { overflow:visible; clip-path:inset(-50px 0 -10px 0); }
+#bug.player-drive.closing .drive-bar::before { opacity:0; transition-delay:.22s; }
+#bug.player-drive.closing .drive-bar { clip-path:inset(0 100% 0 0); transition-delay:.18s; }
+#bug.player-drive.closing .drive-stack { clip-path:inset(0 0 0 100%); transition-delay:.18s; }
+
+/* The scoring drive uses the same full-height compact carrier as module 11,
+   with its own logo/title lane. These rules do not affect player foldouts. */
+#bug.scoring-sequence .drive-stack { left:-200px; top:2.5px; width:150px; height:88px; }
+#bug.scoring-sequence .drive-stack .row { width:150px; height:44px; }
+#bug.scoring-sequence .drive-stack .row.home { top:44px; }
+#bug.scoring-sequence .drive-stack .row .logo { left:-4px; top:-9px; height:64px; }
+#bug.scoring-sequence .drive-stack .pts { top:1px; right:15px; font:900 44px/44px "SNF Ringside Condensed Ultra",sans-serif;
+  font-synthesis:none; letter-spacing:0; }
+#bug.scoring-sequence .drive-stack .pts.rolling { animation:snfScoringScoreRoll .11s linear both; }
+@keyframes snfScoringScoreRoll { from { opacity:.65; filter:blur(.6px); padding-top:5px; } to { opacity:1; filter:none; padding-top:0; } }
+#bug.scoring-sequence.compact .pod { transform:translateX(-290px); }
+#bug.scoring-sequence .drive-bar { border:0; border-top-right-radius:5px;
+  background:linear-gradient(to bottom,rgba(230,244,255,.14),rgba(230,244,255,.02) 43%,rgba(3,10,24,.30) 45%,rgba(3,10,24,.58) 100%),
+    linear-gradient(100deg,color-mix(in srgb,var(--c) 34%,#0b1425),color-mix(in srgb,var(--c) 78%,#163461) 34%,color-mix(in srgb,var(--c) 74%,#10254a) 80%,color-mix(in srgb,var(--c) 56%,#8fa6c5)); }
+#bug.scoring-sequence .drive-bar::after { border-top:.7px solid rgba(238,244,250,.95); border-bottom:.7px solid rgba(157,177,201,.32);
+  border-top-right-radius:5px; box-shadow:none; }
+#bug.scoring-sequence .drive-bar .drive-title { left:118px; font:italic 700 34px/60px Arial,sans-serif; letter-spacing:0; }
+#bug.scoring-sequence .drive-bar .stat { border-left:.7px solid rgba(231,241,255,.32); }
+#bug.scoring-sequence .drive-bar .stat.plays { left:416px; width:100px; }
+#bug.scoring-sequence .drive-bar .stat.yds { left:516px; width:92px; }
+#bug.scoring-sequence .drive-bar .stat.top { left:608px; width:142px; }
+#bug.scoring-sequence .drive-bar .lbl { top:9px; font:500 18px/20px "SNF Ringside Narrow Screen Medium",sans-serif;
+  font-synthesis:none; letter-spacing:0; }
+#bug.scoring-sequence .drive-bar .val { top:26px; font:900 34px/34px "SNF Ringside Condensed Ultra",sans-serif; font-synthesis:none; }
+#bug.scoring-sequence .drive-bar .stat .lbl,#bug.scoring-sequence .drive-bar .stat .val { transition-duration:.24s,.35s,.24s; }
+#bug.scoring-sequence.stats .drive-bar .stat.yds .lbl,#bug.scoring-sequence.stats .drive-bar .stat.yds .val { transition-delay:.08s; }
+#bug.scoring-sequence.stats .drive-bar .stat.top .lbl,#bug.scoring-sequence.stats .drive-bar .stat.top .val { transition-delay:.16s; }
+#bug.scoring-sequence .drive-bar .corner { width:65px; border-radius:0;
+  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='65' height='60' viewBox='0 0 65 60'%3E%3Cpath d='M0 .5C30 .5 44 39 65 50' fill='none' stroke='%23e6edf5' stroke-width='.7'/%3E%3C/svg%3E") no-repeat; }
+#bug.scoring-sequence.closing .drive-bar { transition-delay:.10s; transition-duration:.40s; }
+#bug.scoring-sequence.closing .drive-stack { transition-delay:.10s; transition-duration:.40s; }
+@media (prefers-reduced-motion:reduce) {
+  html:not([data-preview-motion="full"]) #bug.player-drive * { animation:none!important; transition:none!important; }
+}

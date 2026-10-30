@@ -1,0 +1,48 @@
+/* Observed 0.62s halftime report → highlight exit from goBwy8oRNBk.
+   This reconstructs the horizontal bands/aperture segment only. The original
+   has 3D surface motion; these editable layers do not claim its source meshes. */
+#cbs-wipe { position:absolute; inset:0; z-index:80; pointer-events:none; overflow:hidden; }
+#cbs-wipe[hidden] { display:none!important; }
+#cbs-wipe .cbs-wipe-iris { position:absolute; inset:0; clip-path:circle(1800px at 960px 540px); }
+#cbs-wipe .cbs-wipe-band { position:absolute; left:0; width:1920px; }
+#cbs-wipe .cbs-wipe-blue { top:500px; height:8px; background:linear-gradient(180deg,#0876de,#0050c1); }
+#cbs-wipe .cbs-wipe-red { top:508px; height:14px; background:linear-gradient(180deg,#dc1327,#c40920); }
+#cbs-wipe .cbs-wipe-white { top:-750px; height:780px; background:linear-gradient(180deg,#fbfbfa,#dddfe0); }
+#cbs-wipe .cbs-wipe-title { position:absolute; top:437px; left:192px; width:1536px; text-align:center; color:#ffffff22; font:700 152px/1.05 "CBS Preview Bold",Arial,sans-serif; letter-spacing:27px; opacity:0; }
+#cbs-wipe .cbs-wipe-contours { position:absolute; inset:0; width:1920px; height:1080px; fill:none; stroke:#ffffffb3; stroke-width:2; opacity:0; }
+#cbs-wipe .cbs-wipe-eye-ring { position:absolute; left:600px; top:180px; width:720px; height:720px; opacity:0; }
+#cbs-wipe .cbs-wipe-orbit { fill:none; stroke:white; stroke-width:.1; }
+#cbs-wipe .cbs-wipe-settled-eye { position:absolute; left:849px; top:429px; width:222px; height:222px; opacity:0; }
+#cbs-wipe.running .cbs-wipe-iris { animation:cbs-ht-iris 620ms linear both; }
+#cbs-wipe.running .cbs-wipe-blue { animation:cbs-ht-blue 620ms linear both; }
+#cbs-wipe.running .cbs-wipe-red { animation:cbs-ht-red 620ms linear both; }
+#cbs-wipe.running .cbs-wipe-white { animation:cbs-ht-white 620ms linear both; }
+#cbs-wipe.running .cbs-wipe-title { animation:cbs-ht-title 620ms linear both; }
+#cbs-wipe.running .cbs-wipe-contours { animation:cbs-ht-contours 620ms linear both; }
+#cbs-wipe.running .cbs-wipe-eye-ring { animation:cbs-ht-eye-aperture 620ms linear both; }
+#cbs-wipe.running .cbs-wipe-settled-eye { animation:cbs-ht-eye-settle 620ms linear both; }
+@keyframes cbs-ht-blue {
+  0% { top:500px; height:8px; }
+  14% { top:381px; height:141px; }
+  25% { top:339px; height:273px; }
+  36% { top:627px; height:402px; }
+  47% { top:696px; height:384px; }
+  58% { top:696px; height:384px; }
+  69%,100% { top:870px; height:210px; }
+}
+@keyframes cbs-ht-red {
+  0% { top:508px; height:14px; }
+  14% { top:522px; height:249px; }
+  25% { top:612px; height:111px; }
+  36% { top:243px; height:384px; }
+  47% { top:156px; height:540px; }
+  58% { top:69px; height:627px; }
+  69%,100% { top:231px; height:639px; }
+}
+@keyframes cbs-ht-white { 0%,58% { top:-780px; } 69%,100% { top:-549px; } }
+@keyframes cbs-ht-iris { 0%,47% { clip-path:circle(1800px at 960px 540px); } 58% { clip-path:circle(960px at 960px 540px); } 69% { clip-path:circle(810px at 960px 540px); } 77%,100% { clip-path:circle(0 at 960px 540px); } }
+@keyframes cbs-ht-title { 0%,20% { opacity:0; transform:translateX(90px); } 36% { opacity:1; transform:translateX(0); } 69% { opacity:1; } 77%,100% { opacity:0; } }
+@keyframes cbs-ht-contours { 0% { opacity:0; transform:scale(1.2); } 14% { opacity:1; } 58% { opacity:1; transform:scale(.95); } 77%,100% { opacity:0; transform:scale(.8); } }
+@keyframes cbs-ht-eye-aperture { 0%,35% { opacity:0; transform:scale(1); } 47% { opacity:1; transform:scale(1); } 58% { opacity:1; transform:scale(.93); } 69% { opacity:1; transform:scale(.76); } 77%,100% { opacity:0; transform:scale(.3); } }
+@keyframes cbs-ht-eye-settle { 0%,73% { opacity:0; } 77%,94% { opacity:1; } 95%,100% { opacity:0; } }
+@media(prefers-reduced-motion:reduce) { html:not([data-preview-motion="full"]) #cbs-wipe { display:none!important; } }

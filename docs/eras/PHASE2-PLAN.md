@@ -912,3 +912,14 @@ packages, like mods/presentations/NBC_SNF). Needed so they show the right teams:
   revealed only through development/scouting. League Setup option: Sleepers Off / 1-10 (default 5).
 * Draft show: DRAFT-SHOW-FEASIBILITY.md route (draft_menu stage + trophy podium, commish01 as
   commissioner and as the suited player, coin-toss walk, overhead jersey hold, HTML pick card).
+
+**Draft show audio (user, 2026-10-16):** mods\eras\draft\audio\ (gitignored): pick_is_in_chime.mp3
+(5.1 s), numbers\number_01..32.mp3, teams\NN_<City>_<Name>.mp3 for the 32 modern names plus
+Washington Redskins / Oakland Raiders / St. Louis Rams. clips.json maps 1980 team ids -> clips.
+Call order: chime -> numbers/number_NN ("With the Nth pick") -> team clip; name on the card.
+Missing for 1980: Baltimore Colts, Houston Oilers, St. Louis Cardinals, San Diego Chargers (later
+eras also need e.g. Los Angeles Raiders, Phoenix Cardinals, Tennessee Oilers, Boston Patriots).
+Animation route (DRAFT-SHOW-FEASIBILITY.md): commish01 walks to the podium (coin-toss walk clip),
+stands (anthem idle); player walks on (coin-toss walk), takes the jersey (coin-toss handshake),
+holds it overhead (helmet-raise clip); chest-height hold = a custom pose authored on the 25-joint
+skeleton.

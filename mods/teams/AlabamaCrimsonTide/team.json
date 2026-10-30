@@ -1,0 +1,19 @@
+{
+  "code": "Z2",
+  "base": "13",
+  "city": "Alabama",
+  "nickname": "Crimson Tide",
+  "abbreviation": "BAMA",
+  "name": "Crimson Tide",
+  "colors": {
+    "primary": "#B30838",
+    "secondary": "#CFD4D8",
+    "text": "#FFFFFF"
+  },
+  "logos": {
+    "scorebug": "logos/scorebug.png"
+  },
+  "aliases": [],
+  "created_with": "NFL2K5-PC Team Creator",
+  "stadium": "BRYANT-DENNY STADIUM"
+}

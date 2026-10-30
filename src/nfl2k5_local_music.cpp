@@ -51,12 +51,24 @@ struct Album {
 
 std::wstring g_music, g_out, g_cache;
 std::vector<Album> g_albums;
+/* The scanner runs below the game thread.  Do not let hooks dereference the
+ * vector while it is still being grown; once the scan is published the
+ * vector's shape is stable and only per-song readiness changes. */
+static volatile LONG g_music_ready;
+static volatile LONG g_music_stop;
+static HANDLE g_music_thread;
 
 std::wstring widen(const char *s)
 {
     int n = MultiByteToWideChar(CP_UTF8, 0, s, -1, nullptr, 0);
-    std::wstring w(n ? n - 1 : 0, L'\0');
-    if (n) MultiByteToWideChar(CP_UTF8, 0, s, -1, &w[0], n);
+    /* n includes the terminating NUL.  The previous n-1 allocation still
+     * passed n as the destination capacity, allowing the conversion to write
+     * one wchar past the string during startup. */
+    std::wstring w(n > 0 ? n : 0, L'\0');
+    if (n) {
+        MultiByteToWideChar(CP_UTF8, 0, s, -1, &w[0], n);
+        w.resize((size_t)n - 1);
+    }
     for (auto &c : w) if (c == L'/') c = L'\\';
     return w;
 }
@@ -240,9 +252,11 @@ DWORD WINAPI worker(LPVOID)
     CoInitializeEx(nullptr, COINIT_MULTITHREADED);
     size_t total = 0, todo = 0;
     for (auto &dir : list(g_music, true)) {
+        if (InterlockedCompareExchange(&g_music_stop, 0, 0)) break;
         Album al;
         al.name = dir;
         for (auto &f : list(g_music + L"\\" + dir, false)) {
+            if (InterlockedCompareExchange(&g_music_stop, 0, 0)) break;
             Song s;
             s.src = g_music + L"\\" + dir + L"\\" + f;
             s.cache = cache_name(s.src);
@@ -255,12 +269,18 @@ DWORD WINAPI worker(LPVOID)
         if (!al.songs.empty()) g_albums.push_back(al);
     }
     fprintf(stderr, "[MUSIC] library: %zu playlists, %zu songs, %zu to convert\n", g_albums.size(), total, todo);
-    for (size_t a = 0; a < g_albums.size(); a++)
-        for (size_t k = 0; k < g_albums[a].songs.size(); k++)
+    /* Publish only after all Album/Song entries have been appended. */
+    InterlockedExchange(&g_music_ready, 1);
+    for (size_t a = 0; a < g_albums.size(); a++) {
+        for (size_t k = 0; k < g_albums[a].songs.size(); k++) {
+            if (InterlockedCompareExchange(&g_music_stop, 0, 0)) break;
             if (g_albums[a].songs[k].ready) link_song(a, k);
+        }
+    }
     write_db();
     for (size_t a = 0; a < g_albums.size(); a++) {
         for (size_t k = 0; k < g_albums[a].songs.size(); k++) {
+            if (InterlockedCompareExchange(&g_music_stop, 0, 0)) break;
             Song &s = g_albums[a].songs[k];
             if (s.ready) continue;
             std::wstring part = s.cache.substr(0, s.cache.size() - 4) + L".part.wma";
@@ -296,6 +316,8 @@ extern "C" void nfl2k5_local_music_start(const char *root, const char *save_dir)
 {
     nfl2k5_pack_music_hooks();
     nfl2k5_retail_next_interp_hook();
+    InterlockedExchange(&g_music_ready, 0);
+    InterlockedExchange(&g_music_stop, 0);
     g_music = widen(root) + L"\\Music";
     g_out = widen(save_dir) + L"\\Soundtracks";
     g_cache = g_out + L"\\cache";
@@ -306,8 +328,19 @@ extern "C" void nfl2k5_local_music_start(const char *root, const char *save_dir)
     HANDLE t = CreateThread(nullptr, 0, worker, nullptr, 0, nullptr);
     if (t) {
         SetThreadPriority(t, THREAD_PRIORITY_BELOW_NORMAL);
-        CloseHandle(t);
+        g_music_thread = t;
     }
+}
+
+extern "C" void nfl2k5_local_music_shutdown(void)
+{
+    InterlockedExchange(&g_music_stop, 1);
+    if (g_music_thread) {
+        WaitForSingleObject(g_music_thread, INFINITE);
+        CloseHandle(g_music_thread);
+        g_music_thread = nullptr;
+    }
+    InterlockedExchange(&g_music_ready, 0);
 }
 
 /* ── Now playing / skip ──────────────────────────────────────────────────
@@ -478,6 +511,7 @@ static void banner_tick(void)
 
 static bool show_now_playing(uint32_t id)
 {
+    if (InterlockedCompareExchange(&g_music_ready, 0, 0) == 0) return false;
     size_t a = id >> 16, k = id & 0xFFFF;
     if (a >= g_albums.size() || k >= g_albums[a].songs.size()) return false;
     const Song &song = g_albums[a].songs[k];

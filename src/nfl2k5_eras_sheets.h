@@ -21,8 +21,14 @@ int nfl2k5_eras_sheets_standings_on(void);
 /* Push the screens (deferred, as the game's own push); conference 0 AFC, 1 NFC. */
 void nfl2k5_eras_sheets_push_schedule(uint32_t fsm);
 void nfl2k5_eras_sheets_push_standings(uint32_t fsm, int conference);
+/* M14: the Playoff Picture (page 0: seeds and the hunt per conference; page 1: the bracket by round)
+ * and the Awards (page 0: season awards; page 1: league leaders), on the same sheet engine. */
+void nfl2k5_eras_sheets_push_playoffs(uint32_t fsm, int bracket);
+void nfl2k5_eras_sheets_push_awards(uint32_t fsm);
+int nfl2k5_eras_sheets_playoffs_on(void);
 /* The season block is filled with Eras data (only while one of the screens is on top). */
 int nfl2k5_eras_sheets_swapped(void);
+uint32_t nfl2k5_eras_sheets_team_rec(int team);   /* M15: the team's Eras record (0 = none) */
 
 typedef void (*nfl2k5_eras_sheets_fn)(void);
 nfl2k5_eras_sheets_fn nfl2k5_eras_sheets_lookup(uint32_t address);

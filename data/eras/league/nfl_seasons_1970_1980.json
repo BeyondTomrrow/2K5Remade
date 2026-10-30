@@ -1,7 +1,7 @@
 {
  "schema": "nfl2k5_eras_league_seasons/v1",
- "generated_by": "build/eras/league_history.py",
- "scope": "NFL regular seasons 1970-1980: teams, conferences, divisions, records, postseason",
+ "generated_by": "tools/eras/league_history.py",
+ "scope": "NFL regular seasons 1970-1981: teams, conferences, divisions, records, postseason",
  "conventions": {
   "id": "stable franchise id (see franchise_events_1970_2025.json)",
   "city/name": "as Pro-Football-Reference lists the team that season",
@@ -5819,6 +5819,563 @@
     "https://www.pro-football-reference.com/years/1980/",
     "https://web.archive.org/web/20241219080443/https://www.pro-football-reference.com/years/1980/",
     "https://en.wikipedia.org/wiki/1980_NFL_season"
+   ]
+  },
+  {
+   "season": 1981,
+   "team_count": 28,
+   "games": 16,
+   "playoff_teams": 10,
+   "playoff_format": {
+    "teams_per_conference": 5,
+    "division_winners_per_conference": 3,
+    "wild_cards_per_conference": 2,
+    "byes_per_conference": 3,
+    "rounds": [
+     "Wild Card playoffs",
+     "Divisional playoffs",
+     "Conference championships",
+     "Super Bowl"
+    ],
+    "qualification": "Three division winners plus two wild cards per conference; the two wild cards play each other in the first round (Pro Football Hall of Fame).",
+    "home_field": "Seeded by record; the higher-seeded wild card hosts the Wild Card game (Wikipedia cross-check). PFR game sites agree wherever the two wild cards had different records. The two equal-record cases were settled by tiebreakers, per the NFL Record & Fact Book: 1978 NFC, Atlanta was first wild card over Philadelphia (both 9-7) on record against common opponents (5-2 to 5-3); 1980 AFC, Oakland was first wild card over Houston (both 11-5) on conference record (9-3 to 7-5). The general tiebreak procedure was not researched.",
+    "same_division_rule": "Teams from the same division could not meet in the divisional round (NFL Record & Fact Book: from 1970 to 1989 two teams from the same division could not meet before the conference championship game; consistent with every PFR divisional matchup 1978-1980).",
+    "sources": [
+     "https://www.profootballhof.com/news/wild-card-golden-nuggets",
+     "https://web.archive.org/web/20130925182142/http://static.nfl.com/static/content/public/image/history/pdfs/History/Past_Standings_2011.pdf",
+     "https://en.wikipedia.org/wiki/NFL_playoffs"
+    ]
+   },
+   "championship": {
+    "name": "Super Bowl XVI",
+    "number": 16,
+    "date": "1982-01-24",
+    "site": "Silverdome, Pontiac, Mich.",
+    "winner": "49ers",
+    "loser": "bengals",
+    "winner_name": "San Francisco 49ers",
+    "loser_name": "Cincinnati Bengals",
+    "score": "26-21",
+    "sources": [
+     "https://www.pro-football-reference.com/years/1981/",
+     "https://www.espn.com/nfl/superbowl/history/winners"
+    ]
+   },
+   "conference_championships": [
+    "AFC Championship Game",
+    "NFC Championship Game"
+   ],
+   "conferences": [
+    {
+     "name": "AFC",
+     "divisions": [
+      {
+       "name": "AFC East",
+       "teams": [
+        {
+         "id": "dolphins",
+         "city": "Miami",
+         "name": "Dolphins",
+         "abbreviation": "MIA",
+         "pfr_code": "mia",
+         "record": {
+          "w": 11,
+          "l": 4,
+          "t": 1
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "jets",
+         "city": "New York",
+         "name": "Jets",
+         "abbreviation": "NYJ",
+         "pfr_code": "nyj",
+         "record": {
+          "w": 10,
+          "l": 5,
+          "t": 1
+         },
+         "finish": "wild_card"
+        },
+        {
+         "id": "bills",
+         "city": "Buffalo",
+         "name": "Bills",
+         "abbreviation": "BUF",
+         "pfr_code": "buf",
+         "record": {
+          "w": 10,
+          "l": 6,
+          "t": 0
+         },
+         "finish": "wild_card"
+        },
+        {
+         "id": "colts",
+         "city": "Baltimore",
+         "name": "Colts",
+         "abbreviation": "BAL",
+         "pfr_code": "clt",
+         "record": {
+          "w": 2,
+          "l": 14,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "patriots",
+         "city": "New England",
+         "name": "Patriots",
+         "abbreviation": "NE",
+         "pfr_code": "nwe",
+         "record": {
+          "w": 2,
+          "l": 14,
+          "t": 0
+         },
+         "finish": null
+        }
+       ]
+      },
+      {
+       "name": "AFC Central",
+       "teams": [
+        {
+         "id": "bengals",
+         "city": "Cincinnati",
+         "name": "Bengals",
+         "abbreviation": "CIN",
+         "pfr_code": "cin",
+         "record": {
+          "w": 12,
+          "l": 4,
+          "t": 0
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "steelers",
+         "city": "Pittsburgh",
+         "name": "Steelers",
+         "abbreviation": "PIT",
+         "pfr_code": "pit",
+         "record": {
+          "w": 8,
+          "l": 8,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "oilers_titans",
+         "city": "Houston",
+         "name": "Oilers",
+         "abbreviation": "HOU",
+         "pfr_code": "oti",
+         "record": {
+          "w": 7,
+          "l": 9,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "browns",
+         "city": "Cleveland",
+         "name": "Browns",
+         "abbreviation": "CLE",
+         "pfr_code": "cle",
+         "record": {
+          "w": 5,
+          "l": 11,
+          "t": 0
+         },
+         "finish": null
+        }
+       ]
+      },
+      {
+       "name": "AFC West",
+       "teams": [
+        {
+         "id": "chargers",
+         "city": "San Diego",
+         "name": "Chargers",
+         "abbreviation": "SD",
+         "pfr_code": "sdg",
+         "record": {
+          "w": 10,
+          "l": 6,
+          "t": 0
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "broncos",
+         "city": "Denver",
+         "name": "Broncos",
+         "abbreviation": "DEN",
+         "pfr_code": "den",
+         "record": {
+          "w": 10,
+          "l": 6,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "chiefs",
+         "city": "Kansas City",
+         "name": "Chiefs",
+         "abbreviation": "KC",
+         "pfr_code": "kan",
+         "record": {
+          "w": 9,
+          "l": 7,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "raiders",
+         "city": "Oakland",
+         "name": "Raiders",
+         "abbreviation": "OAK",
+         "pfr_code": "rai",
+         "record": {
+          "w": 7,
+          "l": 9,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "seahawks",
+         "city": "Seattle",
+         "name": "Seahawks",
+         "abbreviation": "SEA",
+         "pfr_code": "sea",
+         "record": {
+          "w": 6,
+          "l": 10,
+          "t": 0
+         },
+         "finish": null
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "NFC",
+     "divisions": [
+      {
+       "name": "NFC East",
+       "teams": [
+        {
+         "id": "cowboys",
+         "city": "Dallas",
+         "name": "Cowboys",
+         "abbreviation": "DAL",
+         "pfr_code": "dal",
+         "record": {
+          "w": 12,
+          "l": 4,
+          "t": 0
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "eagles",
+         "city": "Philadelphia",
+         "name": "Eagles",
+         "abbreviation": "PHI",
+         "pfr_code": "phi",
+         "record": {
+          "w": 10,
+          "l": 6,
+          "t": 0
+         },
+         "finish": "wild_card"
+        },
+        {
+         "id": "giants",
+         "city": "New York",
+         "name": "Giants",
+         "abbreviation": "NYG",
+         "pfr_code": "nyg",
+         "record": {
+          "w": 9,
+          "l": 7,
+          "t": 0
+         },
+         "finish": "wild_card"
+        },
+        {
+         "id": "washington",
+         "city": "Washington",
+         "name": "Redskins",
+         "abbreviation": "WAS",
+         "pfr_code": "was",
+         "record": {
+          "w": 8,
+          "l": 8,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "cardinals",
+         "city": "St. Louis",
+         "name": "Cardinals",
+         "abbreviation": "STL",
+         "pfr_code": "crd",
+         "record": {
+          "w": 7,
+          "l": 9,
+          "t": 0
+         },
+         "finish": null
+        }
+       ]
+      },
+      {
+       "name": "NFC Central",
+       "teams": [
+        {
+         "id": "buccaneers",
+         "city": "Tampa Bay",
+         "name": "Buccaneers",
+         "abbreviation": "TB",
+         "pfr_code": "tam",
+         "record": {
+          "w": 9,
+          "l": 7,
+          "t": 0
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "lions",
+         "city": "Detroit",
+         "name": "Lions",
+         "abbreviation": "DET",
+         "pfr_code": "det",
+         "record": {
+          "w": 8,
+          "l": 8,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "packers",
+         "city": "Green Bay",
+         "name": "Packers",
+         "abbreviation": "GB",
+         "pfr_code": "gnb",
+         "record": {
+          "w": 8,
+          "l": 8,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "vikings",
+         "city": "Minnesota",
+         "name": "Vikings",
+         "abbreviation": "MIN",
+         "pfr_code": "min",
+         "record": {
+          "w": 7,
+          "l": 9,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "bears",
+         "city": "Chicago",
+         "name": "Bears",
+         "abbreviation": "CHI",
+         "pfr_code": "chi",
+         "record": {
+          "w": 6,
+          "l": 10,
+          "t": 0
+         },
+         "finish": null
+        }
+       ]
+      },
+      {
+       "name": "NFC West",
+       "teams": [
+        {
+         "id": "49ers",
+         "city": "San Francisco",
+         "name": "49ers",
+         "abbreviation": "SF",
+         "pfr_code": "sfo",
+         "record": {
+          "w": 13,
+          "l": 3,
+          "t": 0
+         },
+         "finish": "division_winner"
+        },
+        {
+         "id": "falcons",
+         "city": "Atlanta",
+         "name": "Falcons",
+         "abbreviation": "ATL",
+         "pfr_code": "atl",
+         "record": {
+          "w": 7,
+          "l": 9,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "rams",
+         "city": "Los Angeles",
+         "name": "Rams",
+         "abbreviation": "LA",
+         "pfr_code": "ram",
+         "record": {
+          "w": 6,
+          "l": 10,
+          "t": 0
+         },
+         "finish": null
+        },
+        {
+         "id": "saints",
+         "city": "New Orleans",
+         "name": "Saints",
+         "abbreviation": "NO",
+         "pfr_code": "nor",
+         "record": {
+          "w": 4,
+          "l": 12,
+          "t": 0
+         },
+         "finish": null
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "postseason": [
+    {
+     "round": "Wild Card playoffs",
+     "date": "1981-12-27",
+     "winner": "Buffalo Bills",
+     "loser": "New York Jets",
+     "winner_id": "bills",
+     "loser_id": "jets",
+     "pts_win": 31,
+     "pts_lose": 27,
+     "site": "loser_home"
+    },
+    {
+     "round": "Wild Card playoffs",
+     "date": "1981-12-27",
+     "winner": "New York Giants",
+     "loser": "Philadelphia Eagles",
+     "winner_id": "giants",
+     "loser_id": "eagles",
+     "pts_win": 27,
+     "pts_lose": 21,
+     "site": "loser_home"
+    },
+    {
+     "round": "Divisional playoffs",
+     "date": "1982-01-02",
+     "winner": "Dallas Cowboys",
+     "loser": "Tampa Bay Buccaneers",
+     "winner_id": "cowboys",
+     "loser_id": "buccaneers",
+     "pts_win": 38,
+     "pts_lose": 0,
+     "site": "winner_home"
+    },
+    {
+     "round": "Divisional playoffs",
+     "date": "1982-01-02",
+     "winner": "San Diego Chargers",
+     "loser": "Miami Dolphins",
+     "winner_id": "chargers",
+     "loser_id": "dolphins",
+     "pts_win": 41,
+     "pts_lose": 38,
+     "site": "loser_home"
+    },
+    {
+     "round": "Divisional playoffs",
+     "date": "1982-01-03",
+     "winner": "Cincinnati Bengals",
+     "loser": "Buffalo Bills",
+     "winner_id": "bengals",
+     "loser_id": "bills",
+     "pts_win": 28,
+     "pts_lose": 21,
+     "site": "winner_home"
+    },
+    {
+     "round": "Divisional playoffs",
+     "date": "1982-01-03",
+     "winner": "San Francisco 49ers",
+     "loser": "New York Giants",
+     "winner_id": "49ers",
+     "loser_id": "giants",
+     "pts_win": 38,
+     "pts_lose": 24,
+     "site": "winner_home"
+    },
+    {
+     "round": "Conference championships",
+     "date": "1982-01-10",
+     "winner": "Cincinnati Bengals",
+     "loser": "San Diego Chargers",
+     "winner_id": "bengals",
+     "loser_id": "chargers",
+     "pts_win": 27,
+     "pts_lose": 7,
+     "site": "winner_home"
+    },
+    {
+     "round": "Conference championships",
+     "date": "1982-01-10",
+     "winner": "San Francisco 49ers",
+     "loser": "Dallas Cowboys",
+     "winner_id": "49ers",
+     "loser_id": "cowboys",
+     "pts_win": 28,
+     "pts_lose": 27,
+     "site": "winner_home"
+    },
+    {
+     "round": "Super Bowl",
+     "date": "1982-01-24",
+     "winner": "San Francisco 49ers",
+     "loser": "Cincinnati Bengals",
+     "winner_id": "49ers",
+     "loser_id": "bengals",
+     "pts_win": 26,
+     "pts_lose": 21,
+     "site": "neutral"
+    }
+   ],
+   "sources": [
+    "https://www.pro-football-reference.com/years/1981/",
+    "https://web.archive.org/web/20251010102211/https://www.pro-football-reference.com/years/1981/",
+    "https://en.wikipedia.org/wiki/1981_NFL_season"
    ]
   }
  ]

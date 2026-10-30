@@ -5,7 +5,7 @@
   'use strict';
   var api = window.NFL2K5, canvas = document.getElementById('canvas');
   if (!api || !canvas) return;
-  var latest = api.state, current = null, timer = 0, ownership = '', matchKey = '';
+  var latest = api.state, current = null, timer = 0, ownership = '', matchKey = '', nativePhase = null;
   var aliases = { STL:'LAR', SD:'LAC', OAK:'LV', JAC:'JAX', WSH:'WAS' };
   var colors = { LAR:'#1f4fae', CIN:'#da541b', ARI:'#97233f', ATL:'#a71930', BAL:'#3b2a8f', BUF:'#00338d', CAR:'#0085ca', CHI:'#c83803', CLE:'#ff3c00', DAL:'#003594', DEN:'#fb4f14', DET:'#0076b6', GB:'#2f5a3e', HOU:'#a71930', IND:'#0b4a8f', JAX:'#006778', KC:'#e31837', LV:'#6b6f74', LAC:'#0080c6', MIA:'#008e97', MIN:'#4f2683', NE:'#0c2f5e', NO:'#9f8958', NYG:'#0b2265', NYJ:'#125740', PHI:'#004c54', PIT:'#d9a300', SF:'#aa0000', SEA:'#1d4f91', TB:'#d50a0a', TEN:'#4b92db', WAS:'#7a1a1a' };
 
@@ -60,15 +60,17 @@
   function stage() { return latest && latest.context && latest.context.pregameStage || ''; }
   function basePermitted() {
     var s = latest, cx = s && s.context || {};
-    if (!s || s.valid !== true || !s.away || !s.home || s.gameStatus === 'inactive' || s.gameStatus === 'final' || cx.playSelection || cx.paused) return false;
+    if (window.SNFBroadcastScenes && window.SNFBroadcastScenes.active() === 'period-summary') return false;
+    if (!s || s.valid !== true || !s.away || !s.home || s.gameStatus === 'inactive' || s.gameStatus === 'final' || cx.playSelection || cx.paused || window.SNFTransitions && window.SNFTransitions.active()) return false;
     /* A known football phase wins over an old pregame-stage marker. Phase
        zero is the native pregame/toss phase; one through four are play. */
-    if (s.phase !== 0) return false;
     return true;
   }
   function permitted(kind, legacyNative) {
     if (!basePermitted()) return false;
     var p = stage();
+    if (kind === 'player-fact' && legacyNative && Number.isInteger(nativePhase) && nativePhase === latest.phase && latest.phase !== 0 && latest.phase !== 2) return true;
+    if (latest.phase !== 0) return false;
     if (kind === 'player-fact') {
       if (p === 'warmup' || p === 'panning') return true;
       /* An owned native fact already confirms the card is being shown.
@@ -105,7 +107,9 @@
   var factHeader = node('div', 'pg-fact-heading', fact.plate);
   fact.name = node('div', 'pg-player-name', factHeader);
   fact.caption = node('div', 'pg-caption', factHeader);
+  fact.category = node('div', 'pg-category', fact.plate);
   fact.text = node('div', 'pg-fact-text', fact.plate);
+  fact.columns = node('div', 'pg-stat-columns', fact.plate);
   var toss = shell('snf-coin-toss');
   var tossHeader = node('div', 'pg-toss-heading', toss.plate);
   toss.title = node('div', 'pg-toss-title', tossHeader);
@@ -113,6 +117,7 @@
   image('pg-peacock', brand).setAttribute('src', 'assets/branding/nbc-peacock-user.png');
   image('pg-snf', brand).setAttribute('src', 'assets/branding/snf-wordmark.svg');
   toss.text = node('div', 'pg-toss-text', toss.plate);
+  toss.choices = node('div', 'pg-toss-choices', toss.plate);
   var nativeOwned = false;
   var ackToken = 0, ackSerial = 0;
   function hostMessage(action, token) {
@@ -142,12 +147,16 @@
   function erase() {
     [fact, toss].forEach(function (c) { c.root.classList.remove('on', 'out'); c.root.setAttribute('aria-hidden', 'true'); c.root.removeAttribute('data-owner'); c.root.style.removeProperty('--pregame-team'); c.root.style.removeProperty('--pregame-rgb'); setImage(c.logo, ''); });
     setImage(fact.portrait, ''); fact.root.classList.add('no-photo');
-    [fact.position, fact.name, fact.caption, fact.text, toss.title, toss.text].forEach(function (n) { n.textContent = ''; });
+    [fact.position, fact.name, fact.caption, fact.category, fact.text, toss.title, toss.text].forEach(function (n) { n.textContent = ''; });
+    fact.category.hidden = true;
+    fact.columns.textContent = ''; toss.choices.textContent = '';
+    fact.columns.hidden = true; fact.text.hidden = false; toss.choices.hidden = true;
+    fact.root.classList.remove('has-stats'); toss.root.classList.remove('has-choices');
     fact.position.hidden = true; fact.root.classList.remove('long-name');
   }
   function reset() {
     releaseNative();
-    clearTimeout(timer); timer = 0; ownership = ''; nativeOwned = false; erase();
+    clearTimeout(timer); timer = 0; ownership = ''; nativeOwned = false; nativePhase = null; erase();
     if (current !== null) { current = null; notify(); }
   }
   function hide() {
@@ -161,6 +170,13 @@
   }
   function lifetime(e) {
     clearTimeout(timer); timer = 0;
+    /* A native popup's timeout begins before its layout has finished
+       entering. Releasing a painted replacement on that estimate exposes
+       the still-active ESPN card underneath its exit. With an exact owner,
+       the native close event and slot lifecycle own the end of the card. */
+    if (e.source === 'native' && e.nativeVisible === true &&
+        Number.isInteger(e.replacementToken) && e.replacementToken > 0 &&
+        e.replacementToken <= 4294967295) return;
     var seconds = e.duration != null ? e.duration : e.displaySeconds;
     /* Unknown FLTM values do not mean five seconds. In their absence the
        native hide event, next card or phase change owns the lifetime. */
@@ -172,28 +188,43 @@
   }
   function playerFact(e) {
     var p = e.player, t = teamFor(e), ownsNativeFact = e.source === 'native' && e.nativeVisible === true;
-    if (!permitted('player-fact', ownsNativeFact) || !p || !hasText(p.fullName) || !hasText(e.text) || !t) { reset(); return; }
+    nativePhase = Number.isInteger(e.phase) && Number.isInteger(e.replacementToken) && e.replacementToken > 0 ? e.phase : null;
+    var columns = nativeColumns(e.columns);
+    if (!permitted('player-fact', ownsNativeFact) || !p || !hasText(p.fullName) || (!hasText(e.text) && !columns.length) || !t) { reset(); return; }
     /* Conflicting cached identity must not put one player's face beneath
        another player's native fact. The bridge must supply one owner. */
     if (hasText(p.name) && p.name.trim().split(/\s+/).pop().toLowerCase() !== p.fullName.trim().split(/\s+/).pop().toLowerCase()) { reset(); return; }
     var number = Number.isInteger(p.number) && p.number >= 0 && p.number <= 99 ? String(p.number) : '';
     var portrait = asset(p.portrait), position = hasText(p.position) ? p.position : '';
-    var owner = JSON.stringify([code(t), p.id == null ? null : p.id, p.fullName, position, number, portrait, e.caption || 'CAREER', e.text]);
+    var caption = hasText(e.caption) ? e.caption : '';
+    var category = hasText(e.category) ? e.category : '';
+    var owner = JSON.stringify([code(t), p.id == null ? null : p.id, p.fullName, position, number, portrait, caption, category, e.text || '', columns]);
     if (current === 'player-fact' && ownership === owner && !fact.root.classList.contains('out')) {
       nativeOwned = ownsNativeFact; acknowledgeNative(e); return;
     }
     reset(); teamStyle(fact.root, t); teamImage(fact.logo, t); setImage(fact.portrait, portrait);
     nativeOwned = ownsNativeFact;
+    nativePhase = Number.isInteger(e.phase) && Number.isInteger(e.replacementToken) && e.replacementToken > 0 ? e.phase : null;
     fact.root.classList.toggle('no-photo', !portrait); fact.root.classList.toggle('long-name', p.fullName.length > 26);
     fact.position.textContent = [position, number].filter(Boolean).join('\n'); fact.position.hidden = !position && !number;
-    fact.name.textContent = p.fullName; fact.caption.textContent = hasText(e.caption) ? e.caption : 'CAREER'; fact.text.textContent = e.text;
+    fact.name.textContent = p.fullName; fact.caption.textContent = caption; fact.text.textContent = hasText(e.text) ? e.text : '';
+    fact.category.textContent = category; fact.category.hidden = !category;
+    fact.root.classList.toggle('has-stats', columns.length > 0);
+    fact.text.hidden = columns.length > 0; fact.columns.hidden = !columns.length;
+    fact.columns.style.setProperty('--pg-column-count', String(columns.length || 1));
+    columns.forEach(function (column) {
+      var cell = node('div', 'pg-stat-column', fact.columns);
+      node('div', 'pg-stat-label', cell, column.label);
+      node('div', 'pg-stat-value', cell, column.value);
+    });
     reveal('player-fact', fact, e, owner);
     acknowledgeNative(e);
   }
   function coinToss(e) {
     var nativeMessage = e.source === 'native' || e.native === true, t = teamFor(e);
-    if (!permitted('coin-toss', nativeMessage) || !hasText(e.text) || !t) { reset(); return; }
-    var owner = JSON.stringify([code(t), hasText(e.title) ? e.title : 'COIN TOSS', e.text]);
+    if (!permitted('coin-toss', nativeMessage) || !hasText(e.text) || (!t && (!nativeMessage || e.team || e.teamData))) { reset(); return; }
+    var choices = nativeChoices(e.choices);
+    var owner = JSON.stringify([code(t), hasText(e.title) ? e.title : 'COIN TOSS', e.text, choices]);
     if (current === 'coin-toss' && ownership === owner && !toss.root.classList.contains('out')) {
       nativeOwned = nativeMessage; acknowledgeNative(e); return;
     }
@@ -201,11 +232,36 @@
     if (!update) reset();
     nativeOwned = nativeMessage; teamStyle(toss.root, t); teamImage(toss.logo, t);
     toss.title.textContent = hasText(e.title) ? e.title : 'COIN TOSS'; toss.text.textContent = e.text;
+    toss.root.classList.toggle('has-choices', choices.length > 0);
+    toss.choices.textContent = ''; toss.choices.hidden = !choices.length;
+    choices.forEach(function (choice) {
+      var row = node('div', 'pg-toss-choice' + (choice.selected ? ' selected' : ''), toss.choices);
+      node('div', 'pg-choice-marker', row);
+      node('div', 'pg-choice-text', row, choice.text);
+      if (choice.button) node('div', 'pg-choice-button', row, choice.button);
+      row.setAttribute('aria-current', choice.selected ? 'true' : 'false');
+    });
     if (update) { ownership = owner; toss.root.setAttribute('data-owner', owner); lifetime(e); }
     else reveal('coin-toss', toss, e, owner);
     acknowledgeNative(e);
   }
+  /* These rows are the native card's actual labels and displayed strings.
+     Never pick position-specific fields or populate absent statistics. */
+  function nativeColumns(input) {
+    if (!Array.isArray(input) || !input.length || input.length > 8) return [];
+    if (input.some(function (column) {
+      return !column || !hasText(column.label) || !(hasText(column.value) || typeof column.value === 'number' && isFinite(column.value));
+    })) return [];
+    return input.map(function (column) { return { label:column.label, value:String(column.value) }; });
+  }
+  function nativeChoices(input) {
+    if (!Array.isArray(input) || input.length > 4 || input.some(function (choice) { return !choice || !hasText(choice.text); })) return [];
+    return input.map(function (choice) { return { text:choice.text, selected:choice.selected === true, button:hasText(choice.button) ? choice.button : '' }; });
+  }
   window.SNFPregameInserts = { active:function () { return current; }, reset:reset };
+  document.addEventListener('snf-transition-change', function () {
+    if (window.SNFTransitions && window.SNFTransitions.active()) reset();
+  });
   api.onState(function (s) {
     latest = s;
     var key = s && s.away && s.home ? String(s.matchId || '') + '|' + code(s.away) + '|' + code(s.home) : '';

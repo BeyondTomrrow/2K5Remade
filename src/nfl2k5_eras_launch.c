@@ -218,12 +218,16 @@ int nfl2k5_eras_launch(uint32_t fsm, char *msg, size_t n)
     else if (u >= 0 && u == e->away) user_side = 2;
     for (s = 0; s < PORTS; s++) gcall(sub_00077200, (uint32_t)s, s == s_l.port ? (uint32_t)user_side : 0u);
 
-    /* 6. Teams, stadium, uniforms. */
-    stadium = home->stadium[0] ? g_eras_svc->stadium_find(home->stadium, &stadium_id) : 0;
-    if (!stadium && home->stadium[0]) stadium = g_eras_svc->stadium_borrow(home->stadium, &stadium_id);
-    if (stadium) MEM32(slot[0] + T_STADIUM) = stadium;
-    else if (home->stadium[0]) nfl2k5_eras_log("launch %s: stadium '%s' not found among the roster's stadiums; the template's is used",
-                                               e->id, home->stadium);
+    /* 6. Teams, stadium, uniforms. M14: a playoff game at a neutral site (the Super Bowl's
+     * postseason.csv venue) uses that stadium instead of the home team's. */
+    {
+        const char *venue = e->site[0] ? e->site : home->stadium;
+        stadium = venue[0] ? g_eras_svc->stadium_find(venue, &stadium_id) : 0;
+        if (!stadium && venue[0]) stadium = g_eras_svc->stadium_borrow(venue, &stadium_id);
+        if (stadium) MEM32(slot[0] + T_STADIUM) = stadium;
+        else if (venue[0]) nfl2k5_eras_log("launch %s: stadium '%s' not found among the roster's stadiums; the template's is used",
+                                           e->id, venue);
+    }
     gcall(sub_00077AE0, slot[0], 0);
     gcall(sub_00077B20, slot[1], 0);
     gcall(sub_00077470, MEM32(slot[0] + T_STADIUM), 0);
@@ -242,13 +246,13 @@ int nfl2k5_eras_launch(uint32_t fsm, char *msg, size_t n)
     nfl2k5_eras_menu_game_rows(1);
     /* M9: era card badges / logos on, and the scorebug's Eras identity and package */
     nfl2k5_eras_team_art_update();
-    g_eras_svc->pres_eras_begin(NFL2K5_ERAS_SEASON, e->week, home->id, away->id);
-    nfl2k5_eras_log("launch %s (week %d): %s %s (USER1 %08X, home) vs %s %s (USER2 %08X, away); "
+    g_eras_svc->pres_eras_begin(nfl2k5_eras_season(), e->week, home->id, away->id);
+    nfl2k5_eras_log("launch %s (week %d%s%s): %s %s (USER1 %08X, home) vs %s %s (USER2 %08X, away); "
                     "mode 4; port %d side %d (%s); stadium %s (record %08X id %d); uniforms %u/%u; "
                     "unverified community rosters",
-                    e->id, e->week, home->city, home->name, slot[0], away->city, away->name, slot[1],
+                    e->id, e->week, e->label[0] ? ", " : "", e->label, home->city, home->name, slot[0], away->city, away->name, slot[1],
                     s_l.port, user_side, user_side ? "user team" : "CPU vs CPU",
-                    stadium ? home->stadium : "(template)", MEM32(slot[0] + T_STADIUM), stadium_id,
+                    stadium ? (e->site[0] ? e->site : home->stadium) : "(template)", MEM32(slot[0] + T_STADIUM), stadium_id,
                     MEM8(slot[0] + T_UNIFORM), MEM8(slot[1] + T_UNIFORM));
     gcall(sub_0034CA40, 0, 0);
     gcall(sub_0006E390, fsm, PREP_STATE);

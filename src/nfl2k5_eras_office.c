@@ -342,7 +342,7 @@ static int look_ini(EraLook *e, const char *dir)
 /* Auto: the league season's decade (decision 2: the 1980 slice uses the 1980s office). */
 int nfl2k5_eras_office_auto_look(void)
 {
-    int y = NFL2K5_ERAS_SEASON;
+    int y = nfl2k5_eras_season();   /* M14: the league's season */
     return y < 1980 ? OFFICE_LOOK_1970S : y < 1990 ? OFFICE_LOOK_1980S : y < 2000 ? OFFICE_LOOK_1990S
          : y < 2010 ? OFFICE_LOOK_2000S : y < 2020 ? OFFICE_LOOK_2010S : OFFICE_LOOK_2020S;
 }
@@ -366,7 +366,7 @@ static const EraLook *current_look(void)
     e = s_looks[l];
     look_ini(&e, k_look_name[l]);
     if (!s_o.live && s_o.setting == OFFICE_LOOK_AUTO) {
-        snprintf(season, sizeof season, "%d", NFL2K5_ERAS_SEASON);
+        snprintf(season, sizeof season, "%d", nfl2k5_eras_season());
         look_ini(&e, season);
     }
     /* the reshaped 1980s desk is optional (needs the Mod Tools when the pack is built) */
@@ -378,7 +378,7 @@ static void texture_context(int on)
 {
     char season[8];
     int l = nfl2k5_eras_office_look();
-    snprintf(season, sizeof season, "%d", NFL2K5_ERAS_SEASON);
+    snprintf(season, sizeof season, "%d", nfl2k5_eras_season());
     if (!on) g_eras_svc->texpack_set_era(NULL, NULL);
     else g_eras_svc->texpack_set_era(!s_o.live && s_o.setting == OFFICE_LOOK_AUTO ? season : NULL, k_look_name[l]);
 }

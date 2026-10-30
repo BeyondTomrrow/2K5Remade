@@ -6,7 +6,8 @@
 Writes mods/eras/office/files/ (gitignored: these are retail data and never committed):
 
   erasoffice.iff  byte copies of the SCNE records coach_desk and front_office and the
-                  LAYT records coach_desk and front_office out of fr.iff (archive entry 23),
+                  LAYT records coach_desk, front_office, rookie_pane and rookie_pane_news (M15,
+                  the draft screens' prospect card) out of fr.iff (archive entry 23),
                   each with its 0x20-byte record header, at 16-byte boundaries. The payloads
                   stay as they are on the disc (VC-LZ, magic 0xFEEDBEEF). The game loads the
                   file under its own context (ERASOFFICE), never Franchise's FRANCHISE1.
@@ -22,7 +23,8 @@ import hashlib, os, struct, sys
 ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))
 DISC = os.path.join(ROOT, 'original', 'disc', 'vc_53450030')
 OUT = os.path.join(ROOT, 'mods', 'eras', 'office', 'files')
-WANT = (('SCNE', 'coach_desk'), ('SCNE', 'front_office'), ('LAYT', 'coach_desk'), ('LAYT', 'front_office'))
+WANT = (('SCNE', 'coach_desk'), ('SCNE', 'front_office'), ('LAYT', 'coach_desk'), ('LAYT', 'front_office'),
+        ('LAYT', 'rookie_pane'), ('LAYT', 'rookie_pane_news'))   # M15: the draft screens' prospect card layouts
 
 
 def crc(name):

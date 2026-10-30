@@ -32,9 +32,12 @@
 /* The season package by its pack-relative name (docs/eras/MOD-PACK-DESIGN.md 4.1);
  * league.ini keeps this name. Leagues made before the pack layout name the
  * development folder (PACKAGE_LEGACY): the same package. */
-#define PACKAGE_REL     "league\\1980"
-#define PACKAGE_LEGACY  "data\\eras\\runtime\\1980"
+#define PACKAGE_REL     "league\\%d"
+#define PACKAGE_LEGACY  "data\\eras\\runtime\\%d"
 #define LEAGUE_DIR   "eras\\league1"
+#define PLAYOFF_WEEK0   16            /* M14: playoff rounds are weeks 17..20 (round 1..4) */
+
+extern int nfl2k5_eras_playoffs_update(void);   /* src/nfl2k5_eras_playoffs.c: appends rounds as they are due; 1 = games added */
 
 /* ---- paths (docs/eras/MOD-PACK-DESIGN.md 4) ------------------------------
  *
@@ -48,10 +51,15 @@ int nfl2k5_eras_root_count(void) { return g_eras_svc->root_count(); }
 char *nfl2k5_eras_root_path(int i, const char *rel, char *out, size_t n) { return g_eras_svc->root_path(i, rel, out, n); }
 
 static char s_package_dir[MAX_PATH];
+static int s_package_season;        /* the season whose package is loaded (or being loaded) */
 
 static const char *package_dir(void)
 {
-    if (!s_package_dir[0]) nfl2k5_eras_path(PACKAGE_REL, s_package_dir, sizeof s_package_dir);
+    char rel[32];
+    if (!s_package_dir[0]) {
+        snprintf(rel, sizeof rel, PACKAGE_REL, s_package_season ? s_package_season : NFL2K5_ERAS_SEASON);
+        nfl2k5_eras_path(rel, s_package_dir, sizeof s_package_dir);
+    }
     return s_package_dir;
 }
 
@@ -59,6 +67,7 @@ static ErasTeam s_teams[NFL2K5_ERAS_MAX_TEAMS];
 static int s_team_n;
 static ErasGame s_games[NFL2K5_ERAS_MAX_GAMES];
 static int s_game_n, s_weeks;
+static int s_regular_n;             /* M14: the package schedule's games; playoff games follow them */
 static int s_package = -1;          /* -1 not tried, 0 loaded, 1 failed */
 
 static struct {
@@ -160,19 +169,26 @@ int nfl2k5_eras_team_find(const char *id)
     return -1;
 }
 
-int nfl2k5_eras_package_load(void)
+int nfl2k5_eras_season(void) { return s_league.loaded && s_league.season ? s_league.season : NFL2K5_ERAS_SEASON; }
+
+int nfl2k5_eras_package_load(void) { return nfl2k5_eras_package_load_season(nfl2k5_eras_season()); }
+
+int nfl2k5_eras_package_load_season(int season)
 {
     char path[MAX_PATH], line[1024], *f[16];
     FILE *fp;
     int n, row, col_style = -1, col_stadium = 11;
-    if (s_package >= 0) return s_package ? -1 : 0;
+    if (season < 1900) season = NFL2K5_ERAS_SEASON;
+    if (s_package >= 0 && s_package_season == season) return s_package ? -1 : 0;
     if (nfl2k5_eras_limited()[0]) {   /* the pack is installed but cannot run (the hub says why) */
         s_package = 1;
         fprintf(stderr, "[ERAS] package: not loaded (%s)\n", nfl2k5_eras_limited());
         return -1;
     }
     s_package = 1;
-    s_team_n = s_game_n = s_weeks = 0;
+    s_package_season = season;
+    s_package_dir[0] = 0;
+    s_team_n = s_game_n = s_weeks = s_regular_n = 0;
     snprintf(path, sizeof path, "%s\\teams.csv", package_dir());
     if (fopen_s(&fp, path, "rb") || !fp) { fprintf(stderr, "[ERAS] package: %s not found\n", path); return -1; }
     for (row = 0; fgets(line, sizeof line, fp); row++) {
@@ -213,9 +229,10 @@ int nfl2k5_eras_package_load(void)
         if (n < 5 || !f[0][0]) continue;
         if (s_game_n >= NFL2K5_ERAS_MAX_GAMES) break;
         g = &s_games[s_game_n];
+        memset(g, 0, sizeof *g);
         copy(g->id, sizeof g->id, f[0]); g->week = atoi(f[1]); copy(g->date, sizeof g->date, f[2]);
         g->away = nfl2k5_eras_team_find(f[3]); g->home = nfl2k5_eras_team_find(f[4]);
-        if (g->away < 0 || g->home < 0 || g->week < 1 || g->week > NFL2K5_ERAS_MAX_WEEKS) {
+        if (g->away < 0 || g->home < 0 || g->week < 1 || g->week > PLAYOFF_WEEK0) {
             fprintf(stderr, "[ERAS] package: schedule row %d (%s) names an unknown team or week\n", row, f[0]);
             fclose(fp); return -1;
         }
@@ -224,12 +241,41 @@ int nfl2k5_eras_package_load(void)
     }
     fclose(fp);
     if (s_team_n < 2 || s_game_n < 1) { fprintf(stderr, "[ERAS] package: %d teams, %d games\n", s_team_n, s_game_n); return -1; }
+    s_regular_n = s_game_n;
     s_package = 0;
     fprintf(stderr, "[ERAS] package %s: %d teams, %d games, %d weeks\n", package_dir(), s_team_n, s_game_n, s_weeks);
     return 0;
 }
 
 int nfl2k5_eras_package_ok(void) { return nfl2k5_eras_package_load() == 0; }
+
+/* ---- M14: the playoff games (appended by src/nfl2k5_eras_playoffs.c) ----- */
+
+int nfl2k5_eras_regular_game_count(void) { return s_regular_n; }
+
+int nfl2k5_eras_add_game(const ErasGame *g)
+{
+    if (!g || s_game_n >= NFL2K5_ERAS_MAX_GAMES || nfl2k5_eras_game_find(g->id) >= 0) return -1;
+    s_games[s_game_n] = *g;
+    s_played[s_game_n] = 0;
+    if (g->week > s_weeks) s_weeks = g->week;
+    return s_game_n++;
+}
+
+int nfl2k5_eras_regular_complete(void)
+{
+    int i;
+    if (!s_league.loaded || s_regular_n < 1) return 0;
+    for (i = 0; i < s_regular_n; i++) if (!s_played[i]) return 0;
+    return 1;
+}
+
+int nfl2k5_eras_season_complete(void)
+{
+    int i;
+    for (i = s_regular_n; i < s_game_n; i++) if (s_games[i].round == 4 && s_played[i]) return 1;
+    return 0;
+}
 
 /* ---- M9 era looks ------------------------------------------------------ */
 
@@ -255,7 +301,13 @@ void nfl2k5_eras_team_art_update(void)
     static int last = -1;
     char season[8];
     int on = nfl2k5_eras_launch_active() || nfl2k5_eras_depth_editing();
-    snprintf(season, sizeof season, "%d", NFL2K5_ERAS_SEASON);
+    /* M14: the season's team art folder (teams\<season>\art); the first season's when a later
+     * season has none yet (the pack ships 1980 art only) */
+    {
+        char rel[48];
+        snprintf(rel, sizeof rel, "teams\\%d\\art", nfl2k5_eras_season());
+        snprintf(season, sizeof season, "%d", nfl2k5_eras_exists(rel) ? nfl2k5_eras_season() : NFL2K5_ERAS_SEASON);
+    }
     g_eras_svc->texpack_set_team_art(on ? season : NULL);
     if (on != last) nfl2k5_eras_log("team art context %s", on ? season : "off");
     last = on;
@@ -265,7 +317,9 @@ int nfl2k5_eras_team_count(void) { return s_team_n; }
 const ErasTeam *nfl2k5_eras_team(int i) { return i >= 0 && i < s_team_n ? &s_teams[i] : NULL; }
 int nfl2k5_eras_game_count(void) { return s_game_n; }
 const ErasGame *nfl2k5_eras_game(int i) { return i >= 0 && i < s_game_n ? &s_games[i] : NULL; }
-int nfl2k5_eras_week_count(void) { return s_weeks; }
+int nfl2k5_eras_week_count(void) { return s_weeks > PLAYOFF_WEEK0 ? PLAYOFF_WEEK0 : s_weeks; }   /* regular-season weeks (M14: playoff rounds are weeks 17..20) */
+
+char *nfl2k5_eras_league_peek(const char *rel, char *out, unsigned n);
 
 /* ---- league.ini -------------------------------------------------------- */
 
@@ -363,8 +417,14 @@ int nfl2k5_eras_league_load(void)
                 s_league.format_found, NFL2K5_ERAS_FORMAT);
         return NFL2K5_ERAS_BAD_VERSION;
     }
-    if (s_league.season != NFL2K5_ERAS_SEASON || (_stricmp(s_league.package, PACKAGE_REL) && _stricmp(s_league.package, PACKAGE_LEGACY)) || nfl2k5_eras_package_load())
-        return NFL2K5_ERAS_BAD_PACKAGE;
+    {
+        char rel[32], legacy[48];
+        snprintf(rel, sizeof rel, PACKAGE_REL, s_league.season);
+        snprintf(legacy, sizeof legacy, PACKAGE_LEGACY, s_league.season);
+        if (s_league.season < 1900 || (_stricmp(s_league.package, rel) && _stricmp(s_league.package, legacy)) ||
+            nfl2k5_eras_package_load_season(s_league.season))
+            return NFL2K5_ERAS_BAD_PACKAGE;
+    }
     s_league.user_team = strcmp(user, "none") ? nfl2k5_eras_team_find(user) : -1;
     if (strcmp(user, "none") && s_league.user_team < 0) {
         /* refused, not quietly turned into watch mode */
@@ -388,7 +448,7 @@ int nfl2k5_eras_league_create(void)
     time_t now = time(NULL);
     struct tm tmv;
     FILE *f;
-    if (nfl2k5_eras_package_load()) return NFL2K5_ERAS_BAD_PACKAGE;
+    if (nfl2k5_eras_package_load_season(NFL2K5_ERAS_SEASON)) return NFL2K5_ERAS_BAD_PACKAGE;
     localtime_s(&tmv, &now);
     /* An existing league is moved aside (league1-replaced-<time>), never deleted. */
     league_path_peek("", dir, sizeof dir);
@@ -409,7 +469,7 @@ int nfl2k5_eras_league_create(void)
     s_league.season = NFL2K5_ERAS_SEASON;
     s_league.user_team = -1;
     s_league.sleepers = -1;
-    copy(s_league.package, sizeof s_league.package, PACKAGE_REL);
+    snprintf(s_league.package, sizeof s_league.package, PACKAGE_REL, NFL2K5_ERAS_SEASON);
     strftime(s_league.created, sizeof s_league.created, "%Y-%m-%dT%H:%M:%S", &tmv);
     nfl2k5_eras_league_path("box\\", path, sizeof path);     /* creates box\ */
     CreateDirectoryA(path, NULL);
@@ -494,20 +554,66 @@ int nfl2k5_eras_roster_season(void)
     return s_league.loaded && s_league.season ? s_league.season : NFL2K5_ERAS_SEASON;
 }
 
+/* M14: the league's own rosters\<season>\<id>.csv (the draft's rookies, the Alternate History
+ * rollover) wins when it exists; else the package's file for the package season. */
 static int season_file(int team, const char *kind, const char *pkg_rel, char *out, size_t n)
 {
     const ErasTeam *t = nfl2k5_eras_team(team);
-    char *p;
+    char *p, rel[96];
     int season = nfl2k5_eras_roster_season();
     if (!t) { out[0] = 0; return -1; }
-    if (season == NFL2K5_ERAS_SEASON) snprintf(out, n, "%s\\%s", package_dir(), pkg_rel);
-    else {
-        char rel[96];
-        snprintf(rel, sizeof rel, "%s\\%d\\%s.csv", kind, season, t->id);
-        league_path_peek(rel, out, n);
-    }
+    snprintf(rel, sizeof rel, "%s\\%d\\%s.csv", kind, season, t->id);
+    league_path_peek(rel, out, n);
+    if (GetFileAttributesA(out) != INVALID_FILE_ATTRIBUTES) return 0;
+    if (season == s_package_season) snprintf(out, n, "%s\\%s", package_dir(), pkg_rel);
     for (p = out; *p; p++) if (*p == '/') *p = '\\';
     return GetFileAttributesA(out) == INVALID_FILE_ATTRIBUTES ? -1 : 0;
+}
+
+int nfl2k5_eras_package_roster_path(int team, char *out, size_t n)
+{
+    const ErasTeam *t = nfl2k5_eras_team(team);
+    char *p;
+    if (!t) { out[0] = 0; return -1; }
+    snprintf(out, n, "%s\\%s", package_dir(), t->roster_file);
+    for (p = out; *p; p++) if (*p == '/') *p = '\\';
+    return GetFileAttributesA(out) == INVALID_FILE_ATTRIBUTES ? -1 : 0;
+}
+
+int nfl2k5_eras_package_depth_path(int team, char *out, size_t n)
+{
+    const ErasTeam *t = nfl2k5_eras_team(team);
+    if (!t) { out[0] = 0; return -1; }
+    snprintf(out, n, "%s\\depth\\%s.csv", package_dir(), t->id);
+    return GetFileAttributesA(out) == INVALID_FILE_ATTRIBUTES ? -1 : 0;
+}
+
+char *nfl2k5_eras_league_peek(const char *rel, char *out, unsigned n) { return league_path_peek(rel, out, n); }
+
+/* M14 rollover: the league moves to `season`. The caller has archived the old season's files
+ * (src/nfl2k5_eras_rollover.c); here league.ini is rewritten, the package loaded and a fresh
+ * results.csv started. */
+int nfl2k5_eras_league_set_season(int season)
+{
+    char path[MAX_PATH];
+    FILE *f;
+    int old = s_league.season;
+    if (!s_league.loaded || season < 1900) return -1;
+    if (nfl2k5_eras_package_load_season(season)) {
+        nfl2k5_eras_package_load_season(old);
+        nfl2k5_eras_log("rollover: the %d package did not load; the league stays in %d", season, old);
+        return -1;
+    }
+    s_league.season = season;
+    snprintf(s_league.package, sizeof s_league.package, PACKAGE_REL, season);
+    s_league.launched[0] = 0;
+    if (fopen_s(&f, nfl2k5_eras_league_path("results.csv", path, sizeof path), "wb") || !f) return -1;
+    fprintf(f, "game_id,home_pts,away_pts,final_period,end_state,status\r\n");
+    fclose(f);
+    if (league_write()) return -1;
+    nfl2k5_eras_refresh();
+    nfl2k5_eras_log("rollover: the league is now the %d season (package %s, %d teams, %d games)", season, s_league.package, s_team_n, s_game_n);
+    return 0;
 }
 
 int nfl2k5_eras_roster_path(int team, char *out, size_t n)
@@ -545,7 +651,7 @@ int nfl2k5_eras_set_user_team(int team)
 
 /* ---- results and standings -------------------------------------------- */
 
-void nfl2k5_eras_refresh(void)
+static void read_results(void)
 {
     char path[MAX_PATH], line[512], *f[8];
     FILE *fp;
@@ -567,6 +673,18 @@ void nfl2k5_eras_refresh(void)
         s_away_pts[i] = (short)atoi(f[2]);
     }
     fclose(fp);
+}
+
+void nfl2k5_eras_refresh(void)
+{
+    static int busy;
+    read_results();
+    if (!s_league.loaded || busy) return;
+    busy = 1;
+    /* M14: the playoff rounds (playoffs.csv, and the next round when the last one is complete)
+     * join the game list; their results are then read as well */
+    if (nfl2k5_eras_playoffs_update()) read_results();
+    busy = 0;
 }
 
 int nfl2k5_eras_result(int game, int *home_pts, int *away_pts)

@@ -1,0 +1,55 @@
+/* CBS WALK-OFF WINS full-screen comparison, official NFL PLR04ljZ5DI.
+   Reference is 640x360, scaled here by 3. The live camera remains beneath the
+   oval and translucent table. Exact original 3D team-logo meshes, stadium
+   plate and player photography are not included; all image slots are assets. */
+.cbs-stat-comparison { position:absolute; inset:0; width:1920px; height:1080px; overflow:hidden; z-index:30; pointer-events:none; color:#fff; --cl-enter:1250ms; --cl-exit:550ms; }
+.cbs-stat-comparison[hidden] { display:none; }
+.cl-stage,.cl-shell,.cl-opener { position:absolute; inset:0; overflow:hidden; }
+.cl-shade { position:absolute; inset:0; background:linear-gradient(180deg,#08090d28,#08090d18 55%,#08090d40); }
+.cl-team-frame { position:absolute; inset:0; width:1920px; height:1080px; filter:drop-shadow(0 1px 2px #0008); }
+.cl-network { position:absolute;z-index:4;left:1659px;top:57px;width:195px;height:27px;object-fit:contain; }
+.cl-frame-logo { position:absolute; width:170px; height:150px; object-fit:contain; filter:drop-shadow(0 2px 2px #0007); }
+.cl-frame-logo.cl-left { left:29px; top:143px; }.cl-frame-logo.cl-right { right:27px; top:137px; }
+.cl-panel { position:absolute; z-index:2; left:402px; top:156px; width:1116px; height:798px; background:linear-gradient(#000 0 151px,#000000d9 151px,#000000d9 100%); color:#fff; }
+.cl-heading { position:absolute; left:0; right:0; top:0; height:150px; text-align:center; overflow:hidden; }
+.cl-title { position:absolute; left:0; right:0; top:0; height:98px; font:900 84px/100px "CBS Preview Heavy",Impact,"Arial Narrow",sans-serif; white-space:nowrap; }
+.cl-title span { display:inline-block; transform:scaleX(.78); }
+.cl-subtitle { position:absolute; left:15px; right:15px; top:101px; height:40px; font:400 38px/40px Arial,sans-serif; letter-spacing:7px; white-space:nowrap; }
+.cl-columns { position:absolute; left:12px; right:12px; top:160px; height:60px; display:flex; justify-content:space-between; }
+.cl-column { display:flex; align-items:center; justify-content:center; width:40%; gap:13px; font:400 42px/48px Arial,sans-serif; white-space:nowrap; }
+.cl-column span { overflow:hidden; text-overflow:ellipsis; }
+.cl-column-logo { flex:none; width:55px; height:46px; object-fit:contain; }
+.cl-rows { position:absolute; left:12px; right:12px; top:194px; height:516px; display:grid; grid-template-rows:repeat(var(--cl-row-count,3),minmax(0,1fr)); }
+.cl-row { position:relative; display:grid; grid-template-columns:36% 28% 36%; align-items:center; text-align:center; }
+.cl-value { font:900 var(--cl-row-font,76px)/1.08 "CBS Preview Heavy",Impact,"Arial Narrow",sans-serif; white-space:nowrap; }
+.cl-value span { display:inline-block; transform:scaleX(.78); }
+.cl-value.cl-left { grid-column:1; grid-row:1; }.cl-value.cl-right { grid-column:3; grid-row:1; }
+.cl-row-label { grid-column:2; grid-row:1; font:400 var(--cl-label-font,43px)/1 Arial,sans-serif; letter-spacing:1px; padding:0 5px; }
+.cl-highlight span { background:#d6172d; padding:0 12px; }
+.cl-value-long { font-size:62px; }
+.cl-footnote { position:absolute; left:12px; right:12px; bottom:14px; height:45px; text-align:center; font:400 34px/45px Arial,sans-serif; white-space:nowrap; }
+.cl-portrait { position:absolute; z-index:3; top:270px; bottom:0; width:375px; overflow:hidden; }
+.cl-portrait.cl-left { left:36px; }.cl-portrait.cl-right { right:0; width:405px; }
+.cl-player-image { display:block; width:100%; height:100%; object-fit:contain; object-position:center bottom; filter:drop-shadow(0 1px 2px #0008); }
+.cl-portrait[hidden],.cl-player-image[hidden],.cl-frame-logo[hidden],.cl-column-logo[hidden],.cl-plane-logo[hidden] { display:none; }
+.cl-opener { z-index:6; visibility:hidden; }
+.cl-plane { position:absolute; top:0; bottom:0; width:50%; overflow:hidden; box-shadow:inset 0 0 80px #0009; }
+.cl-plane.cl-left { left:0; background:linear-gradient(135deg,#fff2,transparent 32%,#0006 70%),var(--cl-away); }
+.cl-plane.cl-right { right:0; background:linear-gradient(35deg,#0006,transparent 50%,#fff4),var(--cl-home); }
+.cl-plane-logo { position:absolute; left:-35%; top:-14%; width:175%; height:128%; object-fit:contain; filter:drop-shadow(0 15px 0 #0005) drop-shadow(0 24px 8px #0008); }
+.cl-plane.cl-left .cl-plane-logo { transform:rotate(-9deg) skewY(-5deg); }.cl-plane.cl-right .cl-plane-logo { transform:rotate(8deg) skewY(5deg); }
+.cbs-stat-comparison.entering .cl-opener { visibility:visible; animation:clOpener var(--cl-enter) linear both; }
+.cbs-stat-comparison.entering .cl-plane.cl-left { animation:clPlaneLeft var(--cl-enter) linear both; }
+.cbs-stat-comparison.entering .cl-plane.cl-right { animation:clPlaneRight var(--cl-enter) linear both; }
+.cbs-stat-comparison.entering .cl-shell { animation:clShell var(--cl-enter) linear both; }
+.cbs-stat-comparison.entering .cl-panel { animation:clPanel var(--cl-enter) linear both; }
+.cbs-stat-comparison.entering .cl-portrait { animation:clPortrait var(--cl-enter) linear both; }
+.cbs-stat-comparison.leaving .cl-stage { animation:clLeave var(--cl-exit) linear both; }
+@keyframes clOpener { 0%,49%{opacity:1} 66%,100%{opacity:0;visibility:hidden} }
+@keyframes clPlaneLeft { 0%{clip-path:polygon(0 0,0 0,0 100%,0 100%)} 28%,50%{clip-path:polygon(0 0,100% 0,100% 100%,0 100%)} 66%,100%{clip-path:polygon(0 0,0 0,0 100%,0 100%)} }
+@keyframes clPlaneRight { 0%,15%{clip-path:polygon(100% 0,100% 0,100% 100%,100% 100%)} 35%,50%{clip-path:polygon(0 0,100% 0,100% 100%,0 100%)} 66%,100%{clip-path:polygon(100% 0,100% 0,100% 100%,100% 100%)} }
+@keyframes clShell { 0%,38%{opacity:0;clip-path:ellipse(0 0 at 50% 50%)} 58%{opacity:1;clip-path:ellipse(51% 53% at 50% 50%)} 70%,100%{opacity:1;clip-path:ellipse(80% 80% at 50% 50%)} }
+@keyframes clPanel { 0%,49%{clip-path:inset(100% 0 0);opacity:0} 55%{opacity:1} 71%,100%{clip-path:inset(0);opacity:1} }
+@keyframes clPortrait { 0%,67%{clip-path:inset(100% 0 0);filter:grayscale(1)} 82%{clip-path:inset(0);filter:grayscale(1)} 91%,100%{clip-path:inset(0);filter:grayscale(0)} }
+@keyframes clLeave { 0%{clip-path:inset(0);opacity:1} 77%{clip-path:inset(100% 0 0);opacity:1} 100%{clip-path:inset(100% 0 0);opacity:0} }
+@media (prefers-reduced-motion:reduce) { html:not([data-preview-motion="full"]) .cbs-stat-comparison.entering .cl-opener { display:none; } html:not([data-preview-motion="full"]) .cbs-stat-comparison.entering * { animation:none; } html:not([data-preview-motion="full"]) .cbs-stat-comparison.leaving .cl-stage { animation:none;opacity:0; } }

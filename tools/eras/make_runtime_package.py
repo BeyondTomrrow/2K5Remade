@@ -281,6 +281,7 @@ def build(season):
         for t in teams:
             w.writerow([t[k] for k in TEAMS_HEADER])
     coaches = write_coaches(out_dir, season, teams)
+    write_postseason(out_dir, season, league, stadiums)
     write_provenance(out_dir, season, league, comm, digest, payload_path, teams, report, lineage, coaches,
                      starters_doc, mem, docs)
     unused = sorted(set(range(32)) - {t['community_slot'] for t in teams})
@@ -798,6 +799,41 @@ def write_coaches(out_dir, season, teams):
     return d
 
 
+# M14: the Super Bowl site as a franchise's home venue of that season (stadiums_1966_2025.json spells),
+# so the game launches the Super Bowl at the right in-game stadium (exact or the stand-in the spell names).
+SB_HOST = {'Superdome, New Orleans': 'saints', 'Silverdome, Pontiac, Mich.': 'lions', 'Orange Bowl, Miami': 'dolphins',
+           'Tulane Stadium, New Orleans': 'saints', 'Rice Stadium, Houston': 'oilers_titans',
+           'Los Angeles Memorial Coliseum': 'rams', 'Rose Bowl, Pasadena, Calif.': 'rams'}
+# The designated home team alternates between the conferences: the AFC in even-numbered Super Bowls, the
+# NFC in odd-numbered ones (Super Bowl XV: Philadelphia; XVI: Cincinnati; https://en.wikipedia.org/wiki/Super_Bowl_XV,
+# https://en.wikipedia.org/wiki/Super_Bowl_XVI infoboxes).
+ROUND_CODES = [('Wild Card playoffs', 'wildcard', 'WILD CARD'), ('Divisional playoffs', 'divisional', 'DIVISIONAL'),
+               ('Conference championships', 'conference', 'CONFERENCE CHAMPIONSHIP'), ('Super Bowl', 'superbowl', None)]
+
+
+def write_postseason(out_dir, season, league, stadiums):
+    """postseason.csv: the season's playoff rounds (first date of each round, from PFR's playoff table in
+    nfl_seasons_1970_1980.json), the Super Bowl's name, site and designated home conference."""
+    sb = league['championship']
+    host = SB_HOST[sb['site']]
+    venue, match, hist = home_stadium(stadiums, host, season)
+    rows = []
+    for name, code, label in ROUND_CODES:
+        dates = sorted(g['date'] for g in league['postseason'] if g['round'] == name)
+        assert dates, (season, name)
+        if code == 'superbowl':
+            assert dates[0] == sb['date']
+            rows.append([code, dates[0], sb['name'].upper(), venue, '%s (%s)' % (sb['site'], match), 'AFC' if sb['number'] % 2 == 0 else 'NFC'])
+        else:
+            rows.append([code, dates[0], label, '', '', ''])
+    with open(os.path.join(out_dir, 'postseason.csv'), 'w', encoding='ascii', newline='') as f:
+        w = csv.writer(f, lineterminator='\n', quoting=csv.QUOTE_NONE)
+        w.writerow(['round', 'date', 'label', 'site', 'site_historical', 'designated_home'])
+        for r in rows:
+            w.writerow(r)
+    return rows
+
+
 def write_provenance(out_dir, season, league, comm, digest, payload_path, teams, report, lineage, coaches=None,
                      starters_doc=None, mem=None, docs=None):
     sched_path = os.path.join(LEAGUE, 'nfl_schedule_%d.json' % season)
@@ -983,6 +1019,14 @@ def write_provenance(out_dir, season, league, comm, digest, payload_path, teams,
                                                           c['wins'], c['losses'], c['ties']))
         add('')
     add('INPUT FILES (sha256)')
+    add('')
+    add('POSTSEASON (postseason.csv, M14)')
+    add('  Round dates: the first game date of each round in PFR's %d playoff table (nfl_seasons_1970_1980.json' % season)
+    add('  postseason). Super Bowl: name, date and site from the same file (PFR + ESPN winners table); the in-game')
+    add('  venue is the site's host franchise's home venue spell of this season (stadiums_1966_2025.json, exact or')
+    add('  stand-in as marked); designated home: AFC in even-numbered Super Bowls, NFC in odd (Wikipedia Super Bowl')
+    add('  XV / XVI infoboxes). Format: %s.' % league['playoff_format']['qualification'])
+    add('  Seeding and tiebreakers are applied by the game (src/nfl2k5_eras_playoffs.c; docs/eras/results/M14-season-end.md).')
     for rel in ('data/eras/league/nfl_seasons_1970_1980.json', 'data/eras/league/franchise_events_1970_2025.json',
                 'data/eras/historic_teams_2k5.json', 'data/eras/community_rosters/%d.json' % season,
                 'data/eras/league/lineage_check_%d.json' % season, 'data/eras/league/nfl_schedule_%d.json' % season,

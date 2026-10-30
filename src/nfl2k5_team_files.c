@@ -266,6 +266,20 @@ void nfl2k5_team_identity(const char *rost_path, uint32_t slot)
         for (j = 0; j <= len; j++) MEM16(g + 2 * j) = (uint16_t)(unsigned char)v[j];
         MEM32(slot + k_fields[i].field) = g;
     }
+    /* Optional: a custom team can name its home venue (an Eras stadium pack or a
+     * disc stadium), e.g. Alabama -> "BRYANT-DENNY STADIUM". This runs after the
+     * roster import's asset-code stadium rebind, so it wins: point the team
+     * record's stadium (+0x114) at the resolved/borrowed row. One pack row is
+     * borrowed at a time (nfl2k5_teams.c), so this suits a single such team. */
+    if (json_str(text, "stadium", v, sizeof v) && v[0]) {
+        int sid = -1;
+        uint32_t st = nfl2k5_teams_stadium_find(v, &sid);
+        if (!st) st = nfl2k5_teams_stadium_pack(v, &sid);
+        if (st) {
+            MEM32(slot + 0x114) = st;
+            fprintf(stderr, "[TEAMFILES] home stadium '%s' -> record %08X (id %d)\n", v, st, sid);
+        } else fprintf(stderr, "[TEAMFILES] home stadium '%s' not found or not installed\n", v);
+    }
 }
 
 
@@ -366,6 +380,59 @@ void nfl2k5_archive_extend(void)
             nf++;
         } while (FindNextFileA(h, &fd));
         FindClose(h);
+    }
+    /* A custom team can name an Eras stadium pack as its home venue (team.json
+     * "stadium"). Add that pack's files here so the stadium loads even when the
+     * Eras module is off (the module's own extend below runs only when Eras is
+     * on). Dedup by name so an Eras-on boot does not add them twice. */
+    for (k = 0; k < s_n; k++) {
+        char tp[MAX_PATH], ttext[2048], venue[64];
+        WIN32_FIND_DATAA sd;
+        HANDLE sh;
+        FILE *tf;
+        size_t tn;
+        snprintf(tp, sizeof tp, "mods\\teams\\%s\\team.json", s_teams[k].folder);
+        if (!(tf = fopen(tp, "rb"))) continue;
+        tn = fread(ttext, 1, sizeof ttext - 1, tf);
+        fclose(tf);
+        ttext[tn] = 0;
+        if (!json_str(ttext, "stadium", venue, sizeof venue) || !venue[0]) continue;
+        sh = FindFirstFileA("mods\\eras\\stadiums\\*", &sd);
+        if (sh == INVALID_HANDLE_VALUE) continue;
+        do {
+            char sp[MAX_PATH], stext[2048], sname[64], fpat[MAX_PATH];
+            WIN32_FIND_DATAA ff;
+            HANDLE fh;
+            FILE *sf;
+            size_t sn;
+            if (!(sd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) || sd.cFileName[0] == '.') continue;
+            snprintf(sp, sizeof sp, "mods\\eras\\stadiums\\%s\\stadium.json", sd.cFileName);
+            if (!(sf = fopen(sp, "rb"))) continue;
+            sn = fread(stext, 1, sizeof stext - 1, sf);
+            fclose(sf);
+            stext[sn] = 0;
+            if (!json_str(stext, "name", sname, sizeof sname) || _stricmp(sname, venue) != 0) continue;
+            snprintf(fpat, sizeof fpat, "mods\\eras\\stadiums\\%s\\files\\*", sd.cFileName);
+            fh = FindFirstFileA(fpat, &ff);
+            if (fh != INVALID_HANDLE_VALUE) {
+                do {
+                    int j, dup = 0;
+                    if ((ff.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) || nf >= 4096 || strlen(ff.cFileName) >= 96) continue;
+                    for (j = 0; j < nf; j++) if (!_stricmp(files[j].name, ff.cFileName)) { dup = 1; break; }
+                    if (dup) continue;
+                    snprintf(files[nf].host, sizeof files[nf].host, "mods\\eras\\stadiums\\%s\\files\\%s", sd.cFileName, ff.cFileName);
+                    snprintf(files[nf].name, sizeof files[nf].name, "%s", ff.cFileName);
+                    files[nf].size = ff.nFileSizeLow;
+                    files[nf].block = blocks;
+                    blocks += (ff.nFileSizeLow + 0x7FF) / 0x800;
+                    nf++;
+                } while (FindNextFileA(fh, &ff));
+                FindClose(fh);
+                fprintf(stderr, "[TEAMFILES] added stadium pack '%s' files for team %s\n", venue, s_teams[k].folder);
+            }
+            break;
+        } while (FindNextFileA(sh, &sd));
+        FindClose(sh);
     }
     {   /* feature modules' files (My NFL Eras: its stadium bundles and office packages),
          * only when the module is on (src/nfl2k5_plugin_host.c) */

@@ -51,18 +51,30 @@ def hexrgb(c):
     return "#%02X%02X%02X" % tuple(c)
 
 
-def build(spec: dict, game_root: str | Path, progress=print) -> Path:
+def build(spec: dict, game_root: str | Path, progress=print, *, output_dir: Path | None = None) -> Path:
     root = Path(game_root)
     teams = root / "mods" / "teams"
     folder = spec.get("folder") or re.sub(r"[^A-Za-z0-9]+", "", f"{spec['city']}{spec['nickname']}")[:40] or "NewTeam"
-    out = teams / folder
+    if not re.fullmatch(r'[A-Za-z0-9_-]{1,64}', folder):
+        raise ValueError('Team folder must contain only letters, numbers, underscores or hyphens')
+    out = Path(output_dir) if output_dir is not None else teams / folder
     (out / "files").mkdir(parents=True, exist_ok=True)
     old = out / "team.json"
     code = None
     if old.exists():
         code = json.loads(old.read_text(encoding="utf-8")).get("code")
-    code = code or next_code(teams)
+    code = code or spec.get('code') or next_code(teams)
+    if not re.fullmatch(r'[ZQ][1-9A-Z]', code):
+        raise ValueError('Invalid custom team asset code')
     progress(f"Team code {code}, folder {out}")
+
+    def _rp(p):
+        """A spec image path made absolute: a relative one is resolved against
+        the team folder, so a shared pack (with its PNGs/photos inside, paths
+        relative to it) rebuilds from any working directory."""
+        if not p:
+            return p
+        return p if os.path.isabs(p) else str(out / p)
 
     arc = G.Archive(root / "original" / "disc")
     (out / "team.rost").write_bytes(arc.roster_template())
@@ -74,10 +86,10 @@ def build(spec: dict, game_root: str | Path, progress=print) -> Path:
     photos = {}
     for row, p in enumerate(spec["roster"]):
         p.pop("photo", None)
-        if p.get("photo_image") and Path(p["photo_image"]).exists() and row < 100:
+        if p.get("photo_image") and Path(_rp(p["photo_image"])).exists() and row < 100:
             p["photo"] = logos.photo_base(code) + row
-            photos[p["photo"]] = Image.open(p["photo_image"])
-    for name, slot in logos.portrait_slots(arc, photos).items():
+            photos[p["photo"]] = Image.open(_rp(p["photo_image"]))
+    for name, slot in (logos.portrait_slots(arc, photos) if photos else {}).items():
         (out / "cache" / (name + ".bin")).write_bytes(slot)
     if photos:
         progress(f"Player photos: {len(photos)}")
@@ -86,12 +98,12 @@ def build(spec: dict, game_root: str | Path, progress=print) -> Path:
 
     mapper = G.make_mapper([tuple(c) for c in spec["base_colors"]], [tuple(c) for c in spec["colors"]])
     from PIL import Image
-    if spec.get("logo") and Path(spec["logo"]).exists():
-        logo = Image.open(spec["logo"]).convert("RGBA")
+    if spec.get("logo") and Path(_rp(spec["logo"])).exists():
+        logo = Image.open(_rp(spec["logo"])).convert("RGBA")
     else:
         logo = logos.text_logo(spec["nickname"][:1] or spec["city"][:1], spec["colors"][0],
                                spec["colors"][1] if len(spec["colors"]) > 1 else (255, 255, 255))
-    helmet_logo = Image.open(spec["helmet_logo"]).convert("RGBA") if spec.get("helmet_logo") and Path(spec["helmet_logo"]).exists() else None
+    helmet_logo = Image.open(_rp(spec["helmet_logo"])).convert("RGBA") if spec.get("helmet_logo") and Path(_rp(spec["helmet_logo"])).exists() else None
     (out / "logos").mkdir(exist_ok=True)
     logo.save(out / "logos" / "logo.png")
     sb = logo.copy()
@@ -104,8 +116,30 @@ def build(spec: dict, game_root: str | Path, progress=print) -> Path:
         progress(f"Uniforms and crowd {i + 1}/{len(files)}: {name}")
         data = arc.read(name)
         new = G.recolor_iff(data, mapper)
-        if re.fullmatch(r"[ha]\d\.iff", name[len(spec["base"]):]):
-            new = logos.apply_logo(new, logo, spec["nickname"], spec["colors"], mapper, data, helmet_logo)
+        suffix = name[len(spec["base"]):]
+        if re.fullmatch(r"[ha]\d\.iff", suffix):
+            is_away = suffix[0] == "a"
+            uniforms = spec.get("uniforms") or {}
+            uniform = uniforms.get("away" if is_away else "home")
+            if uniform and spec.get('studio_version'):
+                from studio_assets import normalized_uniform
+                uniform=normalized_uniform(uniform)
+            new = logos.apply_logo(new, logo, spec["nickname"], spec["colors"], mapper, data, helmet_logo,
+                                   splayer_logo_box=spec.get("splayer_logo_box"),
+                                   away_pants_white_box=spec.get("away_pants_white_box"),
+                                   is_away=is_away, uniform=uniform, base_colors=spec.get("base_colors"))
+            if uniform and spec.get('studio_version'):
+                from studio_assets import paint_detailed
+                new = paint_detailed(new, data, uniform, spec['base_colors'],is_away)
+        overrides = spec.get('texture_overrides', {})
+        matching = [(key.split('|', 1)[1], path) for key, path in overrides.items()
+                    if key.startswith(name + '|')]
+        if matching:
+            from studio_assets import replace_texture
+            for texture_id, path in matching:
+                progress(f"Custom texture: {name}, {texture_id}")
+                with Image.open(_rp(path)) as custom:
+                    new = replace_texture(new, texture_id, custom)
         (out / "files" / (code + name[len(spec["base"]):])).write_bytes(new)
     progress("Front-end logos (roster backdrop, roster card chip)")
     for name, slot in logos.cache_art(arc, spec["base"], code, logo).items():
@@ -122,6 +156,8 @@ def build(spec: dict, game_root: str | Path, progress=print) -> Path:
         "aliases": [],
         "created_with": "NFL2K5-PC Team Creator",
     }
+    if spec.get("stadium"):          # optional home venue (an Eras stadium pack or disc stadium name)
+        info["stadium"] = spec["stadium"]
     (out / "team.json").write_text(json.dumps(info, indent=2), encoding="utf-8")
     # the recipe, with its pictures inside the team folder and paths relative to
     # it, so the folder can be shared and rebuilt anywhere (team_builder.py)
@@ -132,7 +168,7 @@ def build(spec: dict, game_root: str | Path, progress=print) -> Path:
         recipe["helmet_logo"] = "logos/helmet_logo.png"
     for p in recipe["roster"]:
         if p.get("photo_image"):
-            img = Path(p["photo_image"])
+            img = Path(_rp(p["photo_image"]))
             try:
                 p["photo_image"] = img.resolve().relative_to(out.resolve()).as_posix()
             except ValueError:

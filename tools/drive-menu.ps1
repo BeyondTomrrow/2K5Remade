@@ -1,5 +1,5 @@
 param([string[]]$Steps = @(), [string]$Tag = 'menu', [string]$Exe = 'build\Release\NFL2K5.exe', [int]$BootSeconds = 50,
-      [switch]$KeepRunning)
+      [switch]$KeepRunning, [switch]$Retail)
 # Drive the menus with a list of steps and screenshot after each one.
 # A step is '<button>[x<count>][:<seconds to wait>]', e.g. 'down x3:2', 'a:6',
 # or 'shot' (screenshot only). Buttons are tools\press.ps1's names (a, b, x,
@@ -7,16 +7,18 @@ param([string[]]$Steps = @(), [string]$Tag = 'menu', [string]$Exe = 'build\Relea
 # Settings and VIP each acknowledge separately, so Start, A, A, Start reaches
 # the main menu on an existing profile.
 # Screenshots: logs\<tag>-<n>.png. Uses logs\game.lock like drive-quickgame.
+# -Retail: the clean game (NFL2K5.exe --retail), as drive-quickgame.ps1 -Retail,
+# instead of following mods\active-pack.ini to the selected pack's executable.
 $root = Split-Path $PSScriptRoot -Parent
 Set-Location $root
 $defaultRetail = 'build\Release\NFL2K5.exe'
 # Native packs are launched by the retail dispatcher in a child process.  Use
 # the selected native executable directly so this driver follows the game,
 # rather than treating a successful dispatcher handoff as an early exit.
-if ($Exe -eq $defaultRetail) {
+if ($Exe -eq $defaultRetail -and -not $Retail) {
     $activePack = Join-Path $root 'mods\active-pack.ini'
     if (Test-Path $activePack) {
-        $packName = (Get-Content $activePack -Raw).Trim()
+        $packName = ((Get-Content $activePack -Raw) -join '').Trim()
         $candidate = Join-Path $root ("mods\packs\$packName\native\NFL2K5.exe")
         if ($packName -and (Test-Path $candidate -PathType Leaf)) {
             $Exe = $candidate
@@ -34,7 +36,10 @@ while ((Test-Path $lock) -and ((Get-Date) - (Get-Item $lock).LastWriteTime).Tota
 }
 "drive-menu $PID $(Get-Date -Format s) $Tag" | Set-Content $lock -Encoding ascii
 while (Get-Process NFL2K5 -ErrorAction SilentlyContinue) { Start-Sleep 20 }
-$p = Start-Process $Exe -WorkingDirectory $root -PassThru -RedirectStandardError "logs\$Tag.stderr.log" -RedirectStandardOutput "logs\$Tag.stdout.log"
+$launch = @{ FilePath = $Exe; WorkingDirectory = $root; PassThru = $true
+             RedirectStandardError = "logs\$Tag.stderr.log"; RedirectStandardOutput = "logs\$Tag.stdout.log" }
+if ($Retail) { $launch['ArgumentList'] = '--retail' }
+$p = Start-Process @launch
 Start-Sleep $BootSeconds
 & "$PSScriptRoot\press.ps1" start; Start-Sleep 8
 & "$PSScriptRoot\press.ps1" a; Start-Sleep 8

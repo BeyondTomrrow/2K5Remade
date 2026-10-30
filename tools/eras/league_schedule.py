@@ -66,6 +66,17 @@ SOURCES = {
         {'file': 'years_1980.html', 'role': 'standings', 'snapshot': '20241219080443',
          'page': PFR + '/years/1980/', 'note': 'cached by league_history.py'},
     ],
+    1981: [
+        {'file': 'games_1981.html', 'role': 'primary', 'snapshot': '20260926144128',
+         'page': PFR + '/years/1981/games.htm'},
+        {'file': 'games_1981_20220812.html', 'role': 'second', 'snapshot': '20220812003940',
+         'page': PFR + '/years/1981/games.htm'},
+        {'file': 'nfl_past_standings_2011.pdf', 'role': 'nfl_book', 'snapshot': '20130925182142',
+         'page': 'http://static.nfl.com/static/content/public/image/history/pdfs/History/Past_Standings_2011.pdf',
+         'title': '2012 NFL Record & Fact Book, "Past Standings" (1981: p. 386)'},
+        {'file': 'years_1981.html', 'role': 'standings', 'snapshot': '20251010102211',
+         'page': PFR + '/years/1981/', 'note': 'cached by league_history.py'},
+    ],
 }
 
 
@@ -327,8 +338,12 @@ def book_standings(text, season, teams):
     """
     lines = text.splitlines()
     head = [i for i, ln in enumerate(lines) if re.fullmatch(r'\s*%d\s+%d\s*' % (season + 1, season), ln)]
+    left = False
+    if not head:   # the season is the left column of its page (1981 shares a page with 1980)
+        head = [i for i, ln in enumerate(lines) if re.fullmatch(r'\s*%d\s+%d\s*' % (season, season - 1), ln)]
+        left = True
     assert len(head) == 1, ('NFL book: no unique page header for', season)
-    col = lines[head[0]].index(str(season)) - 3
+    col = lines[head[0]].index(str(season - 1 if left else season)) - 3
     name_of = {}
     for t in teams:
         key = ('N.Y. ' + t['name']) if t['city'] == 'New York' else t['city']
@@ -339,7 +354,7 @@ def book_standings(text, season, teams):
         if ln.lstrip().startswith('*Wild Card'):
             break
         for m in BOOK_ROW.finditer(ln):
-            if m.start() < col:
+            if (m.start() < col) != left:
                 continue
             fid = name_of[m.group(1)]
             assert fid not in out, m.group(0)

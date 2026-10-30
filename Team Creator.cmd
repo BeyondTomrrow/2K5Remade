@@ -1,5 +1,7 @@
 @echo off
-rem NFL 2K5 Team Creator: make new teams (tools\team-creator)
+title NFL 2K5 Team Creator
 cd /d "%~dp0"
-python tools\team-creator\creator.py
+
+call "%~dp0Team Studio.cmd"
+
 if errorlevel 1 pause

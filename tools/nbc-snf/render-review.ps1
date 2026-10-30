@@ -1,8 +1,8 @@
-param([string]$Scene = 'qb-stat',[string]$Out = 'outputs\snf-previews\review\player-stat-motion.mp4',[string]$Label = 'SNF PRESENTATION PREVIEW')
+param([string]$Scene = 'qb-stat',[string]$Out = 'outputs\snf-previews\review\player-stat-motion.mp4',[string]$Label = 'SNF PRESENTATION PREVIEW',[switch]$SingleFrameProcesses)
 $snfRoot = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $snfExe = Join-Path $snfRoot 'tools\presentation-render\presentation-render.exe'
 if (!(Test-Path -LiteralPath $snfExe)) { throw 'Existing presentation renderer is missing. This script does not build it.' }
-$snfOutput = Join-Path $snfRoot $Out
+$snfOutput = if([IO.Path]::IsPathRooted($Out)){$Out}else{Join-Path $snfRoot $Out}
 $snfFrames = Join-Path (Split-Path $snfOutput -Parent) ($Scene + '-frames')
 New-Item -ItemType Directory -Force $snfFrames | Out-Null
 $env:TEMP = Join-Path $snfFrames ('.runtime-' + [Guid]::NewGuid().ToString('N'))
@@ -35,14 +35,21 @@ if($Scene -eq 'intro') {
   $snfTimes.Add(6199)
   for($snfMs=6200;$snfMs -le 6900;$snfMs+=33){$snfTimes.Add($snfMs)}
   $snfTimes.Add(7000)
-} elseif($Scene -eq 'replay-wipe') {
+} elseif($Scene -in @('replay-wipe','replay-return')) {
   for($snfMs=600;$snfMs -le 1750;$snfMs+=33){$snfTimes.Add($snfMs)}
   $snfTimes.Add(1900)
+} elseif($Scene -in @('quarter','halftime','overtime','final')) {
+  for($snfMs=600;$snfMs -le 1800;$snfMs+=33){$snfTimes.Add($snfMs)}
+  $snfExit = if($Scene -eq 'quarter'){5600}elseif($Scene -eq 'halftime'){7600}elseif($Scene -eq 'overtime'){7100}else{8600}
+  $snfTimes.Add($snfExit-1)
+  for($snfMs=$snfExit;$snfMs -le ($snfExit+750);$snfMs+=33){$snfTimes.Add($snfMs)}
+  $snfTimes.Add($snfExit+850)
 } elseif($Scene -in @('touchdown','field-goal')) {
   for($snfMs=600;$snfMs -le 6200;$snfMs+=33){$snfTimes.Add($snfMs)}
-  $snfTimes.Add(9599)
-  for($snfMs=9600;$snfMs -le 11400;$snfMs+=33){$snfTimes.Add($snfMs)}
-  $snfTimes.Add(11500)
+  # Fixture event at 600 ms; source-measured exit begins 8130 ms later.
+  $snfTimes.Add(8729)
+  for($snfMs=8730;$snfMs -le 10300;$snfMs+=33){$snfTimes.Add($snfMs)}
+  $snfTimes.Add(10400)
 } elseif($Scene -in @('timeout','player-profile','profile-receiver')) {
   for($snfMs=600;$snfMs -le 1800;$snfMs+=33){$snfTimes.Add($snfMs)}
   if($Scene -eq 'player-profile') {
@@ -58,11 +65,15 @@ if($Scene -eq 'intro') {
   for($snfMs=33;$snfMs -le 330;$snfMs+=33){$snfTimes.Add($snfMs)}
   $snfTimes.Add(2500)
 } elseif($Scene -in @('qb-stat','receiver-stat','player-context','player-feature','drive-stat','player-comparison','team-stats')) {
-  for($snfMs=600;$snfMs -le 1800;$snfMs+=33){$snfTimes.Add($snfMs)}
-  $snfExit = if($Scene -eq 'player-feature'){7100}elseif($Scene -eq 'drive-stat'){6600}elseif($Scene -in @('player-comparison','team-stats')){7600}else{6100}
+  # The attached drive's final value reveal completes after 2300 ms.
+  # Keep sampling until it is complete before holding the readable state.
+  $snfEnterEnd = if($Scene -eq 'drive-stat'){2400}else{1800}
+  for($snfMs=600;$snfMs -le $snfEnterEnd;$snfMs+=33){$snfTimes.Add($snfMs)}
+  $snfExit = if($Scene -eq 'player-feature'){7100}elseif($Scene -eq 'drive-stat'){4900}elseif($Scene -in @('player-comparison','team-stats')){7600}else{6100}
   $snfTimes.Add($snfExit-1)
-  for($snfMs=$snfExit;$snfMs -le ($snfExit+900);$snfMs+=33){$snfTimes.Add($snfMs)}
-  $snfTimes.Add($snfExit+1000)
+  $snfExitEnd = if($Scene -eq 'drive-stat'){$snfExit+1700}else{$snfExit+900}
+  for($snfMs=$snfExit;$snfMs -le $snfExitEnd;$snfMs+=33){$snfTimes.Add($snfMs)}
+  $snfTimes.Add($snfExitEnd+100)
 } else {
   throw 'Use the interactive preview for this scene; this script records player inserts, pregame inserts, intro, watermark, timeout, replay and scoring sequences.'
 }
@@ -75,20 +86,31 @@ $snfTimes = @($snfTimes | Sort-Object -Unique)
 $snfConcat = [System.Collections.Generic.List[string]]::new()
 $snfFrameIndex = [System.Collections.Generic.List[string]]::new()
 $snfFrameIndex.Add('file,fixture_ms')
+$snfBatchRows = [System.Collections.Generic.List[string]]::new()
 for($snfI=0;$snfI -lt $snfTimes.Count;$snfI++){
   $snfT=$snfTimes[$snfI];$snfPng=Join-Path $snfFrames ('frame-{0:D3}.png' -f $snfI)
   $snfFrameIndex.Add(('frame-{0:D3}.png,{1}' -f $snfI,$snfT))
   # Explicit full motion belongs only to this animation review. The live
   # package continues to honor the operating system's motion preference.
-  & $snfExe "https://presentation.local/NBC_SNF/scorebug.html?preview=$Scene&frame=$snfT&motion=full" $snfPng 1920 1080 700 (Join-Path $snfRoot 'mods\presentations')
-  if($LASTEXITCODE -ne 0){throw "Renderer failed at frame $snfT"}
-  if(($snfI % 10) -eq 0){Write-Output "$Scene frame $($snfI + 1)/$($snfTimes.Count) at ${snfT}ms"}
+  if($SingleFrameProcesses) {
+    & $snfExe "https://presentation.local/NBC_SNF/scorebug.html?preview=$Scene&frame=$snfT&motion=full" $snfPng 1920 1080 700 (Join-Path $snfRoot 'mods\presentations')
+    if($LASTEXITCODE -ne 0){throw "Renderer failed at frame $snfT"}
+    if(($snfI % 10) -eq 0){Write-Output "$Scene frame $($snfI + 1)/$($snfTimes.Count) at ${snfT}ms"}
+  } else { $snfBatchRows.Add("$snfT`t$snfPng") }
   $snfConcat.Add("file '$($snfPng.Replace('\','/'))'")
   # PNG demuxing otherwise rounds every 33ms sample to a 25fps timebase.
   # A millisecond source timebase preserves fixture timing before fps=30.
   $snfConcat.Add('option framerate 1000')
   $snfLength = if($snfI -lt $snfTimes.Count-1){($snfTimes[$snfI+1]-$snfT)/1000.0}else{0.7}
   $snfConcat.Add('duration '+$snfLength.ToString('0.000',[Globalization.CultureInfo]::InvariantCulture))
+}
+if(!$SingleFrameProcesses) {
+  $snfBatchList = Join-Path $snfFrames 'capture-frames.tsv'
+  [IO.File]::WriteAllLines($snfBatchList,$snfBatchRows,[Text.UTF8Encoding]::new($false))
+  $snfCaptureLog = & $snfExe "https://presentation.local/NBC_SNF/scorebug.html?preview=$Scene&frame=0&motion=full" $snfPng 1920 1080 700 (Join-Path $snfRoot 'mods\presentations') --batch $snfBatchList
+  if($LASTEXITCODE -ne 0){throw 'Batch renderer failed'}
+  [IO.File]::WriteAllLines((Join-Path $snfFrames 'capture.log'),[string[]]$snfCaptureLog,[Text.UTF8Encoding]::new($false))
+  Write-Output "$Scene captured $($snfTimes.Count) actual package frames in one WebView."
 }
 $snfConcat.Add("file '$($snfPng.Replace('\','/'))'")
 $snfConcat.Add('option framerate 1000')

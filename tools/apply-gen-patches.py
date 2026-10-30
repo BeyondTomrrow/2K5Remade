@@ -51,6 +51,23 @@ PATCHES = [
     ("SANDBOX_VIEWPORT_CAMERA", "sub_00064F80", "PUSH32(esp, 0x00064FAFu); RECOMP_ABI_CALL(0x0002AC80u, sub_0002AC80); /* call 0x0002AC80 */", "before", """\
     { extern void nfl2k5_sandbox_world_camera(uint32_t); RECOMP_REGS_OUT(); nfl2k5_sandbox_world_camera(ecx); RECOMP_REGS_IN(); }
 """),
+    # Coach Mode fast-forward: right after the main game-loop per-manager frame
+    # (0x6E6A0), run it extra times while a live play is on screen. edi is the
+    # manager and esi the delta at this point (both callee-saved across the call
+    # just made). A no-op unless Coach Mode fast-forward is armed.
+    ("COACH_FF_FRAME", "sub_000F4EF0", "loc_000F4F52: ;", "after", """\
+    { extern void nfl2k5_coach_ff_extra(uint32_t, uint32_t); RECOMP_REGS_OUT(); nfl2k5_coach_ff_extra(edi, esi); RECOMP_REGS_IN(); }
+"""),
+    # study: the save scanner's per-save check (0 ends the fill pass early)
+    ("SAVESCAN_CHECK_LOG", "sub_0004C8E0", "loc_0004CA6A: ;", "after", """    { extern void nfl2k5_savescan_check(uint32_t); nfl2k5_savescan_check(eax); }
+"""),
+    # SOFTDRINK's animation detours call this helper solely for its returned
+    # ZF. The lifter loses the export when several CMP paths merge at POP EAX.
+    # Both paths have already stored the actual final comparison in _fa/_fb.
+    ("SOFTDRINK_MODE_FLAG_RETURN", "sub_014DB710", "POP32(esp, eax);", "before", """\
+    g_rf_kind = 1; g_rf_a = _fa; g_rf_b = _fb;
+    g_rf_as = _fas; g_rf_bs = _fbs;
+"""),
     ("CELEBRATION_PREVIEW_CUSTOM", "sub_001B6B40", "loc_001B6B40: ;", "after", """\
     if (ecx >= 37u) { extern uint32_t nfl2k5_celebration_resource(uint32_t); eax = nfl2k5_celebration_resource(ecx); esp += 4; return; }
 """),
@@ -375,7 +392,100 @@ PATCHES = [
     ("DIAG_RESFREE", "sub_000450D0", "loc_000450D0: ;", "after", """\
     { extern void nfl2k5_diag_res(uint32_t res, int load, uint32_t ret, uint32_t r2, uint32_t r3); nfl2k5_diag_res(ecx, 0, MEM32(esp), MEM32(esp + 8), MEM32(esp + 0x18)); }
 """),
+    # Automatic replay lifecycle observations (2026-10-18): retail FSM
+    # 4E3F38 / state AFA078. Observe only; never skip native transition,
+    # actor restoration, ambient script, or screen cleanup. Phase 1 precedes
+    # transition-record initialization; its timing fields are not valid yet.
+    # See docs/PRESENTATION-REPLAY-LIFECYCLE-20261018.md. Message 5 / 119D0
+    # can suspend this screen, so it is deliberately NOT treated as an end.
+    ("PRES_REPLAY_OBSERVE_REQUEST", "sub_000116F0", "MEM32(0xAFA078) = 1;", "after", """\
+    { extern void nfl2k5_presentation_replay_observe(unsigned, uint32_t); nfl2k5_presentation_replay_observe(1u, 0x000116FBu); }
+"""),
+    ("PRES_REPLAY_OBSERVE_ENTRY_MIDPOINT", "sub_00013610", "MEM32(0xAFA078) = 2;", "after", """\
+    { extern void nfl2k5_presentation_replay_observe(unsigned, uint32_t); nfl2k5_presentation_replay_observe(2u, 0x00013669u); }
+"""),
+    ("PRES_REPLAY_OBSERVE_PLAYBACK", "sub_00013610", "MEM32(0xAFA078) = 3;", "after", """\
+    { extern void nfl2k5_presentation_replay_observe(unsigned, uint32_t); nfl2k5_presentation_replay_observe(3u, 0x0001372Du); }
+"""),
+    ("PRES_REPLAY_OBSERVE_RETURN_REQUEST", "sub_00012FD0", "MEM32(0xAFA078) = 4;", "after", """\
+    { extern void nfl2k5_presentation_replay_observe(unsigned, uint32_t); nfl2k5_presentation_replay_observe(4u, 0x00012FDEu); }
+"""),
+    # The first state-5 store in 13610 is the normal return midpoint at
+    # 13786; the later 139C2 store belongs to the fast pause-menu diversion.
+    ("PRES_REPLAY_OBSERVE_RETURN_MIDPOINT", "sub_00013610", "MEM32(0xAFA078) = 5;", "after", """\
+    { extern void nfl2k5_presentation_replay_observe(unsigned, uint32_t); nfl2k5_presentation_replay_observe(5u, 0x00013786u); }
+"""),
+    ("PRES_REPLAY_OBSERVE_COMPLETE", "sub_00013610", "MEM32(0xAFA078) = eax;", "after", """\
+    { extern void nfl2k5_presentation_replay_observe(unsigned, uint32_t); nfl2k5_presentation_replay_observe(0u, 0x0001380Du); }
+"""),
+    # This branch restores the actors and replaces the replay descriptor
+    # with 4E9078 (Paused) in one pass; phase 7 is cancellation, not a
+    # normal return wipe. Do not report its intermediate 4/5 as live phases.
+    ("PRES_REPLAY_OBSERVE_MENU_EXIT", "sub_00013610", "MEM32(0xAFA078) = esi;", "after", """\
+    { extern void nfl2k5_presentation_replay_observe(unsigned, uint32_t); nfl2k5_presentation_replay_observe(7u, 0x00013A24u); }
+"""),
+    # Typed replay requests are emitted only after 57BF0 initializes the
+    # copied/default transition and its init callback. Insert after the
+    # call, NOT at label 11754: resume/re-entry jumps directly to that label
+    # without initializing a fresh record. Keep all original ambient work.
+    ("PRES_MATCH_INITIALIZED", "sub_00064C70", "PUSH32(esp, 0x00064C82u); RECOMP_ABI_CALL(0x00064710u, sub_00064710); /* call 0x00064710 */", "after", """\
+    { extern void nfl2k5_presentation_match_lifecycle(int); nfl2k5_presentation_match_lifecycle(1); }
+"""),
+    ("PRES_MATCH_EXIT", "sub_000645D0", "loc_000645D0: ;", "after", """\
+    { extern void nfl2k5_presentation_match_lifecycle(int); nfl2k5_presentation_match_lifecycle(0); }
+"""),
+    ("PRES_REPLAY_READY_ENTRY_COPY", "sub_000116F0", "PUSH32(esp, 0x0001173Bu); RECOMP_ABI_CALL(0x00057BF0u, sub_00057BF0); /* call 0x00057BF0 */", "after", """\
+    { extern void nfl2k5_presentation_replay_ready(unsigned, uint32_t); nfl2k5_presentation_replay_ready(0u, 0x0001173Bu); }
+"""),
+    ("PRES_REPLAY_READY_ENTRY_DEFAULT", "sub_000116F0", "PUSH32(esp, 0x00011754u); RECOMP_ABI_CALL(0x00057BF0u, sub_00057BF0); /* call 0x00057BF0 */", "after", """\
+    { extern void nfl2k5_presentation_replay_ready(unsigned, uint32_t); nfl2k5_presentation_replay_ready(0u, 0x00011754u); }
+"""),
+    ("PRES_REPLAY_READY_RETURN", "sub_00012FD0", "PUSH32(esp, 0x00013027u); RECOMP_ABI_CALL(0x00057BF0u, sub_00057BF0); /* call 0x00057BF0 */", "after", """\
+    { extern void nfl2k5_presentation_replay_ready(unsigned, uint32_t); nfl2k5_presentation_replay_ready(1u, 0x00013027u); }
+"""),
+    # Change only the private replay transition's delta argument. The native
+    # midpoint/end tests, camera/actor handoffs and cleanup remain in place.
+    *[("PRES_REPLAY_DELTA_" + pc, "sub_00013610",
+       "PUSH32(esp, 0x" + pc + "u); RECOMP_ABI_CALL(0x00057CB0u, sub_00057CB0); /* call 0x00057CB0 */", "before", """\
+    { extern float nfl2k5_presentation_replay_delta(float); MEMF(esp) = nfl2k5_presentation_replay_delta(MEMF(esp)); }
+""") for pc in ("00013651", "000136F8", "0001375A", "000137F3")],
+    ("PRES_REPLAY_HANDOFF_IN", "sub_00013610", "PUSH32(esp, 0x000136DFu); RECOMP_ABI_CALL(0x00055070u, sub_00055070); /* call 0x00055070 */", "after", """\
+    { extern void nfl2k5_presentation_replay_handoff(void); nfl2k5_presentation_replay_handoff(); }
+"""),
+    ("PRES_REPLAY_HANDOFF_OUT", "sub_00013610", "MEM32(0xAFA010) = 0;", "after", """\
+    { extern void nfl2k5_presentation_replay_handoff(void); nfl2k5_presentation_replay_handoff(); }
+"""),
+    # Exact draw-only seam. Skip before pushing the original return address;
+    # retain 11A52's matrix restoration and every unrelated 57CE0 caller.
+    ("PRES_REPLAY_DRAW_OWNED", "sub_000119E0", "PUSH32(esp, 0x00011A52u); RECOMP_ABI_CALL(0x00057CE0u, sub_00057CE0); /* call 0x00057CE0 */", "before", """\
+    { extern int nfl2k5_presentation_replay_draw_replaced(void); if (nfl2k5_presentation_replay_draw_replaced()) goto loc_00011A52; }
+"""),
+    # The genuine sack branch invokes A1A00 here. Several non-sack paths
+    # jump straight to B9759, so a label hook would falsely report them.
+    # EBX/ESI retain the two original actors across the native call.
+    ("PRES_SACK_OBSERVE_DECISION", "sub_000B96B0", "PUSH32(esp, 0x000B9759u); RECOMP_ABI_CALL(0x000A1A00u, sub_000A1A00); /* call 0x000A1A00 */", "after", """\
+    { extern void nfl2k5_presentation_sack_observe(uint32_t, uint32_t, uint32_t); nfl2k5_presentation_sack_observe(ebx, esi, 0x000B9754u); }
+"""),
     # Game state-machine pushes/pops (2026-09-24): see nfl2k5_diag_fsm in src/main.c.
+    # A7AD0 has packed actor+3C roster records into its 0x40-byte ring slot.
+    # Observe only successful enqueue of native sack event 0x15. Before the
+    # shared return label: failure paths must not expose an old ring record.
+    ("PRES_SACK_EVENT_ACCEPTED", "sub_000A7AD0", "PUSH32(esp, 0x000A7B0Fu); RECOMP_ABI_CALL(0x000A7A40u, sub_000A7A40); /* call 0x000A7A40 */", "after", """\
+    { extern void nfl2k5_presentation_sack_event_record(uint32_t, uint32_t); if (eax && MEM32(edi) == 0x15u) nfl2k5_presentation_sack_event_record(edi, 0x000A7B0Au); }
+"""),
+    # Script opcode 24 chooses the actual original name-chip subject. Do
+    # not substitute the first contact actor or current possession's QB.
+    ("PRES_SELECTED_PLAYER", "sub_00055450", "MEM32(0xB25E24) = eax;", "after", """\
+    { extern void nfl2k5_presentation_selected_player(unsigned, uint32_t, uint32_t); nfl2k5_presentation_selected_player(esi, eax, 0x00055462u); }
+"""),
+    # Observe only actual acceptance, not8ACF0's show-request entry log.
+    # Keep EAX=-1 rejected cases and all native timeout/close/callback code.
+    ("PRES_REVIEW_ACCEPTED", "sub_00117310", "PUSH32(esp, 0x0011741Bu); RECOMP_ABI_CALL(0x0008ACF0u, sub_0008ACF0); /* call 0x0008ACF0 */", "after", """\
+    { extern void nfl2k5_presentation_review_accepted(int, unsigned); nfl2k5_presentation_review_accepted((int)eax, 0u); }
+"""),
+    ("PRES_REVIEW_RULING_ACCEPTED", "sub_00117430", "PUSH32(esp, 0x00117578u); RECOMP_ABI_CALL(0x0008ACF0u, sub_0008ACF0); /* call 0x0008ACF0 */", "after", """\
+    { extern void nfl2k5_presentation_review_accepted(int, unsigned); nfl2k5_presentation_review_accepted((int)eax, 1u); }
+"""),
     ("DIAG_FSMPUSH", "sub_0006E390", "loc_0006E3E6: ;", "after", """\
     { extern void nfl2k5_diag_fsm(uint32_t obj, uint32_t desc, int push); nfl2k5_diag_fsm(esi, edi, 1); }
 """),
@@ -390,6 +500,54 @@ PATCHES = [
 """),
     ("DIAG_POPUPCB", "sub_0008A340", "loc_0008A3E1: ;", "after", """\
     { extern void nfl2k5_diag_popup(uint32_t obj, int what); nfl2k5_diag_popup(esi, 2); }
+"""),
+    # SNF popup replacement (2026-10-11): preserve the popup update pass,
+    # first-draw latch, layout callbacks, controller choices and close callbacks.
+    # Capture the actual slot every frame, then zero only outgoing draw alpha
+    # after the HTML page acknowledges this exact popup's replacement token.
+    ("SNF_POPUP_FRAME", "sub_0008A170", "loc_0008A170: ;", "after", """\
+    { extern void nfl2k5_presentation_native_popup_frame(uint32_t ctx); nfl2k5_presentation_native_popup_frame(esi); }
+"""),
+    ("SNF_POPUP_TABLE_ALPHA", "sub_0008A170", "PUSH32(esp, 0x0008A235u); RECOMP_ABI_CALL(0x001BD5A0u, sub_001BD5A0); /* call 0x001BD5A0 */", "before", """\
+    { extern int nfl2k5_presentation_pregame_draw_replaced(uint32_t ctx); if (nfl2k5_presentation_pregame_draw_replaced(ecx)) MEM32(esp + 16u) = 0; }
+"""),
+    ("SNF_POPUP_LAYOUT_ALPHA", "sub_0008A170", "PUSH32(esp, 0x0008A269u); RECOMP_ABI_CALL(0x001BCE50u, sub_001BCE50); /* call 0x001BCE50 */", "before", """\
+    { extern int nfl2k5_presentation_pregame_draw_replaced(uint32_t ctx); if (nfl2k5_presentation_pregame_draw_replaced(ecx)) MEM32(esp + 8u) = 0; }
+"""),
+    # Keep a layout-specific fade callback from restoring visible alpha.
+    # BCE50 saved its popup at local ESP+0x14; the just-pushed alpha argument
+    # moves that saved context to ESP+0x18 before the callee return is pushed.
+    ("SNF_POPUP_LAYOUT_EFFECTIVE_ALPHA", "sub_001BCE50", "PUSH32(esp, 0x001BCEC4u); RECOMP_ABI_CALL(0x001BC200u, sub_001BC200); /* call 0x001BC200 */", "before", """\
+    { extern int nfl2k5_presentation_pregame_draw_replaced(uint32_t ctx); if (nfl2k5_presentation_pregame_draw_replaced(MEM32(esp + 0x18u))) MEM32(esp) = 0; }
+"""),
+    # BCE50's dynamic logo and portrait callbacks receive their node alpha,
+    # independently of the layout alpha above. Their ECX is still the popup;
+    # at each CALL instruction the two arguments are already on the stack,
+    # with alpha at ESP and callback data at ESP+4. Keep each callback running
+    # and leave its node's stored alpha and animation untouched.
+    ("SNF_POPUP_DYNAMIC_ART_ALPHA", "sub_001BCE50", "{ uint32_t _icall_target = MEM32(ebx + 4); PUSH32(esp, 0x001BD230u); RECOMP_ICALL_SAFE(_icall_target, _icall_esp); } /* indirect call */", "before", """\
+    { extern int nfl2k5_presentation_pregame_draw_replaced(uint32_t ctx); if (nfl2k5_presentation_pregame_draw_replaced(ecx)) MEM32(esp) = 0; }
+"""),
+    ("SNF_POPUP_DYNAMIC_TEXTURE_ALPHA", "sub_001BCE50", "{ uint32_t _icall_target = MEM32(edi + 4); PUSH32(esp, 0x001BD2F9u); RECOMP_ICALL_SAFE(_icall_target, _icall_esp); } /* indirect call */", "before", """\
+    { extern int nfl2k5_presentation_pregame_draw_replaced(uint32_t ctx); if (nfl2k5_presentation_pregame_draw_replaced(ecx)) MEM32(esp) = 0; }
+"""),
+    # Scene text has its own node alpha; mesh/layout alpha does not reach it.
+    # The formatter has already populated BE5228 before this call. Scope only
+    # its original draw, retaining formatting, layout iteration and node state.
+    # BCE50's saved popup is still at ESP+0x14 before the return is pushed.
+    ("PRESENTATION_POPUP_TEXT_BEGIN", "sub_001BCE50", "PUSH32(esp, 0x001BD17Bu); RECOMP_ABI_CALL(0x001513D0u, sub_001513D0); /* call 0x001513D0 */", "before", """\
+    { extern void nfl2k5_presentation_native_text_begin(uint32_t ctx); nfl2k5_presentation_native_text_begin(MEM32(esp + 0x14u)); }
+"""),
+    ("PRESENTATION_POPUP_TEXT_END", "sub_001BCE50", "loc_001BD17B: ;", "after", """\
+    { extern void nfl2k5_presentation_native_text_end(void); nfl2k5_presentation_native_text_end(); }
+"""),
+    # 150BF0 has just packed the text node's ARGB via 150AB0 and copied it
+    # to EDX. 46B50 writes this outgoing font-state color at object+0x20;
+    # normal, shadow and numeric-font draws all consume that prepared state.
+    # The host filter preserves RGB and returns the color unchanged outside
+    # the exact acknowledged popup text scope above. No node fields change.
+    ("PRESENTATION_POPUP_TEXT_COLOR", "sub_00150BF0", "PUSH32(esp, 0x00150C0Du); RECOMP_ABI_CALL(0x00046B50u, sub_00046B50); /* call 0x00046B50 */", "before", """\
+    { extern uint32_t nfl2k5_presentation_native_text_color(uint32_t color); edx = nfl2k5_presentation_native_text_color(edx); }
 """),
     # Presentation script interpreter (2026-09-25): opcode byte in eax, script
     # context in esi, [esp+0x24] nonzero = start the command, 0 = poll it.
@@ -409,6 +567,43 @@ PATCHES = [
     # sub_000FFD60 shows the ticker once it is filled; skip only the show
     # (sub_001775D0 on the ticker layout) when the package draws the lineup.
     ("LINEUP_NATIVE_HIDE", "sub_000FFD60", "loc_000FFD8B: ;", "after", """    { extern int nfl2k5_lineup_hide_native(void); if (nfl2k5_lineup_hide_native()) { esp += 4; return; } }
+"""),
+    # CBS break-score panel: a real accepted team timeout, its committed
+    # camera state, and the original ordinary scorebug's completed draw gates.
+    ("TIMEOUT_BOARD_ACCEPTED", "sub_000A00A0", "loc_000A00FB: ;", "after", """\
+    { extern void nfl2k5_presentation_timeout_accepted(uint32_t team); nfl2k5_presentation_timeout_accepted(esi); }
+"""),
+    ("TIMEOUT_BUG_BEGIN", "sub_000FC360", "loc_000FC360: ;", "after", """\
+    int _nfl2k5_timeout_bug_eligible = 0;
+"""),
+    ("TIMEOUT_BUG_ADMITTED", "sub_000FC360", "loc_000FC396: ;", "after", """\
+    _nfl2k5_timeout_bug_eligible = 1;
+"""),
+    ("TIMEOUT_BUG_COMPLETED", "sub_000FC360", "loc_000FC6A3: ;", "after", """\
+    { extern void nfl2k5_presentation_timeout_bug_frame(int visible); nfl2k5_presentation_timeout_bug_frame(_nfl2k5_timeout_bug_eligible); }
+"""),
+    ("TIMEOUT_CAMERA_COMMITTED", "sub_00089260", "loc_000892C1: ;", "after", """\
+    { extern void nfl2k5_presentation_timeout_committed(void); nfl2k5_presentation_timeout_committed(); }
+"""),
+    # CBS: preserve native lineup lifetime/camera behavior. Only the exact
+    # ticker's two visual submissions can be omitted after page paint ACK.
+    ("LINEUP_OWNER_FRAME", "sub_001770C0", "loc_001770C0: ;", "after", """\
+    { extern void nfl2k5_presentation_lineup_frame(uint32_t ctx); nfl2k5_presentation_lineup_frame(eax); }
+"""),
+    ("LINEUP_OWNER_MESH", "sub_001770C0", "PUSH32(esp, 0x00177128u); RECOMP_ABI_CALL(0x00021860u, sub_00021860); /* call 0x00021860 */", "before", """\
+    { extern int nfl2k5_presentation_lineup_draw_replaced(uint32_t ctx); if (nfl2k5_presentation_lineup_draw_replaced(esi)) goto loc_00177128; }
+"""),
+    ("LINEUP_OWNER_TEXT", "sub_001770C0", "PUSH32(esp, 0x001771A3u); RECOMP_ABI_CALL(0x001513D0u, sub_001513D0); /* call 0x001513D0 */", "before", """\
+    { extern int nfl2k5_presentation_lineup_draw_replaced(uint32_t ctx); if (nfl2k5_presentation_lineup_draw_replaced(esi)) goto loc_001771A3; }
+"""),
+    ("LINEUP_OWNER_HIDE", "sub_000FFDA0", "loc_000FFDA0: ;", "after", """\
+    { extern void nfl2k5_presentation_lineup_hide(uint32_t completed); nfl2k5_presentation_lineup_hide(0); }
+"""),
+    ("LINEUP_OWNER_COMPLETE", "sub_000FFE70", "loc_000FFE70: ;", "after", """\
+    { extern void nfl2k5_presentation_lineup_hide(uint32_t completed); nfl2k5_presentation_lineup_hide(1); }
+"""),
+    ("LINEUP_OWNER_DESTROY", "sub_000FFDC0", "loc_000FFDC0: ;", "after", """\
+    { extern void nfl2k5_presentation_lineup_hide(uint32_t completed); nfl2k5_presentation_lineup_hide(1); }
 """),
     # Frame interval (2026-10-03): sub_00027880 stores how many vblanks a
     # frame lasts (1 = 60 fps, 2 = 30). The game asks for 2 in its wide and
@@ -861,6 +1056,9 @@ def main():
     for pid, func, anchor, where, code in PATCHES:
         path, lines, start = find_function(files, func)
         if path is None:
+            if pid == "SOFTDRINK_MODE_FLAG_RETURN":
+                # The clean retail game does not contain this mod helper.
+                continue
             failed.append("%s: function %s not found" % (pid, func))
             continue
         # The function ends at the next top-level closing brace.
