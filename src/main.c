@@ -778,11 +778,23 @@ static void android_pick_root(void)
         }
     }
     {
+        /* Only the disc image on the phone: unpack it (first start only). */
+        extern int nfl2k5_android_unpack_iso(const char *root);   /* platform/android/xiso_extract.c */
+        int r = nfl2k5_android_unpack_iso("/sdcard/NFL2K5");
+        if (r > 0) {
+            setenv("NFL2K5_ROOT", "/sdcard/NFL2K5", 1);
+            setenv("NFL2K5_PORTABLE", "1", 1);
+            return;
+        }
+        if (r < 0) exit(1);                       /* it said why */
+    }
+    {
         char msg[1536];
         snprintf(msg, sizeof msg,
-                 "Game files not found.\n\nWith a USB cable, copy default.xbe and the vc_53450030 folder from "
-                 "your PC's original folder into:\n\nInternal storage > NFL2K5 > original\n\n"
-                 "(the app made that folder). Then open NFL 2K5 again.");
+                 "Game files not found.\n\nPut your NFL 2K5 disc image (.iso) in Download or in "
+                 "Internal storage > NFL2K5, and make sure NFL 2K5 has All files access "
+                 "(Settings > Apps > NFL 2K5 > Permissions). The first start unpacks it.\n\n"
+                 "Or copy default.xbe and the vc_53450030 folder into Internal storage > NFL2K5 > original.");
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "NFL 2K5: game files not found", msg, NULL);
         exit(1);
     }
