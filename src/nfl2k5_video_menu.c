@@ -44,7 +44,7 @@ extern void nfl2k5_pres_value_name(int what, int idx, char *buf, size_t n);
 
 #define VM_FN_BASE    0xFEC00000u   /* + screen * 0x1000 + row * 0x40 + slot * 4 */
 #define VM_ROW        0x34u
-#define VM_MAX_ROWS   16
+#define VM_MAX_ROWS   24            /* Video Settings has 18 (row * 0x40 stays inside a screen's 0x1000) */
 #define VM_MAX_VALUES 64
 #define VM_STR_CHARS  64
 #define GAME_OPTIONS_HEADER 0x00501E48u    /* template for the new screens */
