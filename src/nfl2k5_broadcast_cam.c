@@ -91,7 +91,7 @@ static float clampf(float v, float lo, float hi) { return v < lo ? lo : v > hi ?
  * stays in the picture. Saved in nfl2k5_camera.ini in the user folder. */
 #define BTN_UP   0x0001u
 #define BTN_BACK 0x0020u
-typedef struct { int have; float dx, dy, dz, fov; } MyCam;
+typedef struct { int have; float dx, dy, dz, fov, ahead, lift; } MyCam;   /* ahead/lift: where it looks, from the ball */
 static MyCam s_my;
 static int s_my_loaded;
 static float s_dir = 1.f;              /* +1 / -1: the way the offense is going (along z) */
@@ -109,6 +109,13 @@ static void mycam_load(void)
         memset(&m, 0, sizeof m);
         if (fscanf(f, " offset = %f %f %f fov = %f", &m.dx, &m.dy, &m.dz, &m.fov) == 4 &&
                 isfinite(m.dx) && isfinite(m.dy) && isfinite(m.dz) && m.fov > 5.f && m.fov < 120.f) {
+            float ahead, lift;
+            /* optional: aim = <ahead> <up> -- look that far downfield of the
+             * ball (and above it), so the ball sits low in the picture with
+             * the field ahead in view, as in a behind-the-offense game camera */
+            if (fscanf(f, " aim = %f %f", &ahead, &lift) == 2 && isfinite(ahead) && isfinite(lift)) {
+                m.ahead = clampf(ahead, -3000.f, 3000.f); m.lift = clampf(lift, -500.f, 1500.f);
+            }
             m.have = 1;
             s_my = m;
         }
@@ -125,10 +132,12 @@ static void mycam_save(const MyCam *m)
     FILE *f = fopen(xbox_user_path("nfl2k5_camera.ini", path, sizeof path), "w");
     if (!f) return;
     fprintf(f, "offset = %.1f %.1f %.1f fov = %.1f\n"
+               "aim = %.1f %.1f\n"
                "; My Camera (Pro Broadcast): the camera's position from the ball in cm\n"
                "; (across, up, along the field in the offense's direction) and its field of view.\n"
+               "; aim: it looks this far downfield of the ball, and this far above it (0 0 = at the ball).\n"
                "; Set it in a game: Free Cam, fly to the spot, Back + D-pad Up.\n",
-            m->dx, m->dy, m->dz, m->fov);
+            m->dx, m->dy, m->dz, m->fov, m->ahead, m->lift);
     fclose(f);
 }
 
@@ -285,7 +294,7 @@ static void service_freecam(float dt)
                 update_dir();
                 m.have = 1;
                 m.dx = (w.x - tx) * s_dir; m.dy = w.y - ty; m.dz = (w.z - tz) * s_dir;
-                m.fov = clampf(w.fov, 15.f, 90.f);
+                m.fov = clampf(w.fov, 15.f, 90.f); m.ahead = m.lift = 0.f;
                 s_my = m; s_my_loaded = 1;
                 mycam_save(&m);
                 fprintf(stderr, "[BROADCAST] My Camera saved: offset %.0f,%.0f,%.0f fov %.0f\n",
@@ -324,7 +333,7 @@ static void service_mycam(float dt)
     s_eyey = approach(s_eyey, clampf(s_aimy + s_my.dy, 60.f, 20000.f), 3.5f, dt);
     s_eyez = approach(s_eyez, s_aimz + s_my.dz * s_dir, 3.5f, dt);
     ex = s_eyex; ey = s_eyey; ez = s_eyez;
-    dx = s_aimx - ex; dy = s_aimy - ey; dz = s_aimz - ez;
+    dx = s_aimx - ex; dy = s_aimy + s_my.lift - ey; dz = s_aimz + s_my.ahead * s_dir - ez;
     len = sqrtf(dx * dx + dy * dy + dz * dz);
     if (!(len > 1.f)) return;
     memset(&w, 0, sizeof w);
