@@ -230,6 +230,20 @@ static void host_mouse_gamepad(XBOX_GAMEPAD *g)
         g->sThumbLY = (SHORT)((dy * 32767.0f) / cy);
 }
 
+/* Android: the on-screen controls (src/platform/android/touch_pad.c). */
+static void host_touch_gamepad(XBOX_GAMEPAD *g)
+{
+#if defined(__ANDROID__)
+    extern void nfl2k5_touch_pad_merge(uint16_t *buttons, uint8_t analog[8], int16_t *lx, int16_t *ly);
+    uint16_t b = g->wButtons;
+    int16_t lx = g->sThumbLX, ly = g->sThumbLY;
+    nfl2k5_touch_pad_merge(&b, g->bAnalogButtons, &lx, &ly);
+    g->wButtons = b; g->sThumbLX = lx; g->sThumbLY = ly;
+#else
+    (void)g;
+#endif
+}
+
 static void host_keyboard_gamepad(XBOX_GAMEPAD *g)
 {
     int numkeys = 0;
@@ -284,6 +298,7 @@ static void host_gamepad_port(int port, XBOX_GAMEPAD *g)
     if (port == 0) {
         host_keyboard_gamepad(g);
         host_mouse_gamepad(g);
+        host_touch_gamepad(g);
         g->wButtons |= auto_press(g->bAnalogButtons);
         g->wButtons |= file_press(g->bAnalogButtons);
     }
@@ -321,6 +336,7 @@ static void host_gamepad(XBOX_GAMEPAD *g)
         *g = pad.Gamepad;
     host_keyboard_gamepad(g);
     host_mouse_gamepad(g);
+    host_touch_gamepad(g);
     g->wButtons |= auto_press(g->bAnalogButtons);
     g->wButtons |= file_press(g->bAnalogButtons);
     audio_report_combo(g);

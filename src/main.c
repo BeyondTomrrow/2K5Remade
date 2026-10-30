@@ -817,6 +817,10 @@ int main(int argc, char **argv)
     android_pick_root();
     setenv("RECOMP_RENDERER", "vulkan", 0);   /* the GPU renderer (gx) on Vulkan; "cpu" for software */
     {
+        extern void nfl2k5_touch_pad_init(void);   /* on-screen controls (platform/android/touch_pad.c) */
+        nfl2k5_touch_pad_init();
+    }
+    {
         char lp[1024];
         FILE *lf;
         pthread_t t;
