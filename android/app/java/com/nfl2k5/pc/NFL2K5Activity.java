@@ -25,7 +25,10 @@ public class NFL2K5Activity extends SDLActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         File shared = new File(Environment.getExternalStorageDirectory(), "NFL2K5");
-        if (Build.VERSION.SDK_INT >= 30 && shared.isDirectory() && !Environment.isExternalStorageManager()) {
+        /* Make Internal storage/NFL2K5/original on first start, so there is a
+         * folder to copy the game into (needs the permission below first). */
+        try { new File(shared, "original").mkdirs(); } catch (Exception e) { }
+        if (Build.VERSION.SDK_INT >= 30 && !Environment.isExternalStorageManager()) {
             try {
                 Intent i = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
                                       Uri.parse("package:" + getPackageName()));
@@ -33,7 +36,7 @@ public class NFL2K5Activity extends SDLActivity {
             } catch (Exception e) {
                 /* Fire TV has no such settings page: the app folder still works */
             }
-        } else if (Build.VERSION.SDK_INT < 30 && shared.isDirectory()) {
+        } else if (Build.VERSION.SDK_INT < 30) {
             requestPermissions(new String[] { "android.permission.READ_EXTERNAL_STORAGE",
                                               "android.permission.WRITE_EXTERNAL_STORAGE" }, 1);
         }

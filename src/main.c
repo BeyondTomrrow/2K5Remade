@@ -780,9 +780,9 @@ static void android_pick_root(void)
     {
         char msg[1536];
         snprintf(msg, sizeof msg,
-                 "Copy your extracted NFL 2K5 disc into a folder named \"original\" (it must contain default.xbe) in:\n\n"
-                 "%s\n\nor /sdcard/NFL2K5 (that one needs All files access for this app).",
-                 cands[0] ? cands[0] : "(the app's storage folder)");
+                 "Game files not found.\n\nWith a USB cable, copy default.xbe and the vc_53450030 folder from "
+                 "your PC's original folder into:\n\nInternal storage > NFL2K5 > original\n\n"
+                 "(the app made that folder). Then open NFL 2K5 again.");
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "NFL 2K5: game files not found", msg, NULL);
         exit(1);
     }
