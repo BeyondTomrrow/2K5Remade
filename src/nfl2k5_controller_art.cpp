@@ -28,8 +28,10 @@
 #include <string>
 #include <vector>
 
+#ifdef _MSC_VER
 #pragma comment(lib, "windowscodecs.lib")
 #pragma comment(lib, "ole32.lib")
+#endif
 
 extern "C" {
 extern int (*g_xbox_tex_override_wants)(uint32_t fmt, uint32_t w, uint32_t h);

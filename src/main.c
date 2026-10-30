@@ -37,6 +37,15 @@
 #include "recomp_icall_feedback.h"
 #include "nfl2k5_presentation.h"
 #include "nfl2k5_widescreen_patch.h"
+#if defined(__ANDROID__)
+#include <SDL3/SDL.h>
+#include <SDL3/SDL_main.h>      /* main() is SDL_main: SDLActivity calls it */
+#include <android/log.h>
+#include <pthread.h>
+#endif
+#if defined(__aarch64__) && !defined(_WIN32)
+int xbox_arm64_mmio_fault(void *raw_ctx, uintptr_t host, uint32_t va);   /* apu/arm64_mmio.c */
+#endif
 
 #define NFL2K5_RETAIL_XBE_SHA256 "73105b17a3161c546fea792a1c84ce37f9966a67c416f474cdbfab74b911a4a9"
 #ifndef NFL2K5_XBE_SHA256
@@ -258,10 +267,15 @@ static void posix_audio_mmio_sigaction(int sig, siginfo_t *si, void *ucontext)
         uintptr_t host = (uintptr_t)si->si_addr;
         uintptr_t offset = (uintptr_t)xbox_GetMemoryOffset();
         if (host >= offset && host - offset >= 0xFE800000ULL && host - offset < 0xFE880000ULL) {
+#if defined(__x86_64__)
             ucontext_t *uc = (ucontext_t *)ucontext;
             int is_write = (uc->uc_mcontext.gregs[REG_ERR] & 0x2) != 0;
             if (apu_hook_handle_mmio((PCONTEXT)uc, host, (uint32_t)(host - offset), is_write))
                 return;
+#elif defined(__aarch64__)
+            if (xbox_arm64_mmio_fault(ucontext, host, (uint32_t)(host - offset)))
+                return;
+#endif
         }
     }
     const struct sigaction *previous = sig == SIGTRAP ? &g_prev_trap_sa : &g_prev_segv_sa;
@@ -725,10 +739,78 @@ void nfl2k5_diag_slot(const char *where, uint32_t a, uint32_t b, uint32_t c, uin
  * Main Application Entry Point
  * ============================================================================ */
 
+#if defined(__ANDROID__)
+/* stderr goes nowhere on Android: the log lines go to logcat (tag NFL2K5)
+ * and to <root>/nfl2k5.log, where they can be read off the device. */
+static int android_log_pipe[2];
+static void *android_log_thread(void *arg)
+{
+    FILE *file = (FILE *)arg;
+    char buf[1024];
+    ssize_t n;
+    while ((n = read(android_log_pipe[0], buf, sizeof buf - 1)) > 0) {
+        buf[n] = 0;
+        __android_log_write(ANDROID_LOG_INFO, "NFL2K5", buf);
+        if (file) { fwrite(buf, 1, (size_t)n, file); fflush(file); }
+    }
+    return NULL;
+}
+
+/* The game folder: the first of these holding original/default.xbe. The
+ * app's own folder needs no permission (adb push or a file manager);
+ * /sdcard/NFL2K5 needs "All files access" on Android 11+. */
+static void android_pick_root(void)
+{
+    const char *cands[4];
+    char probe[1024];
+    int n = 0;
+    if (getenv("NFL2K5_ROOT")) return;
+    cands[n++] = SDL_GetAndroidExternalStoragePath();
+    cands[n++] = "/sdcard/NFL2K5";
+    cands[n++] = "/storage/emulated/0/NFL2K5";
+    for (int i = 0; i < n; i++) {
+        if (!cands[i]) continue;
+        snprintf(probe, sizeof probe, "%s/original/default.xbe", cands[i]);
+        if (access(probe, R_OK) == 0) {
+            setenv("NFL2K5_ROOT", cands[i], 1);
+            setenv("NFL2K5_PORTABLE", "1", 1);   /* settings and saves beside the game */
+            return;
+        }
+    }
+    {
+        char msg[1536];
+        snprintf(msg, sizeof msg,
+                 "Copy your extracted NFL 2K5 disc into a folder named \"original\" (it must contain default.xbe) in:\n\n"
+                 "%s\n\nor /sdcard/NFL2K5 (that one needs All files access for this app).",
+                 cands[0] ? cands[0] : "(the app's storage folder)");
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "NFL 2K5: game files not found", msg, NULL);
+        exit(1);
+    }
+}
+#endif
+
 int main(int argc, char **argv)
 {
 #if defined(_WIN32)
     SetThreadExecutionState(ES_CONTINUOUS | ES_DISPLAY_REQUIRED | ES_SYSTEM_REQUIRED);
+#endif
+#if defined(__ANDROID__)
+    android_pick_root();
+    {
+        char lp[1024];
+        FILE *lf;
+        pthread_t t;
+        snprintf(lp, sizeof lp, "%s/nfl2k5.log", getenv("NFL2K5_ROOT"));
+        lf = fopen(lp, "w");
+        setvbuf(stdout, NULL, _IOLBF, 0);
+        setvbuf(stderr, NULL, _IONBF, 0);
+        if (pipe(android_log_pipe) == 0) {
+            dup2(android_log_pipe[1], 1);
+            dup2(android_log_pipe[1], 2);
+            pthread_create(&t, NULL, android_log_thread, lf);
+            pthread_detach(t);
+        }
+    }
 #endif
 
     const char *root = nfl2k5_project_root();

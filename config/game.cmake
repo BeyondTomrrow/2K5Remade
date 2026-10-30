@@ -48,13 +48,26 @@ else()
     file(WRITE "${NFL2K5_FUNC_RANGES}" "#include <stdint.h>\nconst uint32_t g_nfl2k5_func_ranges[1][2] = {{0, 0}};\nconst unsigned g_nfl2k5_func_range_count = 0;\n")
   endif()
   find_package(OpenSSL REQUIRED)
-  add_executable(NFL2K5 src/main.c src/recomp_manual.c src/nfl2k5_input_hle.c src/nfl2k5_controls.c
+  if(ANDROID)
+    # SDL's Java activity (android/app) loads the game as libmain.so.
+    macro(nfl2k5_add_target name)
+      add_library(${name} SHARED ${ARGN})
+      set_target_properties(${name} PROPERTIES OUTPUT_NAME main)
+    endmacro()
+  else()
+    macro(nfl2k5_add_target name)
+      add_executable(${name} ${ARGN})
+    endmacro()
+  endif()
+  nfl2k5_add_target(NFL2K5 src/main.c src/recomp_manual.c src/nfl2k5_input_hle.c src/nfl2k5_controls.c
     src/nfl2k5_controller_setup.c src/nfl2k5_controller_art.cpp src/nfl2k5_texture_packs.cpp src/nfl2k5_teams.c
     src/nfl2k5_team_files.c src/nfl2k5_video_menu.c src/nfl2k5_mod_packs.c src/nfl2k5_local_music.cpp
     src/nfl2k5_save_library.cpp src/nfl2k5_discord.cpp src/interp/x86_interp.c src/interp/interp_setup.c
     "${NFL2K5_FUNC_RANGES}" external/xemu-src/util/miniz/miniz.c src/nfl2k5_wma_encode.cpp
     src/presentation/webview2_host.cpp src/presentation/portraits.cpp
     src/platform/posix/win32_game_compat.c src/platform/posix/stb_impl.c src/platform/posix/presentation_stub.cpp
+    # features merged from the pre-SDL3 build (2026-10-29)
+    src/nfl2k5_eras_capture.c src/nfl2k5_eras.c src/nfl2k5_eras_menu.c src/nfl2k5_eras_launch.c src/nfl2k5_eras_office.c src/nfl2k5_eras_draftshow.c src/nfl2k5_eras_playoffs.c src/nfl2k5_eras_awards.c src/nfl2k5_eras_rollover.c src/nfl2k5_eras_depth.c src/nfl2k5_eras_sheets.c src/nfl2k5_eras_draft.c src/nfl2k5_eras_draft_sheets.c src/nfl2k5_eras_draft_room.c src/nfl2k5_eras_module.c src/nfl2k5_coach_mode.c src/nfl2k5_broadcast_cam.c src/nfl2k5_ballscan.c src/nfl2k5_moment_audio.c src/nfl2k5_plugin_host.c src/nfl2k5_json.c src/nfl2k5_walk_diag.c src/nfl2k5_exit_menu.c src/nfl2k5_sandbox.cpp src/nfl2k5_sandbox_menu.c src/nfl2k5_sandbox_world.c src/nfl2k5_sandbox_actors.c src/nfl2k5_sandbox_pose.c src/nfl2k5_sandbox_ui.cpp
     ${NFL2K5_GENERATED})
   target_include_directories(NFL2K5 PRIVATE src/platform/posix "${NFL2K5_GEN_DIR}" src external/xemu-src/util/miniz)
 endif()
@@ -108,6 +121,9 @@ endif()
 target_link_options(NFL2K5 PRIVATE /DEBUG /LARGEADDRESSAWARE /STACK:16777216)
 else()
   target_link_libraries(NFL2K5 PRIVATE xboxrecomp OpenSSL::Crypto)
+  if(ANDROID)
+    target_link_libraries(NFL2K5 PRIVATE log android)
+  endif()
   # Optimisation level for the game target (recompiled code included).
   # GCC spends its time parsing the 220 MB of generated C, not optimising
   # it: the largest file (30 MB) takes ~30 s and ~2 GB of RAM at -O1 and -O2

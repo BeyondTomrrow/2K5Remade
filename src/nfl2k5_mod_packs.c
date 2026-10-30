@@ -296,6 +296,7 @@ static DWORD WINAPI mp_patch_thread(void *arg)
                     fd.cFileName, (unsigned long)launch_error, cmd);
         }
 #else
+        unsigned long launch_error = 0;
         mp_spawn_sh(cmd, s_root, 1, &code);
 #endif
         {

@@ -170,6 +170,11 @@ static void svc_interp_add_hook(uint32_t va, uint32_t from, uint32_t (*fn)(void)
  * a development checkout runs the script. Its output goes to the pack's generated\ only. */
 static int svc_run_builder(const char *args)
 {
+#ifndef _WIN32
+    (void)args;
+    fprintf(stderr, "[ERAS] builder: Windows only\n");
+    return -1;
+#else
     char cmd[2048], exe[MAX_PATH];
     STARTUPINFOA si;
     PROCESS_INFORMATION pi;
@@ -195,6 +200,7 @@ static int svc_run_builder(const char *args)
     CloseHandle(pi.hProcess);
     fprintf(stderr, "[ERAS] builder started: %s\n", cmd);
     return 0;
+#endif
 }
 
 /* ---- the pack manifest (docs/eras/MOD-PACK-DESIGN.md 5) ---------------------- */

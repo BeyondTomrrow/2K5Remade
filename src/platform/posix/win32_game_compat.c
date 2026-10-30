@@ -22,6 +22,7 @@
 #include <sys/types.h>
 #include <time.h>
 #include <unistd.h>
+#include <SDL3/SDL.h>
 
 static void fix_path(const char *in, char *out, size_t cap)
 {
@@ -46,6 +47,50 @@ int _snprintf_s(char *buf, size_t size, size_t count, const char *fmt, ...)
     if (n < 0) { buf[0] = 0; return -1; }
     return (size_t)n >= cap ? -1 : n;          /* MSVC returns -1 on truncation */
 }
+
+int fopen_s(FILE **f, const char *name, const char *mode)
+{
+    char p[1024];
+    size_t i;
+    if (!f) return 22;
+    for (i = 0; name && name[i] && i < sizeof p - 1; i++) p[i] = name[i] == '\\' ? '/' : name[i];
+    p[i] = 0;
+    *f = fopen(p, mode);
+    return *f ? 0 : errno ? errno : 2;
+}
+
+int localtime_s(struct tm *out, const time_t *t)
+{
+    return localtime_r(t, out) ? 0 : 22;
+}
+
+int _vsnprintf_s(char *buf, size_t size, size_t count, const char *fmt, va_list ap)
+{
+    int n;
+    size_t lim = size;
+    if (!buf || !size) return -1;
+    if (count != _TRUNCATE && count + 1 < lim) lim = count + 1;
+    n = vsnprintf(buf, lim, fmt, ap);
+    if (n < 0 || (size_t)n >= lim) return count == _TRUNCATE ? -1 : (buf[0] = 0, -1);
+    return n;
+}
+
+BOOL PostMessageA(HWND w, UINT msg, WPARAM wp, LPARAM lp)
+{
+    (void)w; (void)wp; (void)lp;
+    if (msg == WM_CLOSE) {
+        SDL_Event e;
+        memset(&e, 0, sizeof e);
+        e.type = SDL_EVENT_QUIT;
+        return SDL_PushEvent(&e) ? TRUE : FALSE;
+    }
+    return FALSE;
+}
+
+BOOL GetCursorPos(void *p) { (void)p; return FALSE; }
+BOOL ScreenToClient(HWND w, void *p) { (void)w; (void)p; return FALSE; }
+UINT GetDoubleClickTime(void) { return 500; }
+HWND GetForegroundWindow(void) { return NULL; }
 
 int sprintf_s(char *buf, size_t size, const char *fmt, ...)
 {

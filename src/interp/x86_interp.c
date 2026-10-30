@@ -989,6 +989,7 @@ out:
 void recomp_interp_call(uint32_t va)
 {
     Cpu *parent = t_cur;
+#ifdef _MSC_VER
     __try {
         interp_execute(va);
     } __finally {
@@ -996,6 +997,10 @@ void recomp_interp_call(uint32_t va)
          * reporter pointing into a returned inner interpreter's stack. */
         t_cur = parent;
     }
+#else
+    interp_execute(va);
+    t_cur = parent;
+#endif
 }
 
 /* Exercise the real interpreter's native-to-guest flag handoff, including
