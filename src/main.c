@@ -796,6 +796,7 @@ int main(int argc, char **argv)
 #endif
 #if defined(__ANDROID__)
     android_pick_root();
+    setenv("RECOMP_RENDERER", "vulkan", 0);   /* the GPU renderer (gx) on Vulkan; "cpu" for software */
     {
         char lp[1024];
         FILE *lf;
