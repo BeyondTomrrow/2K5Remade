@@ -33,7 +33,7 @@
 #define PI_F     3.14159265358979323846f
 
 static const char *const k_mode_names[NFL2K5_BCAST_MODE_COUNT] = {
-    "Off", "Broadcast", "Quarterback", "Handheld", "End Zone", "SkyCam", "Free Cam"
+    "Off", "Broadcast", "Quarterback", "Handheld", "End Zone", "SkyCam", "Free Cam", "My Camera"
 };
 
 static int s_init, s_mode;
@@ -82,6 +82,68 @@ void nfl2k5_broadcast_cam_set_enabled(int on) { parse_env(); s_mode = on ? NFL2K
 
 static float clampf(float v, float lo, float hi) { return v < lo ? lo : v > hi ? hi : v; }
 
+/* ---- My Camera (2026-10-30) ----------------------------------------------
+ * The player places the camera with Free Cam and saves it with Back + D-pad
+ * Up. What is kept is where the camera sits relative to the ball -- its
+ * offset, with the along-the-field part in the offense's direction so the
+ * shot flips with possession -- and its zoom. In play the camera holds that
+ * offset from the ball and always aims at it, so a deep ball or a long run
+ * stays in the picture. Saved in nfl2k5_camera.ini in the user folder. */
+#define BTN_UP   0x0001u
+#define BTN_BACK 0x0020u
+typedef struct { int have; float dx, dy, dz, fov; } MyCam;
+static MyCam s_my;
+static int s_my_loaded;
+static float s_dir = 1.f;              /* +1 / -1: the way the offense is going (along z) */
+void xbox_PresentToast(const char *header, const char *line1, const char *line2, unsigned ms);
+char *xbox_user_path(const char *rel, char *out, size_t n);
+
+static void mycam_load(void)
+{
+    char path[MAX_PATH];
+    FILE *f;
+    if (s_my_loaded) return;
+    s_my_loaded = 1;
+    if ((f = fopen(xbox_user_path("nfl2k5_camera.ini", path, sizeof path), "r")) != NULL) {
+        MyCam m;
+        memset(&m, 0, sizeof m);
+        if (fscanf(f, " offset = %f %f %f fov = %f", &m.dx, &m.dy, &m.dz, &m.fov) == 4 &&
+                isfinite(m.dx) && isfinite(m.dy) && isfinite(m.dz) && m.fov > 5.f && m.fov < 120.f) {
+            m.have = 1;
+            s_my = m;
+        }
+        fclose(f);
+    }
+    if (!s_my.have) {          /* until one is saved: high behind the offense */
+        s_my.have = 1; s_my.dx = 0.f; s_my.dy = 900.f; s_my.dz = -1600.f; s_my.fov = 50.f;
+    }
+}
+
+static void mycam_save(const MyCam *m)
+{
+    char path[MAX_PATH];
+    FILE *f = fopen(xbox_user_path("nfl2k5_camera.ini", path, sizeof path), "w");
+    if (!f) return;
+    fprintf(f, "offset = %.1f %.1f %.1f fov = %.1f\n"
+               "; My Camera (Pro Broadcast): the camera's position from the ball in cm\n"
+               "; (across, up, along the field in the offense's direction) and its field of view.\n"
+               "; Set it in a game: Free Cam, fly to the spot, Back + D-pad Up.\n",
+            m->dx, m->dy, m->dz, m->fov);
+    fclose(f);
+}
+
+/* The way the offense is going: from the ball spot toward the line to gain. */
+static void update_dir(void)
+{
+    uint32_t ds = MEM32(DRIVE);
+    if (ds) {
+        float ball = MEMF(ds + 0x18u), line = MEMF(ds + 0x28u);
+        if (isfinite(ball) && isfinite(line) && fabsf(line - ball) > 1.f)
+            s_dir = line > ball ? 1.f : -1.f;
+    }
+}
+
+
 /* Frame-rate-independent exponential approach toward a target. rate is 1/tau
  * in 1/seconds: bigger = snappier, smaller = more operator lag. */
 static float approach(float cur, float tgt, float rate, float dt)
@@ -111,6 +173,31 @@ static int action_target(float *tx, float *ty, float *tz)
         if (isfinite(b) && fabsf(b) < 20000.f) { *tx = 0.f; *ty = 80.f; *tz = b; return 1; }
     }
     return 0;
+}
+
+/* The football's position (world cm): a float triple (x, y, z) at 0x00BE5ED0,
+ * found with nfl2k5_ballscan.c (2026-10-30): at every snap it sits on the
+ * ball spot, it moves smoothly with the carrier (<1.2 m a frame) and comes to
+ * rest where the next play is spotted. NFL2K5_BALL_ADDR=<hex> overrides it
+ * (0 = the framing point above instead). */
+static uint32_t s_ball_addr = 0x00BE5ED0u;
+static int ball_target(float *tx, float *ty, float *tz)
+{
+    static int looked;
+    if (!looked) {
+        const char *e = getenv("NFL2K5_BALL_ADDR");
+        looked = 1;
+        if (e && *e) s_ball_addr = (uint32_t)strtoul(e, NULL, 16);   /* "0" turns it off */
+    }
+    if (s_ball_addr) {
+        float x = MEMF(s_ball_addr), y = MEMF(s_ball_addr + 4u), z = MEMF(s_ball_addr + 8u);
+        if (isfinite(x) && isfinite(y) && isfinite(z) && fabsf(x) < 6000.f && fabsf(z) < 8000.f &&
+                y > -100.f && y < 6000.f) {
+            *tx = x; *ty = y; *tz = z;
+            return 1;
+        }
+    }
+    return action_target(tx, ty, tz);
 }
 
 static void release(void)
@@ -186,6 +273,67 @@ static void service_freecam(float dt)
     /* move_x, move_y, look_x, look_y, elevate, zoom */
     nfl2k5_sandbox_world_input(lx, ly, rx, -ry, up, 0.f);
     nfl2k5_sandbox_world_tick(dt);
+    {   /* Back + D-pad Up: keep this spot as My Camera */
+        static uint32_t prev;
+        uint32_t combo = BTN_BACK | BTN_UP;
+        if ((s_btn & combo) == combo && (prev & combo) != combo) {
+            Nfl2k5SandboxWorldState w;
+            float tx, ty, tz;
+            nfl2k5_sandbox_world_get_state(&w);
+            if (w.camera_ready && ball_target(&tx, &ty, &tz)) {
+                MyCam m;
+                update_dir();
+                m.have = 1;
+                m.dx = (w.x - tx) * s_dir; m.dy = w.y - ty; m.dz = (w.z - tz) * s_dir;
+                m.fov = clampf(w.fov, 15.f, 90.f);
+                s_my = m; s_my_loaded = 1;
+                mycam_save(&m);
+                fprintf(stderr, "[BROADCAST] My Camera saved: offset %.0f,%.0f,%.0f fov %.0f\n",
+                        m.dx, m.dy, m.dz, m.fov);
+                xbox_PresentToast("MY CAMERA", "Camera position saved",
+                                  "Pick \"My Camera\" on the Camera screen to play with it", 3500);
+            }
+        }
+        prev = s_btn;
+    }
+}
+
+/* My Camera in play: hold the saved offset from the ball, aim at the ball. */
+static void service_mycam(float dt)
+{
+    float tx, ty, tz, ex, ey, ez, dx, dy, dz, len;
+    Nfl2k5SandboxWorldState w;
+    mycam_load();
+    if (!s_armed) {
+        if (!nfl2k5_sandbox_world_enter()) return;
+        s_armed = 1;
+    }
+    if (!ball_target(&tx, &ty, &tz)) return;
+    update_dir();
+    if (!s_have) {
+        s_aimx = tx; s_aimy = ty; s_aimz = tz;
+        s_eyex = tx + s_my.dx * s_dir; s_eyey = ty + s_my.dy; s_eyez = tz + s_my.dz * s_dir;
+        s_have = 1;
+    }
+    /* The aim keeps up with a thrown ball; the camera body trails it a little,
+     * like an operator on a cable or a cart. Swapping ends (possession) glides. */
+    s_aimx = approach(s_aimx, tx, 9.f, dt);
+    s_aimy = approach(s_aimy, ty, 7.f, dt);
+    s_aimz = approach(s_aimz, tz, 9.f, dt);
+    s_eyex = approach(s_eyex, s_aimx + s_my.dx * s_dir, 3.5f, dt);
+    s_eyey = approach(s_eyey, clampf(s_aimy + s_my.dy, 60.f, 20000.f), 3.5f, dt);
+    s_eyez = approach(s_eyez, s_aimz + s_my.dz * s_dir, 3.5f, dt);
+    ex = s_eyex; ey = s_eyey; ez = s_eyez;
+    dx = s_aimx - ex; dy = s_aimy - ey; dz = s_aimz - ez;
+    len = sqrtf(dx * dx + dy * dy + dz * dz);
+    if (!(len > 1.f)) return;
+    memset(&w, 0, sizeof w);
+    w.ready = 1; w.camera_ready = 1; w.timescale = 1.f;
+    w.x = ex; w.y = ey; w.z = ez;
+    w.yaw = atan2f(dx, dz) * 180.f / PI_F;
+    w.pitch = clampf(asinf(clampf(dy / len, -1.f, 1.f)) * 180.f / PI_F, -85.f, 85.f);
+    w.fov = s_my.fov;
+    nfl2k5_sandbox_world_restore(&w);
 }
 
 void nfl2k5_broadcast_cam_service_pad(uint32_t buttons, int lx, int ly, int rx, int ry, int tl, int tr)
@@ -197,6 +345,8 @@ void nfl2k5_broadcast_cam_service_pad(uint32_t buttons, int lx, int ly, int rx, 
     Shot sh;
 
     s_btn = buttons; s_lx = lx; s_ly = ly; s_rx = rx; s_ry = ry; s_tl = tl; s_tr = tr;
+    {   extern void nfl2k5_ballscan_service(void);   /* NFL2K5_BALLSCAN=1 test only */
+        nfl2k5_ballscan_service(); }
 
     parse_env();
     if (!s_mode) { if (s_in) { release(); s_in = 0; } return; }
@@ -225,6 +375,7 @@ void nfl2k5_broadcast_cam_service_pad(uint32_t buttons, int lx, int ly, int rx, 
     if (!(dt > 0.f) || dt > 0.1f) dt = 0.016f;
 
     if (s_mode == NFL2K5_BCAST_FREECAM) { service_freecam(dt); return; }
+    if (s_mode == NFL2K5_BCAST_CUSTOM) { service_mycam(dt); return; }
 
     if (!s_armed) {
         if (!nfl2k5_sandbox_world_enter()) return;   /* arms the per-frame camera hook */

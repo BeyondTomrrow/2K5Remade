@@ -7,7 +7,7 @@
  * own those. Mode 0 (Off) leaves the original cameras untouched.
  *
  * Modes (see k_mode_names): Off, Broadcast (high sideline), Quarterback,
- * Handheld, End Zone, SkyCam, Free Cam. Selected on the in-game Camera screen
+ * Handheld, End Zone, SkyCam, Free Cam, My Camera. Selected on the in-game Camera screen
  * as the "Pro Broadcast" angle, or forced with NFL2K5_PRO_BROADCAST (0..6). */
 #ifndef NFL2K5_BROADCAST_CAM_H
 #define NFL2K5_BROADCAST_CAM_H
@@ -24,6 +24,7 @@ enum {
     NFL2K5_BCAST_ENDZONE,     /* behind the end zone              */
     NFL2K5_BCAST_SKYCAM,      /* overhead cable cam               */
     NFL2K5_BCAST_FREECAM,     /* Sandbox free camera, pad-flown   */
+    NFL2K5_BCAST_CUSTOM,      /* My Camera: a Free Cam spot saved with Back+Up, following the ball */
     NFL2K5_BCAST_MODE_COUNT
 };
 
