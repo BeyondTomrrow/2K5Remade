@@ -1,0 +1,13 @@
+{
+  "name": "YALE BOWL",
+  "display": "Yale Bowl",
+  "location": "New Haven, CT",
+  "code": "s64",
+  "clone": "Giants Stadium",
+  "host": "Alien Arena",
+  "capacity": 70869,
+  "indoor": 0,
+  "grass": 1,
+  "nfl": "Giants 1973-1974",
+  "source": "NCAA Football 07 Yale Bowl (STAD.SRES 143, YALEXX; EA's generic small-bowl model); tools/eras/stadiums/ncaa_stadiums.py"
+}

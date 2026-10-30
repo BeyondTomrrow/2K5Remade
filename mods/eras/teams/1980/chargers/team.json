@@ -1,0 +1,18 @@
+{
+  "abbreviation": "SD",
+  "city": "San Diego",
+  "name": "Chargers",
+  "season": 1980,
+  "eras_id": "chargers",
+  "colors": {
+    "primary": "#002244",
+    "secondary": "#FFC20E",
+    "text": "#FFFFFF"
+  },
+  "logos": {
+    "scorebug": "logos/scorebug.png",
+    "mini": "logos/mini.png"
+  },
+  "source": "disc logo_24_4",
+  "colors_note": "1980 colours from memory, not yet checked against a source"
+}

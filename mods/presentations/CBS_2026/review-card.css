@@ -1,0 +1,16 @@
+/* CBS design-system adaptation for native review notices, not a measured
+   CBS challenge graphic. Its lower edge862 is above the Eyebar top911. */
+#cbs-review-card {position:absolute;left:126px;bottom:218px;width:840px;z-index:74;pointer-events:none;opacity:0;transform:translateY(8px);transition:opacity 200ms ease,transform 200ms ease;filter:drop-shadow(0 3px 4px #0008);}
+#cbs-review-card[hidden] {display:none!important;}
+#cbs-review-card.on {opacity:1;transform:none;}
+#cbs-review-card[data-motion="reduced"] {transition:none;transform:none;}
+.cbs-review-plate {position:relative;min-height:148px;padding:0 24px 18px;border-top:1px solid #dbe8f76b;border-bottom:2px solid #7d91aa;background:linear-gradient(110deg,#102b4df5,#102039ed 75%,#08121fed);overflow:hidden;}
+.cbs-review-plate::before {content:'';position:absolute;inset:0;background-image:radial-gradient(circle,#0004 .8px,transparent 1.1px);background-size:4px 4px;pointer-events:none;}
+.cbs-review-plate::after {content:'';position:absolute;left:0;top:0;bottom:0;width:4px;background:linear-gradient(#e1ebf2,#8ca5bc);}
+.cbs-review-heading {position:relative;min-height:49px;display:flex;align-items:center;justify-content:space-between;gap:22px;border-bottom:1px solid #b6cce436;color:#d5e1eb;font:700 24px/30px "CBS Preview Bold",Arial,sans-serif;letter-spacing:.5px;text-transform:uppercase;}
+.cbs-review-heading span {min-width:0;white-space:pre-wrap;overflow-wrap:anywhere;}
+.cbs-review-heading img {width:164px;height:24px;flex:0 0 164px;object-fit:contain;}
+.cbs-review-eye {position:absolute;right:30px;bottom:-12px;width:140px;height:90px;object-fit:contain;opacity:.055;pointer-events:none;}
+.cbs-review-message {position:relative;padding-top:13px;color:#fff;font:700 30px/38px "CBS Preview Bold",Arial,sans-serif;letter-spacing:-.2px;white-space:pre-wrap;overflow-wrap:anywhere;}
+.cbs-review-reason {position:relative;padding-top:6px;color:#d4dfeb;font:400 25px/32px Arial,Helvetica,sans-serif;white-space:pre-wrap;overflow-wrap:anywhere;}
+.cbs-review-message[hidden],.cbs-review-reason[hidden] {display:none;}

@@ -1,0 +1,26 @@
+/* Live unit roster, adapted to this package's CBS plates/dot treatment.
+ * No measured CBS starting-lineup reference has been established for it. */
+#cbs-lineup { position:absolute; left:126px; bottom:218px; width:1668px; z-index:76; pointer-events:none; opacity:0; transform:translateY(8px); transition:opacity .2s ease,transform .2s cubic-bezier(.2,.8,.2,1); color:#fff; filter:drop-shadow(0 6px 9px #0008); font-family:"CBS Preview Bold",Arial,Helvetica,sans-serif; }
+#cbs-lineup[hidden] { display:none; }
+#cbs-lineup.on { opacity:1; transform:none; }
+#cbs-lineup[data-motion="reduced"] { transition:none; transform:none; }
+#cbs-lineup .lu-panel { border:1px solid #aebdca9c; background:linear-gradient(100deg,#0c1826f7,#172839f5 48%,#091420f7); }
+#cbs-lineup .lu-head { position:relative; display:flex; height:84px; align-items:center; gap:20px; padding:8px 28px; border-bottom:2px solid #a2b1bd; overflow:hidden; background:linear-gradient(180deg,#304258,#142235); }
+#cbs-lineup .lu-head::before,#cbs-lineup .lu-grid::before { content:""; position:absolute; inset:0; pointer-events:none; background:radial-gradient(circle,#ccd9e224 .8px,transparent 1.15px); background-size:4px 4px; }
+#cbs-lineup .lu-team-logo { width:82px; height:66px; object-fit:contain; filter:drop-shadow(0 3px 3px #000b); }
+#cbs-lineup .lu-team-code { display:none; width:82px; text-align:center; font-size:30px; }
+#cbs-lineup .lu-team-logo[hidden] + .lu-team-code { display:block; }
+#cbs-lineup .lu-heading { position:relative; flex:1; min-width:0; }
+#cbs-lineup .lu-unit { color:#c6d4e0; font-size:18px; line-height:23px; letter-spacing:2px; }
+#cbs-lineup .lu-team-name { font-size:32px; line-height:36px; white-space:nowrap; }
+#cbs-lineup .lu-brand { width:260px; height:40px; object-fit:contain; }
+#cbs-lineup .lu-grid { position:relative; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px 18px; padding:20px 24px; }
+#cbs-lineup .lu-player { position:relative; min-width:0; height:72px; display:grid; grid-template-columns:52px 46px 42px minmax(0,1fr); gap:10px; align-items:center; padding:5px 8px; border-bottom:1px solid #8396a85e; background:linear-gradient(90deg,#08111c8c,transparent); }
+#cbs-lineup .lu-portrait { width:52px; height:62px; object-fit:contain; align-self:end; }
+#cbs-lineup .lu-portrait[hidden] { visibility:hidden; display:block; }
+#cbs-lineup .lu-position { color:#bccedc; font-size:23px; line-height:30px; }
+#cbs-lineup .lu-number { font-size:28px; line-height:34px; text-align:right; }
+#cbs-lineup .lu-person { min-width:0; }
+#cbs-lineup .lu-name { display:block; font-size:28px; line-height:34px; white-space:nowrap; }
+#cbs-lineup .lu-college { display:block; color:#bfcbd5; font:18px/22px Arial,Helvetica,sans-serif; white-space:nowrap; }
+#cbs-lineup .lu-college[hidden] { display:none; }

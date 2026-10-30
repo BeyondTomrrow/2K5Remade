@@ -15759,6 +15759,8 @@ void sub_0006E6A0(void)
     (void)_fa; (void)_fb; (void)_fas; (void)_fbs;
 
 loc_0006E6A0: ;
+    /* NFL2K5-GENPATCH:SANDBOX_MAIN_FSM_SERVICE */
+    { extern void nfl2k5_sandbox_menu_service(void); if (ecx == 0x00A84B18u) { RECOMP_REGS_OUT(); nfl2k5_sandbox_menu_service(); RECOMP_REGS_IN(); } }
     eax = MEM32(esp + 4);
     PUSH32(esp, esi);
     esi = ecx;

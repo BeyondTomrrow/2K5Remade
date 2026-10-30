@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "xinput_xbox.h"
+#include "nfl2k5_sandbox_ui.h"
 
 extern char *xbox_user_path(const char *rel, char *out, size_t n);
 extern void *xbox_FramebufferWindowHwnd(void);
@@ -424,6 +425,10 @@ static void keyboard_into(XBOX_GAMEPAD *g)
 
 static void mouse_into(XBOX_GAMEPAD *g)
 {
+#if defined(_WIN32)
+    /* Sandbox's HTML panel owns the pointer: do not also send A/B/Start. */
+    if (nfl2k5_sandbox_ui_pointer_active()) return;
+#endif
     SDL_Window *win = (SDL_Window *)xbox_FramebufferWindowHwnd();
     float mx = 0.0f, my = 0.0f;
     int ww = 0, wh = 0;

@@ -340,7 +340,12 @@ int recomp_interp_dirty(uint32_t va)
 static recomp_func_t native_for(uint32_t va)
 {
     recomp_func_t fn;
-    if (va >= 0xFE000000u) return recomp_lookup_kernel(va);   /* kernel thunk bridge */
+    if (va >= 0xFE000000u) {
+        /* the kernel thunk bridge, else the menu functions served from C (Video Settings,
+         * the Main Menu's Exit prompt: 0xFEC0.., 0xFED0.., 0xFEE0..; NATIVE-MENU 2.2) */
+        fn = recomp_lookup_kernel(va);
+        return fn ? fn : recomp_lookup_manual(va);
+    }
     if (recomp_interp_dirty(va)) return NULL;
     fn = recomp_lookup_manual(va);
     if (!fn) fn = recomp_lookup(va);
@@ -451,13 +456,22 @@ static LONG WINAPI interp_fault_report(EXCEPTION_POINTERS *ep)
 }
 #endif
 
-void recomp_interp_call(uint32_t va)
+static void interp_execute(uint32_t va)
 {
     Cpu cpu, *c = &cpu;
     uint32_t esp0;
     memset(c, 0, sizeof *c);
     c->r[EAX] = g_eax; c->r[ECX] = g_ecx; c->r[EDX] = g_edx; c->r[EBX] = g_ebx;
     c->r[ESP] = g_esp; c->r[EBP] = g_ebp; c->r[ESI] = g_esi; c->r[EDI] = g_edi;
+    /* Native detour callers publish the flags used by their continuation.
+     * Mod wrappers commonly PUSHFD before calling a helper and POPFD before
+     * branching. Starting with zero flags loses that caller comparison even
+     * when the wrapper's own PUSHFD/POPFD is interpreted correctly. */
+    if (g_rf_kind) {
+        c->cf = recomp_rf_cond(2); c->pf = recomp_rf_cond(10);
+        c->zf = recomp_rf_cond(4); c->sf = recomp_rf_cond(8);
+        c->of = recomp_rf_cond(0);
+    }
     c->eip = va;
     esp0 = c->r[ESP];
     if (s_interp_log < 0) {
@@ -473,6 +487,24 @@ void recomp_interp_call(uint32_t va)
         int size;
         uint32_t target = 0, prev = c->start;
         c->start = c->eip;
+        {   /* NFL2K5_INTERP_TRACE=lo-hi (hex VAs, diagnostics): every interpreted instruction in
+             * that range with the registers it starts with. */
+            static int tr_on = -1;
+            static uint32_t tr_lo, tr_hi;
+            if (tr_on < 0) {
+                const char *tv = getenv("NFL2K5_INTERP_TRACE");
+                char *te;
+                tr_on = 0;
+                if (tv && *tv) {
+                    tr_lo = (uint32_t)strtoul(tv, &te, 16);
+                    tr_hi = *te == '-' ? (uint32_t)strtoul(te + 1, NULL, 16) : tr_lo;
+                    tr_on = 1;
+                }
+            }
+            if (tr_on && c->start >= tr_lo && c->start <= tr_hi)
+                fprintf(stderr, "[ITRACE] %08X eax %08X ecx %08X edx %08X ebx %08X esp %08X ebp %08X esi %08X edi %08X\n",
+                        c->start, c->r[0], c->r[1], c->r[2], c->r[3], c->r[4], c->r[5], c->r[6], c->r[7]);
+        }
         if (s_nhooks && c->start >= s_hook_lo && c->start <= s_hook_hi) {
             uint32_t to = run_hooks(c, prev);
             if (to) { c->eip = to; continue; }
@@ -952,4 +984,81 @@ out:
     InterlockedIncrement(&s_unknown_reported);
     sync_out(c);
     g_esp = esp0 + 4;
+}
+
+void recomp_interp_call(uint32_t va)
+{
+    Cpu *parent = t_cur;
+    __try {
+        interp_execute(va);
+    } __finally {
+        /* Native calls may reenter the interpreter. Never leave the crash
+         * reporter pointing into a returned inner interpreter's stack. */
+        t_cur = parent;
+    }
+}
+
+/* Exercise the real interpreter's native-to-guest flag handoff, including
+ * the PUSHFD / temporary XOR / POPFD pattern used by pack detours. */
+int nfl2k5_test_interp_flags(uint32_t scratch)
+{
+    static const uint8_t code[] = {
+        0x9c, 0x31, 0xc0, 0x9d, 0x74, 0x06,
+        0xb8, 0, 0, 0, 0, 0xc3, 0xb8, 1, 0, 0, 0, 0xc3
+    };
+    static const struct { uint8_t jump; uint32_t a, b; int expected; } cases[] = {
+        { 0x74, 3, 3, 1 }, { 0x74, 4, 3, 0 },
+        { 0x72, 2, 3, 1 }, { 0x72, 4, 3, 0 },
+        { 0x7c, 0xffffffffu, 1, 1 }, { 0x7c, 1, 0xffffffffu, 0 },
+        { 0x70, 0x80000000u, 1, 1 }, { 0x70, 4, 3, 0 }
+    };
+    uint32_t regs[] = { g_eax, g_ecx, g_edx, g_ebx, g_esp, g_ebp, g_esi, g_edi };
+    uint32_t rf[] = { g_rf_kind, g_rf_a, g_rf_b, (uint32_t)g_rf_as, (uint32_t)g_rf_bs, g_rf_cf };
+    uint32_t seh = g_seh_ebp;
+    int df = g_df, ok = 1;
+    memcpy((void *)((uintptr_t)xbox_GetMemoryOffset() + scratch), code, sizeof code);
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+        MEM8(scratch + 4) = cases[i].jump;
+        g_rf_kind = 1; g_rf_a = cases[i].a; g_rf_b = cases[i].b;
+        g_rf_as = (int32_t)cases[i].a; g_rf_bs = (int32_t)cases[i].b;
+        g_esp = scratch + 4000; MEM32(g_esp) = 0;
+        recomp_interp_call(scratch);
+        if (g_eax != (uint32_t)cases[i].expected || g_esp != scratch + 4004) {
+            fprintf(stderr, "[TEST] interpreter flags case %u failed (eax=%u esp=%08X)\n", i, g_eax, g_esp);
+            ok = 0; break;
+        }
+    }
+    /* This pack helper returns the mode comparison in flags, preserving EAX.
+     * Exercise its native implementation: its callers branch on ZF without
+     * another comparison. A stale flag export sends animation down the wrong
+     * mode-specific path. Retail has no function at this address. */
+    recomp_func_t mode_helper = recomp_lookup(0x014DB710u);
+    if (mode_helper) {
+        uint32_t old_mode = MEM32(0xE5FF80u), old_scene = MEM32(0xBF1858u);
+        static const struct { uint32_t mode, scene; int zf; } modes[] = {
+            { 7, 0, 0 }, { 8, 49, 1 }, { 8, 50, 0 }, { 9, 50, 0 }
+        };
+        for (unsigned i = 0; i < sizeof modes / sizeof modes[0]; ++i) {
+            MEM32(0xE5FF80u) = modes[i].mode;
+            MEM32(0xBF1858u) = modes[i].scene;
+            g_rf_kind = 1; g_rf_a = modes[i].zf ? 1 : 0; g_rf_b = 0;
+            g_rf_as = (int32_t)g_rf_a; g_rf_bs = 0;
+            g_eax = 0x12345678u;
+            g_esp = scratch + 4000; MEM32(g_esp) = 0;
+            mode_helper();
+            if (recomp_rf_cond(4) != modes[i].zf ||
+                g_eax != 0x12345678u || g_esp != scratch + 4004) {
+                fprintf(stderr, "[TEST] pack mode flag return case %u failed\n", i);
+                ok = 0;
+            }
+        }
+        MEM32(0xE5FF80u) = old_mode; MEM32(0xBF1858u) = old_scene;
+        if (ok) fprintf(stderr, "[TEST] pack mode helper native flag return passed (4 cases)\n");
+    }
+    g_eax = regs[0]; g_ecx = regs[1]; g_edx = regs[2]; g_ebx = regs[3];
+    g_esp = regs[4]; g_ebp = regs[5]; g_esi = regs[6]; g_edi = regs[7];
+    g_rf_kind = rf[0]; g_rf_a = rf[1]; g_rf_b = rf[2];
+    g_rf_as = (int32_t)rf[3]; g_rf_bs = (int32_t)rf[4]; g_rf_cf = rf[5];
+    g_seh_ebp = seh; g_df = df;
+    return ok;
 }

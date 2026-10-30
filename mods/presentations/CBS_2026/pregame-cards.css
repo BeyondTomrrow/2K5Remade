@@ -1,0 +1,46 @@
+/* CBS family styling; not a measured reconstruction of a CBS toss card.
+   All positions use the existing uniformly scaled 1920x1080 safe canvas. */
+#cbs-pregame-card {position:absolute;left:190px;bottom:215px;width:1100px;z-index:73;pointer-events:none;opacity:0;transform:translateY(8px);transition:opacity 200ms ease,transform 200ms ease;filter:drop-shadow(0 3px 5px #0009);}
+#cbs-pregame-card[hidden] {display:none!important;}
+#cbs-pregame-card.on {opacity:1;transform:none;}
+#cbs-pregame-card.out {transition-duration:160ms;}
+#cbs-pregame-card[data-motion="reduced"] {transition:none;transform:none;}
+.cbs-pg-plate {position:relative;display:flex;min-height:170px;border-top:1px solid #e1edf68c;border-bottom:3px solid #8fa6bd;background:linear-gradient(110deg,#17395bf8,#101f34f5 70%,#09121ff5);overflow:hidden;}
+.cbs-pg-plate::before {content:'';position:absolute;inset:0;background-image:radial-gradient(circle,#0005 .8px,transparent 1.1px);background-size:4px 4px;pointer-events:none;}
+.cbs-pg-plate::after {content:'';position:absolute;left:0;top:0;bottom:0;width:4px;background:linear-gradient(#e1ebf2,#8ca5bc);}
+.cbs-pg-content {position:relative;min-width:0;flex:1;padding:0 27px 20px;}
+.cbs-pg-heading {min-height:49px;display:flex;align-items:center;justify-content:space-between;gap:25px;border-bottom:1px solid #b6cce43d;color:#d4e1eb;font:700 25px/31px "CBS Preview Bold",Arial,sans-serif;letter-spacing:.4px;text-transform:uppercase;}
+.cbs-pg-heading span {min-width:0;overflow-wrap:anywhere;}
+.cbs-pg-heading img {width:164px;height:24px;flex:0 0 164px;object-fit:contain;}
+.cbs-pg-team {position:relative;display:none;flex:none;width:166px;align-items:center;justify-content:center;background:linear-gradient(140deg,#0002,#0006),var(--cbs-pg-team,#163b61);border-right:2px solid #7d93a85c;}
+.has-team .cbs-pg-team {display:flex;}
+.cbs-pg-team img {width:145px;height:140px;object-fit:contain;filter:drop-shadow(0 3px 3px #0008);}
+.cbs-pg-portrait {display:none;position:relative;align-self:flex-end;flex:none;width:166px;height:205px;object-fit:contain;object-position:bottom;filter:drop-shadow(3px 1px 3px #0006);}
+.has-portrait .cbs-pg-portrait {display:block;}
+.cbs-pg-eye {position:absolute;right:25px;bottom:-12px;width:160px;height:100px;opacity:.04;pointer-events:none;}
+.cbs-pg-text {position:relative;margin-top:14px;color:#fff;font:700 31px/39px "CBS Preview Bold",Arial,sans-serif;white-space:pre-wrap;overflow-wrap:anywhere;}
+.cbs-pg-player {display:flex;align-items:baseline;gap:20px;justify-content:space-between;padding-top:9px;}
+.cbs-pg-name {color:white;font:700 37px/44px "CBS Preview Bold",Arial,sans-serif;overflow-wrap:anywhere;}
+.cbs-pg-position {color:#d4e1eb;font:700 23px/30px "CBS Preview Bold",Arial,sans-serif;white-space:nowrap;}
+.cbs-pg-caption {color:#bcd0e2;font:700 22px/29px "CBS Preview Bold",Arial,sans-serif;text-transform:uppercase;}
+.cbs-pg-columns {display:grid;grid-template-columns:repeat(var(--cbs-pg-columns,1),minmax(0,1fr));margin-top:14px;}
+.cbs-pg-column {padding:0 10px;text-align:center;border-right:1px solid #b8c9dc38;min-width:0;}
+.cbs-pg-column:first-child {padding-left:0;}.cbs-pg-column:last-child {border-right:0;}
+.cbs-pg-label {color:#cbd9e7;font:700 21px/28px "CBS Preview Bold",Arial,sans-serif;white-space:pre-wrap;overflow-wrap:anywhere;}
+.cbs-pg-value {color:#fff;font:700 38px/46px "CBS Preview Bold",Arial,sans-serif;white-space:pre-wrap;overflow-wrap:anywhere;}
+.cbs-pg-choices {display:flex;flex-wrap:wrap;gap:12px 24px;margin-top:16px;}
+.cbs-pg-choice {display:flex;align-items:center;gap:12px;position:relative;min-height:44px;padding:5px 16px 5px 10px;border:1px solid #c0d1e34d;background:#0003;color:#b9c5d1;font:700 26px/32px "CBS Preview Bold",Arial,sans-serif;}
+.cbs-pg-choice.selected {color:#fff;background:linear-gradient(100deg,#4e78974d,#223b5966);border-color:#e4edf5ad;box-shadow:inset 0 1px #e6f1fa26;}
+.cbs-pg-choice-marker {width:0;height:0;border-top:7px solid transparent;border-bottom:7px solid transparent;border-left:9px solid transparent;}
+.selected .cbs-pg-choice-marker {border-left-color:#e7eef7;}
+.cbs-pg-choice-button {display:flex;align-items:center;justify-content:center;min-width:30px;height:30px;padding:0 6px;margin-left:8px;border:1px solid #dbe7f37a;background:#020a15;color:#fff;font:700 21px/28px Arial,sans-serif;}
+/* Interactive native notices carry a label plus both consequence cells per
+   row. Preserve the matrix instead of reducing it to Accept / Decline. */
+#cbs-pregame-card[data-kind="notice"] .cbs-pg-choices {display:flex;flex-direction:column;flex-wrap:nowrap;gap:8px;}
+#cbs-pregame-card[data-kind="notice"] .cbs-pg-choice {display:grid;grid-template-columns:minmax(220px,1.1fr) repeat(2,minmax(0,1fr));gap:18px;width:100%;padding:8px 15px 8px 10px;}
+#cbs-pregame-card[data-kind="notice"] .cbs-pg-choice[data-outcomes="0"] {grid-template-columns:minmax(0,1fr);}
+#cbs-pregame-card[data-kind="notice"] .cbs-pg-choice[data-outcomes="1"] {grid-template-columns:minmax(220px,1.1fr) minmax(0,1fr);}
+.cbs-pg-choice-label {display:flex;align-items:center;gap:12px;min-width:0;}
+.cbs-pg-choice-label .cbs-pg-choice-text {flex:1;white-space:pre-wrap;overflow-wrap:anywhere;}
+.cbs-pg-choice-outcome {min-width:0;border-left:1px solid #a9bfd43b;padding-left:18px;color:inherit;font:700 23px/31px "CBS Preview Bold",Arial,sans-serif;white-space:pre-wrap;overflow-wrap:anywhere;}
+.cbs-pg-text[hidden],.cbs-pg-caption[hidden],.cbs-pg-columns[hidden],.cbs-pg-choices[hidden],.cbs-pg-player[hidden],.cbs-pg-portrait[hidden],.cbs-pg-team img[hidden] {display:none;}

@@ -1,0 +1,18 @@
+{
+  "abbreviation": "CHI",
+  "city": "Chicago",
+  "name": "Bears",
+  "season": 1980,
+  "eras_id": "bears",
+  "colors": {
+    "primary": "#0B162A",
+    "secondary": "#C83803",
+    "text": "#FFFFFF"
+  },
+  "logos": {
+    "scorebug": "logos/scorebug.png",
+    "mini": "logos/mini.png"
+  },
+  "source": "disc logo_05_0",
+  "colors_note": "1980 colours from memory, not yet checked against a source"
+}

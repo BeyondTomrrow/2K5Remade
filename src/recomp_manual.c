@@ -36,11 +36,22 @@ static uint32_t nfl2k5_qb_rd32(uint32_t address)
     return value;
 }
 
-static int nfl2k5_guest_player_stat(uint32_t player, uint32_t field, int *out)
+/* One call of a title stat accessor, sub_000CB240 (player record) or
+ * sub_000CB2D0 (match team-data record 0xB30864 / 0xB30A58): ecx = entity,
+ * edx = selector, one stack word = scope (0 match, 1-4 quarters, 5 OT,
+ * 6/7 halves, 11 season), ret 4, result in ST0. Every guest register, the
+ * lazy flags and the x87/XMM state are preserved, so a gen patch may call
+ * this anywhere on the guest thread (My NFL Eras' result capture,
+ * src/nfl2k5_eras_capture.c). The pushed return address is a real call site
+ * of the same accessor (Gamecast 0x3216D4; franchise commit 0x1353A6). */
+int nfl2k5_guest_stat(uint32_t fn_va, void (*fn)(void), uint32_t entity, uint32_t selector,
+                      uint32_t scope, double *out)
 {
     uint32_t save_eax = g_eax, save_ebx = g_ebx, save_ecx = g_ecx, save_edx = g_edx;
     uint32_t save_esi = g_esi, save_edi = g_edi, save_ebp = g_ebp, save_esp = g_esp;
     uint32_t save_seh_ebp = g_seh_ebp;
+    uint32_t save_rf_kind = g_rf_kind, save_rf_a = g_rf_a, save_rf_b = g_rf_b, save_rf_cf = g_rf_cf;
+    int32_t save_rf_as = g_rf_as, save_rf_bs = g_rf_bs;
     int save_fp_top = g_fp_top, save_fp_cmp = g_fp_cmp, save_df = g_df;
     uint16_t save_fp_cc = g_fp_cc, save_fp_control = g_fp_control_word;
     double save_fp_stack[8];
@@ -50,28 +61,57 @@ static int nfl2k5_guest_player_stat(uint32_t player, uint32_t field, int *out)
     int valid;
     static unsigned abi_errors;
 
+    if (!fn || (fn_va != 0x000CB240u && fn_va != 0x000CB2D0u)) return 0;
     memcpy(save_fp_stack, g_fp_stack, sizeof save_fp_stack);
-    g_ecx = player;
-    g_edx = field;
-    PUSH32(g_esp, 0u);          /* Gamecast's actual current-match scope. */
-    PUSH32(g_esp, 0x003216D9u); /* Synthetic call frame, not a stack argument. */
-    RECOMP_ABI_CALL(0x000CB240u, sub_000CB240);
+    g_ecx = entity;
+    g_edx = selector;
+    PUSH32(g_esp, scope);
+    /* Synthetic call frame, not a stack argument. */
+    PUSH32(g_esp, fn_va == 0x000CB240u ? 0x003216D9u : 0x001353ABu);
+    RECOMP_ABI_CALL(fn_va, fn);
     value = g_fp_stack[g_fp_top & 7];
     valid = g_esp == save_esp && g_fp_top == ((save_fp_top + 7) & 7) &&
-            isfinite(value) && value >= -10000.0 && value <= 10000.0;
-    if (!valid && abi_errors++ < 4)
-        fprintf(stderr, "[LIVE-QB-ABI] field=%X esp=%08X expected=%08X fp=%d expected=%d value=%.3f\n",
-                field, g_esp, save_esp, g_fp_top, (save_fp_top + 7) & 7, value);
+            isfinite(value) && value >= -1.0e7 && value <= 1.0e7;
+    if (!valid && abi_errors++ < 8)
+        fprintf(stderr, "[GUEST-STAT-ABI] fn=%05X entity=%08X sel=%X scope=%u esp=%08X expected=%08X fp=%d expected=%d value=%.3f\n",
+                fn_va, entity, selector, scope, g_esp, save_esp, g_fp_top, (save_fp_top + 7) & 7, value);
     g_eax = save_eax; g_ebx = save_ebx; g_ecx = save_ecx; g_edx = save_edx;
     g_esi = save_esi; g_edi = save_edi; g_ebp = save_ebp; g_esp = save_esp;
     g_seh_ebp = save_seh_ebp; g_df = save_df;
+    g_rf_kind = save_rf_kind; g_rf_a = save_rf_a; g_rf_b = save_rf_b; g_rf_cf = save_rf_cf;
+    g_rf_as = save_rf_as; g_rf_bs = save_rf_bs;
     memcpy(g_fp_stack, save_fp_stack, sizeof save_fp_stack);
     g_fp_top = save_fp_top; g_fp_cmp = save_fp_cmp; g_fp_cc = save_fp_cc;
     g_fp_control_word = save_fp_control;
     g_xmm0 = save_xmm[0]; g_xmm1 = save_xmm[1]; g_xmm2 = save_xmm[2]; g_xmm3 = save_xmm[3];
     g_xmm4 = save_xmm[4]; g_xmm5 = save_xmm[5]; g_xmm6 = save_xmm[6]; g_xmm7 = save_xmm[7];
-    if (valid) *out = (int)(value >= 0 ? value + 0.5 : value - 0.5);
+    if (valid) *out = value;
     return valid;
+}
+
+int nfl2k5_guest_player_stat_scope(uint32_t player, uint32_t selector, uint32_t scope, double *out)
+{
+    return nfl2k5_guest_stat(0x000CB240u, sub_000CB240, player, selector, scope, out);
+}
+
+int nfl2k5_guest_team_stat(uint32_t team, uint32_t selector, uint32_t scope, double *out)
+{
+    return nfl2k5_guest_stat(0x000CB2D0u, sub_000CB2D0, team, selector, scope, out);
+}
+
+static int nfl2k5_guest_player_stat(uint32_t player, uint32_t field, int *out)
+{
+    double value = 0.0;
+    static unsigned range_errors;
+    /* Gamecast's actual current-match scope. */
+    if (!nfl2k5_guest_stat(0x000CB240u, sub_000CB240, player, field, 0u, &value)) return 0;
+    if (value < -10000.0 || value > 10000.0) {
+        if (range_errors++ < 4)
+            fprintf(stderr, "[LIVE-QB-ABI] field=%X value=%.3f out of range\n", field, value);
+        return 0;
+    }
+    *out = (int)(value >= 0 ? value + 0.5 : value - 0.5);
+    return 1;
 }
 
 /* Ask the title's current depth chart for the first QB slot. 61CB0/61CD0
@@ -365,6 +405,308 @@ void nfl2k5_pregame_guest_roster_snapshot(void)
     InterlockedExchange(&sampling, 0);
 }
 
+/* Current-match presentation collector. Selector evidence is the owned
+ * XBE's A8A510/A8B918 tables and labelled scope-zero Gamecast descriptors,
+ * decoded in data/eras/stat_selectors_2k5.json. This is deliberately separate
+ * from the two-QB sampler: at most ONE non-QB player per 50ms and ONE team
+ * per 500ms. No worker/timer thread executes a guest accessor. */
+typedef struct Nfl2k5LiveSelector {
+    unsigned selector, type;
+    uint32_t player_getter, team_getter;
+    unsigned format; /* 0 integer, 1 half credits, 2 seconds */
+} Nfl2k5LiveSelector;
+
+static const Nfl2k5LiveSelector k_live_selectors[NFL2K5_LIVE_FIELD_COUNT] = {
+    { 0x04, 2, 0x0024E230u, 0x000CAB00u, 0 }, /* pass completions */
+    { 0x23, 2, 0x0024DF60u, 0x000CAA90u, 0 }, /* pass attempts */
+    { 0x4C, 3, 0x0024E310u, 0x000CAB70u, 0 }, /* pass yards */
+    { 0x40, 2, 0x0024E3E0u, 0x000CABC0u, 0 }, /* pass TD */
+    { 0x16, 0, 0x0024E430u, 0x000C99C0u, 0 }, /* pass INT */
+    { 0x03, 2, 0x0024E700u, 0x000CAC00u, 0 }, /* carries */
+    { 0x50, 3, 0x0024E800u, 0x000CAC40u, 0 }, /* rush yards */
+    { 0x3F, 2, 0x0024E960u, 0x000CAC90u, 0 }, /* rush TD */
+    { 0x2E, 2, 0x0024E9A0u, 0x000CAB00u, 0 }, /* receptions */
+    { 0x4F, 3, 0x0024EB70u, 0x000CACD0u, 0 }, /* receive yards */
+    { 0x3E, 0, 0x0024ED00u, 0x000C9BA0u, 0 }, /* receive TD */
+    { 0x32, 0, 0x0024EED0u, 0x000C9C40u, 0 }, /* tackles */
+    { 0xB8, 4, 0, 0, 1 },                   /* half-sacks * 0.5 */
+    { 0x17, 0, 0x0024F060u, 0x000C9C90u, 0 }, /* defensive INT */
+    { 0xC8, 4, 0, 0, 0 },                   /* FG made, four ranges */
+    { 0xC7, 4, 0, 0, 0 },                   /* FG attempted */
+    { 0x1C, 0, 0x0024F4F0u, 0x000C9E90u, 0 }, /* longest FG */
+    { 0x0E, 0, 0, 0x000C9330u, 0 },        /* first downs */
+    { 0x5D, 0, 0, 0x000C9460u, 0 },        /* possessions */
+    { 0xD0, 4, 0, 0, 0 },                   /* rush + pass yards */
+    { 0x5F, 0, 0, 0x00250040u, 2 },        /* time of possession */
+    { 0x11, 0, 0x0024F180u, 0x000C9CF0u, 0 }, /* forced fumbles */
+    { 0x12, 0, 0x0024F1C0u, 0x000C9D00u, 0 }, /* fumble recoveries */
+    { 0x34, 0, 0x0024EF50u, 0x000C9C60u, 0 }, /* tackles for loss */
+    { 0x1A, 1, 0x0024E8A0u, 0x000C9B30u, 0 }, /* longest rush */
+    { 0x1B, 1, 0x0024EBD0u, 0x000C9A00u, 0 }, /* longest reception */
+    { 0x1F, 1, 0x0024DC00u, 0x000C9A00u, 0 }, /* longest pass */
+    { 0x42, 0, 0, 0x000C9820u, 0 },        /* team turnovers */
+    { 0x24, 0, 0, 0x000C93E0u, 0 },        /* penalties */
+    { 0x46, 1, 0, 0x000C9730u, 0 },        /* pass yards allowed */
+    { 0x45, 1, 0, 0x000C9780u, 0 },        /* rush yards allowed */
+    { 0xDE, 4, 0, 0, 0 }                    /* allowed rush + pass */
+};
+
+static int nfl2k5_live_base_ready(unsigned selector, unsigned type,
+                                  uint32_t player_getter, uint32_t team_getter, int team)
+{
+    uint32_t descriptor = 0x00A8A510u + selector * 0x1Cu;
+    uint32_t expected = team ? team_getter : player_getter;
+    return expected && nfl2k5_qb_rd32(descriptor) == type &&
+           nfl2k5_qb_rd32(descriptor + (team ? 8u : 4u)) == expected && recomp_lookup(expected);
+}
+
+static int nfl2k5_live_selector_ready(unsigned field, int team)
+{
+    const Nfl2k5LiveSelector *s;
+    uint32_t row;
+    unsigned i;
+    if (field >= NFL2K5_LIVE_FIELD_COUNT) return 0;
+    s = &k_live_selectors[field];
+    if (s->type < 4u)
+        return nfl2k5_live_base_ready(s->selector, s->type, s->player_getter, s->team_getter, team);
+    row = 0x00A8B918u + (s->selector - 0xB8u) * 24u;
+    if (field == NFL2K5_LIVE_SACKS) {
+        float half = 0.0f;
+        return nfl2k5_qb_rd32(row) == 6u && nfl2k5_qb_rd32(row + 4u) == 0x2Fu &&
+               nfl2k5_qb_read(0x004E4184u, &half, sizeof half) && half == 0.5f &&
+               nfl2k5_live_base_ready(0x2Fu, 0, 0x0024EF90u, 0x000C9C80u, team);
+    }
+    if (field == NFL2K5_LIVE_TOTAL_YARDS || field == NFL2K5_LIVE_TOTAL_YARDS_ALLOWED) {
+        unsigned a = field == NFL2K5_LIVE_TOTAL_YARDS ? NFL2K5_LIVE_RUSH_YARDS : NFL2K5_LIVE_RUSH_YARDS_ALLOWED;
+        unsigned b = field == NFL2K5_LIVE_TOTAL_YARDS ? NFL2K5_LIVE_PASS_YARDS : NFL2K5_LIVE_PASS_YARDS_ALLOWED;
+        return nfl2k5_qb_rd32(row) == 0u &&
+               nfl2k5_qb_rd32(row + 4u) == k_live_selectors[a].selector &&
+               nfl2k5_qb_rd32(row + 8u) == k_live_selectors[b].selector &&
+               nfl2k5_live_selector_ready(a, team) && nfl2k5_live_selector_ready(b, team);
+    }
+    if (field == NFL2K5_LIVE_FIELD_GOALS_MADE || field == NFL2K5_LIVE_FIELD_GOALS_ATTEMPTED) {
+        unsigned first = field == NFL2K5_LIVE_FIELD_GOALS_MADE ? 0xADu : 0xA9u;
+        const uint32_t player_made[4] = { 0x000C87E0u, 0x000C87F0u, 0x000C8800u, 0x000C8810u };
+        const uint32_t player_attempt[4] = { 0x000C87A0u, 0x000C87B0u, 0x000C87C0u, 0x000C87D0u };
+        const uint32_t team_made[4] = { 0x000C9E40u, 0x000C9E30u, 0x000C9E20u, 0x000C9E10u };
+        const uint32_t team_attempt[4] = { 0x000C9DF0u, 0x000C9DE0u, 0x000C9DD0u, 0x000C9DC0u };
+        if (nfl2k5_qb_rd32(row) != 4u) return 0;
+        for (i = 0; i < 4u; ++i)
+            if (nfl2k5_qb_rd32(row + 4u + i * 4u) != first + i ||
+                !nfl2k5_live_base_ready(first + i, 0,
+                    first == 0xADu ? player_made[i] : player_attempt[i],
+                    first == 0xADu ? team_made[i] : team_attempt[i], team)) return 0;
+        return 1;
+    }
+    return 0;
+}
+
+/* Same source and bounded prefix rule as presentation read_state's
+ * read_team_code(): UTF-16 "DAL-pb.iff" -> "DAL". Roster+10C is instead a
+ * numeric string such as "07" and must never be called an abbreviation. */
+static int nfl2k5_live_playbook_code(unsigned side, char *out, size_t capacity)
+{
+    const uint32_t names[2] = { 0x00B30810u, 0x00B307D0u }; /* away, home */
+    uint16_t words[8];
+    unsigned i;
+    if (!out || capacity < 8u) return 0;
+    memset(out, 0, capacity);
+    if (side > 1u || !nfl2k5_qb_read(names[side], words, sizeof words)) return 0;
+    for (i = 0; i < 7u && words[i] && words[i] != '-'; ++i) {
+        if (words[i] < 32u || words[i] > 126u) { memset(out, 0, capacity); return 0; }
+        out[i] = (char)words[i];
+    }
+    return i != 0u;
+}
+
+static int nfl2k5_live_read_owner(Nfl2k5LiveStatOwner *owner)
+{
+    const uint32_t objects[2] = { 0x00E5FC60u, 0x00E5FC20u }; /* away, home */
+    const uint32_t expected[2] = { 0x00B30A58u, 0x00B30864u };
+    float clock;
+    unsigned side;
+    memset(owner, 0, sizeof *owner);
+    owner->period = nfl2k5_qb_rd32(0x00E602C4u);
+    owner->clock_object = nfl2k5_qb_rd32(0x00E6028Cu);
+    if (!nfl2k5_qb_rd32(0x00A9288Cu) || !owner->period || owner->period > 12u ||
+        !owner->clock_object || !nfl2k5_qb_read(owner->clock_object + 0x10u, &clock, sizeof clock) ||
+        !isfinite(clock) || clock < 0.0f || clock >= 4000.0f) return 0;
+    for (side = 0; side < 2u; ++side) {
+        unsigned char count = 0;
+        owner->rosters[side] = nfl2k5_qb_rd32(objects[side] + 0x1Cu);
+        if (owner->rosters[side] != expected[side] ||
+            !nfl2k5_qb_read(owner->rosters[side] + 0x11Cu, &count, sizeof count) ||
+            !count || count > 71u) return 0;
+        nfl2k5_live_playbook_code(side, owner->abbreviations[side], sizeof owner->abbreviations[side]);
+    }
+    owner->sampled_at_ms = GetTickCount64();
+    return 1;
+}
+
+static int nfl2k5_live_same_owner(const Nfl2k5LiveStatOwner *a, const Nfl2k5LiveStatOwner *b)
+{
+    return a->clock_object == b->clock_object && a->rosters[0] == b->rosters[0] &&
+        a->rosters[1] == b->rosters[1] &&
+        !memcmp(a->abbreviations, b->abbreviations, sizeof a->abbreviations);
+}
+
+static uint32_t nfl2k5_live_team_block(const Nfl2k5LiveStatOwner *owner, unsigned side)
+{
+    uint32_t object = side ? 0x00E5FC20u : 0x00E5FC60u, block;
+    unsigned slot;
+    if (side > 1u) return 0;
+    block = nfl2k5_qb_rd32(object + 0x18u);
+    if (!block) return 0;
+    for (slot = 0; slot < 2u; ++slot)
+        if (nfl2k5_qb_rd32(0x00B72A50u + slot * 4u) == owner->rosters[side] &&
+            nfl2k5_qb_rd32(0x00B72A58u + slot * 4u) == block) return block;
+    return 0;
+}
+
+static int nfl2k5_live_value(uint32_t entity, unsigned field, int team, double *out)
+{
+    double value, rounded;
+    unsigned format;
+    if (!nfl2k5_live_selector_ready(field, team) ||
+        !nfl2k5_guest_stat(team ? 0x000CB2D0u : 0x000CB240u,
+            team ? sub_000CB2D0 : sub_000CB240, entity, k_live_selectors[field].selector, 0u, &value)) return 0;
+    format = k_live_selectors[field].format;
+    if (value < -10000.0 || value > 100000.0) return 0;
+    if (field != NFL2K5_LIVE_PASS_YARDS && field != NFL2K5_LIVE_RUSH_YARDS &&
+        field != NFL2K5_LIVE_RECEIVE_YARDS && field != NFL2K5_LIVE_TOTAL_YARDS &&
+        field != NFL2K5_LIVE_PASS_YARDS_ALLOWED && field != NFL2K5_LIVE_RUSH_YARDS_ALLOWED &&
+        field != NFL2K5_LIVE_TOTAL_YARDS_ALLOWED &&
+        field != NFL2K5_LIVE_LONGEST_PASS && field != NFL2K5_LIVE_LONGEST_RUSH &&
+        field != NFL2K5_LIVE_LONGEST_RECEPTION && value < 0.0) return 0;
+    if (format != 2u) {
+        double units = format == 1u ? value * 2.0 : value;
+        rounded = floor(units + 0.5);
+        if (fabs(units - rounded) > 0.001) return 0;
+        value = format == 1u ? rounded * 0.5 : rounded;
+    }
+    *out = value;
+    return 1;
+}
+
+static int nfl2k5_live_collect_player(const Nfl2k5LiveStatOwner *owner, unsigned side, unsigned index)
+{
+    static const char *positions[17] = { "QB", "K", "P", "WR", "CB", "FS", "SS", "HB", "FB", "TE", "LB", "LB", "C", "G", "T", "DT", "DE" };
+    static const unsigned offense[] = { NFL2K5_LIVE_RUSH_ATTEMPTS, NFL2K5_LIVE_RUSH_YARDS, NFL2K5_LIVE_RUSH_TOUCHDOWNS,
+        NFL2K5_LIVE_RECEPTIONS, NFL2K5_LIVE_RECEIVE_YARDS, NFL2K5_LIVE_RECEIVE_TOUCHDOWNS,
+        NFL2K5_LIVE_LONGEST_RUSH, NFL2K5_LIVE_LONGEST_RECEPTION };
+    static const unsigned defense[] = { NFL2K5_LIVE_TACKLES, NFL2K5_LIVE_SACKS, NFL2K5_LIVE_DEF_INTERCEPTIONS,
+        NFL2K5_LIVE_FORCED_FUMBLES, NFL2K5_LIVE_FUMBLES_RECOVERED, NFL2K5_LIVE_TACKLES_FOR_LOSS };
+    static const unsigned kicking[] = { NFL2K5_LIVE_FIELD_GOALS_MADE, NFL2K5_LIVE_FIELD_GOALS_ATTEMPTED, NFL2K5_LIVE_LONGEST_FIELD_GOAL };
+    const unsigned *fields;
+    unsigned fields_count, i;
+    unsigned char count = 0, position = 0xFFu;
+    uint16_t photo;
+    uint32_t player, slot, live, jersey;
+    char first[32], last[40];
+    Nfl2k5LivePlayerSample sample;
+    Nfl2k5LiveStatOwner after;
+    if (!nfl2k5_qb_read(owner->rosters[side] + 0x11Cu, &count, sizeof count) || index >= count ||
+        nfl2k5_qb_rd32(0x00B72A60u) != 0x000C96B0u || !nfl2k5_live_team_block(owner, side)) return 0;
+    player = nfl2k5_qb_rd32(owner->rosters[side] + index * 4u);
+    if (!player || !nfl2k5_qb_read(player + 0x35u, &position, sizeof position) || position > 16u) return 0;
+    if (position == 3u || position == 7u || position == 8u || position == 9u) {
+        fields = offense; fields_count = sizeof offense / sizeof offense[0];
+    } else if (position == 4u || position == 5u || position == 6u || position == 10u ||
+               position == 11u || position == 15u || position == 16u) {
+        fields = defense; fields_count = sizeof defense / sizeof defense[0];
+    } else if (position == 1u) {
+        fields = kicking; fields_count = sizeof kicking / sizeof kicking[0];
+    } else return 0; /* Existing sampler owns QB; P/OL are not these stat families. */
+    slot = nfl2k5_qb_rd32(player + 0x30u); live = slot ? nfl2k5_qb_rd32(slot) : 0;
+    if (!live || !nfl2k5_qb_read(live, &jersey, sizeof jersey) ||
+        !nfl2k5_guest_record_text(player + 0x10u, first, sizeof first) ||
+        !nfl2k5_guest_record_text(player + 0x14u, last, sizeof last)) return 0;
+    memset(&sample, 0, sizeof sample); sample.owner = *owner; sample.side = (int)side;
+    sample.player_record = player; sample.roster_index = index; sample.native_position = position;
+    sample.jersey_number = sample.photo_id = -1;
+    for (i = 0; i < NFL2K5_LIVE_FIELD_COUNT; ++i) sample.values[i] = NAN;
+    _snprintf_s(sample.name, sizeof sample.name, _TRUNCATE, "%c. %s", first[0], last);
+    _snprintf_s(sample.full_name, sizeof sample.full_name, _TRUNCATE, "%s %s", first, last);
+    strcpy_s(sample.position, sizeof sample.position, positions[position]);
+    if (nfl2k5_qb_read(player + 0x20u, &jersey, sizeof jersey) && ((jersey >> 3u) & 0x7Fu) <= 99u)
+        sample.jersey_number = (int)((jersey >> 3u) & 0x7Fu);
+    if (nfl2k5_qb_read(player + 6u, &photo, sizeof photo)) sample.photo_id = photo;
+    for (i = 0; i < fields_count; ++i)
+        if (nfl2k5_live_value(player, fields[i], 0, &sample.values[fields[i]]))
+            sample.valid_fields |= NFL2K5_LIVE_FIELD_BIT(fields[i]);
+    if (sample.valid_fields && nfl2k5_live_read_owner(&after) && nfl2k5_live_same_owner(owner, &after) &&
+        nfl2k5_qb_rd32(owner->rosters[side] + index * 4u) == player &&
+        nfl2k5_qb_rd32(player + 0x30u) == slot && nfl2k5_qb_rd32(slot) == live) {
+        sample.owner.sampled_at_ms = after.sampled_at_ms;
+        nfl2k5_broadcast_live_player_sample(&sample);
+    }
+    return 1; /* This tick spent its single-player guest-call budget. */
+}
+
+static void nfl2k5_live_collect_team(const Nfl2k5LiveStatOwner *owner, unsigned side)
+{
+    static const unsigned fields[] = { NFL2K5_LIVE_PASS_COMPLETIONS, NFL2K5_LIVE_PASS_ATTEMPTS, NFL2K5_LIVE_PASS_YARDS,
+        NFL2K5_LIVE_PASS_TOUCHDOWNS, NFL2K5_LIVE_PASS_INTERCEPTIONS, NFL2K5_LIVE_RUSH_ATTEMPTS,
+        NFL2K5_LIVE_RUSH_YARDS, NFL2K5_LIVE_RUSH_TOUCHDOWNS, NFL2K5_LIVE_TACKLES, NFL2K5_LIVE_SACKS,
+        NFL2K5_LIVE_DEF_INTERCEPTIONS, NFL2K5_LIVE_FIRST_DOWNS, NFL2K5_LIVE_POSSESSIONS, NFL2K5_LIVE_TOTAL_YARDS,
+        NFL2K5_LIVE_TIME_OF_POSSESSION, NFL2K5_LIVE_FORCED_FUMBLES, NFL2K5_LIVE_FUMBLES_RECOVERED,
+        NFL2K5_LIVE_TACKLES_FOR_LOSS, NFL2K5_LIVE_TURNOVERS, NFL2K5_LIVE_PENALTIES,
+        NFL2K5_LIVE_PASS_YARDS_ALLOWED, NFL2K5_LIVE_RUSH_YARDS_ALLOWED, NFL2K5_LIVE_TOTAL_YARDS_ALLOWED };
+    Nfl2k5LiveTeamSample sample;
+    Nfl2k5LiveStatOwner after;
+    unsigned i;
+    memset(&sample, 0, sizeof sample); sample.owner = *owner; sample.side = (int)side;
+    sample.stat_block = nfl2k5_live_team_block(owner, side);
+    if (!sample.stat_block) return;
+    for (i = 0; i < NFL2K5_LIVE_FIELD_COUNT; ++i) sample.values[i] = NAN;
+    for (i = 0; i < sizeof fields / sizeof fields[0]; ++i)
+        if (nfl2k5_live_value(owner->rosters[side], fields[i], 1, &sample.values[fields[i]]))
+            sample.valid_fields |= NFL2K5_LIVE_FIELD_BIT(fields[i]);
+    /* 5F seconds verified against Gamecast: raw1184 =19:44, raw888 =14:48,
+     * docs/eras/research/RESULT-CAPTURE.md section8.1 and logs/eras/t11.stderr.
+     * Its configured-quarter semantics must NOT be clamped to an overridden
+     * harness periodLength. The actual title accessor owns these totals. */
+    if (sample.valid_fields & NFL2K5_LIVE_FIELD_BIT(NFL2K5_LIVE_TIME_OF_POSSESSION))
+        sample.time_of_possession_unit = NFL2K5_TOP_SECONDS;
+    if (sample.valid_fields && nfl2k5_live_read_owner(&after) && nfl2k5_live_same_owner(owner, &after) &&
+        nfl2k5_live_team_block(owner, side) == sample.stat_block) {
+        sample.owner.sampled_at_ms = after.sampled_at_ms;
+        nfl2k5_broadcast_live_team_sample(&sample);
+    }
+}
+
+static void nfl2k5_live_stats_guest_tick(void)
+{
+    static volatile LONG sampling;
+    static uint64_t last_tick, last_team;
+    static unsigned cursor, team_side;
+    static Nfl2k5LiveStatOwner previous;
+    Nfl2k5LiveStatOwner owner;
+    uint64_t now = GetTickCount64();
+    uint32_t stack_probe;
+    unsigned scanned;
+    if (InterlockedCompareExchange(&sampling, 1, 0)) return;
+    if (now - last_tick < 50u) { InterlockedExchange(&sampling, 0); return; }
+    last_tick = now;
+    if (!nfl2k5_broadcast_live_stats_enabled() || g_esp < 256u ||
+        !nfl2k5_qb_read(g_esp - 256u, &stack_probe, sizeof stack_probe) || !nfl2k5_live_read_owner(&owner)) {
+        if (previous.clock_object) nfl2k5_broadcast_live_stats_reset();
+        memset(&previous, 0, sizeof previous); cursor = team_side = 0; last_team = 0;
+        InterlockedExchange(&sampling, 0); return;
+    }
+    if (!nfl2k5_live_same_owner(&previous, &owner)) {
+        nfl2k5_broadcast_live_stats_reset(); previous = owner; cursor = team_side = 0; last_team = 0;
+    }
+    for (scanned = 0; scanned < 142u; ++scanned) {
+        unsigned slot = cursor; cursor = (cursor + 1u) % 142u;
+        if (nfl2k5_live_collect_player(&owner, slot / 71u, slot % 71u)) break;
+    }
+    if (now - last_team >= 500u) {
+        nfl2k5_live_collect_team(&owner, team_side); team_side ^= 1u; last_team = now;
+    }
+    InterlockedExchange(&sampling, 0);
+}
+
 void nfl2k5_live_qb_guest_tick(void)
 {
     static DWORD last_sample;
@@ -374,6 +716,7 @@ void nfl2k5_live_qb_guest_tick(void)
     DWORD now = GetTickCount();
     int side;
     uint32_t period;
+    nfl2k5_live_stats_guest_tick();
     if (now - last_sample < 500u || InterlockedCompareExchange(&sampling, 1, 0))
         return;
     last_sample = now;
@@ -2582,11 +2925,22 @@ static void nfl2k5_xpp_timer_init(void)
 }
 extern recomp_func_t nfl2k5_video_menu_lookup(uint32_t address);
 
-recomp_func_t recomp_lookup_manual(uint32_t address)
+static recomp_func_t lookup_manual_any(uint32_t address)
 {
+    /* The Main Menu's Exit prompt (src/nfl2k5_exit_menu.c, M16). */
+    if ((address & 0xFFFFF000u) == 0xFEC0F000u) {
+        extern recomp_func_t nfl2k5_exit_menu_lookup(uint32_t address);
+        return nfl2k5_exit_menu_lookup(address);
+    }
     /* Rows of the Video Settings screen (src/nfl2k5_video_menu.c). */
     if ((address & 0xFFFF0000u) == 0xFEC00000u)
         return nfl2k5_video_menu_lookup(address);
+    /* Feature modules' screens (My NFL Eras: 0xFEE00000.., src/nfl2k5_eras_menu.c). */
+    if ((address & 0xFFF00000u) == 0xFEE00000u ||
+        (address & 0xFFFFF000u) == 0xFEF00000u) {
+        extern recomp_func_t nfl2k5_hook_lookup_va(uint32_t address);
+        return nfl2k5_hook_lookup_va(address);
+    }
     switch(address) {
     case 0x0004C3C0u:
         return nfl2k5_io_completion;
@@ -2638,6 +2992,20 @@ recomp_func_t recomp_lookup_manual(uint32_t address)
     }
     return NULL;
 }
+
+/* A hand-written override of a retail function yields to the interpreter when
+ * the running mod pack changed that function (src/interp/interp_setup.c,
+ * nfl2k5_interp_code_changed): SOFTDRINK v0.6.1 rewrote the I/O worker at
+ * 0x0004D810, and the retail C version aborted on its states. */
+extern int g_interp_active;
+int nfl2k5_interp_code_changed(uint32_t va);
+recomp_func_t recomp_lookup_manual(uint32_t address)
+{
+    recomp_func_t fn = lookup_manual_any(address);
+    if (fn && g_interp_active && address < 0xFE000000u && nfl2k5_interp_code_changed(address))
+        return NULL;
+    return fn;
+}
 void recomp_icall_fail_log(uint32_t address)
 {
     static unsigned count;
@@ -2675,12 +3043,50 @@ extern void nfl2k5_scorebug_native_hook(void);
 extern void nfl2k5_scorebug_native_place(uint32_t matrix);
 
 static uint32_t ih_hide(void) { nfl2k5_scorebug_hide(); return 0; }
+static uint32_t ih_sandbox_delta(void) {
+    extern float nfl2k5_sandbox_world_frame_delta(float);
+    MEMF(g_esp + 0xC) = nfl2k5_sandbox_world_frame_delta(MEMF(g_esp + 0xC)); return 0;
+}
+static uint32_t ih_sandbox_camera(void) {
+    extern void nfl2k5_sandbox_world_camera(uint32_t);
+    nfl2k5_sandbox_world_camera(g_ecx); return 0;
+}
+static uint32_t ih_sandbox_pose_begin(void) {
+    extern uint32_t nfl2k5_sandbox_pose_begin_draw(uint32_t,uint32_t,uint32_t);
+    g_edx=nfl2k5_sandbox_pose_begin_draw(MEM32(g_esi+0x2Cu),g_ecx,g_edx);return 0;
+}
+static uint32_t ih_sandbox_pose_end(void) {
+    extern void nfl2k5_sandbox_pose_end_draw(void);nfl2k5_sandbox_pose_end_draw();return 0;
+}
+static uint32_t ih_sandbox_service(void) {
+    extern void nfl2k5_sandbox_menu_service(void);
+    if (g_ecx == 0x00A84B18u) nfl2k5_sandbox_menu_service(); return 0;
+}
+static uint32_t ih_sandbox_launch(void) {
+    extern void nfl2k5_sandbox_menu_launch_accepted(void);
+    nfl2k5_sandbox_menu_launch_accepted(); return 0;
+}
 static uint32_t ih_qb(void) { nfl2k5_live_qb_guest_tick(); return 0; }
 static uint32_t ih_native(void) { nfl2k5_scorebug_native_hook(); return 0; }
 static uint32_t ih_place(void) { nfl2k5_scorebug_native_place(g_esi); return 0; }
+static uint32_t ih_popup_frame(void) { nfl2k5_presentation_native_popup_frame(g_esi); return 0; }
+static uint32_t ih_popup_table_alpha(void)
+{ if (nfl2k5_presentation_pregame_draw_replaced(g_ecx)) MEM32(g_esp + 16u) = 0; return 0; }
+static uint32_t ih_popup_layout_alpha(void)
+{ if (nfl2k5_presentation_pregame_draw_replaced(g_ecx)) MEM32(g_esp + 8u) = 0; return 0; }
+static uint32_t ih_popup_effective_alpha(void)
+{ if (nfl2k5_presentation_pregame_draw_replaced(MEM32(g_esp + 0x18u))) MEM32(g_esp) = 0; return 0; }
+static uint32_t ih_popup_dynamic_alpha(void)
+{ if (nfl2k5_presentation_pregame_draw_replaced(g_ecx)) MEM32(g_esp) = 0; return 0; }
 
 void nfl2k5_scorebug_interp_hooks(void)
 {
+    recomp_interp_add_hook(0x00064CF2u, 0, ih_sandbox_delta);
+    recomp_interp_add_hook(0x00064FAAu, 0, ih_sandbox_camera);
+    recomp_interp_add_hook(0x0008FFA9u, 0, ih_sandbox_pose_begin);
+    recomp_interp_add_hook(0x0008FFB6u, 0, ih_sandbox_pose_end);
+    recomp_interp_add_hook(0x0006E6A0u, 0, ih_sandbox_service);
+    recomp_interp_add_hook(0x002C0E7Cu, 0, ih_sandbox_launch);
     /* NFL2K5_INTERP_HOOKS=<hex mask>: which hooks (diagnostics; 0 = none) */
     const char *e = getenv("NFL2K5_INTERP_HOOKS");
     unsigned mask = e ? (unsigned)strtoul(e, NULL, 16) : 0xFFu;
@@ -2690,4 +3096,13 @@ void nfl2k5_scorebug_interp_hooks(void)
     if (mask & 4) recomp_interp_add_hook(0x000FCE70u, 0, ih_qb);              /* LIVE_QB_SAMPLE */
     if (mask & 8) recomp_interp_add_hook(0x000FCFA7u, 0, ih_native);          /* SCOREBUG_NATIVE_HOOK */
     if (mask & 16) recomp_interp_add_hook(0x000FD178u, 0x000FD175u, ih_place); /* SCOREBUG_NATIVE_HIDE2, before the loop label */
+    /* Same outgoing-alpha gates as the generated renderer, so modified
+     * future code packs do not retain native ESPN art under the HTML card. */
+    recomp_interp_add_hook(0x0008A170u, 0, ih_popup_frame);
+    recomp_interp_add_hook(0x0008A230u, 0, ih_popup_table_alpha);
+    recomp_interp_add_hook(0x0008A264u, 0, ih_popup_layout_alpha);
+    recomp_interp_add_hook(0x001BCEBFu, 0, ih_popup_effective_alpha);
+    recomp_interp_add_hook(0x001BD22Du, 0, ih_popup_dynamic_alpha);
+    recomp_interp_add_hook(0x001BD2F6u, 0, ih_popup_dynamic_alpha);
 }
+

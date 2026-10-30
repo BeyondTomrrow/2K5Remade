@@ -1,0 +1,24 @@
+{
+  "schema": 1,
+  "id": "snf_claude",
+  "name": "Primetime Football (SNF_Claude)",
+  "menu_name": "SNF Claude",
+  "type": "html",
+  "version": "0.5.0",
+  "author": "NFL2K5-PC",
+  "description": "Vector rebuild of the compact 2022-style primetime scorebug: circular clock pod, team glass panels, rail, timeouts, possession tab and play clock, all CSS/SVG with no traced plates. Keeps the package inserts, scenes and transitions. Network marks and team crops are not reproduced; teams use their supplied logos.",
+  "enabled": true,
+  "entry": "scorebug.html",
+  "replaces": ["lineup", "player_cards", "pregame_cards"],
+  "canvas": {
+    "width": 1920,
+    "height": 1080,
+    "fit": "fill_width"
+  },
+  "dependencies": [],
+  "assets": {},
+  "compatibility": {
+    "game": "NFL2K5-PC",
+    "presentation_api": 1
+  }
+}

@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Primetime Football scorebug (SNF_Claude)</title>
+<link rel="stylesheet" href="scorebug.css">
+<link rel="stylesheet" href="inserts.css">
+<link rel="stylesheet" href="extra-inserts.css">
+<link rel="stylesheet" href="broadcast-scenes.css">
+<link rel="stylesheet" href="pregame-inserts.css">
+<link rel="stylesheet" href="layout.css">
+<link rel="stylesheet" href="broadcast-fonts.css">
+<script src="preview-clock.js"></script>
+<script src="wide-glyph-data.js"></script>
+<script src="broadcast-glyphs.js"></script>
+</head>
+<body>
+<svg width="0" height="0" aria-hidden="true" style="position:absolute">
+  <defs></defs>
+</svg>
+<div id="canvas">
+  <!-- Pure HTML/CSS/SVG. Inside #bug, units are design pixels: the bug is
+       576x94 (reference/reference.png); the down & distance tab hangs below
+       it and the scoring-drive layout reaches past both sides. The whole
+       bug is scaled with --bug-scale. -->
+  <div id="bug" class="off-air" data-element="bug">
+    <div class="half away" data-element="away-half">
+      <div class="panel"></div>
+      <div class="logo-window" data-element="away-logo"><img class="logo" alt=""><div class="pane"><img class="ghost" alt=""></div></div>
+      <div class="abbr" data-element="away-abbr">AWY</div>
+      <div class="record" data-element="away-record"></div>
+      <div class="divider"></div>
+      <div class="score" data-element="away-score">0</div>
+      <div class="timeouts" data-element="away-timeouts"><i></i><i></i><i></i></div>
+    </div>
+    <div class="half home" data-element="home-half">
+      <div class="panel"></div>
+      <div class="logo-window" data-element="home-logo"><img class="logo" alt=""><div class="pane"><img class="ghost" alt=""></div></div>
+      <div class="abbr" data-element="home-abbr">HOM</div>
+      <div class="record" data-element="home-record"></div>
+      <div class="divider"></div>
+      <div class="score" data-element="home-score">0</div>
+      <div class="timeouts" data-element="home-timeouts"><i></i><i></i><i></i></div>
+    </div>
+    <div class="rail" data-element="rail"></div>
+
+    <!-- down & distance, under the team with the ball -->
+    <div class="tab" data-element="down-tab">
+      <div class="tab-fill"></div>
+      <div class="chev left"><b></b><b></b></div>
+      <div class="tab-text" data-element="down-text"></div>
+      <div class="chev right"><b></b><b></b></div>
+    </div>
+
+    <!-- scoring drive: team stack, then the drive bar -->
+    <div class="drive-stack" data-element="drive-stack">
+      <div class="row away"><img class="logo" alt=""><span class="pts"></span></div>
+      <div class="row home"><img class="logo" alt=""><span class="pts"></span></div>
+    </div>
+    <div class="drive-bar" data-element="drive-bar">
+      <div class="drive-logo"><img class="logo" alt=""></div>
+      <div class="drive-player"><img class="portrait" alt=""><div class="position"></div><div class="name"></div></div>
+      <div class="drive-title">SCORING DRIVE</div>
+      <div class="stat plays"><span class="lbl">PLAYS</span><span class="val"></span></div>
+      <div class="stat yds"><span class="lbl">YDS</span><span class="val"></span></div>
+      <div class="stat top"><span class="lbl">T.O.P</span><span class="val"></span></div>
+      <div class="corner"></div>
+    </div>
+
+    <div class="pod" data-element="pod">
+      <div class="pulse"></div><div class="pulse p2"></div>
+      <img class="badge" src="assets/branding/network-badge.svg" alt="">
+      <div class="flag-word">FLAG</div>
+      <div class="pod-line top"></div>
+      <div class="clock" data-element="clock">15:00</div>
+      <div class="pod-line bottom"></div>
+      <div class="quarter" data-element="quarter"><span class="num">1</span><span class="ord">ST</span></div>
+    </div>
+    <div class="playclock" data-element="play-clock"></div>
+
+    <!-- Scoring slices copy the actual current team plates at event time. -->
+    <div class="scoring-panels" aria-hidden="true"></div>
+    <div class="scoring-marks" aria-hidden="true"><i class="inward left"></i><i class="inward right"></i><i class="spark"></i></div>
+
+    <!-- Real logo pixels supply the shaded entrance and luminous contours.
+         These filters do not supply the broadcaster's original 3D render. -->
+    <div class="takeover" data-element="takeover">
+      <div class="neon-logo">
+        <img class="scoring-logo-shaded" alt="">
+        <svg class="scoring-logo-light" viewBox="0 0 240 240" aria-hidden="true">
+          <defs><filter id="snf-scoring-contours" x="-25%" y="-25%" width="150%" height="150%" color-interpolation-filters="sRGB">
+            <feMorphology in="SourceAlpha" operator="erode" radius="1.25" result="inside"/>
+            <feComposite in="SourceAlpha" in2="inside" operator="out" result="alpha-edge"/>
+            <!-- Differences between light and dark logo regions retain
+                 interior details which a solid alpha silhouette loses. -->
+            <feColorMatrix in="SourceGraphic" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  .2126 .7152 .0722 0 0" result="luminance"/>
+            <feMorphology in="luminance" operator="dilate" radius="1" result="light-regions"/>
+            <feMorphology in="luminance" operator="erode" radius="1" result="dark-regions"/>
+            <feComposite in="light-regions" in2="dark-regions" operator="arithmetic" k2="1" k3="-1" result="contrast"/>
+            <feComponentTransfer in="contrast" result="contrast-strong"><feFuncA type="linear" slope="2.4"/></feComponentTransfer>
+            <feComposite in="contrast-strong" in2="SourceAlpha" operator="in" result="interior-edge"/>
+            <feMerge result="edges"><feMergeNode in="alpha-edge"/><feMergeNode in="interior-edge"/></feMerge>
+            <feFlood class="scoring-edge-color" flood-color="#577dff" result="team-light"/>
+            <feComposite in="team-light" in2="edges" operator="in" result="colored-edge"/>
+            <feGaussianBlur in="colored-edge" stdDeviation="3" result="halo"/>
+            <feFlood flood-color="#c9dcff" result="white-light"/>
+            <feComposite in="white-light" in2="edges" operator="in" result="fine-edge"/>
+            <feMerge><feMergeNode in="halo"/><feMergeNode in="colored-edge"/><feMergeNode in="fine-edge"/></feMerge>
+          </filter></defs>
+          <image class="scoring-logo-source" width="240" height="240" preserveAspectRatio="xMidYMid meet" filter="url(#snf-scoring-contours)"/>
+        </svg>
+      </div>
+      <div class="big-word"></div>
+    </div>
+  </div>
+  <!-- Native player-stat insert. All families share the SNF glass/curve
+       geometry; columns and portraits are supplied by the event. -->
+  <div id="qb-stat" data-element="quarterback-stat">
+    <div class="qs-sheen"></div>
+    <img class="qs-team-logo logo" alt="">
+    <img class="qs-portrait" alt="">
+    <div class="qs-position">QB</div>
+    <div class="qs-name"></div>
+    <div class="qs-season">THIS SEASON</div>
+    <div class="qs-rule"></div>
+    <div class="qs-topic"></div>
+    <svg class="qs-curve" viewBox="0 0 60 100" preserveAspectRatio="none" aria-hidden="true"><path d="M12 0 C50 22 50 78 8 100 L29 100 C66 70 67 25 42 0Z" fill="#cfd4d9"/><path d="M42 0 C65 25 67 70 29 100 L42 100 C68 63 68 31 52 0Z" fill="#7f8993"/></svg>
+    <div class="qs-fields">
+      <span><b>COMP PCT</b><strong class="pct">0.0</strong></span>
+      <span><b>YDS</b><strong class="yds">0</strong></span>
+      <span><b>TD</b><strong class="td">0</strong></span>
+      <span><b>INT</b><strong class="int">0</strong></span>
+    </div>
+    <div class="qs-brand"><i></i><em>SNF</em></div>
+    <div class="qs-note"></div>
+  </div>
+  <div id="player-feature" data-element="player-feature">
+    <div class="pf-backdrop"></div>
+    <div class="pf-stadium"></div>
+    <div class="pf-wedge"></div>
+    <img class="pf-logo logo" alt="">
+    <img class="pf-portrait" alt="">
+    <div class="pf-kicker"></div>
+    <div class="pf-title"></div>
+    <div class="pf-name"></div>
+    <div class="pf-position"></div>
+    <div class="pf-table">
+      <div class="pf-head"><span></span><b>GAME</b><em>SEASON</em></div>
+      <div><span>COMPLETIONS / ATTEMPTS</span><b class="pf-ca"></b><em>—</em></div>
+      <div><span>PASSING YARDS</span><b class="pf-yds"></b><em>—</em></div>
+      <div><span>TOUCHDOWNS</span><b class="pf-td"></b><em>—</em></div>
+      <div><span>INTERCEPTIONS</span><b class="pf-int"></b><em>—</em></div>
+      <div><span>QB RATING</span><b class="pf-rate"></b><em>—</em></div>
+    </div>
+    <div class="pf-brand"><img class="nbc-brand" src="assets/branding/network-badge.svg" alt=""><strong>SNF</strong></div>
+  </div>
+  <div id="snf-notice" aria-hidden="true"><div class="notice-glass"></div><img class="nbc-brand" src="assets/branding/network-badge.svg" alt=""><div class="notice-title"></div><div class="notice-detail"></div><div class="notice-curve"></div></div>
+  <div id="snf-wipe" aria-hidden="true" data-phase="hidden"><div class="wipe-direction"><div class="wipe-plane back"></div><div class="wipe-plane front"></div><div class="wipe-light"></div></div><div class="wipe-lockup"><img class="nbc-brand" src="assets/branding/network-badge.svg" alt=""><img class="wipe-wordmark" src="assets/branding/primetime-wordmark.svg" alt="Primetime Football"></div></div>
+</div>
+<!-- Starting lineup (LINEUP event): one player at a time, laid out from the
+     2025 SNF player introductions (1920x1080 reference frames). Canvas px. -->
+<div id="lineup" data-element="lineup">
+  <div class="lu-bar">
+    <div class="lu-ghost"><img class="logo" alt=""></div>
+    <svg class="lu-panel" viewBox="0 0 500 130" preserveAspectRatio="none" aria-hidden="true">
+      <defs>
+        <linearGradient id="luSilver" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#cfd6da"/><stop offset="1" stop-color="#9eaab0"/></linearGradient>
+        <filter id="luGlow" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="2.5"/></filter>
+      </defs>
+      <path d="M164 0 C 118 0, 86 124, 12 130 L 500 130 L 500 0 Z" fill="url(#luSilver)"/>
+      <path class="lu-swoosh" d="M164 0 C 118 0, 86 124, 12 130" fill="none" stroke-width="9" filter="url(#luGlow)"/>
+      <path class="lu-swoosh" d="M164 0 C 118 0, 86 124, 12 130" fill="none" stroke-width="4"/>
+    </svg>
+  </div>
+  <div class="lu-line"></div>
+  <div class="lu-ribbon"><div class="lu-track"></div></div>
+  <div class="lu-logo"><img class="logo" alt=""></div>
+  <img class="lu-portrait" alt="">
+  <div class="lu-card">
+    <div class="lu-tab"><b class="pos"></b><span class="num"></span></div>
+    <div class="lu-name"></div>
+    <div class="lu-sub"></div>
+  </div>
+</div>
+<script src="../_runtime/nfl2k5-presentation.js"></script>
+<script src="broadcast-transitions.js"></script>
+<script src="scorebug.js"></script>
+<script src="extra-inserts.js"></script>
+<script src="broadcast-scenes.js"></script>
+<script src="pregame-inserts.js"></script>
+<script src="preview-scenes.js"></script>
+</body>
+</html>

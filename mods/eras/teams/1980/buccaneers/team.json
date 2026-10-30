@@ -1,0 +1,18 @@
+{
+  "abbreviation": "TB",
+  "city": "Tampa Bay",
+  "name": "Buccaneers",
+  "season": 1980,
+  "eras_id": "buccaneers",
+  "colors": {
+    "primary": "#F26522",
+    "secondary": "#C8102E",
+    "text": "#FFFFFF"
+  },
+  "logos": {
+    "scorebug": "logos/scorebug.png",
+    "mini": "logos/mini.png"
+  },
+  "source": "disc logo_27_3",
+  "colors_note": "1980 colours from memory, not yet checked against a source"
+}

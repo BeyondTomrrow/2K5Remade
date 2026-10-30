@@ -75982,6 +75982,8 @@ loc_002C0E70: ;
     g_seh_ebp = ebp; RECOMP_ITAIL(_jt); return; }
 
 loc_002C0E7C: ;
+    /* NFL2K5-GENPATCH:SANDBOX_LAUNCH_ACCEPTED */
+    { extern void nfl2k5_sandbox_menu_launch_accepted(void); nfl2k5_sandbox_menu_launch_accepted(); }
     edx = 0x515660;
     ecx = esi;
     PUSH32(esp, 0x002C0E88u); RECOMP_ABI_CALL(0x0006E450u, sub_0006E450); /* call 0x0006E450 */

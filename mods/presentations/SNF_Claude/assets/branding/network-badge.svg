@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 76 44" width="76" height="44">
+  <!-- Neutral primetime badge: a silver spark over a dark glass lens. Original artwork. -->
+  <defs>
+    <linearGradient id="s" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f6f8fb"/><stop offset=".55" stop-color="#c9d1da"/><stop offset="1" stop-color="#7f8994"/>
+    </linearGradient>
+    <radialGradient id="lens" cx=".5" cy=".35" r=".7">
+      <stop offset="0" stop-color="#2d3540"/><stop offset="1" stop-color="#0b0e13"/>
+    </radialGradient>
+  </defs>
+  <ellipse cx="38" cy="22" rx="36" ry="18" fill="url(#lens)" stroke="#bfc8d2" stroke-width="1.4"/>
+  <path d="M38 5 L42.5 17.5 L55 22 L42.5 26.5 L38 39 L33.5 26.5 L21 22 L33.5 17.5 Z" fill="url(#s)" stroke="#1a2129" stroke-width=".8" stroke-linejoin="round"/>
+  <path d="M12 22 H24 M52 22 H64" stroke="#d7dde4" stroke-width="1.6" stroke-linecap="round" opacity=".85"/>
+</svg>

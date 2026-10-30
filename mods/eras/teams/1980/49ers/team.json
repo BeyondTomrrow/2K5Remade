@@ -1,0 +1,18 @@
+{
+  "abbreviation": "SF",
+  "city": "San Francisco",
+  "name": "49ers",
+  "season": 1980,
+  "eras_id": "49ers",
+  "colors": {
+    "primary": "#AA0000",
+    "secondary": "#B3995D",
+    "text": "#FFFFFF"
+  },
+  "logos": {
+    "scorebug": "logos/scorebug.png",
+    "mini": "logos/mini.png"
+  },
+  "source": "disc logo_25_3",
+  "colors_note": "1980 colours from memory, not yet checked against a source"
+}

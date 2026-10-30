@@ -1,0 +1,13 @@
+{
+  "name": "TIGER STADIUM BATON ROUGE",
+  "display": "Tiger Stadium",
+  "location": "Baton Rouge, LA",
+  "code": "s74",
+  "clone": "Tampa Bay Stadium",
+  "host": "Dragon Dome",
+  "capacity": 91600,
+  "indoor": 0,
+  "grass": 1,
+  "nfl": "Saints 2005 (4 home games)",
+  "source": "NCAA Football 07 Tiger Stadium, Baton Rouge (STAD.SRES 59, LSUXXX); tools/eras/stadiums/ncaa_stadiums.py"
+}

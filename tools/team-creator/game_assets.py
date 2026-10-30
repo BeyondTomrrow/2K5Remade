@@ -36,7 +36,15 @@ def name_id(name: str) -> int:
 class Archive:
     def __init__(self, disc_dir: str | Path):
         self.dir = Path(disc_dir)
-        self.a = nfl_outer.parse_archive(self.dir / "vc_53450030" / "0")
+        try:
+            self.a = nfl_outer.parse_archive(self.dir / "vc_53450030" / "0")
+        except (OSError, ValueError):
+            # Some installations keep a partial disc/ override alongside the
+            # complete original archive one level up. Never mix pack volumes.
+            if self.dir.name.lower() != 'disc':
+                raise
+            self.dir = self.dir.parent
+            self.a = nfl_outer.parse_archive(self.dir / "vc_53450030" / "0")
         self.ids = {e.name_id: e for e in self.a.entries}
 
     def has(self, name: str) -> bool:

@@ -1,0 +1,93 @@
+/* 2026 compact CBS Eyebar. Source measurements and limits are documented
+   in docs/CBS-2026-REFERENCE.md. Logos are image assets, not font drawings. */
+@font-face { font-family:"CBS Preview Heavy"; src:url("fonts/all-pro-sans-heavy.woff2") format("woff2"); font-weight:900; font-style:normal; font-display:block; }
+@font-face { font-family:"CBS Preview Bold"; src:url("fonts/all-pro-sans-bold.woff2") format("woff2"); font-weight:700; font-style:normal; font-display:block; }
+:root { --pad:0px; --away:#002244; --home:#c60c30; --ease:cubic-bezier(.2,.8,.2,1); }
+* { box-sizing:border-box; }
+html,body { margin:0; width:100%; height:100%; overflow:hidden; background:transparent; }
+#canvas { position:relative; width:1920px; height:1080px; margin-left:var(--pad); color:#fff; font-family:Arial,Helvetica,sans-serif; }
+/* Full 1080p KC/BUF reference: x552..1368, y911..1029. Keep the
+   measured internal grid and its motion, with one uniform outer scale. */
+#eyebar { position:absolute; left:552px; top:911px; width:840px; height:122px; scale:.9714285714; transform-origin:0 0; opacity:1; pointer-events:none; transition:opacity .24s ease,transform .28s var(--ease); filter:drop-shadow(0 2px 2px #0006); }
+#eyebar.hidden { opacity:0; transform:translateY(7px); }
+.live-plate { position:absolute; inset:0; display:grid; grid-template-columns:270px 300px 270px; }
+.team { position:relative; height:122px; overflow:hidden; background:linear-gradient(180deg,#00000018,#00000038),var(--team); border-top:2px solid #c1c8d04d; border-bottom:1px solid #0009; }
+.team::before,.top-band::before,.opening-track::before { content:''; position:absolute; inset:0; pointer-events:none; background-image:radial-gradient(circle,#00000038 .8px,transparent 1.05px); background-size:4px 4px; }
+.team.away { --team:var(--away); border-left:2px solid #a9b5c454; border-radius:5px 0 0 5px; }
+.team.home { --team:var(--home); border-right:2px solid #a9b5c454; border-radius:0 5px 5px 0; }
+.logo { position:absolute; top:9px; width:110px; height:88px; object-fit:contain; filter:drop-shadow(0 2px 2px #000a) drop-shadow(0 0 1px #0008); }
+.away .logo { left:16px; }.home .logo { right:14px; }
+.score { position:absolute; top:2px; width:128px; height:100px; text-align:center; font:900 91px/100px "CBS Preview Heavy",Arial,Helvetica,sans-serif; font-variant-numeric:tabular-nums; letter-spacing:-5px; text-shadow:0 1px 1px #0005; }
+.away .score { right:6px; }.home .score { left:5px; }
+.score.three-digits { font-size:72px; letter-spacing:-4px; }
+.record { position:absolute; bottom:6px; font:700 18px/22px Arial,sans-serif; color:#e9eef5; }
+.away .record { left:13px; }.home .record { right:13px; }
+.timeouts { position:absolute; bottom:11px; width:112px; height:5px; display:flex; gap:10px; }
+.away .timeouts { right:12px; }.home .timeouts { left:12px; }
+.timeouts i { display:block; flex:1; height:5px; background:#f3f5f7; border-top:1px solid #fff; box-shadow:0 1px 1px #0006; }
+.timeouts i.used { background:#ffffff26; border-color:#ffffff0a; box-shadow:none; }
+.timeouts i[hidden] { display:none; }
+.possession { position:absolute; left:0; bottom:0; width:100%; height:3px; background:#e6ecf5; opacity:0; box-shadow:0 -1px 2px #ffffff28; }
+.team.has-ball .possession { opacity:1; }
+.team-fallback { display:none; position:absolute; top:30px; width:108px; font:700 30px/40px Arial,sans-serif; text-align:center; }
+.away .team-fallback { left:16px; }.home .team-fallback { right:14px; }
+.team.no-logo .team-fallback { display:block; }.team.no-logo .logo { visibility:hidden; }
+.center { position:relative; z-index:2; background:#020303; border-left:3px solid #080a0c; border-right:3px solid #080a0c; }
+.top-band { position:absolute; left:0; top:0; width:294px; height:61px; border-top:2px solid #bbcfe46b; border-bottom:2px solid #000; background:linear-gradient(#00000012,#00000038),var(--possession-color,#123e97); display:flex; align-items:center; justify-content:center; overflow:hidden; }
+#down { position:relative; z-index:1; font:700 39px/52px Arial,sans-serif; letter-spacing:-.6px; text-align:center; white-space:nowrap; }
+#down small { font-size:25px; vertical-align:3px; }
+#center-brand { display:none; width:234px; height:35px; object-fit:contain; filter:drop-shadow(0 1px 1px #000b); }
+.top-band.branding { background:linear-gradient(#353638,#202123); }
+.top-band.branding #center-brand { display:block; }.top-band.branding #down { display:none; }
+.top-band.flag { color:#090a0c; }
+.top-band.flag::after { content:''; position:absolute; inset:0; background:linear-gradient(#f9e43b,#e8ce08); animation:flagSweep .25s ease-out both; }
+.top-band.flag #down { animation:flagWord .25s ease-out both; }
+@keyframes flagSweep { from{clip-path:inset(0 49.5%)} to{clip-path:inset(0)} }
+@keyframes flagWord { 0%,45%{opacity:0} 100%{opacity:1} }
+.top-band.message #down { font-size:29px; letter-spacing:0; }
+.clock-row { position:absolute; left:0; right:0; bottom:0; height:60px; display:flex; align-items:center; padding:0 8px; gap:0; }
+#quarter { flex:none; width:85px; text-align:center; font:700 33px/46px Arial,sans-serif; }
+#quarter small { font-size:21px; vertical-align:2px; }
+.clock-divider { flex:none; height:38px; width:2px; margin:0 12px 0 5px; background:linear-gradient(#a9a9a9,#dbdbdb 50%,#8b8b8b); box-shadow:1px 0 2px #8f8f8f77; }
+#game-clock { flex:1; text-align:center; font:700 34px/44px Arial,sans-serif; font-variant-numeric:tabular-nums; letter-spacing:-1px; white-space:nowrap; }
+#play-clock { flex:none; width:46px; height:47px; margin-left:10px; display:none; align-items:center; justify-content:center; border:2px solid #a9252c; border-radius:1px; box-shadow:0 0 2px #ed434780,0 0 7px #c4212c4d,inset 0 0 3px #ba2d3159; font:400 29px/42px Arial,sans-serif; letter-spacing:-1px; }
+#play-clock.on { display:flex; }#play-clock.low { color:white; background:#b32129; border-color:#e3595e; box-shadow:0 0 2px #ec6d7380,0 0 7px #c4212c59,inset 0 0 3px #ba2d3159; }
+#eyebar.final #game-clock,#eyebar.final .clock-divider,#eyebar.final #play-clock { display:none; }
+#eyebar.final #quarter { width:100%; font-size:30px; }
+#eyebar.final .timeouts { visibility:hidden; }
+/* Ordinary KC/BUF 2025 Q1 ending, 1321.5–1325.0s: CBS brand above a
+   single centered END 1st QTR line. Retain teams/scores/timeouts. */
+#eyebar.period-ending #game-clock,#eyebar.period-ending .clock-divider,#eyebar.period-ending #play-clock { display:none; }
+#eyebar.period-ending #quarter { width:100%; font-family:"CBS Preview Heavy",Arial,sans-serif; font-weight:900; font-size:38px; letter-spacing:-.3px; }
+#eyebar.period-ending #quarter small { font-size:23px; vertical-align:0; }
+#network { position:absolute; top:43px; right:63px; width:229px; height:49px; display:flex; justify-content:center; align-items:center; background:#15202b73; border:1px solid #c3d0dd50; border-radius:2px; opacity:0; transition:opacity .2s; z-index:90; }
+#network.on { opacity:1; }#network img { display:block; width:210px; height:30px; object-fit:contain; }
+/* The observed entry opens on the eye/brand and both team logos. Scores
+   settle in after the logo strip; no video is played over the game. */
+.opening-strip { position:absolute; left:0; top:0; width:840px; height:122px; opacity:0; overflow:visible; }
+.opening-track { position:absolute; inset:0; background:linear-gradient(180deg,#333a42,#101215 12%,#0a0b0d 80%,#242a32); border-top:2px solid #b8c3d4; border-bottom:2px solid #7d8a9c; overflow:hidden; }
+.opening-brand { position:absolute; left:145px; top:34px; width:550px; height:55px; object-fit:contain; }
+.opening-eye { position:absolute; left:398px; top:40px; width:44px; height:44px; object-fit:contain; }
+.opening-logo { position:absolute; top:-50px; width:220px; height:200px; object-fit:contain; filter:drop-shadow(0 2px 2px #000a) drop-shadow(0 0 1px #0008); }
+.away-logo { left:-110px; }.home-logo { right:-110px; }
+.opening-sheen { position:absolute; inset:0; background:linear-gradient(110deg,transparent 20%,#ffffff1f 43%,transparent 60%); transform:translateX(-100%); }
+#eyebar.entering .opening-strip { animation:brandStrip 1.85s var(--ease) both; }
+#eyebar.entering .opening-track { animation:entryTrack 1.85s var(--ease) both; }
+#eyebar.entering .away-logo { animation:entryAway 1.85s var(--ease) both; }
+#eyebar.entering .home-logo { animation:entryHome 1.85s var(--ease) both; }
+#eyebar.entering .opening-eye { animation:entryEye 1.85s linear both; }
+#eyebar.entering .opening-brand { animation:entryBrand 1.85s var(--ease) both; }
+#eyebar.entering .opening-sheen { animation:entrySheen 1.35s ease .15s both; }
+#eyebar.entering .live-plate { animation:settlePlate 1.85s var(--ease) both; }
+@keyframes brandStrip { 0%,3% { opacity:0; } 7%,68% { opacity:1; } 84%,100% { opacity:0; } }
+@keyframes entryTrack { 0%,3% { clip-path:inset(0 48%); } 33%,58% { clip-path:inset(0); } 69%,100% { clip-path:inset(0 33%); } }
+@keyframes entryAway { 0%,6% { opacity:0; transform:translateX(420px) scale(.3); } 11% { opacity:1; transform:translateX(420px) scale(.5); filter:blur(3px); } 33%,58% { opacity:1; transform:none; filter:blur(0); } 82%,100% { opacity:0; transform:translateX(80px) scale(.43); } }
+@keyframes entryHome { 0%,6% { opacity:0; transform:translateX(-420px) scale(.3); } 11% { opacity:1; transform:translateX(-420px) scale(.5); filter:blur(3px); } 33%,58% { opacity:1; transform:none; filter:blur(0); } 82%,100% { opacity:0; transform:translateX(-80px) scale(.43); } }
+@keyframes entryEye { 0%,3% { opacity:0; transform:scale(.4); } 7%,18% { opacity:1; transform:scale(1); } 31% { opacity:0; transform:translateX(-248px); } 32%,100%{opacity:0} }
+@keyframes entryBrand { 0%,21% { opacity:0; clip-path:inset(0 100% 0 0); } 33%,58% { opacity:1; transform:none; clip-path:inset(0); } 69% { opacity:1; transform:scale(.46) translateY(-56px); } 75%,100% { opacity:0; transform:scale(.46) translateY(-56px); } }
+@keyframes entrySheen { to { transform:translateX(100%); } }
+@keyframes settlePlate { 0%,67% { opacity:0; clip-path:inset(0 35%); } 69% { opacity:1; clip-path:inset(0 35%); } 84%,100% { opacity:1; clip-path:inset(0); } }
+@media(prefers-reduced-motion:reduce) {
+  html:not([data-preview-motion="full"]) #eyebar,html:not([data-preview-motion="full"]) #eyebar * { animation:none!important; transition:none!important; }
+  html:not([data-preview-motion="full"]) .opening-strip { display:none; }
+}

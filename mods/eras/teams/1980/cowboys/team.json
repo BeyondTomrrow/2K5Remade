@@ -1,0 +1,18 @@
+{
+  "abbreviation": "DAL",
+  "city": "Dallas",
+  "name": "Cowboys",
+  "season": 1980,
+  "eras_id": "cowboys",
+  "colors": {
+    "primary": "#003594",
+    "secondary": "#869397",
+    "text": "#FFFFFF"
+  },
+  "logos": {
+    "scorebug": "logos/scorebug.png",
+    "mini": "logos/mini.png"
+  },
+  "source": "disc logo_07_3",
+  "colors_note": "1980 colours from memory, not yet checked against a source"
+}

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 180" width="560" height="180">
+  <!-- Neutral wordmark for the package's opens, bumpers and wipes. Original artwork. -->
+  <defs>
+    <linearGradient id="w" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/><stop offset=".6" stop-color="#dfe5ec"/><stop offset="1" stop-color="#9aa5b1"/>
+    </linearGradient>
+  </defs>
+  <text x="280" y="86" text-anchor="middle" font-family="'SNF Ringside Condensed Ultra','Arial Black',sans-serif" font-weight="900" font-size="96" letter-spacing="2" fill="url(#w)" stroke="#121820" stroke-width="2">PRIMETIME</text>
+  <text x="280" y="160" text-anchor="middle" font-family="'SNF Ringside Condensed Ultra','Arial Black',sans-serif" font-weight="900" font-size="78" letter-spacing="6" fill="#f4f7fa" stroke="#121820" stroke-width="2">FOOTBALL</text>
+  <rect x="40" y="100" width="480" height="3" fill="#c3cad3"/>
+</svg>

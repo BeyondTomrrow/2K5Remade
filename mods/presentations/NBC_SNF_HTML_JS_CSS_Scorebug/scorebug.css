@@ -1,0 +1,337 @@
+/* NBC SNF HTML Scorebug
+   Separate HTML, JS, and CSS support.
+   No font files are bundled. Add your own @font-face if needed.
+*/
+
+:root {
+  --silver: #e0e0e0;
+  --shadow: rgba(0, 0, 0, 0.72);
+  --rail-gray: rgba(138, 138, 138, 0.72);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background: #1d1d1d;
+  color: white;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.demo-field {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(circle at 20% 20%, rgba(255,255,255,0.05), transparent 28%),
+    radial-gradient(circle at 80% 70%, rgba(255,255,255,0.035), transparent 30%),
+    #1b1b1b;
+}
+
+.snf-scorebug {
+  --bug-width: 610px;
+  --bug-height: 112px;
+
+  --away-color: #003594;
+  --away-color-dark: #001b4d;
+  --away-color-light: #2b67c7;
+
+  --home-color: #7b2d23;
+  --home-color-dark: #3a140f;
+  --home-color-light: #c0523f;
+
+  position: relative;
+  width: var(--bug-width);
+  height: var(--bug-height);
+  filter: drop-shadow(0 8px 7px rgba(0, 0, 0, 0.55));
+  transform: translateZ(0);
+}
+
+.team-panel {
+  position: absolute;
+  top: 27px;
+  height: 56px;
+  overflow: hidden;
+  border-radius: 6px;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.42),
+    inset 0 -5px 0 rgba(0,0,0,0.32);
+}
+
+.away-panel {
+  left: 0;
+  width: 305px;
+  background:
+    linear-gradient(to bottom, rgba(255,255,255,0.26), rgba(255,255,255,0.00) 24%),
+    linear-gradient(to bottom, var(--away-color-light), var(--away-color) 48%, var(--away-color-dark));
+}
+
+.home-panel {
+  right: 0;
+  width: 305px;
+  background:
+    linear-gradient(to bottom, rgba(255,255,255,0.22), rgba(255,255,255,0.00) 24%),
+    linear-gradient(to bottom, var(--home-color-light), var(--home-color) 48%, var(--home-color-dark));
+}
+
+.team-panel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    repeating-linear-gradient(65deg, rgba(255,255,255,0.035) 0 1px, transparent 1px 7px);
+  pointer-events: none;
+  mix-blend-mode: screen;
+}
+
+.logo-window {
+  position: absolute;
+  top: 0;
+  height: 56px;
+  width: 110px;
+  overflow: hidden;
+}
+
+.away-logo-window {
+  left: 0;
+}
+
+.home-logo-window {
+  right: 0;
+}
+
+.team-logo {
+  position: absolute;
+  top: -15px;
+  width: 135px;
+  height: 86px;
+  object-fit: contain;
+  filter:
+    drop-shadow(2px 2px 3px rgba(0,0,0,0.7))
+    saturate(1.1);
+}
+
+.away-logo {
+  left: -22px;
+}
+
+.home-logo {
+  right: -22px;
+}
+
+.logo-tint {
+  position: absolute;
+  inset: 0;
+  opacity: 0.30;
+  pointer-events: none;
+}
+
+.away-logo-window .logo-tint {
+  background: linear-gradient(to bottom, var(--away-color-light), var(--away-color-dark));
+}
+
+.home-logo-window .logo-tint {
+  background: linear-gradient(to bottom, var(--home-color-light), var(--home-color-dark));
+}
+
+.team-stack,
+.score,
+.clock-text,
+.quarter-text {
+  position: absolute;
+  color: var(--silver);
+  font-family: "RingsideCondensed Ultra TD", "Arial Narrow", Impact, Arial, sans-serif;
+  font-weight: 900;
+  text-shadow: 2px 2px 3px var(--shadow);
+  line-height: 0.9;
+  z-index: 3;
+}
+
+.team-stack {
+  top: 10px;
+  width: 78px;
+  text-align: center;
+}
+
+.away-stack {
+  left: 118px;
+}
+
+.home-stack {
+  right: 118px;
+}
+
+.team-abbr {
+  font-size: 30px;
+  letter-spacing: -1px;
+}
+
+.team-record {
+  margin-top: 3px;
+  font-size: 16px;
+  letter-spacing: 0;
+}
+
+.score {
+  top: 4px;
+  width: 62px;
+  text-align: center;
+  font-size: 53px;
+  letter-spacing: -1px;
+}
+
+.away-score {
+  left: 220px;
+}
+
+.home-score {
+  right: 220px;
+}
+
+.divider {
+  position: absolute;
+  top: 9px;
+  width: 2px;
+  height: 42px;
+  background: rgba(224,224,224,0.72);
+  box-shadow: 2px 0 0 rgba(0,0,0,0.55);
+  z-index: 3;
+}
+
+.away-divider {
+  left: 211px;
+}
+
+.home-divider {
+  right: 211px;
+}
+
+.clock-pod {
+  position: absolute;
+  left: 50%;
+  top: 3px;
+  width: 104px;
+  height: 104px;
+  transform: translateX(-50%);
+  z-index: 10;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 50% 17%, rgba(255,255,255,0.35), transparent 19%),
+    radial-gradient(circle at 50% 40%, #303943 0%, #141a22 48%, #06080b 70%, #000 100%);
+  border: 3px solid #5d6c7b;
+  box-shadow:
+    0 8px 0 rgba(0,0,0,0.55),
+    inset 0 1px 0 rgba(255,255,255,0.50),
+    inset 0 -5px 8px rgba(0,0,0,0.70);
+}
+
+.clock-pod::before {
+  content: "";
+  position: absolute;
+  inset: 7px;
+  border-radius: 50%;
+  border: 2px solid rgba(220,235,250,0.55);
+  box-shadow: inset 0 0 10px rgba(0,0,0,0.75);
+}
+
+.clock-pod::after {
+  content: "";
+  position: absolute;
+  left: 17%;
+  right: 17%;
+  top: 62%;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(224,224,224,0.70);
+}
+
+.peacock {
+  position: absolute;
+  top: 10px;
+  left: 0;
+  width: 100%;
+  color: #d5dde5;
+  font-size: 19px;
+  font-weight: 900;
+  text-align: center;
+  opacity: 0.95;
+  text-shadow: 1px 1px 2px black;
+}
+
+.clock-text {
+  left: 0;
+  top: 40px;
+  width: 100%;
+  text-align: center;
+  font-size: 26px;
+  letter-spacing: -1px;
+}
+
+.quarter-text {
+  left: 0;
+  top: 68px;
+  width: 100%;
+  text-align: center;
+  font-size: 20px;
+}
+
+.timeout-track {
+  position: absolute;
+  top: 87px;
+  height: 12px;
+  width: 112px;
+  border-radius: 5px;
+  background: var(--rail-gray);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  z-index: 2;
+}
+
+.away-timeout-track {
+  left: 65px;
+}
+
+.home-timeout-track {
+  right: 65px;
+}
+
+.timeout-track span {
+  display: block;
+  width: 28px;
+  height: 4px;
+  border-radius: 3px;
+  background: var(--silver);
+  box-shadow: 1px 1px 1px rgba(0,0,0,0.55);
+}
+
+.controls {
+  position: fixed;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+}
+
+.controls button {
+  background: #2c2c2c;
+  color: #eee;
+  border: 1px solid #555;
+  border-radius: 6px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.controls button:hover {
+  border-color: #aaa;
+}
+
+body.no-controls .controls {
+  display: none;
+}

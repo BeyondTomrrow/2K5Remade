@@ -106,6 +106,24 @@
 #snf-timeout.on .timeout-team { transform:none; }#snf-timeout.on .timeout-logo { transform:scale(1); }
 #snf-timeout.on .timeout-brand,#snf-timeout.on .timeout-title,#snf-timeout.on .timeout-clock,#snf-timeout.on .timeout-detail { opacity:1; transform:none; }
 
+/* Period/halftime/final share the supplied two-row score-summary structure.
+ * Football events choose the footer; the current match continues to own the
+ * team marks and score values. A new-period clock is deliberately omitted.
+ * This is a layered adaptation of that reference, not a prerecorded wipe. */
+#snf-timeout.period-summary .timeout-clock,
+#snf-timeout.period-summary .timeout-detail { display:none; }
+#snf-timeout.period-summary .timeout-score { font-family:"SNF Ringside Condensed Ultra",sans-serif; font-weight:900; font-style:normal; font-synthesis:none; }
+#snf-timeout.period-summary .timeout-name { font-family:"SNF Ringside Compressed Ultra Space","SNF Ringside Narrow Medium",sans-serif; font-weight:500; font-style:normal; font-synthesis:none; }
+/* Supplied TD fonts have a 25 em blank. Reuse the existing space-only
+ * face so a multiword footer cannot wrap outside its 38 px carrier. */
+#snf-timeout.period-summary .timeout-title { font-family:"SNF Ringside Compressed Ultra Space","SNF Ringside Wide Black Italic",sans-serif; font-weight:900; font-style:italic; font-synthesis:none; font-size:27px; white-space:nowrap; }
+/* 580 ms row exits, second row delayed 80 ms. JS retains presentation
+ * ownership for 700 ms, including the 40 ms clearance after the last row. */
+#snf-timeout.period-summary.leaving .timeout-team.away { transform:translateX(-1920px); transition:transform .58s cubic-bezier(.64,0,.82,.36); }
+#snf-timeout.period-summary.leaving .timeout-team.home { transform:translateX(1920px); transition:transform .58s cubic-bezier(.64,0,.82,.36) .08s; }
+#snf-timeout.period-summary.leaving .timeout-brand,
+#snf-timeout.period-summary.leaving .timeout-title { opacity:0; transition:opacity .18s; }
+
 #snf-player-profile { left:175px; top:235px; width:1570px; height:660px; z-index:40; transition:opacity .22s; --profile-team:#003594; --profile-rgb:0,53,148; }
 .profile-glass { position:absolute; left:385px; top:0; width:1185px; height:660px; background:linear-gradient(110deg,rgba(5,9,15,.94),rgba(var(--profile-rgb),.83)); clip-path:polygon(0 0,91% 0,100% 50%,91% 100%,0 100%); transform:scaleX(.02); transform-origin:left; transition:transform .55s cubic-bezier(.16,.84,.24,1); }
 .profile-flag { position:absolute; left:0; top:0; width:465px; height:660px; background:linear-gradient(125deg,var(--profile-team),rgba(var(--profile-rgb),.82)); opacity:0; transform:translateX(-65px); transition:opacity .2s,transform .55s; }

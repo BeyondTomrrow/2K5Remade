@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+*.glb
+*.blend
+*.blend1
+*.png
+*.log
+work/app_smoke/
+work/gui_test/
+tools/quickbms.exe

@@ -1,5 +1,11 @@
 # NFL 2K5 Team Creator
 
+**New:** launch `Team Studio.cmd` (also opened by `Team Creator.cmd`) for the
+interactive 3D workspace, per-texture painting and PNG import/export, full
+ratings editor, saved projects and staged team builds. See [STUDIO.md](STUDIO.md)
+for features, verification and preview limits. The original interface is kept
+at `Team Creator (Classic).cmd`.
+
 Makes a completely new team for NFL2K5-PC: its own name, code, uniforms,
 crowd and roster. Nothing of another team changes.
 

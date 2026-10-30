@@ -1,0 +1,1512 @@
+{
+  "definitions": {
+    "coordinates": "player source Y-up, unconverted; distances are source units",
+    "rotations": "column vectors, order letters are explicit matrix product; raw*2pi/65536",
+    "rigid": "Clst raw weight ==4096; helpers and partial vertices excluded",
+    "boundary": "vertices on edges incident to exactly one nondegenerate triangle within each source part",
+    "broad_metric": "nearest point on a different node AND different cluster; all boundary points, NOT known seam correspondences",
+    "warning": "near-pair selection is exploratory; duplicate LOD rigs are not independent skeleton observations",
+    "coordinate_invariance": "common orthogonal root conversion preserves all distances, so Y-up/Z-up cannot choose an Euler order"
+  },
+  "files": {
+    "00000004.tmd": {
+      "rigid_six_orders": {
+        "selection": "union of undirected cross-node, cross-cluster rigid boundary nearest pairs within 0.00015 in ANY order",
+        "boundary_populations": {
+          "XYZ": {
+            "count": 5269,
+            "min": 0.0043376696230647376,
+            "median": 0.13233299415069397,
+            "p90": 0.3163881855861916,
+            "rms": 0.1830123483213804,
+            "below_1e-4": 0,
+            "below_1e-3": 0,
+            "below_1e-2": 63
+          },
+          "XZY": {
+            "count": 5269,
+            "min": 0.0043376696230647376,
+            "median": 0.13233299415069397,
+            "p90": 0.3163881855861916,
+            "rms": 0.18307370111184929,
+            "below_1e-4": 0,
+            "below_1e-3": 0,
+            "below_1e-2": 63
+          },
+          "YXZ": {
+            "count": 5269,
+            "min": 0.0010335133736055543,
+            "median": 0.1335771571244067,
+            "p90": 0.3163881855861915,
+            "rms": 0.18331803900502183,
+            "below_1e-4": 0,
+            "below_1e-3": 0,
+            "below_1e-2": 63
+          },
+          "YZX": {
+            "count": 5269,
+            "min": 0.00028320235750598334,
+            "median": 0.13254207869141169,
+            "p90": 0.3163881855861916,
+            "rms": 0.18328797435237618,
+            "below_1e-4": 0,
+            "below_1e-3": 4,
+            "below_1e-2": 63
+          },
+          "ZXY": {
+            "count": 5269,
+            "min": 0.0043376696230647376,
+            "median": 0.13145330983632353,
+            "p90": 0.3163881855861916,
+            "rms": 0.18304714352052287,
+            "below_1e-4": 0,
+            "below_1e-3": 0,
+            "below_1e-2": 63
+          },
+          "ZYX": {
+            "count": 5269,
+            "min": 2.6096869381312355e-05,
+            "median": 0.13301804523489813,
+            "p90": 0.3163881855861916,
+            "rms": 0.183336626092139,
+            "below_1e-4": 4,
+            "below_1e-3": 4,
+            "below_1e-2": 63
+          }
+        },
+        "pairs": [
+          {
+            "a_node_vertex_cluster_bone": [
+              55,
+              255,
+              9,
+              2
+            ],
+            "b_node_vertex_cluster_bone": [
+              206,
+              83,
+              23,
+              7
+            ],
+            "a_local_xyz": [
+              0.10951564460992813,
+              -0.2023245394229889,
+              -0.07909277081489563
+            ],
+            "b_local_xyz": [
+              -0.10003508627414703,
+              -0.20309264957904816,
+              -0.07793067395687103
+            ],
+            "distance_by_order": {
+              "XYZ": 0.006651058641254204,
+              "XZY": 0.006386046066682892,
+              "YXZ": 0.0010335133736055543,
+              "YZX": 0.00028390622113039996,
+              "ZXY": 0.005650493691763281,
+              "ZYX": 2.7253833556152692e-05
+            }
+          },
+          {
+            "a_node_vertex_cluster_bone": [
+              55,
+              282,
+              23,
+              7
+            ],
+            "b_node_vertex_cluster_bone": [
+              206,
+              60,
+              9,
+              2
+            ],
+            "a_local_xyz": [
+              -0.10969129949808121,
+              -0.20232175290584564,
+              -0.0791039988398552
+            ],
+            "b_local_xyz": [
+              0.09985913336277008,
+              -0.20309649407863617,
+              -0.07791857421398163
+            ],
+            "distance_by_order": {
+              "XYZ": 0.0066505037951624865,
+              "XZY": 0.006385487180898763,
+              "YXZ": 0.0010344337444286398,
+              "YZX": 0.00028320235750598334,
+              "ZXY": 0.0056496631057003826,
+              "ZYX": 2.6096869381312355e-05
+            }
+          }
+        ],
+        "fixed_union_pair_statistics": {
+          "XYZ": {
+            "count": 2,
+            "min": 0.0066505037951624865,
+            "median": 0.006650781218208345,
+            "p90": 0.006651003156645032,
+            "rms": 0.006650781223994398,
+            "below_1e-4": 0,
+            "below_1e-3": 0,
+            "below_1e-2": 2
+          },
+          "XZY": {
+            "count": 2,
+            "min": 0.006385487180898763,
+            "median": 0.006385766623790827,
+            "p90": 0.006385990178104479,
+            "rms": 0.006385766629905076,
+            "below_1e-4": 0,
+            "below_1e-3": 0,
+            "below_1e-2": 2
+          },
+          "YXZ": {
+            "count": 2,
+            "min": 0.0010335133736055543,
+            "median": 0.001033973559017097,
+            "p90": 0.0010343417073463313,
+            "rms": 0.0010339736614232951,
+            "below_1e-4": 0,
+            "below_1e-3": 0,
+            "below_1e-2": 2
+          },
+          "YZX": {
+            "count": 2,
+            "min": 0.00028320235750598334,
+            "median": 0.0002835542893181917,
+            "p90": 0.0002838358347679583,
+            "rms": 0.00028355450771720274,
+            "below_1e-4": 0,
+            "below_1e-3": 2,
+            "below_1e-2": 2
+          },
+          "ZXY": {
+            "count": 2,
+            "min": 0.0056496631057003826,
+            "median": 0.005650078398731832,
+            "p90": 0.005650410633156991,
+            "rms": 0.005650078413994302,
+            "below_1e-4": 0,
+            "below_1e-3": 0,
+            "below_1e-2": 2
+          },
+          "ZYX": {
+            "count": 2,
+            "min": 2.6096869381312355e-05,
+            "median": 2.6675351468732524e-05,
+            "p90": 2.713813713866866e-05,
+            "rms": 2.668162321722343e-05,
+            "below_1e-4": 2,
+            "below_1e-3": 2,
+            "below_1e-2": 2
+          }
+        }
+      },
+      "partial_ZYX": {
+        "linear_world": {
+          "count": 6216,
+          "min": 2.6096869381312355e-05,
+          "median": 0.09008535607921078,
+          "p90": 0.1954039153129607,
+          "rms": 0.11966089140371344,
+          "below_1e-4": 4,
+          "below_1e-3": 4,
+          "below_1e-2": 91
+        },
+        "linear_pivot": {
+          "count": 6216,
+          "min": 2.6096869381312355e-05,
+          "median": 0.07763450552718038,
+          "p90": 0.18396634494998815,
+          "rms": 0.11057693113932433,
+          "below_1e-4": 4,
+          "below_1e-3": 4,
+          "below_1e-2": 173
+        },
+        "euler_trs": {
+          "count": 6216,
+          "min": 2.6096869381312355e-05,
+          "median": 0.09014818393218577,
+          "p90": 0.19502507332300972,
+          "rms": 0.11904378878218284,
+          "below_1e-4": 4,
+          "below_1e-3": 4,
+          "below_1e-2": 92
+        },
+        "euler_pivot": {
+          "count": 6216,
+          "min": 2.6096869381312355e-05,
+          "median": 0.06224347057096988,
+          "p90": 0.15577823652149803,
+          "rms": 0.09288470367775385,
+          "below_1e-4": 4,
+          "below_1e-3": 4,
+          "below_1e-2": 150
+        },
+        "slerp_trs": {
+          "count": 6216,
+          "min": 2.6096869381312355e-05,
+          "median": 0.09008493574888257,
+          "p90": 0.19502507332300972,
+          "rms": 0.11903608420042773,
+          "below_1e-4": 4,
+          "below_1e-3": 4,
+          "below_1e-2": 89
+        },
+        "slerp_pivot": {
+          "count": 6216,
+          "min": 2.6096869381312355e-05,
+          "median": 0.06267708644595799,
+          "p90": 0.1553005335034643,
+          "rms": 0.0927543022804955,
+          "below_1e-4": 4,
+          "below_1e-3": 4,
+          "below_1e-2": 195
+        }
+      }
+    },
+    "00000005.tmd": {
+      "rigid_six_orders": {
+        "selection": "union of undirected cross-node, cross-cluster rigid boundary nearest pairs within 0.00015 in ANY order",
+        "boundary_populations": {
+          "XYZ": {
+            "count": 2198,
+            "min": 4.360754861258343e-08,
+            "median": 0.15526509078147066,
+            "p90": 0.3806284178247386,
+            "rms": 0.2240285539945009,
+            "below_1e-4": 6,
+            "below_1e-3": 6,
+            "below_1e-2": 17
+          },
+          "XZY": {
+            "count": 2198,
+            "min": 4.360754861258343e-08,
+            "median": 0.15554679922136488,
+            "p90": 0.3806284178247385,
+            "rms": 0.22408697795007973,
+            "below_1e-4": 6,
+            "below_1e-3": 6,
+            "below_1e-2": 17
+          },
+          "YXZ": {
+            "count": 2198,
+            "min": 4.360754861258343e-08,
+            "median": 0.1583691417922195,
+            "p90": 0.38062841782473844,
+            "rms": 0.2245978964861434,
+            "below_1e-4": 6,
+            "below_1e-3": 6,
+            "below_1e-2": 17
+          },
+          "YZX": {
+            "count": 2198,
+            "min": 4.360754861258343e-08,
+            "median": 0.1587016569633516,
+            "p90": 0.3806284178247386,
+            "rms": 0.22455609720263361,
+            "below_1e-4": 6,
+            "below_1e-3": 6,
+            "below_1e-2": 17
+          },
+          "ZXY": {
+            "count": 2198,
+            "min": 4.360754861258343e-08,
+            "median": 0.155891038475997,
+            "p90": 0.3806284178247385,
+            "rms": 0.224087093060037,
+            "below_1e-4": 6,
+            "below_1e-3": 6,
+            "below_1e-2": 17
+          },
+          "ZYX": {
+            "count": 2198,
+            "min": 4.360754861258343e-08,
+            "median": 0.1588154452829194,
+            "p90": 0.3806284178247386,
+            "rms": 0.22463048731032098,
+            "below_1e-4": 6,
+            "below_1e-3": 6,
+            "below_1e-2": 17
+          }
+        },
+        "pairs": [
+          {
+            "a_node_vertex_cluster_bone": [
+              152,
+              2,
+              45,
+              15
+            ],
+            "b_node_vertex_cluster_bone": [
+              160,
+              176,
+              43,
+              14
+            ],
+            "a_local_xyz": [
+              0.06024414300918579,
+              0.015768960118293762,
+              -0.05460117757320404
+            ],
+            "b_local_xyz": [
+              0.06024414300918579,
+              0.24798069894313812,
+              0.0347285270690918
+            ],
+            "distance_by_order": {
+              "XYZ": 1.634228377602969e-07,
+              "XZY": 1.634228377602969e-07,
+              "YXZ": 1.634228377602969e-07,
+              "YZX": 1.634228377602969e-07,
+              "ZXY": 1.634228377602969e-07,
+              "ZYX": 1.634228377602969e-07
+            }
+          },
+          {
+            "a_node_vertex_cluster_bone": [
+              152,
+              6,
+              45,
+              15
+            ],
+            "b_node_vertex_cluster_bone": [
+              160,
+              172,
+              43,
+              14
+            ],
+            "a_local_xyz": [
+              -0.06024414300918579,
+              0.015769056975841522,
+              -0.05460124835371971
+            ],
+            "b_local_xyz": [
+              -0.06024414300918579,
+              0.24798069894313812,
+              0.0347285270690918
+            ],
+            "distance_by_order": {
+              "XYZ": 4.360754861258343e-08,
+              "XZY": 4.360754861258343e-08,
+              "YXZ": 4.360754861258343e-08,
+              "YZX": 4.360754861258343e-08,
+              "ZXY": 4.360754861258343e-08,
+              "ZYX": 4.360754861258343e-08
+            }
+          },
+          {
+            "a_node_vertex_cluster_bone": [
+              152,
+              8,
+              45,
+              15
+            ],
+            "b_node_vertex_cluster_bone": [
+              160,
+              175,
+              43,
+              14
+            ],
+            "a_local_xyz": [
+              4.9099187093978516e-18,
+              0.0002644923224579543,
+              -0.08213669061660767
+            ],
+            "b_local_xyz": [
+              4.9099187093978516e-18,
+              0.24952828884124756,
+              0.003165937727317214
+            ],
+            "distance_by_order": {
+              "XYZ": 4.720769206965028e-08,
+              "XZY": 4.720769206965028e-08,
+              "YXZ": 4.720769206965028e-08,
+              "YZX": 4.720769206965028e-08,
+              "ZXY": 4.720769206965028e-08,
+              "ZYX": 4.720769206965028e-08
+            }
+          }
+        ],
+        "fixed_union_pair_statistics": {
+          "XYZ": {
+            "count": 3,
+            "min": 4.360754861258343e-08,
+            "median": 4.720769206965028e-08,
+            "p90": 1.4017980862216758e-07,
+            "rms": 1.0138574585573337e-07,
+            "below_1e-4": 3,
+            "below_1e-3": 3,
+            "below_1e-2": 3
+          },
+          "XZY": {
+            "count": 3,
+            "min": 4.360754861258343e-08,
+            "median": 4.720769206965028e-08,
+            "p90": 1.4017980862216758e-07,
+            "rms": 1.0138574585573337e-07,
+            "below_1e-4": 3,
+            "below_1e-3": 3,
+            "below_1e-2": 3
+          },
+          "YXZ": {
+            "count": 3,
+            "min": 4.360754861258343e-08,
+            "median": 4.720769206965028e-08,
+            "p90": 1.4017980862216758e-07,
+            "rms": 1.0138574585573337e-07,
+            "below_1e-4": 3,
+            "below_1e-3": 3,
+            "below_1e-2": 3
+          },
+          "YZX": {
+            "count": 3,
+            "min": 4.360754861258343e-08,
+            "median": 4.720769206965028e-08,
+            "p90": 1.4017980862216758e-07,
+            "rms": 1.0138574585573337e-07,
+            "below_1e-4": 3,
+            "below_1e-3": 3,
+            "below_1e-2": 3
+          },
+          "ZXY": {
+            "count": 3,
+            "min": 4.360754861258343e-08,
+            "median": 4.720769206965028e-08,
+            "p90": 1.4017980862216758e-07,
+            "rms": 1.0138574585573337e-07,
+            "below_1e-4": 3,
+            "below_1e-3": 3,
+            "below_1e-2": 3
+          },
+          "ZYX": {
+            "count": 3,
+            "min": 4.360754861258343e-08,
+            "median": 4.720769206965028e-08,
+            "p90": 1.4017980862216758e-07,
+            "rms": 1.0138574585573337e-07,
+            "below_1e-4": 3,
+            "below_1e-3": 3,
+            "below_1e-2": 3
+          }
+        }
+      },
+      "partial_ZYX": {
+        "linear_world": {
+          "count": 2795,
+          "min": 4.360754861258343e-08,
+          "median": 0.09021441065433727,
+          "p90": 0.2114972243046036,
+          "rms": 0.12704564669933685,
+          "below_1e-4": 6,
+          "below_1e-3": 6,
+          "below_1e-2": 23
+        },
+        "linear_pivot": {
+          "count": 2795,
+          "min": 4.360754861258343e-08,
+          "median": 0.08001736634383959,
+          "p90": 0.1826072849434055,
+          "rms": 0.11280301573394273,
+          "below_1e-4": 6,
+          "below_1e-3": 6,
+          "below_1e-2": 42
+        },
+        "euler_trs": {
+          "count": 2795,
+          "min": 4.360754861258343e-08,
+          "median": 0.0911341854460325,
+          "p90": 0.21149722430460363,
+          "rms": 0.12663740684570055,
+          "below_1e-4": 6,
+          "below_1e-3": 6,
+          "below_1e-2": 35
+        },
+        "euler_pivot": {
+          "count": 2795,
+          "min": 4.360754861258343e-08,
+          "median": 0.07496168707395705,
+          "p90": 0.17249629703812008,
+          "rms": 0.104902618243788,
+          "below_1e-4": 6,
+          "below_1e-3": 6,
+          "below_1e-2": 21
+        },
+        "slerp_trs": {
+          "count": 2795,
+          "min": 4.360754861258343e-08,
+          "median": 0.09091352788439197,
+          "p90": 0.21149722430460363,
+          "rms": 0.12657791219408066,
+          "below_1e-4": 6,
+          "below_1e-3": 6,
+          "below_1e-2": 35
+        },
+        "slerp_pivot": {
+          "count": 2795,
+          "min": 4.360754861258343e-08,
+          "median": 0.0744735407729343,
+          "p90": 0.1723778522460706,
+          "rms": 0.10465732476659084,
+          "below_1e-4": 6,
+          "below_1e-3": 6,
+          "below_1e-2": 21
+        }
+      }
+    },
+    "00000006.tmd": {
+      "rigid_six_orders": {
+        "selection": "union of undirected cross-node, cross-cluster rigid boundary nearest pairs within 0.00015 in ANY order",
+        "boundary_populations": {
+          "XYZ": {
+            "count": 1064,
+            "min": 0.004327137878755758,
+            "median": 0.12578090653450252,
+            "p90": 0.21692624096956648,
+            "rms": 0.14608611846511604,
+            "below_1e-4": 0,
+            "below_1e-3": 0,
+            "below_1e-2": 21
+          },
+          "XZY": {
+            "count": 1064,
+            "min": 0.004327137878755758,
+            "median": 0.12578090653450258,
+            "p90": 0.2164097872332288,
+            "rms": 0.14649652661092463,
+            "below_1e-4": 0,
+            "below_1e-3": 0,
+            "below_1e-2": 21
+          },
+          "YXZ": {
+            "count": 1064,
+            "min": 0.004327137878755758,
+            "median": 0.12805542141844006,
+            "p90": 0.21653582510246955,
+            "rms": 0.14724801399568382,
+            "below_1e-4": 0,
+            "below_1e-3": 0,
+            "below_1e-2": 21
+          },
+          "YZX": {
+            "count": 1064,
+            "min": 0.004327137878755758,
+            "median": 0.12846504353743962,
+            "p90": 0.21638758490072046,
+            "rms": 0.14701651182347986,
+            "below_1e-4": 0,
+            "below_1e-3": 0,
+            "below_1e-2": 21
+          },
+          "ZXY": {
+            "count": 1064,
+            "min": 0.004327137878755758,
+            "median": 0.12578090653448484,
+            "p90": 0.21626422187128744,
+            "rms": 0.14625859549324607,
+            "below_1e-4": 0,
+            "below_1e-3": 0,
+            "below_1e-2": 21
+          },
+          "ZYX": {
+            "count": 1064,
+            "min": 0.004327137878755758,
+            "median": 0.1295694589670245,
+            "p90": 0.21587211258715655,
+            "rms": 0.14734418137864574,
+            "below_1e-4": 0,
+            "below_1e-3": 0,
+            "below_1e-2": 21
+          }
+        },
+        "pairs": [],
+        "fixed_union_pair_statistics": {
+          "XYZ": {
+            "count": 0
+          },
+          "XZY": {
+            "count": 0
+          },
+          "YXZ": {
+            "count": 0
+          },
+          "YZX": {
+            "count": 0
+          },
+          "ZXY": {
+            "count": 0
+          },
+          "ZYX": {
+            "count": 0
+          }
+        }
+      },
+      "partial_ZYX": {}
+    },
+    "00000007.tmd": {
+      "rigid_six_orders": {
+        "selection": "union of undirected cross-node, cross-cluster rigid boundary nearest pairs within 0.00015 in ANY order",
+        "boundary_populations": {
+          "XYZ": {
+            "count": 838,
+            "min": 0.004064517997258717,
+            "median": 0.09101238856705221,
+            "p90": 0.18471980346380099,
+            "rms": 0.11905938413768002,
+            "below_1e-4": 0,
+            "below_1e-3": 0,
+            "below_1e-2": 24
+          },
+          "XZY": {
+            "count": 838,
+            "min": 0.004064517997258717,
+            "median": 0.09073237450076181,
+            "p90": 0.1850594871696462,
+            "rms": 0.1190855022429302,
+            "below_1e-4": 0,
+            "below_1e-3": 0,
+            "below_1e-2": 24
+          },
+          "YXZ": {
+            "count": 838,
+            "min": 0.0030915580283024423,
+            "median": 0.09107600330393473,
+            "p90": 0.18532600120376777,
+            "rms": 0.12094716508536088,
+            "below_1e-4": 0,
+            "below_1e-3": 0,
+            "below_1e-2": 24
+          },
+          "YZX": {
+            "count": 838,
+            "min": 0.0025155815467995295,
+            "median": 0.09167521939964093,
+            "p90": 0.18536863050164604,
+            "rms": 0.12109617798176431,
+            "below_1e-4": 0,
+            "below_1e-3": 0,
+            "below_1e-2": 24
+          },
+          "ZXY": {
+            "count": 838,
+            "min": 0.004064517997258717,
+            "median": 0.08967688424584529,
+            "p90": 0.18511841074757615,
+            "rms": 0.11927034407083498,
+            "below_1e-4": 0,
+            "below_1e-3": 0,
+            "below_1e-2": 24
+          },
+          "ZYX": {
+            "count": 838,
+            "min": 0.003781464044482996,
+            "median": 0.0924293360396271,
+            "p90": 0.1855468123156221,
+            "rms": 0.1211031306773917,
+            "below_1e-4": 0,
+            "below_1e-3": 0,
+            "below_1e-2": 24
+          }
+        },
+        "pairs": [],
+        "fixed_union_pair_statistics": {
+          "XYZ": {
+            "count": 0
+          },
+          "XZY": {
+            "count": 0
+          },
+          "YXZ": {
+            "count": 0
+          },
+          "YZX": {
+            "count": 0
+          },
+          "ZXY": {
+            "count": 0
+          },
+          "ZYX": {
+            "count": 0
+          }
+        }
+      },
+      "partial_ZYX": {}
+    },
+    "00000011.tmd": {
+      "rigid_six_orders": {
+        "selection": "union of undirected cross-node, cross-cluster rigid boundary nearest pairs within 0.00015 in ANY order",
+        "boundary_populations": {
+          "XYZ": {
+            "count": 1678,
+            "min": 0.002235295937462397,
+            "median": 0.3722245188690514,
+            "p90": 0.48554927193369063,
+            "rms": 0.353934154383645,
+            "below_1e-4": 0,
+            "below_1e-3": 0,
+            "below_1e-2": 2
+          },
+          "XZY": {
+            "count": 1678,
+            "min": 0.0025000415468094286,
+            "median": 0.3722245188690513,
+            "p90": 0.4855492719336906,
+            "rms": 0.35400452934387533,
+            "below_1e-4": 0,
+            "below_1e-3": 0,
+            "below_1e-2": 2
+          },
+          "YXZ": {
+            "count": 1678,
+            "min": 0.007852047107138774,
+            "median": 0.3722245188690512,
+            "p90": 0.4855492719336906,
+            "rms": 0.3543164085859296,
+            "below_1e-4": 0,
+            "below_1e-3": 0,
+            "below_1e-2": 2
+          },
+          "YZX": {
+            "count": 1678,
+            "min": 0.008600634350651396,
+            "median": 0.37222451886905145,
+            "p90": 0.4855492719336907,
+            "rms": 0.3540452803128974,
+            "below_1e-4": 0,
+            "below_1e-3": 0,
+            "below_1e-2": 2
+          },
+          "ZXY": {
+            "count": 1678,
+            "min": 0.003235367880770823,
+            "median": 0.37222451886905134,
+            "p90": 0.4855492719336906,
+            "rms": 0.3537494873430347,
+            "below_1e-4": 0,
+            "below_1e-3": 0,
+            "below_1e-2": 2
+          },
+          "ZYX": {
+            "count": 1678,
+            "min": 0.008861262350499765,
+            "median": 0.37222451886905134,
+            "p90": 0.4855492719336906,
+            "rms": 0.3541281008824766,
+            "below_1e-4": 0,
+            "below_1e-3": 0,
+            "below_1e-2": 2
+          }
+        },
+        "pairs": [],
+        "fixed_union_pair_statistics": {
+          "XYZ": {
+            "count": 0
+          },
+          "XZY": {
+            "count": 0
+          },
+          "YXZ": {
+            "count": 0
+          },
+          "YZX": {
+            "count": 0
+          },
+          "ZXY": {
+            "count": 0
+          },
+          "ZYX": {
+            "count": 0
+          }
+        }
+      },
+      "partial_ZYX": {
+        "linear_world": {
+          "count": 2295,
+          "min": 0.002086107726573386,
+          "median": 0.11407298209109194,
+          "p90": 0.2651759128824859,
+          "rms": 0.15919609394350595,
+          "below_1e-4": 0,
+          "below_1e-3": 0,
+          "below_1e-2": 6
+        },
+        "linear_pivot": {
+          "count": 2295,
+          "min": 0.008861262350499765,
+          "median": 0.10251096178532577,
+          "p90": 0.19539591038587606,
+          "rms": 0.12441593345732467,
+          "below_1e-4": 0,
+          "below_1e-3": 0,
+          "below_1e-2": 4
+        },
+        "euler_trs": {
+          "count": 2295,
+          "min": 0.001996081229358452,
+          "median": 0.11407298209109194,
+          "p90": 0.26499730871474525,
+          "rms": 0.15896615248930046,
+          "below_1e-4": 0,
+          "below_1e-3": 0,
+          "below_1e-2": 6
+        },
+        "euler_pivot": {
+          "count": 2295,
+          "min": 0.0044589943683073716,
+          "median": 0.10074041102312387,
+          "p90": 0.1886877459753729,
+          "rms": 0.11995231493980879,
+          "below_1e-4": 0,
+          "below_1e-3": 0,
+          "below_1e-2": 6
+        },
+        "slerp_trs": {
+          "count": 2295,
+          "min": 0.0019960812293584496,
+          "median": 0.11407298209109194,
+          "p90": 0.26499730871474525,
+          "rms": 0.15896875317552586,
+          "below_1e-4": 0,
+          "below_1e-3": 0,
+          "below_1e-2": 6
+        },
+        "slerp_pivot": {
+          "count": 2295,
+          "min": 0.0012272454565911495,
+          "median": 0.10074041102312387,
+          "p90": 0.18850194494214934,
+          "rms": 0.11984288097540712,
+          "below_1e-4": 0,
+          "below_1e-3": 0,
+          "below_1e-2": 6
+        }
+      }
+    },
+    "00000012.tmd": {
+      "rigid_six_orders": {
+        "selection": "union of undirected cross-node, cross-cluster rigid boundary nearest pairs within 0.00015 in ANY order",
+        "boundary_populations": {
+          "XYZ": {
+            "count": 731,
+            "min": 0.0337136601063214,
+            "median": 0.3872594634609189,
+            "p90": 0.790063986359843,
+            "rms": 0.4763762447942555,
+            "below_1e-4": 0,
+            "below_1e-3": 0,
+            "below_1e-2": 0
+          },
+          "XZY": {
+            "count": 731,
+            "min": 0.03371366010633887,
+            "median": 0.3872594634609188,
+            "p90": 0.793032655104829,
+            "rms": 0.4778458312941942,
+            "below_1e-4": 0,
+            "below_1e-3": 0,
+            "below_1e-2": 0
+          },
+          "YXZ": {
+            "count": 731,
+            "min": 0.033713660151164254,
+            "median": 0.3872594634609188,
+            "p90": 0.791651101003879,
+            "rms": 0.4774491678135255,
+            "below_1e-4": 0,
+            "below_1e-3": 0,
+            "below_1e-2": 0
+          },
+          "YZX": {
+            "count": 731,
+            "min": 0.03371366015098913,
+            "median": 0.3872594634609188,
+            "p90": 0.7610875756013173,
+            "rms": 0.4622925697874807,
+            "below_1e-4": 0,
+            "below_1e-3": 0,
+            "below_1e-2": 0
+          },
+          "ZXY": {
+            "count": 731,
+            "min": 0.03371366010598027,
+            "median": 0.38725946346091883,
+            "p90": 0.7623752562520225,
+            "rms": 0.4626147701189182,
+            "below_1e-4": 0,
+            "below_1e-3": 0,
+            "below_1e-2": 0
+          },
+          "ZYX": {
+            "count": 731,
+            "min": 0.033713660151005825,
+            "median": 0.38725946346091866,
+            "p90": 0.7642199558842684,
+            "rms": 0.46380465549771255,
+            "below_1e-4": 0,
+            "below_1e-3": 0,
+            "below_1e-2": 0
+          }
+        },
+        "pairs": [],
+        "fixed_union_pair_statistics": {
+          "XYZ": {
+            "count": 0
+          },
+          "XZY": {
+            "count": 0
+          },
+          "YXZ": {
+            "count": 0
+          },
+          "YZX": {
+            "count": 0
+          },
+          "ZXY": {
+            "count": 0
+          },
+          "ZYX": {
+            "count": 0
+          }
+        }
+      },
+      "partial_ZYX": {}
+    },
+    "00000021.tmd": {
+      "rigid_six_orders": {
+        "selection": "union of undirected cross-node, cross-cluster rigid boundary nearest pairs within 0.00015 in ANY order",
+        "boundary_populations": {
+          "XYZ": {
+            "count": 1859,
+            "min": 0.002860631475151494,
+            "median": 0.2762066941500387,
+            "p90": 0.4788119723019189,
+            "rms": 0.32781989456140825,
+            "below_1e-4": 0,
+            "below_1e-3": 0,
+            "below_1e-2": 17
+          },
+          "XZY": {
+            "count": 1859,
+            "min": 0.002860631475151494,
+            "median": 0.2762066941500387,
+            "p90": 0.47881197230191885,
+            "rms": 0.32781820563384517,
+            "below_1e-4": 0,
+            "below_1e-3": 0,
+            "below_1e-2": 17
+          },
+          "YXZ": {
+            "count": 1859,
+            "min": 0.002860631475151494,
+            "median": 0.2771469528245525,
+            "p90": 0.4788119723019188,
+            "rms": 0.3283576857832402,
+            "below_1e-4": 0,
+            "below_1e-3": 0,
+            "below_1e-2": 17
+          },
+          "YZX": {
+            "count": 1859,
+            "min": 0.002860631475151494,
+            "median": 0.28005243060211304,
+            "p90": 0.47881197230191896,
+            "rms": 0.3284345562298938,
+            "below_1e-4": 0,
+            "below_1e-3": 0,
+            "below_1e-2": 17
+          },
+          "ZXY": {
+            "count": 1859,
+            "min": 0.002860631475151494,
+            "median": 0.2788782143415459,
+            "p90": 0.4788119723019188,
+            "rms": 0.3278984538767205,
+            "below_1e-4": 0,
+            "below_1e-3": 0,
+            "below_1e-2": 17
+          },
+          "ZYX": {
+            "count": 1859,
+            "min": 0.002860631475151494,
+            "median": 0.280054652997729,
+            "p90": 0.47881197230191885,
+            "rms": 0.328435781321353,
+            "below_1e-4": 0,
+            "below_1e-3": 0,
+            "below_1e-2": 17
+          }
+        },
+        "pairs": [],
+        "fixed_union_pair_statistics": {
+          "XYZ": {
+            "count": 0
+          },
+          "XZY": {
+            "count": 0
+          },
+          "YXZ": {
+            "count": 0
+          },
+          "YZX": {
+            "count": 0
+          },
+          "ZXY": {
+            "count": 0
+          },
+          "ZYX": {
+            "count": 0
+          }
+        }
+      },
+      "partial_ZYX": {}
+    }
+  },
+  "all_fixture_attachment_audit": [
+    {
+      "file": "00000003.tmd",
+      "render_vertices": 549,
+      "multi_cluster_vertices": 0,
+      "multi_palette_nodes": []
+    },
+    {
+      "file": "00000004.tmd",
+      "render_vertices": 16344,
+      "multi_cluster_vertices": 0,
+      "multi_palette_nodes": [
+        {
+          "node": 55,
+          "palette_count": 7,
+          "draws_per_batch": {
+            "0": 1,
+            "1": 1,
+            "2": 1,
+            "3": 1,
+            "4": 1,
+            "5": 1,
+            "6": 1
+          },
+          "referenced_vertices": 892,
+          "vertices_with_multiple_clusters": 0
+        }
+      ]
+    },
+    {
+      "file": "00000005.tmd",
+      "render_vertices": 6273,
+      "multi_cluster_vertices": 0,
+      "multi_palette_nodes": [
+        {
+          "node": 5,
+          "palette_count": 5,
+          "draws_per_batch": {
+            "0": 1,
+            "1": 1,
+            "2": 1,
+            "3": 1,
+            "4": 1
+          },
+          "referenced_vertices": 494,
+          "vertices_with_multiple_clusters": 0
+        }
+      ]
+    },
+    {
+      "file": "00000006.tmd",
+      "render_vertices": 2694,
+      "multi_cluster_vertices": 0,
+      "multi_palette_nodes": []
+    },
+    {
+      "file": "00000007.tmd",
+      "render_vertices": 1590,
+      "multi_cluster_vertices": 0,
+      "multi_palette_nodes": []
+    },
+    {
+      "file": "00000008.tmd",
+      "render_vertices": 132,
+      "multi_cluster_vertices": 0,
+      "multi_palette_nodes": []
+    },
+    {
+      "file": "00000009.tmd",
+      "render_vertices": 132,
+      "multi_cluster_vertices": 0,
+      "multi_palette_nodes": []
+    },
+    {
+      "file": "0000000a.tmd",
+      "render_vertices": 204,
+      "multi_cluster_vertices": 0,
+      "multi_palette_nodes": []
+    },
+    {
+      "file": "0000000b.tmd",
+      "render_vertices": 204,
+      "multi_cluster_vertices": 0,
+      "multi_palette_nodes": []
+    },
+    {
+      "file": "00000011.tmd",
+      "render_vertices": 5637,
+      "multi_cluster_vertices": 0,
+      "multi_palette_nodes": [
+        {
+          "node": 3,
+          "palette_count": 2,
+          "draws_per_batch": {
+            "0": 1,
+            "1": 1
+          },
+          "referenced_vertices": 131,
+          "vertices_with_multiple_clusters": 0
+        },
+        {
+          "node": 4,
+          "palette_count": 8,
+          "draws_per_batch": {
+            "0": 1,
+            "1": 1,
+            "2": 1,
+            "3": 1,
+            "4": 1,
+            "5": 1,
+            "6": 1,
+            "7": 1
+          },
+          "referenced_vertices": 601,
+          "vertices_with_multiple_clusters": 0
+        },
+        {
+          "node": 7,
+          "palette_count": 3,
+          "draws_per_batch": {
+            "0": 1,
+            "1": 1,
+            "2": 1
+          },
+          "referenced_vertices": 421,
+          "vertices_with_multiple_clusters": 0
+        },
+        {
+          "node": 8,
+          "palette_count": 5,
+          "draws_per_batch": {
+            "0": 1,
+            "1": 1,
+            "2": 1,
+            "3": 1,
+            "4": 1
+          },
+          "referenced_vertices": 644,
+          "vertices_with_multiple_clusters": 0
+        }
+      ]
+    },
+    {
+      "file": "00000012.tmd",
+      "render_vertices": 2633,
+      "multi_cluster_vertices": 0,
+      "multi_palette_nodes": [
+        {
+          "node": 0,
+          "palette_count": 2,
+          "draws_per_batch": {
+            "0": 1,
+            "1": 1
+          },
+          "referenced_vertices": 244,
+          "vertices_with_multiple_clusters": 0
+        },
+        {
+          "node": 1,
+          "palette_count": 5,
+          "draws_per_batch": {
+            "0": 1,
+            "1": 1,
+            "2": 1,
+            "3": 1,
+            "4": 1
+          },
+          "referenced_vertices": 481,
+          "vertices_with_multiple_clusters": 0
+        }
+      ]
+    },
+    {
+      "file": "00000013.tmd",
+      "render_vertices": 993,
+      "multi_cluster_vertices": 0,
+      "multi_palette_nodes": [
+        {
+          "node": 1,
+          "palette_count": 2,
+          "draws_per_batch": {
+            "0": 1,
+            "1": 1
+          },
+          "referenced_vertices": 244,
+          "vertices_with_multiple_clusters": 0
+        }
+      ]
+    },
+    {
+      "file": "00000014.tmd",
+      "render_vertices": 555,
+      "multi_cluster_vertices": 0,
+      "multi_palette_nodes": []
+    },
+    {
+      "file": "00000015.tmd",
+      "render_vertices": 5386,
+      "multi_cluster_vertices": 0,
+      "multi_palette_nodes": [
+        {
+          "node": 3,
+          "palette_count": 8,
+          "draws_per_batch": {
+            "0": 1,
+            "1": 1,
+            "2": 1,
+            "3": 1,
+            "4": 1,
+            "5": 1,
+            "6": 1,
+            "7": 1
+          },
+          "referenced_vertices": 601,
+          "vertices_with_multiple_clusters": 0
+        },
+        {
+          "node": 4,
+          "palette_count": 2,
+          "draws_per_batch": {
+            "0": 1,
+            "1": 1
+          },
+          "referenced_vertices": 131,
+          "vertices_with_multiple_clusters": 0
+        },
+        {
+          "node": 9,
+          "palette_count": 4,
+          "draws_per_batch": {
+            "0": 1,
+            "1": 1,
+            "2": 1,
+            "3": 1
+          },
+          "referenced_vertices": 462,
+          "vertices_with_multiple_clusters": 0
+        },
+        {
+          "node": 10,
+          "palette_count": 5,
+          "draws_per_batch": {
+            "0": 1,
+            "1": 1,
+            "2": 1,
+            "3": 1,
+            "4": 1
+          },
+          "referenced_vertices": 569,
+          "vertices_with_multiple_clusters": 0
+        }
+      ]
+    },
+    {
+      "file": "00000016.tmd",
+      "render_vertices": 2681,
+      "multi_cluster_vertices": 0,
+      "multi_palette_nodes": [
+        {
+          "node": 4,
+          "palette_count": 6,
+          "draws_per_batch": {
+            "0": 1,
+            "1": 1,
+            "2": 1,
+            "3": 1,
+            "4": 1,
+            "5": 1
+          },
+          "referenced_vertices": 508,
+          "vertices_with_multiple_clusters": 0
+        },
+        {
+          "node": 5,
+          "palette_count": 2,
+          "draws_per_batch": {
+            "0": 1,
+            "1": 1
+          },
+          "referenced_vertices": 247,
+          "vertices_with_multiple_clusters": 0
+        }
+      ]
+    },
+    {
+      "file": "00000017.tmd",
+      "render_vertices": 1018,
+      "multi_cluster_vertices": 0,
+      "multi_palette_nodes": []
+    },
+    {
+      "file": "00000018.tmd",
+      "render_vertices": 560,
+      "multi_cluster_vertices": 0,
+      "multi_palette_nodes": []
+    },
+    {
+      "file": "00000019.tmd",
+      "render_vertices": 5786,
+      "multi_cluster_vertices": 0,
+      "multi_palette_nodes": [
+        {
+          "node": 10,
+          "palette_count": 6,
+          "draws_per_batch": {
+            "0": 1,
+            "1": 1,
+            "2": 1,
+            "3": 1,
+            "4": 1,
+            "5": 1
+          },
+          "referenced_vertices": 944,
+          "vertices_with_multiple_clusters": 0
+        }
+      ]
+    },
+    {
+      "file": "0000001a.tmd",
+      "render_vertices": 3267,
+      "multi_cluster_vertices": 0,
+      "multi_palette_nodes": [
+        {
+          "node": 3,
+          "palette_count": 4,
+          "draws_per_batch": {
+            "0": 1,
+            "1": 1,
+            "2": 1,
+            "3": 1
+          },
+          "referenced_vertices": 512,
+          "vertices_with_multiple_clusters": 0
+        }
+      ]
+    },
+    {
+      "file": "0000001b.tmd",
+      "render_vertices": 1570,
+      "multi_cluster_vertices": 0,
+      "multi_palette_nodes": [
+        {
+          "node": 10,
+          "palette_count": 3,
+          "draws_per_batch": {
+            "0": 1,
+            "1": 1,
+            "2": 1
+          },
+          "referenced_vertices": 404,
+          "vertices_with_multiple_clusters": 0
+        }
+      ]
+    },
+    {
+      "file": "0000001c.tmd",
+      "render_vertices": 958,
+      "multi_cluster_vertices": 0,
+      "multi_palette_nodes": []
+    },
+    {
+      "file": "0000001d.tmd",
+      "render_vertices": 6088,
+      "multi_cluster_vertices": 0,
+      "multi_palette_nodes": [
+        {
+          "node": 1,
+          "palette_count": 6,
+          "draws_per_batch": {
+            "0": 1,
+            "1": 1,
+            "2": 1,
+            "3": 1,
+            "4": 1,
+            "5": 1
+          },
+          "referenced_vertices": 943,
+          "vertices_with_multiple_clusters": 0
+        }
+      ]
+    },
+    {
+      "file": "0000001e.tmd",
+      "render_vertices": 3491,
+      "multi_cluster_vertices": 0,
+      "multi_palette_nodes": [
+        {
+          "node": 1,
+          "palette_count": 4,
+          "draws_per_batch": {
+            "0": 1,
+            "1": 1,
+            "2": 1,
+            "3": 1
+          },
+          "referenced_vertices": 524,
+          "vertices_with_multiple_clusters": 0
+        }
+      ]
+    },
+    {
+      "file": "0000001f.tmd",
+      "render_vertices": 1712,
+      "multi_cluster_vertices": 0,
+      "multi_palette_nodes": [
+        {
+          "node": 9,
+          "palette_count": 2,
+          "draws_per_batch": {
+            "0": 1,
+            "1": 1
+          },
+          "referenced_vertices": 376,
+          "vertices_with_multiple_clusters": 0
+        }
+      ]
+    },
+    {
+      "file": "00000020.tmd",
+      "render_vertices": 1074,
+      "multi_cluster_vertices": 0,
+      "multi_palette_nodes": []
+    },
+    {
+      "file": "00000021.tmd",
+      "render_vertices": 6505,
+      "multi_cluster_vertices": 0,
+      "multi_palette_nodes": [
+        {
+          "node": 8,
+          "palette_count": 8,
+          "draws_per_batch": {
+            "0": 1,
+            "1": 1,
+            "2": 1,
+            "3": 1,
+            "4": 1,
+            "5": 1,
+            "6": 1,
+            "7": 1
+          },
+          "referenced_vertices": 888,
+          "vertices_with_multiple_clusters": 0
+        }
+      ]
+    }
+  ]
+}

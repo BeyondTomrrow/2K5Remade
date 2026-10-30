@@ -1,0 +1,18 @@
+{
+  "abbreviation": "GB",
+  "city": "Green Bay",
+  "name": "Packers",
+  "season": 1980,
+  "eras_id": "packers",
+  "colors": {
+    "primary": "#203731",
+    "secondary": "#FFB612",
+    "text": "#FFFFFF"
+  },
+  "logos": {
+    "scorebug": "logos/scorebug.png",
+    "mini": "logos/mini.png"
+  },
+  "source": "disc logo_10_2",
+  "colors_note": "1980 colours from memory, not yet checked against a source"
+}

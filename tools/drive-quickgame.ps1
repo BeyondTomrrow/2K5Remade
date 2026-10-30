@@ -1,4 +1,4 @@
-﻿param([string[]]$Side = @('left'), [string]$Tag = 'qd', [int]$PlaySeconds = 300, [int]$ShotEvery = 30, [string]$Exe = 'build\Release\NFL2K5.exe', [int]$TapEvery = 0, [string]$TapButton = 'a', [switch]$NoSkip, [string[]]$HomeTeam = @())
+﻿param([string[]]$Side = @('left'), [string]$Tag = 'qd', [int]$PlaySeconds = 300, [int]$ShotEvery = 30, [string]$Exe = 'build\Release\NFL2K5.exe', [int]$TapEvery = 0, [string]$TapButton = 'a', [switch]$NoSkip, [string[]]$HomeTeam = @(), [switch]$Retail)
 # Drive a CPU-vs-CPU Quick Game: title -> main menu -> Quick Game -> Team
 # Select (the controller starts on the HOME side; the default one Left press
 # moves it to the middle = CPU vs CPU) -> Coach Matchup -> Start Game ->
@@ -12,7 +12,8 @@ $defaultRetail = 'build\Release\NFL2K5.exe'
 # The retail executable is a dispatcher: when an active pack has a matching
 # native build it starts that build and exits immediately.  Test the selected
 # native executable directly so the driver watches the actual game process.
-if ($Exe -eq $defaultRetail) {
+# -Retail: the clean ESPN NFL 2K5 (NFL2K5.exe --retail), whatever pack is active.
+if ($Exe -eq $defaultRetail -and -not $Retail) {
     $activePack = Join-Path $root 'mods\active-pack.ini'
     if (Test-Path $activePack) {
         $packName = (Get-Content $activePack -Raw).Trim()
@@ -51,7 +52,10 @@ while ((Get-Process NFL2K5 -ErrorAction SilentlyContinue) -and ((Get-Date) - $wa
     Start-Sleep 20
 }
 Get-Process NFL2K5 -ErrorAction SilentlyContinue | Stop-Process -Force
-$p = Start-Process $Exe -WorkingDirectory $root -PassThru `
+Remove-Item -LiteralPath $env:NFL2K5_PRESS_FILE -ErrorAction SilentlyContinue
+$launchArgs = @{}
+if ($Retail) { $launchArgs['ArgumentList'] = '--retail' }
+$p = Start-Process $Exe @launchArgs -WorkingDirectory $root -PassThru `
      -RedirectStandardError "logs\$Tag.stderr.log" -RedirectStandardOutput "logs\$Tag.stdout.log"
 $null = $p.Handle
 function Press([string[]]$b, [int]$after) { & "$PSScriptRoot\press.ps1" @b; Start-Sleep $after }
@@ -60,7 +64,7 @@ Press start 8       # title -> "Successfully loaded Settings" popup
 Press a 8           # Settings popup -> "Successfully loaded VIP1" popup
 Press a 8           # dismiss VIP popup -> title
 Press start 8       # title -> main menu
-Press a 12          # Quick Game
+Press a 18          # Quick Game (Team Select needs the time to load before the side press)
 foreach ($h in $HomeTeam) { Press $h 2 }   # e.g. -HomeTeam (,'lt'*11) = 49ers (default home is Cowboys)
 if ($Side) { Press $Side 3 }   # from home: left = middle (CPU vs CPU), left left = away, -Side @() = play home
 Press start 12      # Team Select -> Coach Matchup

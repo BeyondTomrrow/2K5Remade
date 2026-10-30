@@ -1,0 +1,13 @@
+{
+  "name": "LADD-PEEBLES STADIUM",
+  "display": "Ladd-Peebles Stadium",
+  "location": "Mobile, AL",
+  "code": "s76",
+  "clone": "Tampa Bay Stadium",
+  "host": "Scimitar Stadium",
+  "capacity": 40646,
+  "indoor": 0,
+  "grass": 1,
+  "nfl": "Senior Bowl (future)",
+  "source": "NCAA Football 07 GMAC Bowl stadium (STAD.SRES 161, MOBILE); tools/eras/stadiums/ncaa_stadiums.py"
+}

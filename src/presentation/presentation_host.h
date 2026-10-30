@@ -44,6 +44,7 @@ struct PresentationHostConfig {
     std::string entry = "index.html"; /* page inside package_dir */
     std::string root_dir;             /* folder served as https://presentation.local/ */
     std::string teams_dir;            /* folder served as https://teams.local/ */
+    std::string eras_teams_dir;       /* folder served as https://erateams.local/ (My NFL Eras team art, M9) */
     std::string portraits_dir;        /* folder served as https://portraits.local/ (player headshots) */
     int canvas_width = 1920;          /* logical CSS pixels */
     int canvas_height = 1080;

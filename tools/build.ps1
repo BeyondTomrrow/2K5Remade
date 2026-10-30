@@ -43,6 +43,11 @@
     Build a mod pack's code. Analyse it first:
       tools/analyze.ps1 -Xbe <pack default.xbe> -Analysis analysis-<name> -Gen build\gen-<name>
 
+.PARAMETER StageOnly
+    With -Pack: compile and verify, but leave the exe in the build directory
+    instead of installing it beside the pack (an installed exe may be running
+    in another test).
+
 .EXAMPLE
     .\tools\build.ps1 -Game
     Retail game, optimised, into build\Release.
@@ -68,7 +73,9 @@ param(
     [switch]$DebugGen,
 
     [ValidatePattern('^[A-Za-z0-9_.-]*$')]
-    [string]$Pack = ''
+    [string]$Pack = '',
+
+    [switch]$StageOnly
 )
 
 Set-StrictMode -Version Latest
@@ -273,6 +280,13 @@ function Update-GeneratedCode {
     if ($Pack) { $patchArgs = @('--gen', $Layout.GenDir, '--lenient') }
     Invoke-Python 'apply-gen-patches.py' $patchArgs
 
+    # My NFL Eras: check the module's guest-call list
+    # (src/nfl2k5_eras_guest_calls.h) against its sources. Stale is a warning.
+    & python -I "$Root/tools/eras/check_guest_calls.py" | Out-Null
+    if ($LASTEXITCODE) {
+        Write-Warning 'src/nfl2k5_eras_guest_calls.h is stale: run python -I tools/eras/check_guest_calls.py --write'
+    }
+
     # Retail compiles the faster register-locals copy. Large code packs can
     # contain detour caves with private register/flag conventions that the
     # retail ABI assumptions do not preserve, so packs compile the generated
@@ -401,6 +415,10 @@ Invoke-CMakeBuild -CMake $cmake -Layout $layout
 Invoke-Native -FilePath "$($layout.BuildDir)\NFL2K5_toolchain_check.exe" `
               -FailMessage 'Native toolchain check failed'
 
-if ($Pack) { Install-PackBuild -Layout $layout }
+if ($Pack -and $StageOnly) {
+    Write-Host "Staged native code pack: $($layout.BuildDir)\NFL2K5.exe"
+} elseif ($Pack) {
+    Install-PackBuild -Layout $layout
+}
 
 Write-Host 'Build complete.' -ForegroundColor Green

@@ -8,7 +8,10 @@
 <link rel="stylesheet" href="broadcast-scenes.css">
 <link rel="stylesheet" href="pregame-inserts.css">
 <link rel="stylesheet" href="layout.css">
+<link rel="stylesheet" href="broadcast-fonts.css">
 <script src="preview-clock.js"></script>
+<script src="wide-glyph-data.js"></script>
+<script src="broadcast-glyphs.js"></script>
 </head>
 <body>
 <svg width="0" height="0" aria-hidden="true" style="position:absolute">
@@ -96,9 +99,38 @@
     </div>
     <div class="playclock" data-element="play-clock"></div>
 
-    <!-- touchdown / field goal word over the team's neon logo -->
+    <!-- Scoring slices copy the actual current team plates at event time. -->
+    <div class="scoring-panels" aria-hidden="true"></div>
+    <div class="scoring-marks" aria-hidden="true"><i class="inward left"></i><i class="inward right"></i><i class="spark"></i></div>
+
+    <!-- Real logo pixels supply the shaded entrance and luminous contours.
+         These filters do not supply the broadcaster's original 3D render. -->
     <div class="takeover" data-element="takeover">
-      <div class="neon-logo"></div>
+      <div class="neon-logo">
+        <img class="scoring-logo-shaded" alt="">
+        <svg class="scoring-logo-light" viewBox="0 0 240 240" aria-hidden="true">
+          <defs><filter id="snf-scoring-contours" x="-25%" y="-25%" width="150%" height="150%" color-interpolation-filters="sRGB">
+            <feMorphology in="SourceAlpha" operator="erode" radius="1.25" result="inside"/>
+            <feComposite in="SourceAlpha" in2="inside" operator="out" result="alpha-edge"/>
+            <!-- Differences between light and dark logo regions retain
+                 interior details which a solid alpha silhouette loses. -->
+            <feColorMatrix in="SourceGraphic" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  .2126 .7152 .0722 0 0" result="luminance"/>
+            <feMorphology in="luminance" operator="dilate" radius="1" result="light-regions"/>
+            <feMorphology in="luminance" operator="erode" radius="1" result="dark-regions"/>
+            <feComposite in="light-regions" in2="dark-regions" operator="arithmetic" k2="1" k3="-1" result="contrast"/>
+            <feComponentTransfer in="contrast" result="contrast-strong"><feFuncA type="linear" slope="2.4"/></feComponentTransfer>
+            <feComposite in="contrast-strong" in2="SourceAlpha" operator="in" result="interior-edge"/>
+            <feMerge result="edges"><feMergeNode in="alpha-edge"/><feMergeNode in="interior-edge"/></feMerge>
+            <feFlood class="scoring-edge-color" flood-color="#577dff" result="team-light"/>
+            <feComposite in="team-light" in2="edges" operator="in" result="colored-edge"/>
+            <feGaussianBlur in="colored-edge" stdDeviation="3" result="halo"/>
+            <feFlood flood-color="#c9dcff" result="white-light"/>
+            <feComposite in="white-light" in2="edges" operator="in" result="fine-edge"/>
+            <feMerge><feMergeNode in="halo"/><feMergeNode in="colored-edge"/><feMergeNode in="fine-edge"/></feMerge>
+          </filter></defs>
+          <image class="scoring-logo-source" width="240" height="240" preserveAspectRatio="xMidYMid meet" filter="url(#snf-scoring-contours)"/>
+        </svg>
+      </div>
       <div class="big-word"></div>
     </div>
   </div>
@@ -144,7 +176,7 @@
     <div class="pf-brand"><img class="nbc-brand" src="assets/branding/nbc-peacock-user.png" alt="NBC"><strong>SNF</strong></div>
   </div>
   <div id="snf-notice" aria-hidden="true"><div class="notice-glass"></div><img class="nbc-brand" src="assets/branding/nbc-peacock-user.png" alt="NBC"><div class="notice-title"></div><div class="notice-detail"></div><div class="notice-curve"></div></div>
-  <div id="snf-wipe" aria-hidden="true"><div class="wipe-plane back"></div><div class="wipe-plane front"></div><div class="wipe-light"></div><div class="wipe-lockup"><img class="nbc-brand" src="assets/branding/nbc-peacock-user.png" alt="NBC"><span>SUNDAY NIGHT</span><strong>FOOTBALL</strong></div></div>
+  <div id="snf-wipe" aria-hidden="true" data-phase="hidden"><div class="wipe-direction"><div class="wipe-plane back"></div><div class="wipe-plane front"></div><div class="wipe-light"></div></div><div class="wipe-lockup"><img class="nbc-brand" src="assets/branding/nbc-peacock-user.png" alt="NBC"><img class="wipe-wordmark" src="assets/branding/sunday-night-football-wordmark.svg" alt="Sunday Night Football"></div></div>
 </div>
 <!-- Starting lineup (LINEUP event): one player at a time, laid out from the
      2025 SNF player introductions (1920x1080 reference frames). Canvas px. -->
@@ -172,6 +204,7 @@
   </div>
 </div>
 <script src="../_runtime/nfl2k5-presentation.js"></script>
+<script src="broadcast-transitions.js"></script>
 <script src="scorebug.js"></script>
 <script src="extra-inserts.js"></script>
 <script src="broadcast-scenes.js"></script>
