@@ -61,7 +61,7 @@
 extern "C" {
 extern ptrdiff_t g_xbox_mem_offset;
 typedef struct { int bb_w, bb_h; float game_x, game_y, game_w, game_h; } XboxHudFrame;
-typedef struct { const void *pixels; int w, h, stride, x, y, changed, dw, dh; void *shared; } XboxHudImage;
+typedef struct { const void *pixels; int w, h, stride, x, y, changed, dw, dh; void *shared; int dirty_y0, dirty_y1; const unsigned char *dirty_rows; } XboxHudImage;
 /* Set by the presenter when it cannot open a shared HUD texture: use pixels. */
 extern "C" int xbox_hud_shared_failed;
 typedef int (*XboxHudCallback)(const XboxHudFrame *f, XboxHudImage *img);
@@ -5870,6 +5870,8 @@ static int html_hud(const XboxHudFrame *f, XboxHudImage *img, const GameState &g
     img->y = (int)lroundf(f->game_y + (gh - dh) / 2);
     img->dw = (int)lroundf(dw); img->dh = (int)lroundf(dh);
     img->changed = surf.serial != shown;
+    img->dirty_y0 = surf.dirty_y0; img->dirty_y1 = surf.dirty_y1;   /* only these rows are uploaded */
+    img->dirty_rows = surf.dirty_rows;
     shown = surf.serial;
     return 1;
 }
@@ -6167,7 +6169,9 @@ static int hud_callback(const XboxHudFrame *f, XboxHudImage *img)
     /* Presentation HTML belongs to an active match.  Starting its WebView in
      * the title/front-end path kept an overlay process alive before gameplay
      * and made Press Start contend with presentation startup. */
-    if (match_active && custom_active() && s_pkgs[s_sel_pkg].html) {
+    static int no_html = -1;            /* NFL2K5_NO_HTML=1: no HTML package (performance A/B) */
+    if (no_html < 0) no_html = getenv("NFL2K5_NO_HTML") != nullptr;
+    if (match_active && custom_active() && s_pkgs[s_sel_pkg].html && !no_html) {
         HtmlContext cx;
         cx.play_selection = playcall_on;
         cx.paused = pause_on;

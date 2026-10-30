@@ -25,6 +25,7 @@
 #include <winrt/base.h>
 #include <winrt/Windows.Foundation.h>
 #include <winrt/Windows.Foundation.Numerics.h>
+#include <winrt/Windows.Foundation.Collections.h>
 #include <winrt/Windows.Graphics.h>
 #include <winrt/Windows.Graphics.Capture.h>
 #include <winrt/Windows.Graphics.DirectX.h>
@@ -34,7 +35,10 @@
 
 #include "WebView2.h"
 
+#include <algorithm>
 #include <atomic>
+#include <climits>
+#include <cstring>
 #include <cstdio>
 #include <deque>
 #include <mutex>
@@ -142,9 +146,28 @@ public:
         gpu_only_ = false;
         if (!front_serial_) return false;
         /* The consumer gets its own copy, taken only when a new frame exists;
-         * it stays valid until the next call. */
+         * it stays valid until the next call. Only the rows that changed
+         * since are copied (and reported, so they are all that is uploaded). */
+        out.dirty_y0 = out.dirty_y1 = 0;
+        out.dirty_rows = nullptr;
         if (consumer_serial_ != front_serial_) {
-            consumer_ = front_;
+            if (consumer_.size() != front_.size() || consumer_w_ != frame_w_) {
+                consumer_ = front_;
+                consumer_w_ = frame_w_;
+                out.dirty_y0 = 0; out.dirty_y1 = frame_h_;
+            } else {
+                size_t row = (size_t)frame_w_ * 4;
+                out_rows_.assign(frame_h_, 0);
+                int lo = INT_MAX, hi = 0;
+                for (int y = 0; y < frame_h_ && y < (int)pend_rows_.size(); y++)
+                    if (pend_rows_[y]) {
+                        memcpy(&consumer_[(size_t)y * row], &front_[(size_t)y * row], row);
+                        out_rows_[y] = 1;
+                        lo = std::min(lo, y); hi = y + 1;
+                    }
+                if (hi > lo) { out.dirty_y0 = lo; out.dirty_y1 = hi; out.dirty_rows = out_rows_.data(); }
+            }
+            std::fill(pend_rows_.begin(), pend_rows_.end(), (uint8_t)0);
             consumer_serial_ = front_serial_;
         }
         out.pixels = consumer_.data();
@@ -440,6 +463,12 @@ private:
         tex->GetDesc(&d);
         share_frame(tex.Get(), d);
         if (gpu_only_) return;           /* the game draws the shared texture */
+        /* Only the rows that changed go on: most of the canvas is transparent
+         * and still, and copying the whole 3440x1440 frame through the CPU 55
+         * times a second -- four times over, on its way to the game's texture
+         * -- held play at 30 fps with Direct3D 12, where the shared texture is
+         * not available (2026-10-30). Windows' own dirty regions are the whole
+         * frame for a visual capture, so the rows are compared here. */
         if (!staging_ || staging_w_ != (int)d.Width || staging_h_ != (int)d.Height) {
             D3D11_TEXTURE2D_DESC sd = d;
             sd.Usage = D3D11_USAGE_STAGING;
@@ -454,13 +483,44 @@ private:
         d3d_ctx_->CopyResource(staging_.Get(), tex.Get());
         D3D11_MAPPED_SUBRESOURCE m;
         if (FAILED(d3d_ctx_->Map(staging_.Get(), 0, D3D11_MAP_READ, 0, &m))) return;
-        back_.resize((size_t)staging_w_ * staging_h_ * 4);
-        for (int y = 0; y < staging_h_; y++)
-            memcpy(&back_[(size_t)y * staging_w_ * 4], (const uint8_t *)m.pData + (size_t)y * m.RowPitch,
-                   (size_t)staging_w_ * 4);
-        d3d_ctx_->Unmap(staging_.Get(), 0);
+        const size_t row = (size_t)staging_w_ * 4;
+        const bool whole = front_.size() != row * staging_h_;
+        changed_.clear();
+        if (!whole) {
+            /* front_ is written only on this thread: compared unlocked */
+            for (int y = 0; y < staging_h_; y++)
+                if (memcmp(&front_[(size_t)y * row], (const uint8_t *)m.pData + (size_t)y * m.RowPitch, row))
+                    changed_.push_back(y);
+            if (changed_.empty()) {
+                d3d_ctx_->Unmap(staging_.Get(), 0);
+                return;                 /* nothing new */
+            }
+        }
         std::lock_guard<std::mutex> g(frame_lock_);
-        front_.swap(back_);
+        if (whole) {
+            front_.assign(row * staging_h_, 0);
+            for (int y = 0; y < staging_h_; y++)
+                memcpy(&front_[(size_t)y * row], (const uint8_t *)m.pData + (size_t)y * m.RowPitch, row);
+            pend_rows_.assign(staging_h_, 1);
+        } else {
+            if (pend_rows_.size() != (size_t)staging_h_) pend_rows_.assign(staging_h_, 0);
+            for (int y : changed_) {
+                memcpy(&front_[(size_t)y * row], (const uint8_t *)m.pData + (size_t)y * m.RowPitch, row);
+                pend_rows_[y] = 1;
+            }
+        }
+        d3d_ctx_->Unmap(staging_.Get(), 0);
+        if (getenv("NFL2K5_PRES_DIRTY_LOG")) {
+            static DWORD t0;
+            static unsigned frames, rows;
+            frames++; rows += whole ? staging_h_ : (unsigned)changed_.size();
+            if (!t0) t0 = GetTickCount();
+            if (GetTickCount() - t0 >= 2000) {
+                fprintf(stderr, "[HTMLPRES] %u new frames, %.0f changed rows a frame (of %d)\n",
+                        frames, (double)rows / frames, staging_h_);
+                t0 = GetTickCount(); frames = rows = 0;
+            }
+        }
         frame_w_ = staging_w_; frame_h_ = staging_h_;
         front_serial_++;
         if (front_serial_ == 1) fprintf(stderr, "[HTMLPRES] first frame %dx%d\n", frame_w_, frame_h_);
@@ -541,8 +601,11 @@ private:
     std::mutex capture_callback_lock_;
 
     std::mutex frame_lock_;
-    std::vector<uint8_t> back_, front_, consumer_;
-    int frame_w_ = 0, frame_h_ = 0;
+    std::vector<uint8_t> front_, consumer_;
+    int frame_w_ = 0, frame_h_ = 0, consumer_w_ = 0;
+    std::vector<uint8_t> pend_rows_;        /* rows changed in front_ since the consumer's copy */
+    std::vector<uint8_t> out_rows_;         /* the consumer's: rows its last copy changed */
+    std::vector<int> changed_;              /* capture thread scratch */
     uint64_t front_serial_ = 0, consumer_serial_ = 0;
 
     ComPtr<ID3D11Texture2D> shared_[2];
