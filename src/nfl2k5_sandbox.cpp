@@ -75,8 +75,14 @@ bool guest_copy(uint32_t at,void *out,size_t n,bool write=false) {
     uint64_t end=(uint64_t)at+n;
     if (!((at>=0x10000u&&end<=0x08000000u)||(at>=0x80000000u&&end<=0x88000000u))) return false;
     void *p=(void *)((uintptr_t)xbox_GetMemoryOffset()+at);
+#ifdef _MSC_VER
     __try { if(write) memcpy(p,out,n); else memcpy(out,p,n); return true; }
     __except(EXCEPTION_EXECUTE_HANDLER) { return false; }
+#else
+    /* no SEH; the range check above keeps this inside guest RAM */
+    if(write) memcpy(p,out,n); else memcpy(out,p,n);
+    return true;
+#endif
 }
 uint32_t rd(uint32_t at) { uint32_t v=0; guest_copy(at,&v,4); return v; }
 float rf(uint32_t at) { float v=NAN; guest_copy(at,&v,4); return v; }

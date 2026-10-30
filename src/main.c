@@ -893,6 +893,46 @@ static void android_pick_root(void)
 }
 #endif
 
+#if defined(__ANDROID__)
+/* The recompiled game runs on the thread that calls main, with the deep call
+ * chains of the guest's code: Windows links a 16 MB main-thread stack, and
+ * SDL's Java activity starts this one with Java's default (about 1 MB). The
+ * game gets a thread of its own with room to spare. */
+static int s_main_argc, s_main_ret;
+static char **s_main_argv;
+int nfl2k5_real_main(int argc, char **argv);
+static void *big_stack_main(void *unused)
+{
+    stack_t ss;
+    (void)unused;
+    ss.ss_sp = malloc(64 * 1024);           /* the crash reporter's stack */
+    ss.ss_size = 64 * 1024;
+    ss.ss_flags = 0;
+    if (ss.ss_sp) sigaltstack(&ss, NULL);
+    s_main_ret = nfl2k5_real_main(s_main_argc, s_main_argv);
+    return NULL;
+}
+
+int main(int argc, char **argv)
+{
+    pthread_attr_t at;
+    pthread_t t;
+    s_main_argc = argc;
+    s_main_argv = argv;
+    pthread_attr_init(&at);
+    pthread_attr_setstacksize(&at, 64u << 20);
+    if (pthread_create(&t, &at, big_stack_main, NULL) == 0) {
+        pthread_attr_destroy(&at);
+        pthread_join(t, NULL);
+        return s_main_ret;
+    }
+    pthread_attr_destroy(&at);
+    return nfl2k5_real_main(argc, argv);
+}
+#undef main
+#define main nfl2k5_real_main
+#endif
+
 int main(int argc, char **argv)
 {
 #if defined(_WIN32)
