@@ -19,7 +19,7 @@
 typedef struct { int bb_w, bb_h; float game_x, game_y, game_w, game_h; } XboxHudFrame;
 typedef struct { const void *pixels; int w, h, stride, x, y, changed, dw, dh; void *shared; int dirty_y0, dirty_y1; const unsigned char *dirty_rows; } XboxHudImage;
 typedef int (*XboxHudCallback)(const XboxHudFrame *f, XboxHudImage *img);
-void xbox_PresentSetHudCallback(XboxHudCallback cb);
+void xbox_PresentSetTopHudCallback(XboxHudCallback cb);   /* drawn over the broadcast HUD */
 
 /* The pad as the game's XINPUT_GAMEPAD has it (wButtons bits, analog buttons
  * A B X Y Black White LT RT). */
@@ -328,7 +328,7 @@ void nfl2k5_touch_pad_init(void)
     SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");   /* touches are not mouse clicks (A) */
     SDL_SetHint(SDL_HINT_ANDROID_TRAP_BACK_BUTTON, "1");
     SDL_AddEventWatch(on_event, NULL);
-    xbox_PresentSetHudCallback(hud);
+    xbox_PresentSetTopHudCallback(hud);
 }
 
 /* Port 0's pad (nfl2k5_input_hle.c): the touch controls added in. */
