@@ -1,4 +1,8 @@
-/* uwp_webview2_stub.cpp -- PresentationHost for the UWP build.
+/* uwp_webview2_stub.cpp -- PresentationHost factory for the UWP build.
+ *
+ * In XAML host mode the packages run in the XAML WebView
+ * (uwp_webview_host.cpp); in plain CoreWindow mode there is no browser
+ * engine and this stub is used.
  *
  * WebView2 does not exist on Xbox (and its loader is desktop-only), so the
  * HTML scorebug packages are unavailable there and the game falls back to its
@@ -10,6 +14,7 @@
 #include <intrin.h>
 #include <cstdio>
 #include "presentation/presentation_host.h"
+#include "uwp_xaml.h"
 
 namespace nfl2k5 {
 namespace {
@@ -29,6 +34,10 @@ public:
 
 std::unique_ptr<PresentationHost> create_webview2_presentation_host()
 {
+#ifdef NFL2K5_UWP_GAME
+    /* XAML host mode: the EdgeHTML WebView host (uwp_webview_host.cpp). */
+    if (auto h = uwp_create_webview_presentation_host()) return h;
+#endif
     return std::make_unique<UwpStubPresentationHost>();
 }
 } // namespace nfl2k5

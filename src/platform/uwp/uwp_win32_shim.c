@@ -154,7 +154,7 @@ SHIM(BOOL, PulseEvent, (HANDLE ev))
     return ok;
 }
 
-/* These three are called directly (their headers do not declare them
+/* These are called directly (their headers do not declare them
  * dllimport), so they are plain definitions; the desktop import libraries
  * (d3d11.lib, mf.lib, pdh.lib) are kept off the link (uwp/CMakeLists.txt). */
 
@@ -170,13 +170,7 @@ HRESULT WINAPI D3D11CreateDeviceAndSwapChain(void *a, int b, HMODULE c, UINT d, 
     return E_NOTIMPL;
 }
 
-/* Media Foundation transcode helper (WMA music import): not in the UWP set. */
-HRESULT WINAPI MFTranscodeGetAudioOutputAvailableTypes(REFGUID sub, DWORD flags, void *attrs, void **out)
-{
-    (void)sub; (void)flags; (void)attrs;
-    if (out) *out = NULL;
-    return E_NOTIMPL;
-}
+/* MFTranscodeGetAudioOutputAvailableTypes: uwp_mf_shim.cpp (a real one). */
 
 /* pdh (GPU/CPU counters for the perf HUD): "no such counter". */
 #define SHIM_PDH_FAIL ((LONG)0xC0000BB8L)   /* PDH_CSTATUS_NO_OBJECT */

@@ -40,9 +40,11 @@
 #include "uwp_font5x7.h"
 #ifdef NFL2K5_UWP_GAME
 #include "uwp_game.h"
+#include "uwp_xaml.h"
 extern "C" volatile unsigned char g_uwp_keys[256];        /* uwp_win32_shim.c */
 extern "C" LONG g_uwp_window_w, g_uwp_window_h;
 extern "C" int uwp_hwnd_test_main(const wchar_t *local_dir);   /* uwp_hwnd_test.cpp */
+extern "C" int uwp_selftest_main(const wchar_t *cmd);           /* uwp_selftest.cpp */
 #endif
 
 using Microsoft::WRL::ComPtr;
@@ -438,6 +440,10 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR cmd, int)
     int probe = run_probe_only(cmd ? cmd : L"");
     if (probe >= 0) return probe;
 #ifdef NFL2K5_UWP_GAME
+    {
+        int st = uwp_selftest_main(cmd ? cmd : L"");
+        if (st >= 0) return st;
+    }
     if (cmd && wcsstr(cmd, L"--hwnd-test")) {
         const wchar_t *arg = wcsstr(cmd, L"--hwnd-test") + 11;
         while (*arg == L' ' || *arg == L'"') arg++;
@@ -447,6 +453,14 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR cmd, int)
     }
 #endif
     winrt::init_apartment();
+#ifdef NFL2K5_UWP_GAME
+    /* XAML host mode (HTML scorebugs in a WebView) unless switched off or a
+     * XAML start failed before; plain CoreWindow mode otherwise. */
+    {
+        std::wstring local = winrt::Windows::Storage::ApplicationData::Current().LocalFolder().Path().c_str();
+        if (uwp_xaml_wanted(local.c_str())) return uwp_xaml_run();
+    }
+#endif
     CoreApplication::Run(make<App>());
     return 0;
 }

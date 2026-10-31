@@ -93,12 +93,19 @@ if(NFL2K5_UWP_GAME)
   target_link_libraries(nfl2k5_gen PRIVATE xboxrecomp)
 
   set(_g ${NFL2K5_ROOT}/src)
+  # The interpreter source; another tree (e.g. a git-HEAD snapshot) can stand
+  # in while the working copy is mid-edit.
+  set(NFL2K5_UWP_INTERP_SRC "${_g}/interp/x86_interp.c" CACHE FILEPATH "x86_interp.c to compile")
   add_executable(NFL2K5_UWP_Game WIN32
     ${NFL2K5_ROOT}/src/platform/uwp/uwp_main.cpp
     ${NFL2K5_ROOT}/src/platform/uwp/uwp_probe.c
     ${NFL2K5_ROOT}/src/platform/uwp/uwp_game.cpp
     ${NFL2K5_ROOT}/src/platform/uwp/uwp_win32_shim.c
     ${NFL2K5_ROOT}/src/platform/uwp/uwp_hwnd_test.cpp
+    ${NFL2K5_ROOT}/src/platform/uwp/uwp_mf_shim.cpp
+    ${NFL2K5_ROOT}/src/platform/uwp/uwp_selftest.cpp
+    ${NFL2K5_ROOT}/src/platform/uwp/uwp_xaml_app.cpp
+    ${NFL2K5_ROOT}/src/platform/uwp/uwp_webview_host.cpp
     ${_g}/main.c ${_g}/recomp_manual.c ${_g}/nfl2k5_input_hle.c ${_g}/nfl2k5_controls.c
     ${_g}/nfl2k5_controller_setup.c ${_g}/nfl2k5_controller_art.cpp ${_g}/nfl2k5_texture_packs.cpp
     ${_g}/nfl2k5_teams.c ${_g}/nfl2k5_team_files.c ${_g}/nfl2k5_eras_capture.c ${_g}/nfl2k5_eras.c
@@ -110,14 +117,16 @@ if(NFL2K5_UWP_GAME)
     ${_g}/nfl2k5_json.c ${_g}/nfl2k5_walk_diag.c ${_g}/nfl2k5_video_menu.c ${_g}/nfl2k5_exit_menu.c
     ${_g}/nfl2k5_mod_packs.c ${_g}/nfl2k5_pack_install.c ${_g}/nfl2k5_presentation.cpp
     ${_g}/nfl2k5_local_music.cpp ${_g}/nfl2k5_save_library.cpp ${_g}/nfl2k5_discord.cpp
-    ${_g}/interp/x86_interp.c ${_g}/interp/interp_setup.c "${NFL2K5_FUNC_RANGES}"
+    "${NFL2K5_UWP_INTERP_SRC}" ${_g}/interp/interp_setup.c "${NFL2K5_FUNC_RANGES}"
     ${NFL2K5_ROOT}/external/xemu-src/util/miniz/miniz.c ${_g}/nfl2k5_wma_encode.cpp
     ${_g}/presentation/portraits.cpp ${NFL2K5_ROOT}/src/platform/uwp/uwp_webview2_stub.cpp
     ${_g}/nfl2k5_sandbox.cpp ${_g}/nfl2k5_sandbox_menu.c ${_g}/nfl2k5_sandbox_world.c
     ${_g}/nfl2k5_sandbox_actors.c ${_g}/nfl2k5_sandbox_pose.c ${_g}/nfl2k5_sandbox_ui.cpp)
   set_target_properties(NFL2K5_UWP_Game PROPERTIES OUTPUT_NAME NFL2K5 RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/game)
   target_include_directories(NFL2K5_UWP_Game PRIVATE "${NFL2K5_GEN_DIR}" ${_g} ${NFL2K5_ROOT}/external/xemu-src/util/miniz
-    ${NFL2K5_ROOT}/src/platform/uwp ${NFL2K5_ROOT}/dependencies/webview2/sdk/build/native/include)
+    ${NFL2K5_ROOT}/src/platform/uwp ${NFL2K5_ROOT}/dependencies/webview2/sdk/build/native/include ${_g}/interp)
+  # C++/WinRT coroutines (co_await on WinRT async calls) in C++17.
+  set_source_files_properties(${NFL2K5_ROOT}/src/platform/uwp/uwp_webview_host.cpp PROPERTIES COMPILE_OPTIONS "/await")
   # main.c unchanged: its main() becomes nfl2k5_real_main(), started on a
   # big-stack thread by uwp_game.cpp; its WinMain is left unused.
   set_source_files_properties(${_g}/main.c PROPERTIES COMPILE_DEFINITIONS

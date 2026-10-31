@@ -312,7 +312,25 @@ static int SDLCALL worker(void *)
     SDL_SetCurrentThreadPriority(SDL_THREAD_PRIORITY_LOW);
     size_t total = 0, todo = 0;
     std::error_code ec;
-    for (const fs::path &dir : list(g_music, true)) {
+    std::vector<fs::path> album_dirs = list(g_music, true);
+#ifdef NFL2K5_UWP
+    /* UWP/Xbox: more song folders (LocalState\Music, a USB folder named in
+     * LocalState\music.txt), ';'-separated UTF-8, from uwp_game.cpp. */
+    if (const char *extra = getenv("NFL2K5_EXTRA_MUSIC")) {
+        std::string all(extra);
+        for (size_t p = 0; p <= all.size();) {
+            size_t e = all.find(';', p);
+            if (e == std::string::npos) e = all.size();
+            if (e > p) {
+                fs::path more = fs::u8path(all.substr(p, e - p));
+                if (!fs::equivalent(more, g_music, ec))
+                    for (const fs::path &d : list(more, true)) album_dirs.push_back(d);
+            }
+            p = e + 1;
+        }
+    }
+#endif
+    for (const fs::path &dir : album_dirs) {
         if (SDL_GetAtomicInt(&g_music_stop)) break;
         Album al;
         al.name = u8_to_u16(dir.filename().string());

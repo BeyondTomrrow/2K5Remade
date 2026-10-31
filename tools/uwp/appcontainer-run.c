@@ -92,19 +92,23 @@ int wmain(int argc, wchar_t **argv)
         CloseHandle(pi.hThread);
         CloseHandle(pi.hProcess);
     }
-    /* Print the probe log before the profile (and its folder) goes away. */
+    /* Print the result logs before the profile (and its folder) goes away. */
     {
-        wchar_t log[MAX_PATH];
-        FILE *f;
-        _snwprintf(log, MAX_PATH, L"%ls\\uwp-probe.txt", folder);
-        f = _wfopen(log, L"r");
-        if (f) {
-            char line[512];
-            while (fgets(line, sizeof line, f)) fputs(line, stdout);
-            fclose(f);
+        static const wchar_t *const logs[] = {L"uwp-probe.txt", L"uwp-selftest.txt", L"nfl2k5.log"};
+        int k;
+        for (k = 0; k < 3; k++) {
+            wchar_t log[MAX_PATH];
+            FILE *f;
+            _snwprintf(log, MAX_PATH, L"%ls\\%ls", folder, logs[k]);
+            f = _wfopen(log, L"r");
+            if (f) {
+                char line[512];
+                while (fgets(line, sizeof line, f)) fputs(line, stdout);
+                fclose(f);
+            }
         }
     }
-    DeleteAppContainerProfile(k_name);
+    if (!getenv("APPCONTAINER_KEEP")) DeleteAppContainerProfile(k_name);
     CoTaskMemFree(folder);
     FreeSid(sid);
     return (int)code;

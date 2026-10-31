@@ -41,6 +41,12 @@
         <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" />
         <uap:SplashScreen Image="Assets\SplashScreen.png" BackgroundColor="#0D1220" />
       </uap:VisualElements>
+      <!-- HTML scorebug packages are served to the XAML WebView under these
+           names (uwp_webview_host.cpp); "include" lets their pages call
+           window.external.notify (ScriptNotify). -->
+      <uap:ApplicationContentUriRules>
+        <uap:Rule Match="https://presentation.local/" Type="include" WindowsRuntimeAccess="none" />
+      </uap:ApplicationContentUriRules>
     </Application>
   </Applications>
 

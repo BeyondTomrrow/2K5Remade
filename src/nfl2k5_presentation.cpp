@@ -6280,7 +6280,20 @@ static int html_hud(const XboxHudFrame *f, XboxHudImage *img, const GameState &g
         img->shared = shared.handle;
         img->pixels = shared.handle;          /* non-null: "there is an image" */
     } else {
-        if (!s_html.host->acquire_surface(surf)) return 0;
+        if (!s_html.host->acquire_surface(surf)) {
+#ifdef NFL2K5_UWP
+            /* UWP/Xbox: a package the EdgeHTML WebView cannot run (or no
+             * WebView at all) goes back to the native scorebug for this
+             * session; the reason is in the log. */
+            std::string why = s_html.host->status();
+            if (why.compare(0, 6, "error:") == 0 || why.compare(0, 11, "unavailable") == 0) {
+                fprintf(stderr, "[HTMLPRES] \"%s\": %s -- using the native scorebug\n", pkg.name.c_str(), why.c_str());
+                html_stop();
+                s_sel_pkg = 0;
+            }
+#endif
+            return 0;
+        }
         img->pixels = surf.pixels;
     }
     img->w = surf.width; img->h = surf.height; img->stride = surf.stride;

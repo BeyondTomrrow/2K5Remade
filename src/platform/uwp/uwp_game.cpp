@@ -198,9 +198,10 @@ void poll_pads()
     }
 }
 
-std::wstring read_root_override(const std::wstring &local)
+/* First line of <local>\<name> (UTF-8), or empty. */
+std::wstring read_line_file(const std::wstring &local, const wchar_t *name)
 {
-    std::wstring path = local + L"\\root.txt";
+    std::wstring path = local + L"\\" + name;
     FILE *f = _wfopen(path.c_str(), L"rb");
     if (!f) return {};
     char buf[1024] = {};
@@ -225,12 +226,28 @@ static void game_start(const char *prop, void *window, const wchar_t *local_dir,
     _wfreopen((local + L"\\nfl2k5-stdout.log").c_str(), L"w", stdout);
     setvbuf(stderr, nullptr, _IONBF, 0);
 
-    std::wstring root = read_root_override(local);
+    std::wstring root = read_line_file(local, L"root.txt");
     if (root.empty()) root = local;
     s_root = utf8(root);
     _putenv_s("NFL2K5_ROOT", s_root.c_str());
     if (!getenv("RECOMP_RENDERER")) _putenv_s("RECOMP_RENDERER", "d3d12");   /* gx on SDL_GPU D3D12 */
-    if (!getenv("NFL2K5_PORTABLE")) _putenv_s("NFL2K5_PORTABLE", "1");       /* settings and saves under the root, not %LOCALAPPDATA% */
+    /* The UWP SDL has only the dummy video driver (the window is ours), and
+     * SDL never picks that one by itself. */
+    if (!getenv("SDL_VIDEO_DRIVER")) _putenv_s("SDL_VIDEO_DRIVER", "dummy");
+    /* Saves, settings and logs always go to LocalState, even when root.txt
+     * points at a read-only game folder: per-user mode, with LOCALAPPDATA set
+     * to LocalState, puts the user folder at LocalState\NFL2K5-PC (main.c). */
+    if (!getenv("NFL2K5_PORTABLE")) _putenv_s("NFL2K5_PORTABLE", "0");
+    _wputenv_s(L"LOCALAPPDATA", local_dir);
+    {   /* Song folders besides <root>\Music: LocalState\Music and the folder
+         * named in LocalState\music.txt (e.g. a USB drive). */
+        std::wstring music = local + L"\\Music";
+        CreateDirectoryW(music.c_str(), nullptr);
+        std::string extra = utf8(music);
+        std::wstring more = read_line_file(local, L"music.txt");
+        if (!more.empty()) extra += ";" + utf8(more);
+        _putenv_s("NFL2K5_EXTRA_MUSIC", extra.c_str());
+    }
     _putenv_s("NFL2K5_INSTALL_DIR", utf8(install_dir).c_str());
     _wputenv_s(L"NFL2K5_UWP_LOCALSTATE", local_dir);   /* SHGetFolderPathW shim */
     fprintf(stderr, "[UWP] NFL2K5 UWP build; install %s\n", utf8(install_dir).c_str());
