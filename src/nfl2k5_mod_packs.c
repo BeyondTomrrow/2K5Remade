@@ -53,9 +53,18 @@ static void mp_read_json_name(const char *path, char *out, size_t cap)
     out[n] = 0;
 }
 
+#ifdef NFL2K5_UWP
+char *xbox_user_path(const char *rel, char *out, size_t n);
+#endif
+
 static void mp_config_path(char *out, size_t cap)
 {
+#ifdef NFL2K5_UWP
+    /* the game folder is read-only to a UWP app: the choice is the app's own */
+    xbox_user_path("mods\\active-pack.ini", out, cap);
+#else
     snprintf(out, cap, "%s/mods/active-pack.ini", s_root);
+#endif
 }
 
 static void mp_read_active(char *out, size_t cap)
@@ -577,7 +586,7 @@ void nfl2k5_modpacks_set(int row, int on)
         fprintf(stderr, "[MODPACK] Could not save selected pack.\n");
         return;
     }
-#ifdef __ANDROID__
+#if defined(__ANDROID__) || defined(NFL2K5_UWP)
     /* An app cannot start a second copy of itself: the choice is saved and
      * applies when the game is opened again. */
     (void)a; (void)th; (void)exe;
