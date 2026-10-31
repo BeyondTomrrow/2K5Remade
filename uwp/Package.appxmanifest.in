@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- NFL2K5 UWP package manifest (configured by uwp/CMakeLists.txt). -->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:mp="http://schemas.microsoft.com/appx/2014/phone/manifest"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  IgnorableNamespaces="uap mp">
+
+  <Identity Name="NFL2K5.Recompiled"
+            Publisher="@NFL2K5_UWP_PUBLISHER@"
+            Version="@NFL2K5_UWP_PKG_VERSION@"
+            ProcessorArchitecture="x64" />
+
+  <mp:PhoneIdentity PhoneProductId="6f6b2c2e-2a5e-4f0e-9b5e-2c0a2b5e2005" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
+
+  <Properties>
+    <DisplayName>ESPN NFL 2K5 (Recompiled)</DisplayName>
+    <PublisherDisplayName>NFL2K5 Dev</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+  </Properties>
+
+  <Dependencies>
+    <!-- 10.0.17134 (1803): MapViewOfFile3FromApp / VirtualAlloc2FromApp. -->
+    <TargetDeviceFamily Name="Windows.Universal" MinVersion="10.0.17134.0" MaxVersionTested="10.0.26100.0" />
+    <!-- vcruntime140_app.dll / msvcp140_app.dll -->
+    <PackageDependency Name="Microsoft.VCLibs.140.00" MinVersion="14.0.30035.0" Publisher="CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="en-us" />
+  </Resources>
+
+  <Applications>
+    <Application Id="App" Executable="NFL2K5.exe" EntryPoint="NFL2K5.App">
+      <uap:VisualElements
+        DisplayName="ESPN NFL 2K5"
+        Description="ESPN NFL 2K5, natively recompiled"
+        BackgroundColor="#0D1220"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png">
+        <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" />
+        <uap:SplashScreen Image="Assets\SplashScreen.png" BackgroundColor="#0D1220" />
+      </uap:VisualElements>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <Capability Name="internetClient" />
+  </Capabilities>
+</Package>
