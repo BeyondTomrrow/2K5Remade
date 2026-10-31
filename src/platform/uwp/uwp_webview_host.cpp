@@ -106,6 +106,46 @@ const char *k_shim =
     "try{var a=document.getAnimations();for(var i=0;i<a.length;i++)if(a[i].playState==='running'){b=true;break;}}"
     "catch(e){b=true;}}else if(A>0||Date.now()-T<1500)b=true;return b;};})();</script>";
 
+/* EdgeHTML 18's canvas measureText() gives only .width. Packages place their
+ * text from the ink and font boxes (actualBoundingBox*, fontBoundingBox*):
+ * without them the SNF scores, clock and quarter got NaN sizes and sat at
+ * the bug's corner in the default font (2026-10-31). The ink box is read
+ * from the text drawn on a scratch canvas; the font box from a DOM probe. */
+const char *k_measure_polyfill =
+    "<script>(function(){var C=window.CanvasRenderingContext2D;if(!C)return;var P=C.prototype,o=P.measureText;"
+    "var t=document.createElement('canvas').getContext('2d');if('actualBoundingBoxAscent' in o.call(t,'H'))return;"
+    "var sc=document.createElement('canvas'),g=sc.getContext('2d');"
+    "function fbox(f){var d=document.createElement('div'),s=document.createElement('span'),b=document.createElement('span');"
+    "d.style.cssText='position:absolute;left:-9999px;top:0;white-space:nowrap;line-height:normal;font:'+f;"
+    "b.style.cssText='display:inline-block;width:1px;height:0;vertical-align:baseline';s.textContent='Hg';"
+    "d.appendChild(s);d.appendChild(b);(document.body||document.documentElement).appendChild(d);"
+    "var base=b.offsetTop,h=d.offsetHeight;d.parentNode.removeChild(d);return{a:base,d:h-base};}"
+    "P.measureText=function(s){var m=o.call(this,s),f=this.font,px=parseFloat((/([\\d.]+)px/.exec(f)||[0,10])[1])||10;"
+    "var pad=Math.ceil(px),W=Math.max(1,Math.ceil(m.width)+pad*2),H=Math.ceil(px*3),bx=pad,by=Math.ceil(px*2);"
+    "sc.width=W;sc.height=H;g.font=f;g.textBaseline='alphabetic';g.textAlign='left';g.fillStyle='#000';g.fillText(s,bx,by);"
+    "var p=g.getImageData(0,0,W,H).data,x0=W,x1=-1,y0=H,y1=-1;"
+    "for(var y=0;y<H;y++)for(var x=0;x<W;x++)if(p[(y*W+x)*4+3]>8){if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y;}"
+    "var fb=fbox(f),r={width:m.width,fontBoundingBoxAscent:fb.a,fontBoundingBoxDescent:fb.d,"
+    "actualBoundingBoxLeft:0,actualBoundingBoxRight:m.width,actualBoundingBoxAscent:0,actualBoundingBoxDescent:0};"
+    "if(x1>=0){r.actualBoundingBoxLeft=bx-x0;r.actualBoundingBoxRight=x1+1-bx;r.actualBoundingBoxAscent=by-y0;r.actualBoundingBoxDescent=y1+1-by;}"
+    "return r;};})();</script>";
+
+/* EdgeHTML drew the packages' .svg images as broken images when they came
+ * from WebResourceRequested (PNGs from the same handler load; 2026-10-31).
+ * An <img> given an .svg address gets the file as a data: URI instead (read
+ * with a synchronous request to the same handler, kept per address). */
+const char *k_svg_inline =
+    "<script>(function(){var I=window.HTMLImageElement;if(!I)return;var K={};"
+    "function dat(u){if(typeof u!=='string'||!/\\.svg(\\?|#|$)/i.test(u)||/^data:/i.test(u))return u;"
+    "if(K[u])return K[u];try{var x=new XMLHttpRequest();x.open('GET',u,false);x.send();"
+    "if(x.status===200&&x.responseText){K[u]='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(x.responseText);return K[u];}}catch(e){}return u;}"
+    "var d=Object.getOwnPropertyDescriptor(I.prototype,'src');"
+    "if(d&&d.set)Object.defineProperty(I.prototype,'src',{configurable:true,enumerable:d.enumerable,get:d.get,set:function(v){d.set.call(this,dat(v));}});"
+    "var sa=Element.prototype.setAttribute;Element.prototype.setAttribute=function(n,v){"
+    "if(this instanceof I&&String(n).toLowerCase()==='src')v=dat(String(v));return sa.call(this,n,v);};"
+    "document.addEventListener('DOMContentLoaded',function(){var a=document.getElementsByTagName('img');"
+    "for(var i=0;i<a.length;i++){var s=a[i].getAttribute('src');if(s&&dat(s)!==s)a[i].setAttribute('src',s);}});})();</script>";
+
 std::wstring widen(const std::string &s)
 {
     if (s.empty()) return {};
@@ -357,7 +397,8 @@ void serve(const SharedPtr &s, wuxc::WebViewWebResourceRequestedEventArgs const 
         if (in) {
             std::string body((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
             const wchar_t *type = mime(file);
-            if (wcscmp(type, L"text/html") == 0 || wcscmp(type, L"text/css") == 0) uwp_css::expand_inset(body);
+            if (wcscmp(type, L"text/html") == 0 || wcscmp(type, L"text/css") == 0) uwp_css::edgehtml_compat(body);
+            if (wcscmp(type, L"image/svg+xml") == 0) uwp_css::svg_intrinsic_size(body);
             if (wcscmp(type, L"text/html") == 0) {
                 std::string lower = body;
                 for (auto &c : lower) c = (char)tolower((unsigned char)c);
@@ -365,7 +406,19 @@ void serve(const SharedPtr &s, wuxc::WebViewWebResourceRequestedEventArgs const 
                 at = at == std::string::npos ? 0 : body.find('>', at) + 1;
                 char zoom[160];
                 snprintf(zoom, sizeof zoom, "<style>html{zoom:%.4f;overflow:hidden;background:transparent}</style>", s->scale);
-                body.insert(at, std::string(k_shim) + zoom);
+                body.insert(at, std::string(k_shim) + k_measure_polyfill + k_svg_inline + zoom);
+                /* NFL2K5_HTMLPRES_PROBE=1 (study): every 15 s, log how EdgeHTML laid
+                 * out the package's elements, to compare with WebView2 on the PC. */
+                if (getenv("NFL2K5_HTMLPRES_PROBE")) {
+                    static const char *probe =
+                        "<script>setInterval(function(){var q=document.querySelectorAll('[data-element],.score,.clock,.quarter span,.abbr,.nbc-brand,.snf-wordmark,.numeric-glyph');"
+                        "for(var i=0;i<q.length&&i<80;i++){var e=q[i],r=e.getBoundingClientRect(),c=getComputedStyle(e);"
+                        "if(!r.width&&!r.height)continue;"
+                        "window.external.notify('probe '+(e.getAttribute('data-element')||e.className||e.tagName)+' '+Math.round(r.left)+','+Math.round(r.top)+' '+Math.round(r.width)+'x'+Math.round(r.height)+"
+                        "' op='+c.opacity+' vis='+c.visibility+' col='+c.color+' fill='+(c.webkitTextFillColor||'')+' clip='+(c.webkitBackgroundClip||c.backgroundClip||'')+"
+                        "' font='+c.fontFamily.split(',')[0]+' '+c.fontSize+' txt='+(e.textContent||'').replace(/\\s+/g,' ').substr(0,16)+' bg='+String(c.backgroundImage).substr(0,24)+' bs='+c.backgroundSize+' bp='+c.backgroundPosition+' tf='+c.transform+' nat='+(e.naturalWidth||'')+(e.src?' src='+e.src.substr(0,40):''));}},15000);</script>";
+                    body.insert(at, probe);
+                }
             }
             auto buf = winrt::Windows::Security::Cryptography::CryptographicBuffer::CreateFromByteArray(
                 array_view<const uint8_t>((const uint8_t *)body.data(), (const uint8_t *)body.data() + body.size()));

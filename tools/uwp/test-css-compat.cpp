@@ -9,6 +9,16 @@
 #include <sstream>
 
 static int fails;
+static void expect_mix(const std::string &in, const std::string &want)
+{
+    std::string s = in;
+    uwp_css::fallback_color_mix(s);
+    uwp_css::fallback_conic(s);
+    bool ok = s == want;
+    if (!ok) fails++;
+    printf("%s %s\n   -> %s\n", ok ? "PASS" : "FAIL", in.c_str(), s.c_str());
+    if (!ok) printf("   want %s\n", want.c_str());
+}
 static void expect(const std::string &in, const std::string &want)
 {
     std::string s = in;
@@ -29,6 +39,14 @@ int main(int argc, char **argv)
     expect(".a{box-shadow:inset 0 0 4px #000}", ".a{box-shadow:inset 0 0 4px #000}");
     expect(".a{inset-inline:0}", ".a{inset-inline:0}");
     expect("<div style=\"inset:0;opacity:1\">", "<div style=\"top:0;right:0;bottom:0;left:0;opacity:1\">");
+    expect_mix("a{color:color-mix(in srgb, #ff0000 50%, #0000ff)}", "a{color:rgba(128,0,128,1)}");
+    expect_mix("a{color:color-mix(in srgb, white 25%, black)}", "a{color:rgba(64,64,64,1)}");
+    expect_mix("a{background:color-mix(in srgb, var(--t) 45%, #12151b)}", "a{background:#12151b}");
+    expect_mix("a{background:color-mix(in srgb,var(--g) 55%,#c9dcff)}", "a{background:var(--g)}");
+    expect_mix("a{b:color-mix(in srgb, color-mix(in srgb, #fff 50%, #000) 50%, #000)}", "a{b:rgba(64,64,64,1)}");
+    expect_mix("a{background:conic-gradient(#7137a7,#168ed2)}", "a{background:linear-gradient(90deg,#7137a7,#168ed2)}");
+    { std::string s = "<svg xmlns='x' viewBox=\"0 0 460 120\">"; uwp_css::svg_intrinsic_size(s); bool ok = s == "<svg width=\"460\" height=\"120\" xmlns='x' viewBox=\"0 0 460 120\">"; if (!ok) fails++; printf("%s svg size -> %s\n", ok ? "PASS" : "FAIL", s.c_str()); }
+    { std::string s = "<svg width=\"10\" viewBox=\"0 0 4 1\">", a = s; uwp_css::svg_intrinsic_size(s); bool ok = s == a; if (!ok) fails++; printf("%s svg keeps width -> %s\n", ok ? "PASS" : "FAIL", s.c_str()); }
     if (argc > 1) {
         int files = 0, changed = 0;
         for (auto &e : std::filesystem::recursive_directory_iterator(argv[1])) {
