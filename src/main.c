@@ -42,6 +42,8 @@
 #include <SDL3/SDL_main.h>      /* main() is SDL_main: SDLActivity calls it */
 #include <android/log.h>
 #include <pthread.h>
+#include <dirent.h>
+#include <unistd.h>
 #endif
 #if defined(__aarch64__) && !defined(_WIN32)
 int xbox_arm64_mmio_fault(void *raw_ctx, uintptr_t host, uint32_t va);   /* apu/arm64_mmio.c */
@@ -756,6 +758,70 @@ static void *android_log_thread(void *arg)
     return NULL;
 }
 
+/* Every 30 s: the threads that used the most CPU, as percent of one core.
+ * What drains a phone battery is CPU time, and this names who spends it. */
+static void *android_cpu_report_thread(void *arg)
+{
+    enum { MAXT = 160 };
+    struct { int tid; unsigned long long t; char name[20]; } prev[MAXT], cur[MAXT];
+    int np = 0;
+    long hz = sysconf(_SC_CLK_TCK);
+    (void)arg;
+    for (;;) {
+        DIR *d = opendir("/proc/self/task");
+        struct dirent *e;
+        int nc = 0, i, j, k;
+        struct { int pct10; const char *name; } top[6];
+        int ntop = 0, total10 = 0;
+        if (!d) return NULL;
+        while ((e = readdir(d)) && nc < MAXT) {
+            char path[64], buf[512], *p;
+            unsigned long long ut = 0, st = 0;
+            FILE *f;
+            if (e->d_name[0] < '0' || e->d_name[0] > '9') continue;
+            snprintf(path, sizeof path, "/proc/self/task/%s/stat", e->d_name);
+            if (!(f = fopen(path, "r"))) continue;
+            buf[0] = 0;
+            if (!fgets(buf, sizeof buf, f)) buf[0] = 0;
+            fclose(f);
+            cur[nc].tid = atoi(e->d_name);
+            cur[nc].name[0] = 0;
+            if ((p = strchr(buf, '(')) && strrchr(buf, ')')) {
+                size_t l = (size_t)(strrchr(buf, ')') - p - 1);
+                if (l >= sizeof cur[nc].name) l = sizeof cur[nc].name - 1;
+                memcpy(cur[nc].name, p + 1, l); cur[nc].name[l] = 0;
+                p = strrchr(buf, ')') + 2;
+                /* fields after the name: state ppid pgrp session tty tpgid flags minflt cminflt majflt cmajflt utime stime */
+                sscanf(p, "%*c %*d %*d %*d %*d %*d %*u %*u %*u %*u %*u %llu %llu", &ut, &st);
+            }
+            cur[nc].t = ut + st;
+            nc++;
+        }
+        closedir(d);
+        for (i = 0; i < nc; i++) {
+            unsigned long long was = cur[i].t;
+            int pct10;
+            for (j = 0; j < np; j++) if (prev[j].tid == cur[i].tid) { was = prev[j].t; break; }
+            if (j == np && np) was = 0;            /* new thread: all of its time is in this window */
+            pct10 = (int)((cur[i].t - was) * 1000ull / (unsigned long long)(hz * 30));
+            total10 += pct10;
+            for (k = ntop; k > 0 && top[k - 1].pct10 < pct10; k--) if (k < 6) top[k] = top[k - 1];
+            if (k < 6) { top[k].pct10 = pct10; top[k].name = cur[i].name; if (ntop < 6) ntop++; }
+        }
+        if (np) {
+            char line[512];
+            int o = snprintf(line, sizeof line, "[CPU] last 30 s: %d.%d%% of one core in total;", total10 / 10, total10 % 10);
+            for (k = 0; k < ntop && o < (int)sizeof line - 40; k++)
+                o += snprintf(line + o, sizeof line - o, " %s %d.%d%%", top[k].name, top[k].pct10 / 10, top[k].pct10 % 10);
+            fprintf(stderr, "%s\n", line);
+        }
+        memcpy(prev, cur, sizeof cur[0] * (size_t)nc);
+        np = nc;
+        sleep(30);
+    }
+    return NULL;
+}
+
 /* A crash writes where it happened into the log: the signal, the faulting
  * address and the call stack as offsets in libmain.so (symbolised on the PC
  * with llvm-symbolizer and the unstripped library), then dies as before. The
@@ -1000,6 +1066,10 @@ int main(int argc, char **argv)
     {
         extern void nfl2k5_touch_pad_init(void);   /* on-screen controls (platform/android/touch_pad.c) */
         nfl2k5_touch_pad_init();
+    }
+    {
+        pthread_t t;
+        if (pthread_create(&t, NULL, android_cpu_report_thread, NULL) == 0) pthread_detach(t);
     }
 #endif
 

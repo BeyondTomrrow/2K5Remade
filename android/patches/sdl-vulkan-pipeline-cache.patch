@@ -1,8 +1,8 @@
 diff --git a/src/gpu/vulkan/SDL_gpu_vulkan.c b/src/gpu/vulkan/SDL_gpu_vulkan.c
-index 53212a2..73d17dc 100644
+index 53212a2..c40d156 100644
 --- a/src/gpu/vulkan/SDL_gpu_vulkan.c
 +++ b/src/gpu/vulkan/SDL_gpu_vulkan.c
-@@ -1131,6 +1131,10 @@ struct VulkanRenderer
+@@ -1131,6 +1131,12 @@ struct VulkanRenderer
      VkPhysicalDeviceProperties2KHR physicalDeviceProperties;
      VkPhysicalDeviceDriverPropertiesKHR physicalDeviceDriverProperties;
      VkDevice logicalDevice;
@@ -10,10 +10,12 @@ index 53212a2..73d17dc 100644
 +    VkPipelineCache pipelineCache;
 +    char *pipelineCachePath;
 +    SDL_AtomicInt pipelinesSinceCacheSave;
++    SDL_SpinLock pipelineCacheSaveLock;
++    size_t pipelineCacheSavedSize;
      Uint8 integratedMemoryNotification;
      Uint8 outOfDeviceLocalMemoryWarning;
      Uint8 outofBARMemoryWarning;
-@@ -4994,6 +4998,8 @@ static bool VULKAN_INTERNAL_EndCommandBuffer(
+@@ -4994,6 +5000,8 @@ static bool VULKAN_INTERNAL_EndCommandBuffer(
      return true;
  }
  
@@ -22,7 +24,7 @@ index 53212a2..73d17dc 100644
  static void VULKAN_DestroyDevice(
      SDL_GPUDevice *device)
  {
-@@ -5002,6 +5008,8 @@ static void VULKAN_DestroyDevice(
+@@ -5002,6 +5010,8 @@ static void VULKAN_DestroyDevice(
  
      VULKAN_Wait(device->driverData);
  
@@ -31,7 +33,7 @@ index 53212a2..73d17dc 100644
      for (Sint32 i = renderer->claimedWindowCount - 1; i >= 0; i -= 1) {
          VULKAN_ReleaseWindow(device->driverData, renderer->claimedWindows[i]->window);
      }
-@@ -5090,6 +5098,10 @@ static void VULKAN_DestroyDevice(
+@@ -5090,6 +5100,10 @@ static void VULKAN_DestroyDevice(
      SDL_DestroyMutex(renderer->descriptorSetLayoutFetchLock);
      SDL_DestroyMutex(renderer->windowLock);
  
@@ -42,7 +44,7 @@ index 53212a2..73d17dc 100644
      renderer->vkDestroyDevice(renderer->logicalDevice, NULL);
      renderer->vkDestroyInstance(renderer->instance, NULL);
  
-@@ -6349,6 +6361,81 @@ static VkRenderPass VULKAN_INTERNAL_CreateTransientRenderPass(
+@@ -6349,6 +6363,87 @@ static VkRenderPass VULKAN_INTERNAL_CreateTransientRenderPass(
      return renderPass;
  }
  
@@ -56,11 +58,17 @@ index 53212a2..73d17dc 100644
 +    if (!renderer->pipelineCache || !renderer->pipelineCachePath) {
 +        return;
 +    }
-+    if (renderer->vkGetPipelineCacheData(renderer->logicalDevice, renderer->pipelineCache, &size, NULL) != VK_SUCCESS || size == 0) {
++    // Pipelines are created on several threads; one save at a time, and
++    // only when the cache has grown (a cache hit adds nothing).
++    SDL_LockSpinlock(&renderer->pipelineCacheSaveLock);
++    if (renderer->vkGetPipelineCacheData(renderer->logicalDevice, renderer->pipelineCache, &size, NULL) != VK_SUCCESS || size == 0 ||
++        size == renderer->pipelineCacheSavedSize) {
++        SDL_UnlockSpinlock(&renderer->pipelineCacheSaveLock);
 +        return;
 +    }
 +    data = SDL_malloc(size);
 +    if (!data) {
++        SDL_UnlockSpinlock(&renderer->pipelineCacheSaveLock);
 +        return;
 +    }
 +    if (renderer->vkGetPipelineCacheData(renderer->logicalDevice, renderer->pipelineCache, &size, data) == VK_SUCCESS &&
@@ -68,10 +76,12 @@ index 53212a2..73d17dc 100644
 +        if (SDL_SaveFile(tmp, data, size)) {
 +            SDL_RemovePath(renderer->pipelineCachePath);
 +            SDL_RenamePath(tmp, renderer->pipelineCachePath);
++            renderer->pipelineCacheSavedSize = size;
 +        }
 +        SDL_free(tmp);
 +    }
 +    SDL_free(data);
++    SDL_UnlockSpinlock(&renderer->pipelineCacheSaveLock);
 +}
 +
 +static void VULKAN_INTERNAL_CreatePipelineCache(VulkanRenderer *renderer)
@@ -110,21 +120,19 @@ index 53212a2..73d17dc 100644
 +
 +static void VULKAN_INTERNAL_NotePipelineCreated(VulkanRenderer *renderer)
 +{
-+    // Saved after the first new pipeline and every 4th: an Android app is
++    // Saved after every pipeline that grew the cache: an Android app is
 +    // usually killed, not shut down, so a save only at device destruction
-+    // would rarely happen.
++    // would rarely happen, and any unsaved pipeline compiles again next run.
 +    if (renderer->pipelineCachePath) {
-+        int n = SDL_AddAtomicInt(&renderer->pipelinesSinceCacheSave, 1) + 1;
-+        if (n == 1 || n % 4 == 0) {
-+            VULKAN_INTERNAL_SavePipelineCache(renderer);
-+        }
++        SDL_AddAtomicInt(&renderer->pipelinesSinceCacheSave, 1);
++        VULKAN_INTERNAL_SavePipelineCache(renderer);
 +    }
 +}
 +
  static SDL_GPUGraphicsPipeline *VULKAN_CreateGraphicsPipeline(
      SDL_GPURenderer *driverData,
      const SDL_GPUGraphicsPipelineCreateInfo *createinfo)
-@@ -6636,7 +6723,7 @@ static SDL_GPUGraphicsPipeline *VULKAN_CreateGraphicsPipeline(
+@@ -6636,7 +6731,7 @@ static SDL_GPUGraphicsPipeline *VULKAN_CreateGraphicsPipeline(
      // TODO: enable pipeline caching
      vulkanResult = renderer->vkCreateGraphicsPipelines(
          renderer->logicalDevice,
@@ -133,7 +141,7 @@ index 53212a2..73d17dc 100644
          1,
          &vkPipelineCreateInfo,
          NULL,
-@@ -6657,6 +6744,7 @@ static SDL_GPUGraphicsPipeline *VULKAN_CreateGraphicsPipeline(
+@@ -6657,6 +6752,7 @@ static SDL_GPUGraphicsPipeline *VULKAN_CreateGraphicsPipeline(
      }
  
      SDL_SetAtomicInt(&graphicsPipeline->referenceCount, 0);
@@ -141,7 +149,7 @@ index 53212a2..73d17dc 100644
  
      if (renderer->debugMode && renderer->supportsDebugUtils && SDL_HasProperty(createinfo->props, SDL_PROP_GPU_GRAPHICSPIPELINE_CREATE_NAME_STRING)) {
          VkDebugUtilsObjectNameInfoEXT nameInfo;
-@@ -6771,7 +6859,7 @@ static SDL_GPUComputePipeline *VULKAN_CreateComputePipeline(
+@@ -6771,7 +6867,7 @@ static SDL_GPUComputePipeline *VULKAN_CreateComputePipeline(
  
      vulkanResult = renderer->vkCreateComputePipelines(
          renderer->logicalDevice,
@@ -150,7 +158,7 @@ index 53212a2..73d17dc 100644
          1,
          &vkShaderCreateInfo,
          NULL,
-@@ -13495,6 +13583,8 @@ static SDL_GPUDevice *VULKAN_CreateDevice(bool debugMode, bool preferLowPower, S
+@@ -13495,6 +13591,8 @@ static SDL_GPUDevice *VULKAN_CreateDevice(bool debugMode, bool preferLowPower, S
          return NULL;
      }
  
