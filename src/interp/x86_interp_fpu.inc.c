@@ -95,6 +95,12 @@ static void frestore_image(uint32_t a, int with_xmm)
 int interp_x87(Cpu *c, uint8_t op)
 {
     modrm(c);
+    return interp_x87_body(c, op);
+}
+
+/* After the ModRM byte (decoded by modrm() or from the instruction cache). */
+static int interp_x87_body(Cpu *c, uint8_t op)
+{
     int r = c->reg, i = c->rm;
     if (c->mod != 3) {
         uint32_t a = c->ea;

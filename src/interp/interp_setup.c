@@ -17,6 +17,9 @@
 extern const uint32_t g_nfl2k5_func_ranges[][2];
 extern const unsigned g_nfl2k5_func_range_count;
 extern ptrdiff_t xbox_GetMemoryOffset(void);
+/* Bumped whenever more functions are marked: the interpreter's per-thread
+ * native callee cache drops what it learned (x86_interp.c). */
+extern volatile long g_interp_dirty_gen;
 
 static uint8_t *g_base;   /* the converted executable, for nfl2k5_interp_code_changed */
 static size_t g_base_len;
@@ -92,6 +95,7 @@ unsigned nfl2k5_interp_setup(const uint8_t *base, size_t base_len)
         }
     }
     g_interp_active = 1;
+    g_interp_dirty_gen++;
     /* kept for nfl2k5_interp_code_changed (the caller frees its buffer) */
     g_base = (uint8_t *)malloc(base_len);
     if (g_base) { memcpy(g_base, base, base_len); g_base_len = base_len; }
@@ -164,6 +168,7 @@ unsigned nfl2k5_interp_force(uint32_t lo, uint32_t hi)
         marked++;
     }
     g_interp_active = 1;
+    g_interp_dirty_gen++;
     return marked;
 }
 
@@ -189,6 +194,7 @@ uint32_t nfl2k5_interp_mark_va(uint32_t va)
             if (va >= start && va < end) {
                 g_interp_dirty_bits[start >> 3] |= (uint8_t)(1u << (start & 7));
                 g_interp_active = 1;
+                g_interp_dirty_gen++;
                 found = start;
             }
         }
