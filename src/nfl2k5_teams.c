@@ -78,6 +78,8 @@ static void custom_scan(void)
     WIN32_FIND_DATAA fd;
     HANDLE h;
     s_custom_n = 0;
+    /* not with a mod pack: see scan() in nfl2k5_team_files.c */
+    if (getenv("NFL2K5_PACK") && *getenv("NFL2K5_PACK") && !getenv("NFL2K5_PACK_TEAMS")) return;
     h = FindFirstFileA("mods\\teams\\*", &fd);
     if (h == INVALID_HANDLE_VALUE) return;
     do {

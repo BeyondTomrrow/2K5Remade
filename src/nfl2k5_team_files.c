@@ -78,6 +78,14 @@ static void scan(void)
     HANDLE h;
     char cwd[MAX_PATH], dir[MAX_PATH];
     s_n = 0;
+    /* A mod pack brings its own teams and rosters (SOFTDRINK v0.7 adds a classic
+     * team): with ours added on top the game crashed loading a game (2026-10-31,
+     * a position id of 225 reached sub_000E7990). Off while a pack runs unless
+     * NFL2K5_PACK_TEAMS=1. */
+    if (getenv("NFL2K5_PACK") && *getenv("NFL2K5_PACK") && !getenv("NFL2K5_PACK_TEAMS")) {
+        fprintf(stderr, "[TEAMFILES] a mod pack is loaded: mods\\teams added teams are off (NFL2K5_PACK_TEAMS=1 keeps them)\n");
+        return;
+    }
     GetCurrentDirectoryA(sizeof cwd, cwd);
     snprintf(dir, sizeof dir, "%s\\mods\\teams", cwd);
     xbox_path_map_disc_dir("NFL2K5-TEAMS", dir);
