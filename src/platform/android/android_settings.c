@@ -2,14 +2,16 @@
  *
  * The rows of Options > Phone Settings (src/nfl2k5_video_menu.c): the touch
  * controls (src/platform/android/touch_pad.c), the battery saver
- * (nv2a_gpu_present.inc.c), pausing the game while the app is in the
- * background, and adding songs from the phone (NFL2K5Activity.pickSongs).
+ * (nv2a_gpu_present.inc.c), heat control, pausing the game while the app is
+ * in the background, adding songs from the phone (NFL2K5Activity.pickSongs)
+ * and the touch layout editor.
  * Saved in <root>/android.ini. */
 #if defined(__ANDROID__)
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_system.h>
 #include <jni.h>
 #include <sys/prctl.h>
+#include <dlfcn.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -19,6 +21,8 @@ extern void xbox_ggl_leave(void);
 extern void xbox_ggl_set_priority(int prio);
 extern int xbox_ggl_enabled(void);
 extern volatile int g_xbox_battery_saver;           /* nv2a_gpu_present.inc.c */
+extern volatile int g_xbox_heat_level;              /* nv2a_gpu_present.inc.c: 1 = 1x, 2 = also 30 FPS */
+extern void nfl2k5_touch_edit_begin(void);          /* touch_pad.c */
 extern void nfl2k5_local_music_rescan(void);        /* nfl2k5_local_music.cpp */
 extern void xbox_PresentToast(const char *header, const char *line1, const char *line2, unsigned ms);
 extern void nfl2k5_touch_pad_changed(void);         /* touch_pad.c: redraw */
@@ -30,7 +34,8 @@ static struct {
     int touch_opacity;  /* 0 25%, 1 50%, 2 75%, 3 100% */
     int battery_saver;  /* 1x internal resolution and 30 FPS */
     int pause_bg;       /* freeze the game while the app is in the background */
-} s_set = { 0, 1, 2, 0, 1 };
+    int heat;           /* lower the quality while the phone is hot */
+} s_set = { 0, 1, 2, 0, 1, 1 };
 
 static void ini_path(char *out, size_t n)
 {
@@ -48,8 +53,8 @@ static void save(void)
                "; touch: 0 automatic (hidden while a controller is in use), 1 on, 2 off\n"
                "touch = %d\n; touch_size: 0 small, 1 medium, 2 large\ntouch_size = %d\n"
                "; touch_opacity: 0 25%%, 1 50%%, 2 75%%, 3 100%%\ntouch_opacity = %d\n"
-               "battery_saver = %d\npause_in_background = %d\n",
-            s_set.touch, s_set.touch_size, s_set.touch_opacity, s_set.battery_saver, s_set.pause_bg);
+               "battery_saver = %d\npause_in_background = %d\nheat_control = %d\n",
+            s_set.touch, s_set.touch_size, s_set.touch_opacity, s_set.battery_saver, s_set.pause_bg, s_set.heat);
     fclose(f);
 }
 
@@ -67,6 +72,7 @@ static void load(void)
         else if (!strcmp(key, "touch_opacity")) s_set.touch_opacity = v >= 0 && v <= 3 ? v : 2;
         else if (!strcmp(key, "battery_saver")) s_set.battery_saver = v != 0;
         else if (!strcmp(key, "pause_in_background")) s_set.pause_bg = v != 0;
+        else if (!strcmp(key, "heat_control")) s_set.heat = v != 0;
     }
     fclose(f);
 }
@@ -167,19 +173,74 @@ void nfl2k5_android_pick_songs(void)
     (*env)->DeleteLocalRef(env, c);
 }
 
+/* ---- heat control -----------------------------------------------------------
+ * A hot phone slows its own processor down hard; stepping the game's quality
+ * down first keeps it smooth. Android's thermal status (Android 11+, through
+ * libandroid) or else the battery temperature: warm = 1x internal resolution,
+ * hot = also 30 FPS. A step back up waits for a minute below the line. */
+typedef void *(*AcquireFn)(void);
+typedef int (*StatusFn)(void *);
+
+static int battery_tenths_c(void)
+{
+    FILE *f = fopen("/sys/class/power_supply/battery/temp", "r");
+    int t = 0;
+    if (!f) return 0;
+    if (fscanf(f, "%d", &t) != 1) t = 0;
+    fclose(f);
+    return t;
+}
+
+static int heat_thread(void *arg)
+{
+    void *lib = dlopen("libandroid.so", RTLD_NOW), *mgr = NULL;
+    AcquireFn acquire = lib ? (AcquireFn)dlsym(lib, "AThermal_acquireManager") : NULL;
+    StatusFn status = lib ? (StatusFn)dlsym(lib, "AThermal_getCurrentThermalStatus") : NULL;
+    Uint64 cool_since = 0;
+    int level = 0;
+    (void)arg;
+    if (acquire && status) mgr = acquire();
+    for (;;) {
+        int st = mgr ? status(mgr) : -1, t = battery_tenths_c(), want = 0;
+        /* ATHERMAL_STATUS_MODERATE 2, SEVERE 3 */
+        if (st >= 3 || t >= 460) want = 2;
+        else if (st == 2 || t >= 420) want = 1;
+        if (!s_set.heat) want = 0;
+        if (want > level || !s_set.heat) { cool_since = 0; }
+        if (want >= level) {
+            if (want != level) fprintf(stderr, "[ANDROID] heat: level %d (thermal status %d, battery %.1f C)\n", want, st, t / 10.0);
+            level = want;
+        } else {
+            if (!cool_since) cool_since = SDL_GetTicks();
+            if (SDL_GetTicks() - cool_since >= 60000) {
+                level--;
+                cool_since = 0;
+                fprintf(stderr, "[ANDROID] heat: level %d (cooler: status %d, battery %.1f C)\n", level, st, t / 10.0);
+            }
+        }
+        if (g_xbox_heat_level != level) {
+            g_xbox_heat_level = level;
+            if (g_xbox_fps_limit_changed) g_xbox_fps_limit_changed();
+        }
+        SDL_Delay(10000);
+    }
+    return 0;
+}
+
 /* ---- Options > Phone Settings rows (src/nfl2k5_video_menu.c) ---- */
-enum { PS_TOUCH, PS_SIZE, PS_OPACITY, PS_BATTERY, PS_PAUSE, PS_SONGS, PS_COUNT };
+enum { PS_TOUCH, PS_SIZE, PS_OPACITY, PS_EDIT, PS_BATTERY, PS_HEAT, PS_PAUSE, PS_SONGS, PS_COUNT };
 static const char *const k_labels[PS_COUNT] = { "Touch Controls", "Touch Button Size", "Touch Opacity",
-                                                "Battery Saver", "Pause When Leaving", "Add Songs" };
+                                                "Edit Touch Layout", "Battery Saver", "Heat Control",
+                                                "Pause When Leaving", "Add Songs" };
 int nfl2k5_phone_rows(void) { return PS_COUNT; }
 const char *nfl2k5_phone_label(int r) { return r >= 0 && r < PS_COUNT ? k_labels[r] : ""; }
-int nfl2k5_phone_toggle(int r) { return r == PS_BATTERY || r == PS_PAUSE; }
+int nfl2k5_phone_toggle(int r) { return r == PS_BATTERY || r == PS_PAUSE || r == PS_HEAT; }
 int nfl2k5_phone_values(int r)
 {
     switch (r) {
     case PS_TOUCH: case PS_SIZE: return 3;
     case PS_OPACITY: return 4;
-    case PS_SONGS: return 2;
+    case PS_SONGS: case PS_EDIT: return 2;
     default: return 2;
     }
 }
@@ -191,6 +252,7 @@ int nfl2k5_phone_get(int r)
     case PS_OPACITY: return s_set.touch_opacity;
     case PS_BATTERY: return s_set.battery_saver;
     case PS_PAUSE: return s_set.pause_bg;
+    case PS_HEAT: return s_set.heat;
     default: return 0;
     }
 }
@@ -204,6 +266,8 @@ void nfl2k5_phone_set(int r, int v)
                     if (g_xbox_fps_limit_changed) g_xbox_fps_limit_changed();
                     break;
     case PS_PAUSE: s_set.pause_bg = v != 0; break;
+    case PS_HEAT: s_set.heat = v != 0; break;
+    case PS_EDIT: nfl2k5_touch_edit_begin(); return;      /* an action: opens the editor */
     case PS_SONGS: nfl2k5_android_pick_songs(); return;   /* an action: opens the picker */
     default: return;
     }
@@ -219,6 +283,7 @@ void nfl2k5_phone_value_name(int r, int v, char *b, size_t n)
     case PS_SIZE: snprintf(b, n, "%s", size[(unsigned)v % 3u]); break;
     case PS_OPACITY: snprintf(b, n, "%s", opacity[(unsigned)v % 4u]); break;
     case PS_SONGS: snprintf(b, n, "%s", "Choose from phone"); break;
+    case PS_EDIT: snprintf(b, n, "%s", "Move and resize"); break;
     default: snprintf(b, n, "%s", v ? "On" : "Off"); break;
     }
 }
@@ -235,6 +300,10 @@ void nfl2k5_android_settings_init(void)
     s_pause_lock = SDL_CreateMutex();
     s_pause_cond = SDL_CreateCondition();
     SDL_AddEventWatch(on_app_event, NULL);
+    {
+        SDL_Thread *t = SDL_CreateThread(heat_thread, "heat_control", NULL);
+        if (t) SDL_DetachThread(t);
+    }
     env = jni_env();
     if (env && (c = activity_class(env))) {
         if ((*env)->RegisterNatives(env, c, natives, 1) != 0) (*env)->ExceptionClear(env);

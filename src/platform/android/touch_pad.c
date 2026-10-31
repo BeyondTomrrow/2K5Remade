@@ -9,11 +9,14 @@
  * redrawn only when something changes. Options > Phone Settings picks
  * Automatic (hidden while a real controller is connected and nothing has been
  * touched for a while), On or Off, and their size and opacity; the small
- * HIDE / SHOW button under Back/Start switches between On and Off. */
+ * HIDE / SHOW button under Back/Start switches between On and Off.
+ * Phone Settings > Edit Touch Layout moves and resizes the controls; there is
+ * one layout for the menus and one for the game itself (touch_layout.ini). */
 #if defined(__ANDROID__)
 #include <SDL3/SDL.h>
 #include <math.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -32,6 +35,17 @@ int nfl2k5_touch_mode(void);            /* 0 automatic, 1 on, 2 off */
 void nfl2k5_touch_set_mode(int m);
 float nfl2k5_touch_scale(void);
 float nfl2k5_touch_alpha(void);
+int nfl2k5_in_match(void);              /* src/nfl2k5_presentation.cpp: a match is on screen */
+
+/* ---- layouts: each group of controls can be moved and resized ---------- */
+enum { G_STICK, G_DPAD, G_FACE, G_LT, G_WHITE, G_RT, G_BLACK, G_BACK, G_START, G_COUNT, G_NONE = -1 };
+static struct { float dx, dy, s; } s_lay[2][G_COUNT];   /* [0 menus, 1 game]: offset in heights, size */
+static int s_edit;                             /* Edit Touch Layout is open */
+static int s_edit_profile, s_sel = G_NONE;     /* the layout being edited, the selected group */
+static SDL_FingerID s_drag_id;
+static int s_dragging;
+static float s_drag_x, s_drag_y;
+enum { E_SMALLER, E_BIGGER, E_RESET, E_DONE, E_COUNT };
 
 typedef struct { float x, y, r; } Circle;     /* image pixels */
 typedef struct { float x, y, w, h; } Rect;
@@ -56,12 +70,16 @@ static int s_img_gen;
 
 /* ---- layout (image pixels; H-relative so it holds on any aspect) ------- */
 static float U(void) { return s_H * nfl2k5_touch_scale(); }   /* layout unit: the height, scaled */
-static Circle stick_home(void) { Circle c = { U() * 0.33f, s_H - U() * 0.28f, U() * 0.17f }; return c; }
-static Circle dpad_c(void) { Circle c = { U() * 0.25f, U() * 0.36f, U() * 0.13f }; return c; }
+static int profile(void) { return s_edit ? s_edit_profile : nfl2k5_in_match() ? 1 : 0; }
+static float GS(int g) { return s_lay[profile()][g].s; }
+static float GX(int g) { return s_lay[profile()][g].dx * s_H; }
+static float GY(int g) { return s_lay[profile()][g].dy * s_H; }
+static Circle stick_home(void) { Circle c = { U() * 0.33f + GX(G_STICK), s_H - U() * 0.28f + GY(G_STICK), U() * 0.17f * GS(G_STICK) }; return c; }
+static Circle dpad_c(void) { Circle c = { U() * 0.25f + GX(G_DPAD), U() * 0.36f + GY(G_DPAD), U() * 0.13f * GS(G_DPAD) }; return c; }
 static Circle face(int k)
 {
-    float cx = s_W - U() * 0.31f, cy = s_H - U() * 0.30f, o = U() * 0.135f;
-    Circle c = { cx, cy, U() * 0.075f };
+    float cx = s_W - U() * 0.31f + GX(G_FACE), cy = s_H - U() * 0.30f + GY(G_FACE), o = U() * 0.135f * GS(G_FACE);
+    Circle c = { cx, cy, U() * 0.075f * GS(G_FACE) };
     switch (k) {
     case C_A: c.y += o; break;
     case C_B: c.x += o; break;
@@ -83,6 +101,22 @@ static Rect btn_rect(int k)
     case C_TOGGLE: r.w = s_H * 0.15f; r.h = s_H * 0.07f; r.x = s_W * 0.5f - r.w * 0.5f; r.y = t + u * 0.09f + s_H * 0.03f; break;
     default:      r.w = u * 0.17f; r.h = u * 0.09f; r.x = s_W * 0.5f + s_H * 0.03f; break;   /* Start */
     }
+    if (k != C_TOGGLE) {                       /* this group's place and size in the layout */
+        static const int grp[C_COUNT] = { [C_LT] = G_LT, [C_WHITE] = G_WHITE, [C_RT] = G_RT, [C_BLACK] = G_BLACK,
+                                          [C_BACK] = G_BACK, [C_START] = G_START };
+        int g = grp[k];
+        float cx = r.x + r.w * 0.5f + GX(g), cy = r.y + r.h * 0.5f + GY(g);
+        r.w *= GS(g); r.h *= GS(g);
+        r.x = cx - r.w * 0.5f; r.y = cy - r.h * 0.5f;
+    }
+    return r;
+}
+
+/* The editor's buttons: a row across the middle of the screen. */
+static Rect edit_btn(int i)
+{
+    float w = s_H * 0.24f, h = s_H * 0.10f, gap = s_H * 0.03f, x0 = s_W * 0.5f - (E_COUNT * w + (E_COUNT - 1) * gap) * 0.5f;
+    Rect r = { x0 + i * (w + gap), s_H * 0.5f - h * 0.5f, w, h };
     return r;
 }
 
@@ -97,6 +131,7 @@ static int in_rect(Rect r, float x, float y, float g)
 static int controls_shown(void)
 {
     int m = nfl2k5_touch_mode();
+    if (s_edit) return 1;
     if (m == 2) return 0;
     if (m == 0 && SDL_HasGamepad() && SDL_GetTicks() - s_last_touch > 10000) return 0;
     return 1;
@@ -107,12 +142,132 @@ static int hit(float x, float y)
 {
     int k;
     if (in_rect(btn_rect(C_TOGGLE), x, y, 1.3f)) return C_TOGGLE;
-    if (nfl2k5_touch_mode() == 2) return C_NONE;
+    if (nfl2k5_touch_mode() == 2 && !s_edit) return C_NONE;
     for (k = C_A; k <= C_Y; k++) if (in_circle(face(k), x, y, 1.35f)) return k;
     for (k = C_BLACK; k <= C_START; k++) if (in_rect(btn_rect(k), x, y, 1.25f)) return k;
     if (in_circle(dpad_c(), x, y, 1.2f)) return C_DPAD;
-    if (x < s_W * 0.45f && y > s_H * 0.45f) return C_STICK;
+    {   /* the floating stick: the lower left, or around wherever it was moved */
+        Circle h = stick_home();
+        if (s_lay[profile()][G_STICK].dx == 0 && s_lay[profile()][G_STICK].dy == 0
+                ? (x < s_W * 0.45f && y > s_H * 0.45f) : in_circle(h, x, y, 2.4f))
+            return C_STICK;
+    }
     return C_NONE;
+}
+
+/* ---- the layout editor ---------------------------------------------------- */
+static int group_of(int c)
+{
+    switch (c) {
+    case C_STICK: return G_STICK;
+    case C_DPAD: return G_DPAD;
+    case C_A: case C_B: case C_X: case C_Y: return G_FACE;
+    case C_LT: return G_LT;
+    case C_WHITE: return G_WHITE;
+    case C_RT: return G_RT;
+    case C_BLACK: return G_BLACK;
+    case C_BACK: return G_BACK;
+    case C_START: return G_START;
+    default: return G_NONE;
+    }
+}
+
+static void layout_path(char *out, size_t n)
+{
+    const char *root = getenv("NFL2K5_ROOT");
+    snprintf(out, n, "%s/touch_layout.ini", root ? root : "/sdcard/NFL2K5");
+}
+
+static void layout_defaults(int p)
+{
+    int g;
+    for (g = 0; g < G_COUNT; g++) { s_lay[p][g].dx = s_lay[p][g].dy = 0; s_lay[p][g].s = 1; }
+}
+
+static void layout_save(void)
+{
+    char path[1024];
+    FILE *f;
+    int p, g;
+    layout_path(path, sizeof path);
+    if (!(f = fopen(path, "w"))) return;
+    fprintf(f, "; Phone Settings > Edit Touch Layout: layout (0 menus, 1 game), group, x and y offset in screen heights, size\n");
+    for (p = 0; p < 2; p++)
+        for (g = 0; g < G_COUNT; g++)
+            fprintf(f, "%d %d %.4f %.4f %.3f\n", p, g, s_lay[p][g].dx, s_lay[p][g].dy, s_lay[p][g].s);
+    fclose(f);
+}
+
+static void layout_load(void)
+{
+    char path[1024], line[128];
+    FILE *f;
+    layout_defaults(0);
+    layout_defaults(1);
+    layout_path(path, sizeof path);
+    if (!(f = fopen(path, "r"))) return;
+    while (fgets(line, sizeof line, f)) {
+        int p, g;
+        float dx, dy, sz;
+        if (sscanf(line, "%d %d %f %f %f", &p, &g, &dx, &dy, &sz) == 5 && p >= 0 && p < 2 && g >= 0 && g < G_COUNT
+                && sz >= 0.5f && sz <= 2.0f && dx > -2 && dx < 4 && dy > -2 && dy < 2) {
+            s_lay[p][g].dx = dx; s_lay[p][g].dy = dy; s_lay[p][g].s = sz;
+        }
+    }
+    fclose(f);
+}
+
+/* Phone Settings > Edit Touch Layout: edits the layout in use now (the
+ * game's while a match is on screen, the menus' otherwise). */
+void nfl2k5_touch_edit_begin(void)
+{
+    if (!s_lock) return;
+    SDL_LockMutex(s_lock);
+    s_edit_profile = nfl2k5_in_match() ? 1 : 0;
+    s_edit = 1;
+    s_sel = G_NONE;
+    s_dragging = 0;
+    memset(s_fingers, 0, sizeof s_fingers);
+    s_gen++;
+    SDL_UnlockMutex(s_lock);
+}
+
+/* A touch while the editor is open (lock held). */
+static void edit_touch(const SDL_Event *e, float x, float y)
+{
+    int i;
+    if (e->type == SDL_EVENT_FINGER_DOWN) {
+        for (i = 0; i < E_COUNT; i++)
+            if (in_rect(edit_btn(i), x, y, 1.15f)) {
+                if (i == E_DONE) { s_edit = 0; s_sel = G_NONE; layout_save(); }
+                else if (i == E_RESET) { layout_defaults(s_edit_profile); s_sel = G_NONE; }
+                else if (s_sel != G_NONE) {
+                    float *sz = &s_lay[s_edit_profile][s_sel].s;
+                    *sz *= i == E_BIGGER ? 1.12f : 1.0f / 1.12f;
+                    if (*sz < 0.5f) *sz = 0.5f;
+                    if (*sz > 2.0f) *sz = 2.0f;
+                }
+                s_gen++;
+                return;
+            }
+        {
+            int c = hit(x, y);
+            s_sel = group_of(c == C_TOGGLE ? C_NONE : c);
+        }
+        if (s_sel != G_NONE) {
+            s_dragging = 1;
+            s_drag_id = e->tfinger.fingerID;
+            s_drag_x = x; s_drag_y = y;
+        }
+        s_gen++;
+    } else if (e->type == SDL_EVENT_FINGER_MOTION && s_dragging && e->tfinger.fingerID == s_drag_id && s_sel != G_NONE) {
+        s_lay[s_edit_profile][s_sel].dx += (x - s_drag_x) / s_H;
+        s_lay[s_edit_profile][s_sel].dy += (y - s_drag_y) / s_H;
+        s_drag_x = x; s_drag_y = y;
+        s_gen++;
+    } else if ((e->type == SDL_EVENT_FINGER_UP || e->type == SDL_EVENT_FINGER_CANCELED) && e->tfinger.fingerID == s_drag_id) {
+        s_dragging = 0;
+    }
 }
 
 static unsigned dpad_bits(float x, float y)
@@ -180,6 +335,11 @@ static bool SDLCALL on_event(void *ud, SDL_Event *e)
     y = e->tfinger.y * (float)s_H;
     SDL_LockMutex(s_lock);
     s_last_touch = SDL_GetTicks();
+    if (s_edit) {
+        edit_touch(e, x, y);
+        SDL_UnlockMutex(s_lock);
+        return true;
+    }
     for (i = 0; i < 10; i++) if (s_fingers[i].control && s_fingers[i].id == e->tfinger.fingerID) slot = i;
     if (e->type == SDL_EVENT_FINGER_DOWN) {
         if (slot < 0) for (i = 0; i < 10 && slot < 0; i++) if (!s_fingers[i].control) slot = i;
@@ -216,6 +376,9 @@ static const struct { char c; uint8_t rows[7]; } k_font[] = {
     { 'Y', { 0x11, 0x11, 0x0A, 0x04, 0x04, 0x04, 0x04 } }, { 'H', { 0x11, 0x11, 0x11, 0x1F, 0x11, 0x11, 0x11 } },
     { 'D', { 0x1E, 0x11, 0x11, 0x11, 0x11, 0x11, 0x1E } }, { 'E', { 0x1F, 0x10, 0x10, 0x1E, 0x10, 0x10, 0x1F } },
     { 'I', { 0x0E, 0x04, 0x04, 0x04, 0x04, 0x04, 0x0E } }, { 'O', { 0x0E, 0x11, 0x11, 0x11, 0x11, 0x11, 0x0E } },
+    { 'M', { 0x11, 0x1B, 0x15, 0x15, 0x11, 0x11, 0x11 } }, { 'G', { 0x0E, 0x11, 0x10, 0x17, 0x11, 0x11, 0x0F } },
+    { 'N', { 0x11, 0x19, 0x15, 0x13, 0x11, 0x11, 0x11 } }, { 'U', { 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x0E } },
+    { 'P', { 0x1E, 0x11, 0x11, 0x1E, 0x10, 0x10, 0x10 } }, { 'V', { 0x11, 0x11, 0x11, 0x11, 0x11, 0x0A, 0x04 } },
 };
 
 static float s_alpha = 1.0f;                   /* Touch Opacity, for this redraw */
@@ -290,6 +453,29 @@ static void redraw(void)
     int k;
     memset(s_img, 0, (size_t)s_W * s_H * 4);
     s_alpha = 1.0f;
+    if (s_edit) {                              /* the editor: its buttons, a title, the selection */
+        static const char *const names[E_COUNT] = { "SMALLER", "BIGGER", "RESET", "DONE" };
+        for (k = 0; k < E_COUNT; k++) {
+            Rect r = edit_btn(k);
+            fill_rect(r, k == E_DONE ? 0.2f : 1, k == E_DONE ? 0.8f : 1, k == E_DONE ? 0.3f : 1,
+                      k == E_DONE ? 0.75f : (k < E_RESET && s_sel == G_NONE ? 0.15f : 0.35f));
+            text(names[k], r.x + r.w * 0.5f, r.y + r.h * 0.5f, lab * 0.6f, 0.95f);
+        }
+        text(s_edit_profile ? "GAME LAYOUT" : "MENUS LAYOUT", s_W * 0.5f, s_H * 0.5f - s_H * 0.11f, lab * 0.75f, 0.95f);
+        text("DRAG A BUTTON TO MOVE IT", s_W * 0.5f, s_H * 0.5f + s_H * 0.10f, lab * 0.5f, 0.8f);
+        if (s_sel == G_STICK) { Circle c = stick_home(); c.r *= 1.25f; fill_circle(c, 1, 0.85f, 0.2f, 0.9f, s_H * 0.008f); }
+        else if (s_sel == G_DPAD) { Circle c = dpad_c(); c.r *= 1.25f; fill_circle(c, 1, 0.85f, 0.2f, 0.9f, s_H * 0.008f); }
+        else if (s_sel == G_FACE) { Circle c = face(C_A); c.y = (face(C_A).y + face(C_Y).y) * 0.5f;
+                                    c.r = (face(C_A).y - face(C_Y).y) * 0.5f + face(C_A).r * 1.3f;
+                                    fill_circle(c, 1, 0.85f, 0.2f, 0.9f, s_H * 0.008f); }
+        else if (s_sel != G_NONE) {
+            static const int ctl[G_COUNT] = { [G_LT] = C_LT, [G_WHITE] = C_WHITE, [G_RT] = C_RT, [G_BLACK] = C_BLACK,
+                                              [G_BACK] = C_BACK, [G_START] = C_START };
+            Rect r = btn_rect(ctl[s_sel]);
+            r.x -= s_H * 0.012f; r.y -= s_H * 0.012f; r.w += s_H * 0.024f; r.h += s_H * 0.024f;
+            fill_rect(r, 1, 0.85f, 0.2f, 0.45f);
+        }
+    } else
     {
         Rect r = btn_rect(C_TOGGLE);
         int off = nfl2k5_touch_mode() == 2;
@@ -369,6 +555,7 @@ void nfl2k5_touch_pad_init(void)
 {
     if (s_lock) return;
     s_lock = SDL_CreateMutex();
+    layout_load();
     SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");   /* touches are not mouse clicks (A) */
     SDL_SetHint(SDL_HINT_ANDROID_TRAP_BACK_BUTTON, "1");
     SDL_AddEventWatch(on_event, NULL);
@@ -382,6 +569,7 @@ void nfl2k5_touch_pad_merge(uint16_t *buttons, uint8_t analog[8], int16_t *lx, i
     int i;
     if (!s_lock) return;
     SDL_LockMutex(s_lock);
+    if (s_edit) { SDL_UnlockMutex(s_lock); return; }   /* the editor has the touches */
     for (i = 0; i < 8; i++) if (s_pressed[amap[i]]) analog[i] = 255;
     if (s_back_key) analog[1] = 255;
     *buttons |= (uint16_t)s_dpad;
