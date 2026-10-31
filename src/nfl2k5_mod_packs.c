@@ -55,7 +55,7 @@ static void mp_read_json_name(const char *path, char *out, size_t cap)
 
 static void mp_config_path(char *out, size_t cap)
 {
-    snprintf(out, cap, "%s\\mods\\active-pack.ini", s_root);
+    snprintf(out, cap, "%s/mods/active-pack.ini", s_root);
 }
 
 static void mp_read_active(char *out, size_t cap)
@@ -214,111 +214,184 @@ int nfl2k5_modpacks_boot_dispatch(const char *root)
      * developer's build path, causing error 267 on another PC. */
     if (*folder && mp_safe_folder(folder)) {
         char xbe[MAX_PATH];
-        snprintf(xbe, sizeof xbe, "%s\\mods\\packs\\%s\\default.xbe", root, folder);
+        snprintf(xbe, sizeof xbe, "%s/mods/packs/%s/default.xbe", root, folder);
         if (!mp_file_exists(xbe)) {
             fprintf(stderr, "[MODPACK] Selected pack '%s' is not installed; using retail.\n", folder);
             mp_write_active("");
         }
     }
+#ifdef __ANDROID__
+    /* one app, no other executable to hand off to: main.c loads the pack */
+    (void)target; (void)current;
+    return 0;
+#else
     mp_retail_exe(target, sizeof(target));
     if (!mp_current_exe(current, sizeof(current)) || mp_same_path(current, target)) return 0;
     if (!mp_file_exists(target)) return 0;      /* nothing to hand off to: keep running */
     fprintf(stderr, "[MODPACK] Handing off to %s\n", target);
     return mp_launch(target);
+#endif
 }
 
-/* mods\patches drop folder: a .2k5patch, or a patched .iso/.xiso, placed
- * there is installed into mods\packs in the background (the bundled mod pack
- * installer, with the release's native code packs), then offered under
- * Options > Mod Packs after a restart. <file>.installed / <file>.failed mark
- * files already handled; delete the marker to install again. */
+/* mods/patches drop folder: a .2k5patch placed there is installed into
+ * mods/packs in the background by the game itself (src/nfl2k5_pack_install.c:
+ * no Python, no helper program, the same on PC and Android), then offered
+ * under Extras > Mods. On Android a .2k5patch in the phone's Download folder
+ * is picked up too, so a player never has to move a 1 GB file by hand.
+ * A patched .iso/.xiso still goes through the PC tool (tools/pack-install.py
+ * or the bundled installer .exe) on Windows. mods/patches/<file>.installed /
+ * .failed mark files already handled; delete the marker to install again. */
 extern void xbox_PresentToast(const char *header, const char *line1, const char *line2, unsigned ms);
+extern int nfl2k5_pack_install(const char *root, const char *disc, const char *patch,
+                               const char *log_path, char *folder_out, size_t folder_cap,
+                               char *err, size_t err_cap);
+extern void (*g_pack_install_on_progress)(int percent, const char *stage);
 
-static DWORD WINAPI mp_patch_thread(void *arg)
+static char s_installing[MAX_PATH];
+static void mp_install_progress(int percent, const char *stage)
 {
-    WIN32_FIND_DATAA fd;
-    HANDLE h;
-    char pattern[MAX_PATH], tool[MAX_PATH], py[MAX_PATH];
-    (void)arg;
-    Sleep(8000);                                  /* let the game get to its menus first */
-    snprintf(tool, sizeof tool, "%s\\tools\\NFL2K5-ModPack-Installer.exe", s_root);
-    snprintf(py, sizeof py, "%s\\tools\\pack-install.py", s_root);
-    snprintf(pattern, sizeof pattern, "%s\\mods\\patches\\*", s_root);
-    h = FindFirstFileA(pattern, &fd);
-    if (h == INVALID_HANDLE_VALUE) return 0;
-    do {
-        char file[MAX_PATH], done[MAX_PATH], failed[MAX_PATH], cmd[4 * MAX_PATH], logp[MAX_PATH];
-        const char *ext = strrchr(fd.cFileName, '.');
+    static int last = -100;
+    char line[128];
+    if (percent < last) last = -100;
+    if (percent - last < 10) return;                /* a toast every 10% */
+    last = percent;
+    snprintf(line, sizeof line, "%s - %d%%", stage && *stage ? stage : "Installing", percent);
+    xbox_PresentToast("MOD PACKS", s_installing, line, 6000);
+}
+
+/* "SOFTDRINK_2K28" from "SOFTDRINK_2K28_v0.7-v0.7": the pack's name without
+ * its version, so a new release can take over from the one it replaces. */
+static void mp_pack_stem(const char *folder, char *out, size_t cap)
+{
+    size_t i, n = strlen(folder);
+    for (i = 1; i + 1 < n; i++)
+        if ((folder[i] == 'v' || folder[i] == 'V') && (folder[i - 1] == '_' || folder[i - 1] == '-') &&
+                folder[i + 1] >= '0' && folder[i + 1] <= '9') { n = i - 1; break; }
+    if (n >= cap) n = cap - 1;
+    memcpy(out, folder, n);
+    out[n] = 0;
+}
+
+static int mp_ends_with(const char *s, const char *ext)
+{
+    size_t a = strlen(s), b = strlen(ext);
+    return a >= b && !_stricmp(s + a - b, ext);
+}
+
+static void mp_install_one(const char *dir, const char *name)
+{
+    char file[MAX_PATH], done[MAX_PATH], failed[MAX_PATH], logp[MAX_PATH], logdir[MAX_PATH];
+    char folder[MAX_PATH] = "", err[512] = "";
+    int ok = 0;
+    snprintf(file, sizeof file, "%s/%s", dir, name);
+    snprintf(done, sizeof done, "%s/mods/patches/%s.installed", s_root, name);
+    snprintf(failed, sizeof failed, "%s/mods/patches/%s.failed", s_root, name);
+    if (mp_file_exists(done) || mp_file_exists(failed)) return;
+    snprintf(logdir, sizeof logdir, "%s/logs", s_root);
+    CreateDirectoryA(logdir, NULL);
+    snprintf(logp, sizeof logp, "%s/logs/patch-install-%s.log", s_root, name);
+    fprintf(stderr, "[MODPACK] installing %s\n", file);
+    if (mp_ends_with(name, ".2k5patch")) {
+        snprintf(s_installing, sizeof s_installing, "Installing %s", name);
+        xbox_PresentToast("MOD PACKS", s_installing, "This takes a few minutes; keep playing", 10000);
+        g_pack_install_on_progress = mp_install_progress;
+        ok = nfl2k5_pack_install(s_root, NULL, file, logp, folder, sizeof folder, err, sizeof err);
+        g_pack_install_on_progress = NULL;
+    } else {
 #ifdef _WIN32
+        /* a finished, patched disc image: the PC tool compares it with the retail disc */
+        char tool[MAX_PATH], py[MAX_PATH], cmd[4 * MAX_PATH];
         STARTUPINFOA si;
         PROCESS_INFORMATION pi;
-#endif
         DWORD code = 1;
-        if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY || !ext) continue;
-        if (_stricmp(ext, ".2k5patch") && _stricmp(ext, ".iso") && _stricmp(ext, ".xiso")) continue;
-        snprintf(file, sizeof file, "%s\\mods\\patches\\%s", s_root, fd.cFileName);
-        snprintf(done, sizeof done, "%s.installed", file);
-        snprintf(failed, sizeof failed, "%s.failed", file);
-        if (mp_file_exists(done) || mp_file_exists(failed)) continue;
-        snprintf(logp, sizeof logp, "%s\\logs\\patch-install-%s.log", s_root, fd.cFileName);
+        snprintf(tool, sizeof tool, "%s\\tools\\NFL2K5-ModPack-Installer.exe", s_root);
+        snprintf(py, sizeof py, "%s\\tools\\pack-install.py", s_root);
         if (mp_file_exists(tool))
-            snprintf(cmd, sizeof cmd, "\"%s\" \"%s\" --root \"%s\" --replace --log \"%s\"",
-                     tool, file, s_root, logp);
+            snprintf(cmd, sizeof cmd, "\"%s\" \"%s\" --root \"%s\" --replace --log \"%s\"", tool, file, s_root, logp);
         else if (mp_file_exists(py))
-            snprintf(cmd, sizeof cmd, "python \"%s\" \"%s\" --root \"%s\" --replace --log \"%s\"",
-                     py, file, s_root, logp);
+            snprintf(cmd, sizeof cmd, "python \"%s\" \"%s\" --root \"%s\" --replace --log \"%s\"", py, file, s_root, logp);
         else
-            continue;
-        xbox_PresentToast("MOD PACKS", "Installing", fd.cFileName, 8000);
-        fprintf(stderr, "[MODPACK] installing %s\n", file);
-#ifdef _WIN32
+            return;
+        xbox_PresentToast("MOD PACKS", "Installing", name, 8000);
         memset(&si, 0, sizeof si);
         memset(&pi, 0, sizeof pi);
         si.cb = sizeof si;
         si.dwFlags = STARTF_USESHOWWINDOW;
         si.wShowWindow = SW_HIDE;
-        {   /* the installer writes its log there; a missing folder must not fail the install */
-            char logdir[MAX_PATH];
-            snprintf(logdir, sizeof logdir, "%s\\logs", s_root);
-            CreateDirectoryA(logdir, NULL);
-        }
-        DWORD launch_error = 0;
         if (CreateProcessA(NULL, cmd, NULL, NULL, FALSE, CREATE_NO_WINDOW | BELOW_NORMAL_PRIORITY_CLASS,
                            NULL, s_root, &si, &pi)) {
             WaitForSingleObject(pi.hProcess, INFINITE);
             GetExitCodeProcess(pi.hProcess, &code);
             CloseHandle(pi.hThread);
             CloseHandle(pi.hProcess);
+            ok = code == 0;
+            if (!ok) snprintf(err, sizeof err, "the disc-image installer failed (exit %lu); see %s", (unsigned long)code, logp);
         } else {
-            /* e.g. 2: python not on PATH; 267: the root folder is invalid */
-            launch_error = GetLastError();
-            fprintf(stderr, "[MODPACK] %s: could not start the installer (error %lu): %s\n",
-                    fd.cFileName, (unsigned long)launch_error, cmd);
+            /* e.g. 2: python not on PATH */
+            snprintf(err, sizeof err, "the disc-image installer could not start (Windows error %lu): %s",
+                     (unsigned long)GetLastError(), cmd);
         }
 #else
-        unsigned long launch_error = 0;
-        mp_spawn_sh(cmd, s_root, 1, &code);
+        snprintf(err, sizeof err, "a patched disc image can only be installed on the PC; use the pack's .2k5patch here");
 #endif
-        {
-            FILE *m = fopen(code == 0 ? done : failed, "w");
-            if (m) {
-                if (launch_error)
-                    fprintf(m, "the installer could not start (Windows error %lu); command: %s\n",
-                            (unsigned long)launch_error, cmd);
-                else
-                    fprintf(m, "see %s\n", logp);
-                fclose(m);
-            }
+    }
+    {
+        FILE *m = fopen(ok ? done : failed, "w");
+        if (m) {
+            fprintf(m, "%s\nlog: %s\n", ok ? (folder[0] ? folder : "installed") : err, logp);
+            fclose(m);
         }
-        fprintf(stderr, "[MODPACK] %s: installer exit %lu (log %s)\n", fd.cFileName, (unsigned long)code, logp);
-        if (code == 0)
-            xbox_PresentToast("MOD PACKS", "Installed - restart the game, then",
-                              "Options > Mod Packs to turn it on", 15000);
-        else
-            xbox_PresentToast("MOD PACKS", "Install failed — see logs\\patch-install-*.log",
-                              fd.cFileName, 15000);
+    }
+    fprintf(stderr, "[MODPACK] %s: %s\n", name, ok ? "installed" : err);
+    if (!ok) {
+        xbox_PresentToast("MOD PACKS", "Install failed", err, 20000);
+        return;
+    }
+    if (folder[0]) {
+        /* A new release of the pack the player already uses (or the first
+         * pack at all) becomes the selected one, so the next start plays it. */
+        char active[MAX_PATH], a_stem[MAX_PATH], n_stem[MAX_PATH];
+        mp_read_active(active, sizeof active);
+        mp_pack_stem(active, a_stem, sizeof a_stem);
+        mp_pack_stem(folder, n_stem, sizeof n_stem);
+        if ((!active[0] || !_stricmp(a_stem, n_stem)) && !getenv("NFL2K5_NO_PACK_AUTOSELECT") && mp_write_active(folder)) {
+            fprintf(stderr, "[MODPACK] %s is now the selected pack (was '%s')\n", folder, active);
+            xbox_PresentToast("MOD PACKS", "Installed and selected:", folder,
+                              20000);
+            xbox_PresentToast("MOD PACKS", "Restart the game to play it", "(Extras > Mods switches packs)", 20000);
+            return;
+        }
+    }
+    xbox_PresentToast("MOD PACKS", "Installed - restart the game, then", "Extras > Mods to turn it on", 20000);
+}
+
+static void mp_scan_dir(const char *dir, int iso_too)
+{
+    WIN32_FIND_DATAA fd;
+    HANDLE h;
+    char pattern[MAX_PATH];
+    snprintf(pattern, sizeof pattern, "%s/*", dir);
+    h = FindFirstFileA(pattern, &fd);
+    if (h == INVALID_HANDLE_VALUE) return;
+    do {
+        if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
+        if (mp_ends_with(fd.cFileName, ".2k5patch") ||
+                (iso_too && (mp_ends_with(fd.cFileName, ".iso") || mp_ends_with(fd.cFileName, ".xiso"))))
+            mp_install_one(dir, fd.cFileName);
     } while (FindNextFileA(h, &fd));
     FindClose(h);
+}
+
+static DWORD WINAPI mp_patch_thread(void *arg)
+{
+    char dir[MAX_PATH];
+    (void)arg;
+    Sleep(8000);                                  /* let the game get to its menus first */
+    snprintf(dir, sizeof dir, "%s/mods/patches", s_root);
+    mp_scan_dir(dir, 1);
+#ifdef __ANDROID__
+    mp_scan_dir("/sdcard/Download", 0);
+#endif
     return 0;
 }
 
@@ -333,13 +406,13 @@ void nfl2k5_modpacks_init(const char *root)
     {
         char patches[MAX_PATH];
         HANDLE th;
-        snprintf(patches, sizeof patches, "%s\\mods\\patches", root);
+        snprintf(patches, sizeof patches, "%s/mods/patches", root);
         CreateDirectoryA(patches, NULL);
         th = CreateThread(NULL, 0, mp_patch_thread, NULL, 0, NULL);
         if (th) CloseHandle(th);
     }
     mp_read_active(active, sizeof(active));
-    snprintf(pattern, sizeof(pattern), "%s\\mods\\packs\\*", root);
+    snprintf(pattern, sizeof(pattern), "%s/mods/packs/*", root);
     h = FindFirstFileA(pattern, &fd);
     if (h == INVALID_HANDLE_VALUE) return;
     do {
@@ -349,8 +422,8 @@ void nfl2k5_modpacks_init(const char *root)
             s_pack_count >= MP_MAX_PACKS || !mp_safe_folder(fd.cFileName)) continue;
         p = &s_packs[s_pack_count];
         snprintf(p->folder, sizeof(p->folder), "%s", fd.cFileName);
-        snprintf(json, sizeof(json), "%s\\mods\\packs\\%s\\pack.json", root, p->folder);
-        snprintf(xbe, sizeof(xbe), "%s\\mods\\packs\\%s\\default.xbe", root, p->folder);
+        snprintf(json, sizeof(json), "%s/mods/packs/%s/pack.json", root, p->folder);
+        snprintf(xbe, sizeof(xbe), "%s/mods/packs/%s/default.xbe", root, p->folder);
         /* Do not launch a hash-specific code pack.  The base executable
          * interprets the selected patch and remains portable across releases. */
         mp_retail_exe(p->exe, sizeof(p->exe));
@@ -385,7 +458,7 @@ static const struct { const char *id, *folder, *label; } k_features[] = {
 static int mp_feature_installed(int f)
 {
     char p[MAX_PATH];
-    snprintf(p, sizeof p, "%s\\mods\\packs\\%s\\pack.json", s_root[0] ? s_root : ".", k_features[f].folder);
+    snprintf(p, sizeof p, "%s/mods/packs/%s/pack.json", s_root[0] ? s_root : ".", k_features[f].folder);
     return mp_file_exists(p);
 }
 
@@ -403,7 +476,7 @@ static int mp_feature_on(int f)
     char p[MAX_PATH], line[256];
     FILE *fp;
     int on = 1;
-    snprintf(p, sizeof p, "%s\\mods\\features.ini", s_root[0] ? s_root : ".");
+    snprintf(p, sizeof p, "%s/mods/features.ini", s_root[0] ? s_root : ".");
     if (!(fp = fopen(p, "r"))) return 1;
     while (fgets(line, sizeof line, fp)) {
         char key[96], val[32];
@@ -419,7 +492,7 @@ static void mp_feature_set(int f, int on)
     char p[MAX_PATH], tmp[MAX_PATH], line[256];
     FILE *in, *out;
     int done = 0;
-    snprintf(p, sizeof p, "%s\\mods\\features.ini", s_root[0] ? s_root : ".");
+    snprintf(p, sizeof p, "%s/mods/features.ini", s_root[0] ? s_root : ".");
     snprintf(tmp, sizeof tmp, "%s.tmp", p);
     if (!(out = fopen(tmp, "w"))) { fprintf(stderr, "[MODPACK] Could not write %s.\n", p); return; }
     if ((in = fopen(p, "r")) != NULL) {
@@ -503,6 +576,15 @@ void nfl2k5_modpacks_set(int row, int on)
         fprintf(stderr, "[MODPACK] Could not save selected pack.\n");
         return;
     }
+#ifdef __ANDROID__
+    /* An app cannot start a second copy of itself: the choice is saved and
+     * applies when the game is opened again. */
+    (void)a; (void)th; (void)exe;
+    fprintf(stderr, "[MODPACK] selected '%s'; applies at the next start\n", folder);
+    xbox_PresentToast("MOD PACKS", on ? "Selected - close and reopen the game" : "Off - close and reopen the game",
+                      "to apply", 8000);
+    return;
+#endif
     a = (RestartArgs *)malloc(sizeof(*a));
     if (!a) {
         s_active = previous;

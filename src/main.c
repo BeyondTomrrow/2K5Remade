@@ -251,6 +251,35 @@ static LONG CALLBACK crash_report(EXCEPTION_POINTERS *ep)
             code, (unsigned long long)ep->ContextRecord->Rip);
     fprintf(stderr, "[CRASH] eax=%08X ecx=%08X edx=%08X esp=%08X ebx=%08X esi=%08X edi=%08X\n",
             g_eax, g_ecx, g_edx, g_esp, g_ebx, g_esi, g_edi);
+    {   /* where: module + offset, and the function when the PDB is beside the exe */
+        DWORD64 rip = ep->ContextRecord->Rip, disp = 0;
+        HMODULE mod = NULL;
+        char name[MAX_PATH] = "?";
+        union { SYMBOL_INFO s; char buf[sizeof(SYMBOL_INFO) + 256]; } sym;
+        if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                               (LPCSTR)(uintptr_t)rip, &mod) && mod) {
+            GetModuleFileNameA(mod, name, sizeof name);
+            fprintf(stderr, "[CRASH] module %s+0x%llX\n", name, (unsigned long long)(rip - (DWORD64)(uintptr_t)mod));
+        }
+        memset(&sym, 0, sizeof sym);
+        sym.s.SizeOfStruct = sizeof(SYMBOL_INFO);
+        sym.s.MaxNameLen = 255;
+        if (SymFromAddr(GetCurrentProcess(), rip, &disp, &sym.s))
+            fprintf(stderr, "[CRASH] function %s+0x%llX\n", sym.s.Name, (unsigned long long)disp);
+    }
+    if (g_esp >= 0x1000u && g_esp < 0x07FFF000u) {   /* guest stack words that look like code addresses */
+        const uint32_t *st = (const uint32_t *)((uint8_t *)xbox_GetMemoryOffset() + g_esp);
+        int i, shown = 0;
+        fprintf(stderr, "[CRASH] guest stack:");
+        for (i = 0; i < 512 && shown < 24 && g_esp + 4u * (uint32_t)i < 0x07FFF000u; i++) {
+            uint32_t v = st[i];
+            if ((v >= 0x00011000u && v < 0x00420120u) || (v >= 0x014B0000u && v < 0x01520000u)) {
+                fprintf(stderr, " +%X:%08X", (unsigned)(i * 4), v);
+                shown++;
+            }
+        }
+        fprintf(stderr, "\n");
+    }
     fflush(stderr);
     RECOMP_ICALL_FEEDBACK_DUMP();
     return EXCEPTION_EXECUTE_HANDLER;
@@ -1683,7 +1712,16 @@ int main(int argc, char **argv)
         nfl2k5_expand_limits();
     nfl2k5_controller_setup_init();
 
-    if (!strcmp(digest_hex, "f67e6fc1cb76c9ea1f1ad504e4a6491ff126483d66a9da8ddb92950bbaf740ba")) {
+    /* SOFTDRINK v0.6 and later releases (v0.6.1, v0.7, ...) keep the same
+     * dispatcher detour and save-all wrappers: recognise them by their code,
+     * not by one release's executable hash (only v0.6's was listed, so
+     * v0.6.1 and v0.7 ran without these). */
+    static const uint8_t k_sd_dispatch[16] = { 0x8b,0x87,0x00,0x01,0x00,0x00,0x8b,0x2c,0xc7,0x85,0xed,0x89,0x54,0x24,0x08,0x75 };
+    static const uint8_t k_sd_saveall[16] = { 0x9c,0x60,0xe8,0x8b,0xfa,0xff,0xff,0x85,0xc0,0x0f,0x84,0x22,0x00,0x00,0x00,0xf6 };
+    const uint8_t *sd_guest = (const uint8_t *)(uintptr_t)xbox_GetMemoryOffset();
+    if (!strcmp(digest_hex, "f67e6fc1cb76c9ea1f1ad504e4a6491ff126483d66a9da8ddb92950bbaf740ba") ||
+        (g_interp_pack && !memcmp(sd_guest + 0x0006E4E5u, k_sd_dispatch, 16) &&
+         !memcmp(sd_guest + 0x014DE0BEu, k_sd_saveall, 16))) {
         printf("[BOOT] SOFTDRINK v0.6 dispatcher compatibility: %u function\n",
                nfl2k5_interp_force(0x0006E4E5u, 0x0006E5F5u));
         /* These save-all detours branch after POPFD. The native lift only
