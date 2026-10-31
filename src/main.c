@@ -1128,6 +1128,8 @@ int main(int argc, char **argv)
     }
     {
         extern void nfl2k5_touch_pad_init(void);   /* on-screen controls (platform/android/touch_pad.c) */
+        extern void nfl2k5_android_settings_init(void);   /* Phone Settings (platform/android/android_settings.c) */
+        nfl2k5_android_settings_init();
         nfl2k5_touch_pad_init();
     }
     {

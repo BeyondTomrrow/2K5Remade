@@ -132,7 +132,7 @@ else()
   target_link_libraries(NFL2K5 PRIVATE xboxrecomp OpenSSL::Crypto)
   if(ANDROID)
     target_link_libraries(NFL2K5 PRIVATE log android mediandk)
-    target_sources(NFL2K5 PRIVATE src/platform/android/xiso_extract.c src/platform/android/touch_pad.c)   # unpacks the player's disc image
+    target_sources(NFL2K5 PRIVATE src/platform/android/xiso_extract.c src/platform/android/touch_pad.c src/platform/android/android_settings.c)   # unpacks the player's disc image
   endif()
   # Optimisation level for the game target (recompiled code included).
   # GCC spends its time parsing the 220 MB of generated C, not optimising

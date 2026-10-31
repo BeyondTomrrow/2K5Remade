@@ -370,10 +370,18 @@ static void nfl2k5_pack_music_hooks(void);   /* SOFTDRINK: the playlist wins (en
 static void nfl2k5_retail_next_interp_hook(void);   /* R3 when the retail player is interpreted (end of file) */
 
 // root: the game root (holds Music/); save_dir: where Soundtracks/ lives.
+static std::string g_start_root, g_start_save;
+
 extern "C" void nfl2k5_local_music_start(const char *root, const char *save_dir)
 {
-    nfl2k5_pack_music_hooks();
-    nfl2k5_retail_next_interp_hook();
+    g_start_root = root;
+    g_start_save = save_dir;
+    static bool hooked;                               /* once: a rescan starts here again */
+    if (!hooked) {
+        hooked = true;
+        nfl2k5_pack_music_hooks();
+        nfl2k5_retail_next_interp_hook();
+    }
     SDL_SetAtomicInt(&g_music_ready, 0);
     SDL_SetAtomicInt(&g_music_stop, 0);
     std::error_code ec;
@@ -397,6 +405,16 @@ extern "C" void nfl2k5_local_music_shutdown(void)
         g_music_thread = nullptr;
     }
     SDL_SetAtomicInt(&g_music_ready, 0);
+}
+
+/* Songs were added while the game runs (Android: Phone Settings > Add Songs):
+ * scan again, convert the new ones and write ST.DB once more. */
+extern "C" void nfl2k5_local_music_rescan(void)
+{
+    if (g_start_root.empty()) return;
+    std::string root = g_start_root, save = g_start_save;
+    nfl2k5_local_music_shutdown();
+    nfl2k5_local_music_start(root.c_str(), save.c_str());
 }
 
 /* ── Now playing / skip ──────────────────────────────────────────────────

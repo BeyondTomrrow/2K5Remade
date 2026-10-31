@@ -61,6 +61,59 @@ public class NFL2K5Activity extends SDLActivity {
         super.onCreate(savedInstanceState);
     }
 
+    /* ---- Phone Settings > Add Songs (src/platform/android/android_settings.c) ----
+     * Android's own picker; the chosen songs are copied into
+     * <game folder>/Music/Phone Songs, then the game rescans its library. */
+    private static final int PICK_SONGS = 7101;
+    private static native void nativeSongsAdded(int count);
+
+    public static void pickSongs() {
+        final NFL2K5Activity a = (NFL2K5Activity) mSingleton;
+        if (a == null) return;
+        a.runOnUiThread(new Runnable() { public void run() {
+            Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+            i.addCategory(Intent.CATEGORY_OPENABLE);
+            i.setType("audio/*");
+            i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+            try { a.startActivityForResult(i, PICK_SONGS); } catch (Exception e) { }
+        }});
+    }
+
+    @Override
+    protected void onActivityResult(int request, int result, Intent data) {
+        super.onActivityResult(request, result, data);
+        if (request != PICK_SONGS || result != RESULT_OK || data == null) return;
+        final java.util.ArrayList<Uri> uris = new java.util.ArrayList<>();
+        if (data.getClipData() != null)
+            for (int k = 0; k < data.getClipData().getItemCount(); k++) uris.add(data.getClipData().getItemAt(k).getUri());
+        else if (data.getData() != null)
+            uris.add(data.getData());
+        new Thread(new Runnable() { public void run() {
+            String root = android.system.Os.getenv("NFL2K5_ROOT");   /* set by the game; System.getenv is a startup copy */
+            File dir = new File(root != null ? root : new File(Environment.getExternalStorageDirectory(), "NFL2K5").getPath(),
+                                "Music/Phone Songs");
+            dir.mkdirs();
+            int n = 0;
+            for (Uri u : uris) {
+                String name = null;
+                try (android.database.Cursor c = getContentResolver().query(u, new String[] {
+                        android.provider.OpenableColumns.DISPLAY_NAME }, null, null, null)) {
+                    if (c != null && c.moveToFirst()) name = c.getString(0);
+                } catch (Exception e) { }
+                if (name == null) name = "song" + System.currentTimeMillis() + ".mp3";
+                name = name.replaceAll("[\\\\/:*?\"<>|]", "_");
+                try (java.io.InputStream in = getContentResolver().openInputStream(u);
+                     java.io.OutputStream out = new java.io.FileOutputStream(new File(dir, name))) {
+                    byte[] b = new byte[1 << 16];
+                    int r;
+                    while ((r = in.read(b)) > 0) out.write(b, 0, r);
+                    n++;
+                } catch (Exception e) { }
+            }
+            nativeSongsAdded(n);
+        }}).start();
+    }
+
     @Override
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);

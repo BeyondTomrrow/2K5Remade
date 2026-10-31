@@ -191,6 +191,19 @@ static int bcast_get(int r) { (void)r; return nfl2k5_broadcast_cam_mode(); }
 static void bcast_set(int r, int v) { (void)r; nfl2k5_broadcast_cam_set_mode(v); }
 static void bcast_name(int r, int v, char *b, size_t n) { (void)r; snprintf(b, n, "%s", nfl2k5_broadcast_cam_mode_name(v)); }
 
+#ifdef __ANDROID__
+/* ---- Phone Settings rows (src/platform/android/android_settings.c) ---- */
+extern int nfl2k5_phone_rows(void);
+extern const char *nfl2k5_phone_label(int r);
+extern int nfl2k5_phone_toggle(int r);
+extern int nfl2k5_phone_values(int r);
+extern int nfl2k5_phone_get(int r);
+extern void nfl2k5_phone_set(int r, int v);
+extern void nfl2k5_phone_value_name(int r, int v, char *b, size_t n);
+static void phone_name(int r, int v, char *b, size_t n) { nfl2k5_phone_value_name(r, v, b, n); }
+static const char *s_phone_labels[VM_MAX_ROWS];
+#endif
+
 static const char *s_video_labels[VM_MAX_ROWS];
 static const char *s_mod_labels[VM_MAX_ROWS];
 static const char *const k_custom_labels[] = { "Griddy", "Slide", "Stank", "Slickback" };
@@ -261,12 +274,15 @@ uint32_t nfl2k5_celebration_after_retail(uint32_t remaining)
     return remaining < 4u ? 37u + remaining : 41u;
 }
 
-static VmScreen s_screens[5] = {
+static VmScreen s_screens[] = {
     { "Video Settings", 0, s_video_labels, vid_toggle, vid_values, vid_get, vid_set, vid_name },
     { "Presentation", 6, k_pres_labels, pres_toggle, pres_values, pres_get, pres_set, pres_name },
     { "Mod Packs", 0, s_mod_labels, mods_toggle, mods_values, mods_get, mods_set, mods_name },
     { "Coach Mode", 4, k_coach_labels, coach_toggle, coach_values, coach_get, coach_set, coach_name },
     { "Pro Broadcast", 1, k_bcast_labels, bcast_toggle, bcast_values, bcast_get, bcast_set, bcast_name },
+#ifdef __ANDROID__
+    { "Phone Settings", 0, s_phone_labels, nfl2k5_phone_toggle, nfl2k5_phone_values, nfl2k5_phone_get, nfl2k5_phone_set, phone_name },
+#endif
 };
 #define VM_SCREENS ((int)(sizeof s_screens / sizeof s_screens[0]))
 
@@ -578,6 +594,17 @@ void nfl2k5_video_menu_install(void)
         int n = vm_add_link(k_options_headers[k], video, vm_wstr("Video Settings"));
         fprintf(stderr, "[VIDEOMENU] Options menu %08X: %d rows\n", (unsigned)k_options_headers[k], n);
     }
+#ifdef __ANDROID__
+    {   /* touch controls, battery saver, pausing, adding songs: under Video Settings */
+        uint32_t phone;
+        s_screens[5].rows = nfl2k5_phone_rows();
+        for (i = 0; i < s_screens[5].rows && i < VM_MAX_ROWS; i++)
+            s_phone_labels[i] = nfl2k5_phone_label(i);
+        phone = vm_build_screen(5);
+        for (k = 0; phone && k < sizeof k_options_headers / sizeof k_options_headers[0]; k++)
+            vm_add_link(k_options_headers[k], phone, vm_wstr("Phone Settings"));
+    }
+#endif
     /* "Presentation" right under VIP on the pre-game screen. */
     fprintf(stderr, "[VIDEOMENU] Coach Match Up: %d rows\n",
             vm_add_link(COACH_MATCH_UP_HEADER, pres, vm_wstr("Presentation")));

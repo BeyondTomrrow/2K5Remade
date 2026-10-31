@@ -52,8 +52,8 @@ public class PresentationView {
     private Bitmap bitmap;
     private Canvas canvas;
     private ByteBuffer buffer;
-    private boolean ready, flushQueued, stopped;
-    private long lastDraw;
+    private boolean ready, flushQueued, stopped, asking, forceDraw = true;
+    private long lastDraw, lastFull;
 
     private static final String SHIM =
         "<script>(function(){var L=[];window.NFL2K5_HOST='game';" +
@@ -61,7 +61,12 @@ public class PresentationView {
         "addEventListener:function(t,f){if(t==='message')L.push(f);}," +
         "removeEventListener:function(t,f){var i=L.indexOf(f);if(i>=0)L.splice(i,1);}," +
         "postMessage:function(s){NFL2K5Native.post(String(s));}};" +
-        "window.__nfl2k5_recv=function(d){for(var i=0;i<L.length;i++){try{L[i]({data:d});}catch(e){}}};})();</script>";
+        "window.__nfl2k5_recv=function(d){for(var i=0;i<L.length;i++){try{L[i]({data:d});}catch(e){}}};" +
+        /* "anything to draw?": the page changed or an animation is running */
+        "var D=true;try{new MutationObserver(function(){D=true;}).observe(document,{subtree:true,childList:true," +
+        "attributes:true,characterData:true});}catch(e){}" +
+        "window.__nfl2k5_busy=function(){var b=D;D=false;try{var a=document.getAnimations();" +
+        "for(var i=0;i<a.length;i++)if(a[i].playState==='running'){b=true;break;}}catch(e){b=true;}return b;};})();</script>";
 
     private PresentationView(int id, int cssW, int cssH, int outW, int outH) {
         this.id = id; this.cssW = cssW; this.cssH = cssH; this.outW = outW; this.outH = outH;
@@ -158,26 +163,45 @@ public class PresentationView {
         public void doFrame(long nanos) {
             if (stopped || web == null) return;
             /* ~30 frames a second is plenty for broadcast graphics and half
-             * the work of matching the display */
-            if (ready && nanos - lastDraw >= 30_000_000L) {
+             * the work of matching the display -- and only while the page
+             * changes or animates: drawing a still scorebug again and again
+             * was a third of a CPU core (2026-10-30 log). Once a second
+             * regardless, for anything the check cannot see. */
+            if (ready && !asking && nanos - lastDraw >= 30_000_000L) {
                 lastDraw = nanos;
-                canvas.save();
-                canvas.setMatrix(null);
-                canvas.drawColor(0, PorterDuff.Mode.CLEAR);
-                canvas.restore();
-                web.draw(canvas);
-                buffer.rewind();
-                bitmap.copyPixelsToBuffer(buffer);
-                nativeFrame(id, buffer, outW, outH);
+                if (forceDraw || nanos - lastFull >= 1_000_000_000L) {
+                    forceDraw = false;
+                    lastFull = nanos;
+                    draw();
+                } else {
+                    asking = true;
+                    web.evaluateJavascript("window.__nfl2k5_busy?__nfl2k5_busy():true", new android.webkit.ValueCallback<String>() {
+                        public void onReceiveValue(String v) {
+                            asking = false;
+                            if (!stopped && web != null && !"false".equals(v)) draw();
+                        }
+                    });
+                }
             }
             Choreographer.getInstance().postFrameCallback(this);
         }
     };
 
+    private void draw() {
+        canvas.save();
+        canvas.setMatrix(null);
+        canvas.drawColor(0, PorterDuff.Mode.CLEAR);
+        canvas.restore();
+        web.draw(canvas);
+        buffer.rewind();
+        bitmap.copyPixelsToBuffer(buffer);
+        nativeFrame(id, buffer, outW, outH);
+    }
+
     private void flush() {
         if (!ready || web == null) return;
         String js = nativeTake(id);
-        if (js != null && !js.isEmpty()) web.evaluateJavascript(js, null);
+        if (js != null && !js.isEmpty()) { web.evaluateJavascript(js, null); forceDraw = true; }
     }
 
     private static String mime(String path) {

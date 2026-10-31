@@ -6,8 +6,10 @@
  * thread) and are merged into port 0 by the input layer (nfl2k5_input_hle.c,
  * nfl2k5_touch_pad_merge). The controls are drawn through the presenter's HUD
  * hook (the HTML scorebug's on Windows, unused on Android), as one BGRA image
- * redrawn only when something changes. They hide while a real controller is
- * connected and nothing has been touched for a while. */
+ * redrawn only when something changes. Options > Phone Settings picks
+ * Automatic (hidden while a real controller is connected and nothing has been
+ * touched for a while), On or Off, and their size and opacity; the small
+ * HIDE / SHOW button under Back/Start switches between On and Off. */
 #if defined(__ANDROID__)
 #include <SDL3/SDL.h>
 #include <math.h>
@@ -23,7 +25,13 @@ void xbox_PresentSetTopHudCallback(XboxHudCallback cb);   /* drawn over the broa
 
 /* The pad as the game's XINPUT_GAMEPAD has it (wButtons bits, analog buttons
  * A B X Y Black White LT RT). */
-enum { C_NONE, C_STICK, C_DPAD, C_A, C_B, C_X, C_Y, C_BLACK, C_WHITE, C_LT, C_RT, C_BACK, C_START, C_COUNT };
+enum { C_NONE, C_STICK, C_DPAD, C_A, C_B, C_X, C_Y, C_BLACK, C_WHITE, C_LT, C_RT, C_BACK, C_START, C_TOGGLE, C_COUNT };
+
+/* Phone Settings (android_settings.c) */
+int nfl2k5_touch_mode(void);            /* 0 automatic, 1 on, 2 off */
+void nfl2k5_touch_set_mode(int m);
+float nfl2k5_touch_scale(void);
+float nfl2k5_touch_alpha(void);
 
 typedef struct { float x, y, r; } Circle;     /* image pixels */
 typedef struct { float x, y, w, h; } Rect;
@@ -47,12 +55,13 @@ static uint32_t *s_img;
 static int s_img_gen;
 
 /* ---- layout (image pixels; H-relative so it holds on any aspect) ------- */
-static Circle stick_home(void) { Circle c = { s_H * 0.33f, s_H * 0.72f, s_H * 0.17f }; return c; }
-static Circle dpad_c(void) { Circle c = { s_H * 0.25f, s_H * 0.36f, s_H * 0.13f }; return c; }
+static float U(void) { return s_H * nfl2k5_touch_scale(); }   /* layout unit: the height, scaled */
+static Circle stick_home(void) { Circle c = { U() * 0.33f, s_H - U() * 0.28f, U() * 0.17f }; return c; }
+static Circle dpad_c(void) { Circle c = { U() * 0.25f, U() * 0.36f, U() * 0.13f }; return c; }
 static Circle face(int k)
 {
-    float cx = s_W - s_H * 0.31f, cy = s_H * 0.70f, o = s_H * 0.135f;
-    Circle c = { cx, cy, s_H * 0.075f };
+    float cx = s_W - U() * 0.31f, cy = s_H - U() * 0.30f, o = U() * 0.135f;
+    Circle c = { cx, cy, U() * 0.075f };
     switch (k) {
     case C_A: c.y += o; break;
     case C_B: c.x += o; break;
@@ -63,15 +72,16 @@ static Circle face(int k)
 }
 static Rect btn_rect(int k)
 {
-    float w = s_H * 0.20f, h = s_H * 0.11f, t = s_H * 0.04f;
+    float u = U(), w = u * 0.20f, h = u * 0.11f, t = s_H * 0.04f;
     Rect r = { 0, t, w, h };
     switch (k) {
     case C_LT:    r.x = s_H * 0.04f; break;
     case C_WHITE: r.x = s_H * 0.04f + w + s_H * 0.03f; break;
     case C_RT:    r.x = s_W - s_H * 0.04f - w; break;
     case C_BLACK: r.x = s_W - s_H * 0.04f - 2 * w - s_H * 0.03f; break;
-    case C_BACK:  r.w = s_H * 0.17f; r.h = s_H * 0.09f; r.x = s_W * 0.5f - r.w - s_H * 0.03f; break;
-    default:      r.w = s_H * 0.17f; r.h = s_H * 0.09f; r.x = s_W * 0.5f + s_H * 0.03f; break;   /* Start */
+    case C_BACK:  r.w = u * 0.17f; r.h = u * 0.09f; r.x = s_W * 0.5f - r.w - s_H * 0.03f; break;
+    case C_TOGGLE: r.w = s_H * 0.15f; r.h = s_H * 0.07f; r.x = s_W * 0.5f - r.w * 0.5f; r.y = t + u * 0.09f + s_H * 0.03f; break;
+    default:      r.w = u * 0.17f; r.h = u * 0.09f; r.x = s_W * 0.5f + s_H * 0.03f; break;   /* Start */
     }
     return r;
 }
@@ -83,10 +93,21 @@ static int in_rect(Rect r, float x, float y, float g)
     return x >= r.x - mx && x <= r.x + r.w + mx && y >= r.y - my && y <= r.y + r.h + my;
 }
 
+/* Whether the controls are up (Off leaves only the SHOW button). */
+static int controls_shown(void)
+{
+    int m = nfl2k5_touch_mode();
+    if (m == 2) return 0;
+    if (m == 0 && SDL_HasGamepad() && SDL_GetTicks() - s_last_touch > 10000) return 0;
+    return 1;
+}
+
 /* Which control a touch at (x, y) is on; buttons get a 25% margin. */
 static int hit(float x, float y)
 {
     int k;
+    if (in_rect(btn_rect(C_TOGGLE), x, y, 1.3f)) return C_TOGGLE;
+    if (nfl2k5_touch_mode() == 2) return C_NONE;
     for (k = C_A; k <= C_Y; k++) if (in_circle(face(k), x, y, 1.35f)) return k;
     for (k = C_BLACK; k <= C_START; k++) if (in_rect(btn_rect(k), x, y, 1.25f)) return k;
     if (in_circle(dpad_c(), x, y, 1.2f)) return C_DPAD;
@@ -164,6 +185,10 @@ static bool SDLCALL on_event(void *ud, SDL_Event *e)
         if (slot < 0) for (i = 0; i < 10 && slot < 0; i++) if (!s_fingers[i].control) slot = i;
         if (slot >= 0) {
             int c = hit(x, y);
+            if (c == C_TOGGLE) {                   /* HIDE / SHOW: On <-> Off */
+                nfl2k5_touch_set_mode(nfl2k5_touch_mode() == 2 ? 1 : 2);
+                c = C_NONE;
+            }
             s_fingers[slot].id = e->tfinger.fingerID;
             s_fingers[slot].control = c;
             s_fingers[slot].x = x; s_fingers[slot].y = y;
@@ -189,7 +214,11 @@ static const struct { char c; uint8_t rows[7]; } k_font[] = {
     { 'S', { 0x0F, 0x10, 0x10, 0x0E, 0x01, 0x01, 0x1E } }, { 'T', { 0x1F, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04 } },
     { 'W', { 0x11, 0x11, 0x11, 0x15, 0x15, 0x15, 0x0A } }, { 'X', { 0x11, 0x11, 0x0A, 0x04, 0x0A, 0x11, 0x11 } },
     { 'Y', { 0x11, 0x11, 0x0A, 0x04, 0x04, 0x04, 0x04 } }, { 'H', { 0x11, 0x11, 0x11, 0x1F, 0x11, 0x11, 0x11 } },
+    { 'D', { 0x1E, 0x11, 0x11, 0x11, 0x11, 0x11, 0x1E } }, { 'E', { 0x1F, 0x10, 0x10, 0x1E, 0x10, 0x10, 0x1F } },
+    { 'I', { 0x0E, 0x04, 0x04, 0x04, 0x04, 0x04, 0x0E } }, { 'O', { 0x0E, 0x11, 0x11, 0x11, 0x11, 0x11, 0x0E } },
 };
+
+static float s_alpha = 1.0f;                   /* Touch Opacity, for this redraw */
 
 /* src-over with a premultiplied colour (a 0..1) */
 static void blend(int x, int y, float r, float g, float b, float a)
@@ -197,6 +226,8 @@ static void blend(int x, int y, float r, float g, float b, float a)
     uint32_t *p, d;
     float dr, dg, db, da;
     if (x < 0 || y < 0 || x >= s_W || y >= s_H || a <= 0) return;
+    a *= s_alpha;
+    if (a > 1) a = 1;
     p = &s_img[y * s_W + x];
     d = *p;
     db = (d & 255) / 255.0f; dg = ((d >> 8) & 255) / 255.0f; dr = ((d >> 16) & 255) / 255.0f; da = (d >> 24) / 255.0f;
@@ -258,6 +289,15 @@ static void redraw(void)
     float base = 0.30f, on = 0.70f, lab = s_H / 540.0f * 3.0f;
     int k;
     memset(s_img, 0, (size_t)s_W * s_H * 4);
+    s_alpha = 1.0f;
+    {
+        Rect r = btn_rect(C_TOGGLE);
+        int off = nfl2k5_touch_mode() == 2;
+        fill_rect(r, 1, 1, 1, off ? 0.18f : 0.22f);
+        text(off ? "SHOW" : "HIDE", r.x + r.w * 0.5f, r.y + r.h * 0.5f, lab * 0.6f, off ? 0.55f : 0.8f);
+        if (off) return;
+    }
+    s_alpha = nfl2k5_touch_alpha();
     /* stick: its base where it was put down, else home */
     {
         Circle h = stick_home(), b = h, kn;
@@ -294,12 +334,13 @@ static int hud(const XboxHudFrame *f, XboxHudImage *img)
 {
     int gen, H;
     if (!f || f->bb_w <= 0 || f->bb_h <= 0) return 0;
-    /* hidden while a controller is in and the screen has not been touched for 10 s */
-    if (SDL_HasGamepad() && SDL_GetTicks() - s_last_touch > 10000) {
+    /* Automatic: hidden while a controller is in and the screen has not been
+     * touched for 10 s (Off still draws the SHOW button) */
+    if (nfl2k5_touch_mode() == 0 && !controls_shown()) {
         if (!s_hidden_logged++) SDL_Log("NFL2K5 touch controls hidden: controller connected");
         return 0;
     }
-    s_hidden_logged = 0;
+    if (s_hidden_logged) { s_hidden_logged = 0; s_gen++; }
     H = (int)((float)s_W * f->bb_h / f->bb_w + 0.5f);
     SDL_LockMutex(s_lock);
     if (!s_img || H != s_H) {
@@ -320,6 +361,9 @@ static int hud(const XboxHudFrame *f, XboxHudImage *img)
     img->x = 0; img->y = 0; img->dw = f->bb_w; img->dh = f->bb_h;
     return 1;
 }
+
+/* A Phone Settings change: draw again. */
+void nfl2k5_touch_pad_changed(void) { s_gen++; }
 
 void nfl2k5_touch_pad_init(void)
 {

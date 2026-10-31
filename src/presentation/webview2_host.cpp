@@ -635,6 +635,7 @@ std::unique_ptr<PresentationHost> create_webview2_presentation_host()
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_system.h>
 #include <jni.h>
+#include <sys/prctl.h>
 
 #include <algorithm>
 #include <atomic>
@@ -655,6 +656,17 @@ std::mutex s_hosts_lock;                       /* guards s_hosts and the frames 
 std::map<int, AndroidWebViewHost *> s_hosts;
 int s_next_id = 1;
 jclass s_view_class;                           /* com.nfl2k5.pc.PresentationView (global ref) */
+
+/* The JNI environment for this thread. Attaching a thread to the VM renames
+ * it "Thread-N"; the name is put back so the [CPU] report can tell them apart. */
+JNIEnv *jni_env()
+{
+    char name[17] = { 0 };
+    prctl(PR_GET_NAME, name, 0, 0, 0);
+    JNIEnv *env = (JNIEnv *)SDL_GetAndroidJNIEnv();
+    if (name[0]) prctl(PR_SET_NAME, name, 0, 0, 0);
+    return env;
+}
 
 std::string abs_path(const std::string &p)
 {
@@ -710,7 +722,7 @@ public:
     bool start(const PresentationHostConfig &config) override
     {
         if (id_) return false;
-        JNIEnv *env = (JNIEnv *)SDL_GetAndroidJNIEnv();
+        JNIEnv *env = jni_env();
         if (!env || !bind(env)) { set_status("error: PresentationView unavailable"); return false; }
         config_ = config;
         css_w_ = config.canvas_width > 0 ? config.canvas_width : 1920;
@@ -745,7 +757,7 @@ public:
     void stop() override
     {
         if (!id_) return;
-        JNIEnv *env = (JNIEnv *)SDL_GetAndroidJNIEnv();
+        JNIEnv *env = jni_env();
         {
             std::lock_guard<std::mutex> g(s_hosts_lock);
             s_hosts.erase(id_);
@@ -880,7 +892,7 @@ private:
     void kick()
     {
         if (!id_ || !s_view_class) return;
-        JNIEnv *env = (JNIEnv *)SDL_GetAndroidJNIEnv();
+        JNIEnv *env = jni_env();
         if (!env) return;
         static jmethodID m = env->GetStaticMethodID(s_view_class, "kick", "(I)V");
         env->CallStaticVoidMethod(s_view_class, m, (jint)id_);
