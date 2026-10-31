@@ -1162,6 +1162,7 @@ static void *android_perf_stats_thread(void *arg)
  * game's own SIGSEGV handler, installed later, passes faults it does not
  * handle on to this one. */
 #include <dlfcn.h>
+#include <fcntl.h>
 #include <unwind.h>
 static struct sigaction s_crash_prev[32];
 
@@ -1195,6 +1196,19 @@ static void crash_handler(int sig, siginfo_t *si, void *uctx)
     snprintf(line, sizeof line, "[CRASH] signal %d (code %d) at address %p, thread %d\n", sig,
              si ? si->si_code : 0, si ? si->si_addr : NULL, (int)gettid());
     crash_line(line);
+    {   /* the thread's name says whose it is (a driver's worker, the renderer...) */
+        char comm[32];
+        int fd = open("/proc/thread-self/comm", O_RDONLY), k;
+        if (fd >= 0) {
+            k = (int)read(fd, comm, sizeof comm - 1);
+            close(fd);
+            if (k > 0) {
+                comm[k] = 0;
+                crash_line("[CRASH] thread name: ");
+                crash_line(comm);
+            }
+        }
+    }
 #if defined(__aarch64__)
     if (uc) {
         crash_line("[CRASH] pc:\n");
