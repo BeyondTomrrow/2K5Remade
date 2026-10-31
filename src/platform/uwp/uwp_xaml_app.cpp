@@ -122,6 +122,14 @@ struct XamlApp : ApplicationT<XamlApp> {
                 winrt::Windows::UI::ViewManagement::ApplicationViewBoundsMode::UseCoreWindow);
         } catch (...) {
         }
+        /* Xbox: a XAML app starts in mouse mode (the pad drives a cursor and B
+         * is "back"); the game reads the pad itself. */
+        try {
+            Application::Current().RequiresPointerMode(ApplicationRequiresPointerMode::WhenRequested);
+            winrt::Windows::UI::Core::SystemNavigationManager::GetForCurrentView().BackRequested(
+                [](auto &&, winrt::Windows::UI::Core::BackRequestedEventArgs const &a) { a.Handled(true); });
+        } catch (...) {
+        }
         Window win = Window::Current();
         s_root = Grid();
         s_root.Background(Media::SolidColorBrush(winrt::Windows::UI::Colors::Black()));
