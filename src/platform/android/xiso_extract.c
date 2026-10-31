@@ -422,30 +422,6 @@ int nfl2k5_android_unpack_iso(const char *root)
         return -1;
     }
     fprintf(stderr, "[ISO] done: %s\n", dest);
-    {
-        /* The game now runs from the unpacked files; the image is no longer
-         * needed, but it is the player's file: asked, never assumed. */
-        struct stat st;
-        double gb = stat(iso, &st) == 0 ? st.st_size / 1e9 : 0.0;
-        const SDL_MessageBoxButtonData buttons[] = {
-            { SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT, 0, "Keep it" },
-            { SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT, 1, "Delete it" },
-        };
-        SDL_MessageBoxData box;
-        int choice = 0;
-        snprintf(msg, sizeof msg, "NFL 2K5 is installed and plays from its own folder now.\n\n"
-                 "Delete the disc image %s to free %.1f GB?", iso, gb);
-        memset(&box, 0, sizeof box);
-        box.flags = SDL_MESSAGEBOX_INFORMATION;
-        box.title = "NFL 2K5: game installed";
-        box.message = msg;
-        box.numbuttons = 2;
-        box.buttons = buttons;
-        if (SDL_ShowMessageBox(&box, &choice) && choice == 1) {
-            if (unlink(iso) == 0) fprintf(stderr, "[ISO] deleted %s at the player's choice\n", iso);
-            else fprintf(stderr, "[ISO] could not delete %s: %s\n", iso, strerror(errno));
-        }
-    }
     return 1;
 }
 #endif
