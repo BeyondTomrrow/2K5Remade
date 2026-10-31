@@ -40,16 +40,9 @@ ZERO(GetForegroundWindow) ZERO(ScreenToClient) ZERO(GetCursorPos) ZERO(LoadCurso
 ZERO(LoadIconA) ZERO(CreateIconIndirect) ZERO(EnumDisplaySettingsA) ZERO(GetKeyNameTextA)
 ZERO(MapVirtualKeyA) TRUE_(AdjustWindowRect)
 
-/* ---- GDI: the F1 overlay text and prompt art draw into DIBs with GDI.
- * Failing CreateDIBSection/CreateCompatibleDC makes those paths skip; a
- * later stage draws that text another way (DirectWrite is in the UWP set). */
-ZERO(GetDC) ZERO(ReleaseDC) ZERO(CreateCompatibleDC) ZERO(DeleteDC) ZERO(CreateDIBSection)
-ZERO(CreateBitmap) ZERO(SelectObject) ZERO(DeleteObject) ZERO(GetStockObject) ZERO(CreateFontA)
-ZERO(CreatePen) ZERO(CreateSolidBrush) ZERO(SetBkMode) ZERO(SetTextColor) ZERO(TextOutA)
-ZERO(DrawTextA) ZERO(GetTextExtentPoint32A) ZERO(FillRect) ZERO(Rectangle) ZERO(RoundRect)
-ZERO(Ellipse) ZERO(MoveToEx) ZERO(LineTo) ZERO(Polyline) ZERO(SetPixel) ZERO(GdiFlush)
-ZERO(AddFontResourceExW)
-
+/* ---- GDI: the F1 overlay text, the music toast and the prompt art draw into
+ * DIBs with GDI; uwp_gdi_d2d.cpp does that on Direct2D/DirectWrite. ---- */
+ZERO(CreateBitmap) ZERO(AddFontResourceExW)
 /* ---- dbghelp (crash reporter symbol lookup): not on Xbox ---- */
 ZERO(SymInitialize) ZERO(SymCleanup) ZERO(SymSetOptions) ZERO(SymFromAddr) ZERO(SymGetLineFromAddr64)
 

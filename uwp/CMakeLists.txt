@@ -104,6 +104,7 @@ if(NFL2K5_UWP_GAME)
     ${NFL2K5_ROOT}/src/platform/uwp/uwp_probe.c
     ${NFL2K5_ROOT}/src/platform/uwp/uwp_game.cpp
     ${NFL2K5_ROOT}/src/platform/uwp/uwp_win32_shim.c
+    ${NFL2K5_ROOT}/src/platform/uwp/uwp_gdi_d2d.cpp
     ${NFL2K5_ROOT}/src/platform/uwp/uwp_hwnd_test.cpp
     ${NFL2K5_ROOT}/src/platform/uwp/uwp_mf_shim.cpp
     ${NFL2K5_ROOT}/src/platform/uwp/uwp_selftest.cpp
