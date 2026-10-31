@@ -38,6 +38,12 @@
 
 #include "uwp_probe.h"
 #include "uwp_font5x7.h"
+#ifdef NFL2K5_UWP_GAME
+#include "uwp_game.h"
+extern "C" volatile unsigned char g_uwp_keys[256];        /* uwp_win32_shim.c */
+extern "C" LONG g_uwp_window_w, g_uwp_window_h;
+extern "C" int uwp_hwnd_test_main(const wchar_t *local_dir);   /* uwp_hwnd_test.cpp */
+#endif
 
 using Microsoft::WRL::ComPtr;
 using namespace winrt;
@@ -248,6 +254,32 @@ struct App : implements<App, IFrameworkViewSource, IFrameworkView> {
         g_install_dir = Package::Current().InstalledLocation().Path().c_str();
         device_family = narrow(winrt::Windows::System::Profile::AnalyticsInfo::VersionInfo().DeviceFamily());
 
+#ifdef NFL2K5_UWP_GAME
+        /* The game owns the window from here (SDL_GPU D3D12 on this
+         * CoreWindow); this thread only dispatches window events and turns
+         * Windows.Gaming.Input readings into SDL virtual gamepads. */
+        {
+            float scale = DisplayInformation::GetForCurrentView().LogicalDpi() / 96.0f;
+            auto bounds = window.Bounds();
+            g_uwp_window_w = (LONG)(bounds.Width * scale);
+            g_uwp_window_h = (LONG)(bounds.Height * scale);
+            window.SizeChanged([scale](auto &&, WindowSizeChangedEventArgs const &a) {
+                g_uwp_window_w = (LONG)(a.Size().Width * scale);
+                g_uwp_window_h = (LONG)(a.Size().Height * scale);
+            });
+            window.KeyDown([](auto &&, KeyEventArgs const &a) { g_uwp_keys[(int)a.VirtualKey() & 0xFF] = 1; });
+            window.KeyUp([](auto &&, KeyEventArgs const &a) { g_uwp_keys[(int)a.VirtualKey() & 0xFF] = 0; });
+        }
+        uwp_game_start(winrt::get_abi(window), g_local_dir.c_str(), g_install_dir.c_str());
+        for (int code = 0; !closed && !uwp_game_exited(&code);) {
+            window.Dispatcher().ProcessEvents(CoreProcessEventsOption::ProcessAllIfPresent);
+            uwp_game_tick();
+            Sleep(4);
+        }
+        CoreApplication::Exit();
+        return;
+#endif
+
         uwp_probe_run(g_local_dir.c_str(), g_install_dir.c_str(), L"E:\\2K5Remade\\README.md");
 
         {
@@ -405,6 +437,15 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR cmd, int)
 {
     int probe = run_probe_only(cmd ? cmd : L"");
     if (probe >= 0) return probe;
+#ifdef NFL2K5_UWP_GAME
+    if (cmd && wcsstr(cmd, L"--hwnd-test")) {
+        const wchar_t *arg = wcsstr(cmd, L"--hwnd-test") + 11;
+        while (*arg == L' ' || *arg == L'"') arg++;
+        std::wstring dir(arg);
+        while (!dir.empty() && (dir.back() == L'"' || dir.back() == L' ')) dir.pop_back();
+        return uwp_hwnd_test_main(dir.c_str());
+    }
+#endif
     winrt::init_apartment();
     CoreApplication::Run(make<App>());
     return 0;
