@@ -74,6 +74,7 @@ void SDLCALL set_swapchain(void *swapchain)
         com_ptr<ISwapChainPanelNative> native = s_panel.as<ISwapChainPanelNative>();
         HRESULT hr = native->SetSwapChain(static_cast<IDXGISwapChain *>(swapchain));
         fprintf(stderr, "[UWP] SwapChainPanel.SetSwapChain 0x%08lX\n", (unsigned long)hr);
+        if (SUCCEEDED(hr) && swapchain) s_swap_ok = true;   /* the 45 s check reads it */
     };
     if (s_dispatcher.HasThreadAccess()) {
         apply();
@@ -96,6 +97,10 @@ void update_size()
     if (w > 0 && h > 0) {
         g_uwp_window_w = (LONG)(w * (sx > 0 ? sx : 1));
         g_uwp_window_h = (LONG)(h * (sy > 0 ? sy : 1));
+        /* SDL's present stretches the swap chain over the panel (in view
+         * pixels): a SwapChainPanel shows it unscaled otherwise. */
+        SDL_SetFloatProperty(SDL_GetGlobalProperties(), "SDL.uwp.panel.width", (float)w);
+        SDL_SetFloatProperty(SDL_GetGlobalProperties(), "SDL.uwp.panel.height", (float)h);
     }
 }
 
