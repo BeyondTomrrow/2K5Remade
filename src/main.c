@@ -1153,6 +1153,9 @@ static void *android_perf_stats_thread(void *arg)
     return NULL;
 }
 
+#endif /* __ANDROID__ */
+
+#if !defined(_WIN32)   /* the crash report: Android and the Linux test VM */
 /* A crash writes where it happened into the log: the signal, the faulting
  * address and the call stack as offsets in libmain.so (symbolised on the PC
  * with llvm-symbolizer and the unstripped library), then dies as before. The
@@ -1236,6 +1239,9 @@ static void android_crash_reporter(void)
     for (i = 0; i < sizeof sigs / sizeof sigs[0]; i++)
         sigaction(sigs[i], &sa, &s_crash_prev[sigs[i]]);
 }
+
+#endif /* !_WIN32 */
+#if defined(__ANDROID__)
 
 /* The game folder: the first of these holding original/default.xbe. The
  * app's own folder needs no permission (adb push or a file manager);
@@ -1411,6 +1417,8 @@ int main(int argc, char **argv)
         if (pthread_create(&t, NULL, android_cpu_report_thread, NULL) == 0) pthread_detach(t);
         if (pthread_create(&t, NULL, android_perf_stats_thread, NULL) == 0) pthread_detach(t);
     }
+#elif !defined(_WIN32)
+    android_crash_reporter();   /* the Linux test VM: same report in its log */
 #endif
 
     const char *root = nfl2k5_project_root();

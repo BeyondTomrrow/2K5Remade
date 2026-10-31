@@ -523,6 +523,37 @@ static void disc_path(const Pack *pk, const char *rel, char *out, size_t cap)
     snprintf(out, cap, "%s/%s", pk->disc, rel);
 #ifdef _WIN32
     for (char *c = out; *c; c++) if (*c == '/') *c = '\\';
+#else
+    /* The pack names disc files as Windows saw them ("vc_53450030/d"); an
+     * extracted disc can spell them otherwise ("vc_53450030/D"), and on
+     * Linux/Android those are different names. Match each part's case. */
+    if (!pi_exists(out)) {
+        char cur[PI_PATH], part[256];
+        const char *r = rel;
+        snprintf(cur, sizeof cur, "%s", pk->disc);
+        while (*r) {
+            size_t n = strcspn(r, "/\\");
+            DIR *d;
+            struct dirent *de;
+            int found = 0;
+            if (n == 0) { r++; continue; }
+            if (n >= sizeof part) return;
+            memcpy(part, r, n);
+            part[n] = 0;
+            r += n;
+            if (!(d = opendir(cur))) return;
+            while ((de = readdir(d)) != NULL)
+                if (!strcasecmp(de->d_name, part)) {
+                    size_t l = strlen(cur);
+                    snprintf(cur + l, sizeof cur - l, "/%s", de->d_name);
+                    found = 1;
+                    break;
+                }
+            closedir(d);
+            if (!found) return;          /* leave the plain path: the caller reports it missing */
+        }
+        snprintf(out, cap, "%s", cur);
+    }
 #endif
 }
 
