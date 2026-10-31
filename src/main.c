@@ -758,6 +758,63 @@ static void *android_log_thread(void *arg)
     return NULL;
 }
 
+/* The broadcast presentation packages ship inside the APK (android/build_apk.py
+ * puts mods/presentations under assets/presentations with a manifest whose
+ * first line is a version stamp). They are copied into <root>/mods/presentations
+ * when that stamp changes, and a first mods/presentation.ini picks NBC SNF. */
+static void android_mkdirs(const char *path)
+{
+    char tmp[1024];
+    snprintf(tmp, sizeof tmp, "%s", path);
+    for (char *p = tmp + 1; *p; p++)
+        if (*p == '/') { *p = 0; mkdir(tmp, 0775); *p = '/'; }
+    mkdir(tmp, 0775);
+}
+
+static void android_unpack_presentations(const char *root)
+{
+    size_t len = 0;
+    char *manifest = (char *)SDL_LoadFile("presentations/manifest.txt", &len);
+    char dir[1024], stamp_path[1024], old[64] = "";
+    FILE *f;
+    if (!manifest) return;
+    snprintf(dir, sizeof dir, "%s/mods/presentations", root);
+    snprintf(stamp_path, sizeof stamp_path, "%s/.apk-version", dir);
+    if ((f = fopen(stamp_path, "r"))) { if (!fgets(old, sizeof old, f)) old[0] = 0; fclose(f); }
+    char *line = strtok(manifest, "\n");
+    if (line && strcmp(line, old) && strncmp(line, old, strlen(line))) {
+        char stamp[64];
+        unsigned n = 0, bad = 0;
+        snprintf(stamp, sizeof stamp, "%s", line);
+        android_mkdirs(dir);
+        while ((line = strtok(NULL, "\n"))) {
+            char src[1024], dst[1024];
+            size_t sz = 0;
+            void *data;
+            snprintf(src, sizeof src, "presentations/%s", line);
+            snprintf(dst, sizeof dst, "%s/%s", dir, line);
+            if (strrchr(dst, '/')) { *strrchr(dst, '/') = 0; android_mkdirs(dst); dst[strlen(dst)] = '/'; }
+            data = SDL_LoadFile(src, &sz);
+            if (data && (f = fopen(dst, "wb"))) { fwrite(data, 1, sz, f); fclose(f); n++; }
+            else bad++;
+            SDL_free(data);
+        }
+        if ((f = fopen(stamp_path, "w"))) { fprintf(f, "%s\n", stamp); fclose(f); }
+        fprintf(stderr, "[ANDROID] broadcast packages unpacked: %u files%s\n", n, bad ? " (some failed)" : "");
+    }
+    SDL_free(manifest);
+    {
+        char ini[1024];
+        snprintf(ini, sizeof ini, "%s/mods/presentation.ini", root);
+        if (access(ini, F_OK) != 0 && (f = fopen(ini, "w"))) {
+            fprintf(f, "; Broadcast presentation (Coach Match Up > Presentation edits this)\n"
+                       "package = NBC Sunday Night Football\nintro = 0\noutro = 0\nanimations = 1\n"
+                       "theme_volume = 100\ncustom_commentary = 0\n");
+            fclose(f);
+        }
+    }
+}
+
 /* Every 30 s: the threads that used the most CPU, as percent of one core.
  * What drains a phone battery is CPU time, and this names who spends it. */
 static void *android_cpu_report_thread(void *arg)
@@ -1062,6 +1119,9 @@ int main(int argc, char **argv)
         mkdir(cache, 0775);
         snprintf(cache, sizeof cache, "%s/cache/vk_pipelines.bin", root);
         setenv("SDL_GPU_VULKAN_PIPELINE_CACHE", cache, 0);
+        android_unpack_presentations(root);
+        snprintf(cache, sizeof cache, "%s/Music", root);   /* Music/<playlist>/<songs>: custom soundtracks */
+        mkdir(cache, 0775);
     }
     {
         extern void nfl2k5_touch_pad_init(void);   /* on-screen controls (platform/android/touch_pad.c) */

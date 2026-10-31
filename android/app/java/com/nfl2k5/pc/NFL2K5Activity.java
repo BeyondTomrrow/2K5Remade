@@ -17,6 +17,10 @@ import java.io.File;
  * second needs "All files access" on Android 11 and later, asked for here
  * only when that folder exists. */
 public class NFL2K5Activity extends SDLActivity {
+    /* SDL's layout holding the game's surface (PresentationView adds its
+     * page behind it). */
+    static android.view.ViewGroup layout() { return mLayout; }
+
     @Override
     protected String[] getLibraries() {
         return new String[] { "SDL3", "main" };

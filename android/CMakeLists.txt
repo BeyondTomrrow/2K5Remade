@@ -47,3 +47,16 @@ add_library(pthread INTERFACE)
 
 set(NFL2K5_BUILD_GAME ON CACHE BOOL "" FORCE)
 add_subdirectory(.. nfl2k5)
+
+# ---- FFmpeg (static, audio only): Music folder songs -> WMA in process ------
+# (src/nfl2k5_wma_encode.cpp; desktop builds run the ffmpeg program instead).
+# Built from the release source by C:/Android/src/ffmpeg-build.sh.
+set(FFMPEG_ANDROID "C:/Android/src/ffmpeg-android" CACHE PATH "FFmpeg static build (include/, lib/)")
+if(EXISTS "${FFMPEG_ANDROID}/lib/libavcodec.a")
+  target_include_directories(NFL2K5 PRIVATE "${FFMPEG_ANDROID}/include")
+  target_compile_definitions(NFL2K5 PRIVATE NFL2K5_HAVE_FFMPEG)
+  target_link_libraries(NFL2K5 PRIVATE "${FFMPEG_ANDROID}/lib/libavformat.a" "${FFMPEG_ANDROID}/lib/libavcodec.a"
+                                       "${FFMPEG_ANDROID}/lib/libswresample.a" "${FFMPEG_ANDROID}/lib/libavutil.a" m)
+else()
+  message(WARNING "FFmpeg for Android missing (run C:/Android/src/ffmpeg-build.sh): Music folder songs will not convert")
+endif()

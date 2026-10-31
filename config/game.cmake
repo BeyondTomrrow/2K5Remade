@@ -36,7 +36,8 @@ else()
   # ---- POSIX (Linux) -------------------------------------------------------
   # Same game sources minus the Windows-only presentation renderer
   # (Direct2D/DirectWrite/Media Foundation/XAudio2), which is replaced by
-  # no-op stubs until it is ported. src/platform/posix supplies <windows.h>.
+  # no-op stubs on Linux until it is ported (Android compiles it, see below).
+  # src/platform/posix supplies <windows.h>.
   set(NFL2K5_FUNC_RANGES "${CMAKE_BINARY_DIR}/generated/nfl2k5_func_ranges.c")
   if(EXISTS "${PROJECT_SOURCE_DIR}/analysis/disasm/functions.json")
     find_package(Python3 REQUIRED COMPONENTS Interpreter)
@@ -65,11 +66,19 @@ else()
     src/nfl2k5_save_library.cpp src/nfl2k5_discord.cpp src/interp/x86_interp.c src/interp/interp_setup.c
     "${NFL2K5_FUNC_RANGES}" external/xemu-src/util/miniz/miniz.c src/nfl2k5_wma_encode.cpp
     src/presentation/webview2_host.cpp src/presentation/portraits.cpp
-    src/platform/posix/win32_game_compat.c src/platform/posix/stb_impl.c src/platform/posix/presentation_stub.cpp
+    src/platform/posix/win32_game_compat.c src/platform/posix/stb_impl.c
     # features merged from the pre-SDL3 build (2026-10-29)
     src/nfl2k5_eras_capture.c src/nfl2k5_eras.c src/nfl2k5_eras_menu.c src/nfl2k5_eras_launch.c src/nfl2k5_eras_office.c src/nfl2k5_eras_draftshow.c src/nfl2k5_eras_playoffs.c src/nfl2k5_eras_awards.c src/nfl2k5_eras_rollover.c src/nfl2k5_eras_depth.c src/nfl2k5_eras_sheets.c src/nfl2k5_eras_draft.c src/nfl2k5_eras_draft_sheets.c src/nfl2k5_eras_draft_room.c src/nfl2k5_eras_module.c src/nfl2k5_coach_mode.c src/nfl2k5_broadcast_cam.c src/nfl2k5_ballscan.c src/nfl2k5_moment_audio.c src/nfl2k5_plugin_host.c src/nfl2k5_json.c src/nfl2k5_walk_diag.c src/nfl2k5_exit_menu.c src/nfl2k5_sandbox.cpp src/nfl2k5_sandbox_menu.c src/nfl2k5_sandbox_world.c src/nfl2k5_sandbox_actors.c src/nfl2k5_sandbox_pose.c src/nfl2k5_sandbox_ui.cpp
     ${NFL2K5_GENERATED})
   target_include_directories(NFL2K5 PRIVATE src/platform/posix "${NFL2K5_GEN_DIR}" src external/xemu-src/util/miniz)
+  # Broadcast presentation: the real one on Android (HTML packages through
+  # the Android PresentationHost, NDK media decode, SDL3 playback; linked
+  # with mediandk below), the no-op stand-in on Linux until it is ported.
+  if(ANDROID)
+    target_sources(NFL2K5 PRIVATE src/nfl2k5_presentation.cpp)
+  else()
+    target_sources(NFL2K5 PRIVATE src/platform/posix/presentation_stub.cpp)
+  endif()
 endif()
 # The XBE the generated code came from (empty: retail). A pack build runs that
 # XBE and finds its installed pack by this hash (src/main.c).
@@ -122,7 +131,7 @@ target_link_options(NFL2K5 PRIVATE /DEBUG /LARGEADDRESSAWARE /STACK:16777216)
 else()
   target_link_libraries(NFL2K5 PRIVATE xboxrecomp OpenSSL::Crypto)
   if(ANDROID)
-    target_link_libraries(NFL2K5 PRIVATE log android)
+    target_link_libraries(NFL2K5 PRIVATE log android mediandk)
     target_sources(NFL2K5 PRIVATE src/platform/android/xiso_extract.c src/platform/android/touch_pad.c)   # unpacks the player's disc image
   endif()
   # Optimisation level for the game target (recompiled code included).

@@ -86,6 +86,34 @@ with zipfile.ZipFile(unsigned, "a", zipfile.ZIP_DEFLATED) as z:
     for name, path in libs.items():
         print(f"  lib/{a.abi}/{name}: {os.path.getsize(path) / 1e6:.1f} MB")
         z.write(path, f"lib/{a.abi}/{name}")
+    # broadcast presentation packages (mods/presentations), unpacked into the
+    # game folder on first start (src/main.c android_unpack_presentations);
+    # the same file types the PC installer ships
+    pres = os.path.join(ROOT, "mods", "presentations")
+    keep = (".html", ".css", ".js", ".json", ".png", ".ttf", ".otf", ".woff", ".woff2", ".md", ".txt", ".mp3", ".jpg", ".svg", ".webp")
+    files = []
+    for dirpath, _, names in os.walk(pres):
+        for n in sorted(names):
+            if n.lower().endswith(keep):
+                rel = os.path.relpath(os.path.join(dirpath, n), pres).replace(os.sep, "/")
+                files.append(rel)
+                src = os.path.join(dirpath, n)
+                if n.lower().endswith(".png") and os.path.getsize(src) > 200_000:
+                    # team logos are 1-3 MB at up to 2000 px; the phone draws
+                    # the page at 960 px wide, so 256 px is plenty (logos are drawn far smaller)
+                    from PIL import Image
+                    import io
+                    im = Image.open(src)
+                    if max(im.size) > 256:
+                        im.thumbnail((256, 256), Image.LANCZOS)
+                    buf = io.BytesIO()
+                    im.save(buf, "PNG", optimize=True)
+                    z.writestr("assets/presentations/" + rel, buf.getvalue())
+                else:
+                    z.write(src, "assets/presentations/" + rel)
+    stamp = str(int(max(os.path.getmtime(os.path.join(pres, f)) for f in files))) if files else "0"
+    z.writestr("assets/presentations/manifest.txt", stamp + "\n" + "\n".join(files) + "\n")
+    print(f"  assets/presentations: {len(files)} files")
 
 # 4. align and sign
 aligned = os.path.join(work, "aligned.apk")

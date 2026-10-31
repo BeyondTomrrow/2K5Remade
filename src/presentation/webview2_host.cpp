@@ -625,7 +625,352 @@ std::unique_ptr<PresentationHost> create_webview2_presentation_host()
 }
 
 }
-#else /* !_WIN32 */
+#elif defined(__ANDROID__)
+
+/* PresentationHost on Android's WebView (android/app/.../PresentationView.java).
+ * The Java side runs the page behind the game's surface and hands its pixels
+ * back ~30 times a second, drawn at the reduced size asked for here; this
+ * side turns them into the same BGRA premultiplied surface the Windows host
+ * produces and passes messages both ways. */
+#include <SDL3/SDL.h>
+#include <SDL3/SDL_system.h>
+#include <jni.h>
+
+#include <algorithm>
+#include <atomic>
+#include <climits>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <deque>
+#include <map>
+#include <mutex>
+#include <vector>
+
+namespace nfl2k5 {
+namespace {
+
+class AndroidWebViewHost;
+std::mutex s_hosts_lock;                       /* guards s_hosts and the frames they receive */
+std::map<int, AndroidWebViewHost *> s_hosts;
+int s_next_id = 1;
+jclass s_view_class;                           /* com.nfl2k5.pc.PresentationView (global ref) */
+
+std::string abs_path(const std::string &p)
+{
+    if (p.empty()) return p;
+    char buf[PATH_MAX];
+    if (realpath(p.c_str(), buf)) return buf;
+    if (p[0] == '/') return p;
+    const char *root = getenv("NFL2K5_ROOT");
+    return std::string(root ? root : "/sdcard/NFL2K5") + "/" + p;
+}
+
+/* JSON from the game as a Java string; NewStringUTF would reject characters
+ * outside the BMP (they are not "modified UTF-8"). */
+jstring to_jstring(JNIEnv *env, const std::string &s)
+{
+    std::vector<jchar> u;
+    u.reserve(s.size());
+    for (size_t i = 0; i < s.size();) {
+        uint32_t c = (uint8_t)s[i++];
+        if (c >= 0xF0 && i + 2 < s.size() + 0) {
+            c = ((c & 7) << 18) | (((uint8_t)s[i] & 63) << 12) | (((uint8_t)s[i + 1] & 63) << 6) | ((uint8_t)s[i + 2] & 63);
+            i += 3;
+        } else if (c >= 0xE0 && i + 1 < s.size() + 0) {
+            c = ((c & 15) << 12) | (((uint8_t)s[i] & 63) << 6) | ((uint8_t)s[i + 1] & 63);
+            i += 2;
+        } else if (c >= 0xC0 && i < s.size()) {
+            c = ((c & 31) << 6) | ((uint8_t)s[i] & 63);
+            i += 1;
+        }
+        if (c >= 0x10000) {
+            c -= 0x10000;
+            u.push_back((jchar)(0xD800 + (c >> 10)));
+            u.push_back((jchar)(0xDC00 + (c & 0x3FF)));
+        } else
+            u.push_back((jchar)c);
+    }
+    return env->NewString(u.data(), (jsize)u.size());
+}
+
+std::string from_jstring(JNIEnv *env, jstring s)
+{
+    if (!s) return std::string();
+    const char *c = env->GetStringUTFChars(s, nullptr);
+    std::string r = c ? c : "";
+    if (c) env->ReleaseStringUTFChars(s, c);
+    return r;
+}
+
+class AndroidWebViewHost final : public PresentationHost {
+public:
+    ~AndroidWebViewHost() override { stop(); }
+
+    bool start(const PresentationHostConfig &config) override
+    {
+        if (id_) return false;
+        JNIEnv *env = (JNIEnv *)SDL_GetAndroidJNIEnv();
+        if (!env || !bind(env)) { set_status("error: PresentationView unavailable"); return false; }
+        config_ = config;
+        css_w_ = config.canvas_width > 0 ? config.canvas_width : 1920;
+        css_h_ = config.canvas_height > 0 ? config.canvas_height : 1080;
+        float scale = config.raster_scale > 0.05f ? config.raster_scale : 0.5f;
+        out_w_ = std::max(16, (int)(css_w_ * scale + 0.5f));
+        out_h_ = std::max(16, (int)(css_h_ * scale + 0.5f));
+        std::string root = abs_path(config.root_dir), pkg = abs_path(config.package_dir);
+        std::string rel = pkg;
+        if (pkg.size() > root.size() && pkg.compare(0, root.size(), root) == 0 && pkg[root.size()] == '/')
+            rel = pkg.substr(root.size() + 1);
+        std::string url = "https://presentation.local/" + rel + "/" + config.entry;
+        {
+            std::lock_guard<std::mutex> g(s_hosts_lock);
+            id_ = s_next_id++;
+            s_hosts[id_] = this;
+        }
+        fprintf(stderr, "[HTMLPRES] loading %s (%dx%d drawn at %dx%d)\n", url.c_str(), css_w_, css_h_, out_w_, out_h_);
+        set_status("starting");
+        jmethodID m = env->GetStaticMethodID(s_view_class, "start",
+            "(ILjava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;IIII)V");
+        jstring a[5] = { to_jstring(env, root), to_jstring(env, abs_path(config.teams_dir)),
+                         to_jstring(env, abs_path(config.eras_teams_dir)), to_jstring(env, abs_path(config.portraits_dir)),
+                         to_jstring(env, url) };
+        env->CallStaticVoidMethod(s_view_class, m, (jint)id_, a[0], a[1], a[2], a[3], a[4],
+                                  (jint)css_w_, (jint)css_h_, (jint)out_w_, (jint)out_h_);
+        for (jstring s : a) env->DeleteLocalRef(s);
+        if (env->ExceptionCheck()) { env->ExceptionClear(); set_status("error: could not start the page"); return false; }
+        return true;
+    }
+
+    void stop() override
+    {
+        if (!id_) return;
+        JNIEnv *env = (JNIEnv *)SDL_GetAndroidJNIEnv();
+        {
+            std::lock_guard<std::mutex> g(s_hosts_lock);
+            s_hosts.erase(id_);
+        }
+        if (env && s_view_class) {
+            env->CallStaticVoidMethod(s_view_class, env->GetStaticMethodID(s_view_class, "stop", "(I)V"), (jint)id_);
+            if (env->ExceptionCheck()) env->ExceptionClear();
+        }
+        id_ = 0;
+    }
+
+    void post_state(const std::string &json) override
+    {
+        {
+            std::lock_guard<std::mutex> g(msg_lock_);
+            pending_state_ = json;
+        }
+        kick();
+    }
+
+    void post_event(const std::string &json) override
+    {
+        {
+            std::lock_guard<std::mutex> g(msg_lock_);
+            pending_events_.push_back(json);
+        }
+        kick();
+    }
+
+    bool acquire_surface(PresentationSurface &out) override
+    {
+        std::lock_guard<std::mutex> g(frame_lock_);
+        if (!front_serial_) return false;
+        out.dirty_y0 = out.dirty_y1 = 0;
+        out.dirty_rows = nullptr;
+        if (consumer_serial_ != front_serial_) {
+            size_t row = (size_t)frame_w_ * 4;
+            if (consumer_.size() != front_.size()) {
+                consumer_ = front_;
+                out.dirty_y0 = 0; out.dirty_y1 = frame_h_;
+            } else {
+                out_rows_.assign(frame_h_, 0);
+                int lo = INT_MAX, hi = 0;
+                for (int y = 0; y < frame_h_ && y < (int)pend_rows_.size(); y++)
+                    if (pend_rows_[y]) {
+                        memcpy(&consumer_[(size_t)y * row], &front_[(size_t)y * row], row);
+                        out_rows_[y] = 1;
+                        lo = std::min(lo, y); hi = y + 1;
+                    }
+                if (hi > lo) { out.dirty_y0 = lo; out.dirty_y1 = hi; out.dirty_rows = out_rows_.data(); }
+            }
+            std::fill(pend_rows_.begin(), pend_rows_.end(), (uint8_t)0);
+            consumer_serial_ = front_serial_;
+        }
+        out.pixels = consumer_.data();
+        out.width = frame_w_;
+        out.height = frame_h_;
+        out.stride = frame_w_ * 4;
+        out.serial = consumer_serial_;
+        return true;
+    }
+
+    std::string status() const override
+    {
+        std::lock_guard<std::mutex> g(status_lock_);
+        return status_;
+    }
+
+    /* ---- from the Java side (UI thread) ---- */
+
+    /* RGBA premultiplied (an Android bitmap) -> BGRA premultiplied; only
+     * changed rows are copied and reported, as on Windows. */
+    void frame(const uint8_t *px, int w, int h)
+    {
+        const size_t row = (size_t)w * 4;
+        std::lock_guard<std::mutex> g(frame_lock_);
+        bool whole = frame_w_ != w || frame_h_ != h || front_.size() != row * h;
+        if (whole) {
+            front_.assign(row * h, 0);
+            pend_rows_.assign(h, 1);
+            frame_w_ = w; frame_h_ = h;
+        }
+        bool any = whole;
+        scratch_.resize(row);
+        for (int y = 0; y < h; y++) {
+            const uint8_t *s = px + (size_t)y * row;
+            uint8_t *d = scratch_.data();
+            for (int x = 0; x < w; x++, s += 4, d += 4) { d[0] = s[2]; d[1] = s[1]; d[2] = s[0]; d[3] = s[3]; }
+            uint8_t *f = &front_[(size_t)y * row];
+            if (whole || memcmp(f, scratch_.data(), row)) {
+                memcpy(f, scratch_.data(), row);
+                pend_rows_[y] = 1;
+                any = true;
+            }
+        }
+        if (!any) return;
+        front_serial_++;
+        if (front_serial_ == 1) fprintf(stderr, "[HTMLPRES] first frame %dx%d\n", w, h);
+    }
+
+    std::string take()
+    {
+        std::string js, state;
+        std::deque<std::string> events;
+        {
+            std::lock_guard<std::mutex> g(msg_lock_);
+            state.swap(pending_state_);
+            events.swap(pending_events_);
+        }
+        /* Events after the state they belong to. */
+        if (!state.empty()) js += "window.__nfl2k5_recv({\"type\":\"state\",\"state\":" + state + "});";
+        for (auto &e : events) js += "window.__nfl2k5_recv({\"type\":\"event\",\"event\":" + e + "});";
+        return js;
+    }
+
+    void message(const std::string &text)
+    {
+        fprintf(stderr, "[HTMLPRES] page: %s\n", text.c_str());
+        if (config_.on_page_message && text.size() <= 256) config_.on_page_message(text);
+    }
+
+    void set_status(const std::string &s)
+    {
+        {
+            std::lock_guard<std::mutex> g(status_lock_);
+            status_ = s.compare(0, 8, "loading ") == 0 ? "loading" : s;
+        }
+        fprintf(stderr, "[HTMLPRES] %s\n", s.c_str());
+    }
+
+private:
+    void kick()
+    {
+        if (!id_ || !s_view_class) return;
+        JNIEnv *env = (JNIEnv *)SDL_GetAndroidJNIEnv();
+        if (!env) return;
+        static jmethodID m = env->GetStaticMethodID(s_view_class, "kick", "(I)V");
+        env->CallStaticVoidMethod(s_view_class, m, (jint)id_);
+        if (env->ExceptionCheck()) env->ExceptionClear();
+    }
+
+    static bool bind(JNIEnv *env);
+
+    PresentationHostConfig config_;
+    int id_ = 0, css_w_ = 0, css_h_ = 0, out_w_ = 0, out_h_ = 0;
+    mutable std::mutex status_lock_;
+    std::string status_;
+    std::mutex msg_lock_;
+    std::string pending_state_;
+    std::deque<std::string> pending_events_;
+    std::mutex frame_lock_;
+    std::vector<uint8_t> front_, consumer_, pend_rows_, out_rows_, scratch_;
+    int frame_w_ = 0, frame_h_ = 0;
+    uint64_t front_serial_ = 0, consumer_serial_ = 0;
+};
+
+template <typename F> void with_host(jint id, F f)
+{
+    std::lock_guard<std::mutex> g(s_hosts_lock);
+    auto it = s_hosts.find((int)id);
+    if (it != s_hosts.end()) f(it->second);
+}
+
+void JNICALL jni_frame(JNIEnv *env, jclass, jint id, jobject buf, jint w, jint h)
+{
+    const uint8_t *px = (const uint8_t *)env->GetDirectBufferAddress(buf);
+    if (!px || w <= 0 || h <= 0 || env->GetDirectBufferCapacity(buf) < (jlong)w * h * 4) return;
+    with_host(id, [&](AndroidWebViewHost *hst) { hst->frame(px, w, h); });
+}
+
+jstring JNICALL jni_take(JNIEnv *env, jclass, jint id)
+{
+    std::string js;
+    with_host(id, [&](AndroidWebViewHost *hst) { js = hst->take(); });
+    return to_jstring(env, js);
+}
+
+void JNICALL jni_message(JNIEnv *env, jclass, jint id, jstring text)
+{
+    std::string t = from_jstring(env, text);
+    with_host(id, [&](AndroidWebViewHost *hst) { hst->message(t); });
+}
+
+void JNICALL jni_status(JNIEnv *env, jclass, jint id, jstring text)
+{
+    std::string t = from_jstring(env, text);
+    with_host(id, [&](AndroidWebViewHost *hst) { hst->set_status(t); });
+}
+
+/* The class comes from the activity's class loader: FindClass on a game
+ * thread only sees the system classes. */
+bool AndroidWebViewHost::bind(JNIEnv *env)
+{
+    if (s_view_class) return true;
+    jobject act = (jobject)SDL_GetAndroidActivity();
+    if (!act) return false;
+    jclass ac = env->GetObjectClass(act);
+    jobject loader = env->CallObjectMethod(act, env->GetMethodID(ac, "getClassLoader", "()Ljava/lang/ClassLoader;"));
+    jclass lc = env->FindClass("java/lang/ClassLoader");
+    jstring name = env->NewStringUTF("com.nfl2k5.pc.PresentationView");
+    jclass c = (jclass)env->CallObjectMethod(loader, env->GetMethodID(lc, "loadClass", "(Ljava/lang/String;)Ljava/lang/Class;"), name);
+    env->DeleteLocalRef(name);
+    env->DeleteLocalRef(act);
+    if (env->ExceptionCheck() || !c) { env->ExceptionClear(); return false; }
+    static const JNINativeMethod natives[] = {
+        { (char *)"nativeFrame", (char *)"(ILjava/nio/ByteBuffer;II)V", (void *)jni_frame },
+        { (char *)"nativeTake", (char *)"(I)Ljava/lang/String;", (void *)jni_take },
+        { (char *)"nativeMessage", (char *)"(ILjava/lang/String;)V", (void *)jni_message },
+        { (char *)"nativeStatus", (char *)"(ILjava/lang/String;)V", (void *)jni_status },
+    };
+    if (env->RegisterNatives(c, natives, 4) != 0) { env->ExceptionClear(); return false; }
+    s_view_class = (jclass)env->NewGlobalRef(c);
+    return true;
+}
+
+} // namespace
+
+std::unique_ptr<PresentationHost> create_webview2_presentation_host()
+{
+    return std::make_unique<AndroidWebViewHost>();
+}
+
+} // namespace nfl2k5
+
+#else /* !_WIN32 && !__ANDROID__ */
 
 #include <cstdio>
 

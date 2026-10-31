@@ -20,22 +20,45 @@
  *
  * Test switches: NFL2K5_PRES_TEST=1 draws the bug with made-up state
  * everywhere; NFL2K5_PRES_EVENT=<animation> replays that animation every few
- * seconds; NFL2K5_PRES_LOG=1 logs the raw match state. */
+ * seconds; NFL2K5_PRES_LOG=1 logs the raw match state.
+ *
+ * Android (2026-10-30): HTML packages only (the JSON-layout renderer is
+ * Direct2D and stays Windows-only; those packages are not listed). Decoding
+ * is the NDK media API, playback is SDL3 audio behind a small XAudio2-shaped
+ * shim (below), so the music/voice/commentary code is the same on both. The
+ * pregame open video is not played there. */
+#ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>
 #include <d2d1.h>
 #include <dwrite.h>
 #include <wincodec.h>
+#else
+#include <windows.h>          /* src/platform/posix compat layer */
+#endif
 #include "nfl2k5_broadcast.h"
 #include "nfl2k5_presentation.h"
 #include "nfl2k5_sandbox.h"
 #include "nfl2k5_sandbox_ui.h"
 #include "presentation/presentation_host.h"
+#ifdef _WIN32
 #include <mfapi.h>
 #include <mfidl.h>
 #include <mfreadwrite.h>
 #include <xaudio2.h>
+#else
+#include <SDL3/SDL.h>
+#include <sys/uio.h>
+#include <unistd.h>
+#if defined(__ANDROID__)
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <media/NdkMediaCodec.h>
+#include <media/NdkMediaExtractor.h>
+#include <media/NdkMediaFormat.h>
+#endif
+#endif
 #include <algorithm>
 #include <atomic>
 #include <cmath>
@@ -49,6 +72,7 @@
 #include <thread>
 #include <vector>
 
+#ifdef _WIN32
 #pragma comment(lib, "d2d1.lib")
 #pragma comment(lib, "dwrite.lib")
 #pragma comment(lib, "windowscodecs.lib")
@@ -57,6 +81,153 @@
 #pragma comment(lib, "mfuuid.lib")
 #pragma comment(lib, "xaudio2.lib")
 #pragma comment(lib, "ole32.lib")
+#else
+/* ======================================================================
+ * Non-Windows stand-ins
+ *
+ * D2D1_COLOR_F is the colour type of team.json/presentation.json values
+ * (the HTML path serialises it), so it stays without Direct2D.
+ *
+ * The XAudio2 subset this file uses (one engine, a mastering voice for the
+ * mute switch, source voices playing one 48 kHz stereo 16-bit buffer, once
+ * or looped) on SDL3: each source voice is an SDL audio stream on its own
+ * logical device, fed from the buffer by SDL's get-callback, so position,
+ * loop and end of buffer behave like XAudio2's. COM init is a no-op.
+ * ====================================================================== */
+struct D2D1_COLOR_F { float r, g, b, a; };
+namespace D2D1 {
+static inline D2D1_COLOR_F ColorF(float r, float g, float b, float a = 1.0f) { return D2D1_COLOR_F{ r, g, b, a }; }
+}
+
+typedef uint32_t UINT32;
+typedef uint64_t UINT64;
+#define COINIT_MULTITHREADED 0
+static inline HRESULT CoInitializeEx(void *, DWORD) { return S_OK; }
+static inline void CoUninitialize() {}
+
+#define XAUDIO2_DEFAULT_PROCESSOR     0x1u
+#define XAUDIO2_END_OF_STREAM         0x40u
+#define XAUDIO2_LOOP_INFINITE         255u
+#define XAUDIO2_VOICE_NOSAMPLESPLAYED 0x0100u
+struct XAUDIO2_BUFFER {
+    UINT32 Flags, AudioBytes;
+    const BYTE *pAudioData;
+    UINT32 PlayBegin, PlayLength, LoopBegin, LoopLength, LoopCount;
+    void *pContext;
+};
+struct XAUDIO2_VOICE_STATE {
+    void *pCurrentBufferContext;
+    UINT32 BuffersQueued;
+    UINT64 SamplesPlayed;
+};
+
+struct IXAudio2MasteringVoice {
+    std::atomic<float> vol{ 1.0f };
+    HRESULT SetVolume(float v) { vol = v; return S_OK; }
+};
+
+struct IXAudio2SourceVoice {
+    SDL_AudioStream *stream = nullptr;
+    IXAudio2MasteringVoice *master = nullptr;
+    /* Guarded by the stream's lock (SDL runs the callback holding it). */
+    const uint8_t *data = nullptr;
+    size_t bytes = 0, pos = 0;
+    bool loop = false, ended = false;
+    uint64_t fed = 0;                   /* bytes handed to SDL since the buffer was submitted */
+    float vol = 1.0f;
+
+    static void SDLCALL feed(void *user, SDL_AudioStream *s, int additional, int)
+    {
+        IXAudio2SourceVoice *v = (IXAudio2SourceVoice *)user;
+        while (additional > 0 && v->data && v->bytes) {
+            if (v->pos >= v->bytes) {
+                if (!v->loop) break;
+                v->pos = 0;
+            }
+            int n = (int)std::min<size_t>((size_t)additional, v->bytes - v->pos);
+            SDL_PutAudioStreamData(s, v->data + v->pos, n);
+            v->pos += (size_t)n; v->fed += (uint64_t)n; additional -= n;
+        }
+        if (v->data && !v->loop && v->pos >= v->bytes && !v->ended) {
+            v->ended = true;
+            SDL_FlushAudioStream(s);    /* the resampler's held-back tail plays out, so the queue empties */
+        }
+    }
+    HRESULT SubmitSourceBuffer(const XAUDIO2_BUFFER *b)
+    {
+        SDL_LockAudioStream(stream);
+        data = b->pAudioData; bytes = b->AudioBytes & ~3u; pos = 0; fed = 0;
+        loop = b->LoopCount == XAUDIO2_LOOP_INFINITE;
+        ended = false;
+        SDL_UnlockAudioStream(stream);
+        return S_OK;
+    }
+    HRESULT SetVolume(float v)
+    {
+        vol = v;
+        SDL_SetAudioStreamGain(stream, v * (master ? master->vol.load() : 1.0f));
+        return S_OK;
+    }
+    HRESULT Start(UINT32 = 0) { SetVolume(vol); SDL_ResumeAudioStreamDevice(stream); return S_OK; }
+    HRESULT Stop(UINT32 = 0) { SDL_PauseAudioStreamDevice(stream); return S_OK; }
+    HRESULT FlushSourceBuffers()
+    {
+        SDL_LockAudioStream(stream);
+        data = nullptr; bytes = pos = 0; fed = 0; ended = false;
+        SDL_ClearAudioStream(stream);
+        SDL_UnlockAudioStream(stream);
+        return S_OK;
+    }
+    /* BuffersQueued drops to 0 once the buffer ran out and SDL has played what
+     * it was given; SamplesPlayed is what was fed minus what still waits. */
+    void GetState(XAUDIO2_VOICE_STATE *vs, UINT32 = 0)
+    {
+        SDL_LockAudioStream(stream);
+        int queued = SDL_GetAudioStreamQueued(stream);
+        if (queued < 0) queued = 0;
+        vs->pCurrentBufferContext = nullptr;
+        vs->BuffersQueued = data && !(ended && queued == 0) ? 1u : 0u;
+        vs->SamplesPlayed = (fed > (uint64_t)queued ? fed - (uint64_t)queued : 0) / 4u;
+        SDL_UnlockAudioStream(stream);
+    }
+    void DestroyVoice()
+    {
+        if (stream) SDL_DestroyAudioStream(stream);
+        delete this;
+    }
+};
+
+struct IXAudio2 {
+    IXAudio2MasteringVoice master;
+    HRESULT CreateMasteringVoice(IXAudio2MasteringVoice **out) { *out = &master; return S_OK; }
+    HRESULT CreateSourceVoice(IXAudio2SourceVoice **out, const WAVEFORMATEX *wf)
+    {
+        *out = nullptr;
+        if (!SDL_WasInit(SDL_INIT_AUDIO) && !SDL_InitSubSystem(SDL_INIT_AUDIO)) return E_FAIL;
+        SDL_AudioSpec spec;
+        SDL_zero(spec);
+        spec.format = SDL_AUDIO_S16;
+        spec.channels = wf->nChannels;
+        spec.freq = (int)wf->nSamplesPerSec;
+        IXAudio2SourceVoice *v = new IXAudio2SourceVoice;
+        v->master = &master;
+        v->stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, IXAudio2SourceVoice::feed, v);
+        if (!v->stream) {
+            fprintf(stderr, "[PRES] audio: SDL_OpenAudioDeviceStream failed: %s\n", SDL_GetError());
+            delete v;
+            return E_FAIL;
+        }
+        *out = v;                       /* opened paused, like a voice before Start */
+        return S_OK;
+    }
+};
+
+static inline HRESULT XAudio2Create(IXAudio2 **out, UINT32, UINT32)
+{
+    *out = new IXAudio2;
+    return S_OK;
+}
+#endif
 
 extern "C" {
 extern ptrdiff_t g_xbox_mem_offset;
@@ -218,7 +389,7 @@ static bool load_json(const std::string &path, JVal &out)
     if (text.size() >= 3 && (unsigned char)text[0] == 0xEF && (unsigned char)text[1] == 0xBB && (unsigned char)text[2] == 0xBF) {
         text.erase(0, 3);
     } else if (text.size() >= 2 && (unsigned char)text[0] == 0xFF && (unsigned char)text[1] == 0xFE) {
-        const wchar_t *w = (const wchar_t *)(text.data() + 2);
+        const WCHAR *w = (const WCHAR *)(text.data() + 2);   /* UTF-16 units (wchar_t is 4 bytes off Windows) */
         int wn = (int)((text.size() - 2) / 2);
         int n = WideCharToMultiByte(CP_UTF8, 0, w, wn, nullptr, 0, nullptr, nullptr);
         std::string u8((size_t)(n > 0 ? n : 0), '\0');
@@ -235,6 +406,7 @@ static bool load_json(const std::string &path, JVal &out)
     return true;
 }
 
+#ifdef _WIN32
 static std::wstring widen(const std::string &s)
 {
     int n = MultiByteToWideChar(CP_UTF8, 0, s.c_str(), (int)s.size(), nullptr, 0);
@@ -248,6 +420,14 @@ static bool file_exists(const std::string &p)
     DWORD a = GetFileAttributesW(widen(p).c_str());
     return a != INVALID_FILE_ATTRIBUTES && !(a & FILE_ATTRIBUTE_DIRECTORY);
 }
+#else
+/* UTF-8 paths throughout; the compat layer turns '\\' into '/'. */
+static bool file_exists(const std::string &p)
+{
+    DWORD a = GetFileAttributesA(p.c_str());
+    return a != INVALID_FILE_ATTRIBUTES && !(a & FILE_ATTRIBUTE_DIRECTORY);
+}
+#endif
 
 static std::string upper(std::string s) { for (auto &c : s) c = (char)toupper((unsigned char)c); return s; }
 
@@ -278,12 +458,26 @@ static bool guest_va_ok(uint32_t va)
 static bool gread(uint32_t va, void *out, size_t n)
 {
     if (!guest_va_ok(va)) return false;
+#ifndef _WIN32
+    /* No structured exceptions here. Guest RAM (64 MB) and the contiguous
+     * window at 0x80000000 are always backed: a plain copy. Anything else
+     * goes through process_vm_readv, which fails on an unmapped page
+     * instead of faulting. */
+    {
+        uint32_t low = va & 0x7FFFFFFFu;
+        void *host = (void *)((uintptr_t)va + g_xbox_mem_offset);
+        if ((uint64_t)low + n <= 0x04000000u) { memcpy(out, host, n); return true; }
+        struct iovec l = { out, n }, r = { host, n };
+        return process_vm_readv(getpid(), &l, 1, &r, 1, 0) == (ssize_t)n;
+    }
+#else
     __try {
         memcpy(out, (const void *)((uintptr_t)va + g_xbox_mem_offset), n);
         return true;
     } __except (EXCEPTION_EXECUTE_HANDLER) {
         return false;
     }
+#endif
 }
 
 static uint32_t rd32(uint32_t va) { uint32_t v = 0; gread(va, &v, 4); return v; }
@@ -393,6 +587,7 @@ static std::map<std::string, TeamInfo> s_teams;   /* by upper-case abbreviation 
 
 static void load_teams()
 {
+#ifdef _WIN32
     WIN32_FIND_DATAW fd;
     HANDLE h = FindFirstFileW(L"mods\\teams\\*", &fd);
     if (h == INVALID_HANDLE_VALUE) return;
@@ -400,6 +595,14 @@ static void load_teams()
         if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) || fd.cFileName[0] == L'.') continue;
         char dir8[MAX_PATH];
         WideCharToMultiByte(CP_UTF8, 0, fd.cFileName, -1, dir8, sizeof dir8, nullptr, nullptr);
+#else
+    WIN32_FIND_DATAA fd;
+    HANDLE h = FindFirstFileA("mods/teams/*", &fd);
+    if (h == INVALID_HANDLE_VALUE) return;
+    do {
+        if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) || fd.cFileName[0] == '.') continue;
+        const char *dir8 = fd.cFileName;
+#endif
         std::string dir = std::string("mods/teams/") + dir8;
         JVal j;
         if (!load_json(dir + "/team.json", j)) continue;
@@ -420,7 +623,11 @@ static void load_teams()
         s_teams[upper(dir8)] = t;
         if (const JVal *al = j.get("aliases"))
             for (auto &a : al->a) if (a.t == JVal::Str) s_teams[upper(a.s)] = t;
+#ifdef _WIN32
     } while (FindNextFileW(h, &fd));
+#else
+    } while (FindNextFileA(h, &fd));
+#endif
     FindClose(h);
     fprintf(stderr, "[PRES] %zu team entries from mods/teams\n", s_teams.size());
 }
@@ -627,12 +834,20 @@ static void pregame_replacement_reset();
 static void player_card_replacement_reset();
 static void period_board_replacement_reset();
 static std::atomic<int> s_sel_commentary{ 0 };
+#ifdef _WIN32
 static std::string s_commentary_dir = "E:\\cfbsound";
+#else
+static std::string s_commentary_dir = "cfbsound";      /* under the game root (NFL2K5_ROOT) */
+#endif
 
 /* The package may carry its fonts. Registering them privately makes the
- * broadcast reproducible without installing anything into Windows. */
+ * broadcast reproducible without installing anything into Windows.
+ * Elsewhere nothing to do: only HTML packages, whose pages load their own. */
 static void register_package_fonts(const Package &p)
 {
+#ifndef _WIN32
+    (void)p;
+#else
     std::wstring mask = widen(p.dir + "/fonts/*.ttf");
     WIN32_FIND_DATAW fd;
     HANDLE h = FindFirstFileW(mask.c_str(), &fd);
@@ -644,6 +859,7 @@ static void register_package_fonts(const Package &p)
         if (added) fprintf(stderr, "[PRES] private font %ls\n", fd.cFileName);
     } while (FindNextFileW(h, &fd));
     FindClose(h);
+#endif
 }
 
 static void load_packages()
@@ -651,6 +867,7 @@ static void load_packages()
     Package def;
     def.name = "ESPN (Original)";
     s_pkgs.push_back(def);
+#ifdef _WIN32
     WIN32_FIND_DATAW fd;
     HANDLE h = FindFirstFileW(L"mods\\presentations\\*", &fd);
     if (h == INVALID_HANDLE_VALUE) return;
@@ -658,6 +875,14 @@ static void load_packages()
         if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) || fd.cFileName[0] == L'.') continue;
         char dir8[MAX_PATH];
         WideCharToMultiByte(CP_UTF8, 0, fd.cFileName, -1, dir8, sizeof dir8, nullptr, nullptr);
+#else
+    WIN32_FIND_DATAA fd;
+    HANDLE h = FindFirstFileA("mods/presentations/*", &fd);
+    if (h == INVALID_HANDLE_VALUE) return;
+    do {
+        if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) || fd.cFileName[0] == '.') continue;
+        const char *dir8 = fd.cFileName;
+#endif
         if (dir8[0] == '_') continue;     /* shared folders such as _runtime */
         Package p;
         p.dir = std::string("mods/presentations/") + dir8;
@@ -697,6 +922,13 @@ static void load_packages()
                 continue;
             }
         }
+#ifndef _WIN32
+        /* The JSON-layout renderer is Direct2D: not available here. */
+        if (!p.html) {
+            fprintf(stderr, "[PRES] package %s: JSON layout (presentation.json) is Windows-only, skipped\n", dir8);
+            continue;
+        }
+#endif
         p.name = p.root.str("name", dir8);
         if (const JVal *m = p.root.get("music")) {
             for (int k = 0; k < 2; k++)
@@ -711,7 +943,11 @@ static void load_packages()
                 p.name.c_str(), p.html ? "html" : "json", p.intro.size(), p.outro.size());
         register_package_fonts(p);
         s_pkgs.push_back(std::move(p));
+#ifdef _WIN32
     } while (FindNextFileW(h, &fd));
+#else
+    } while (FindNextFileA(h, &fd));
+#endif
     FindClose(h);
 }
 
@@ -987,6 +1223,7 @@ static double now_s()
     return (double)t.QuadPart / (double)f.QuadPart;
 }
 
+#ifdef _WIN32
 /* MF_SOURCE_READER_ENABLE_AUDIO_PROCESSING (Windows 8+; the SDK hides it
  * behind the project's older target version): lets the reader resample. */
 static const GUID k_mf_audio_processing =
@@ -1038,6 +1275,133 @@ static bool decode_mp3(const std::string &path, std::vector<int16_t> &out)
     attr->Release();
     return ok;
 }
+#elif defined(__ANDROID__)
+/* The same result as the Media Foundation reader above (48 kHz stereo
+ * 16-bit, interleaved) from the NDK media API: AMediaExtractor finds the
+ * first audio track (MP3, AAC/MP4, WAV, OGG...), AMediaCodec decodes it,
+ * then the channels are mapped to stereo and the rate converted here. */
+static bool decode_mp3(const std::string &path, std::vector<int16_t> &out)
+{
+    out.clear();
+    int fd = open(path.c_str(), O_RDONLY | O_CLOEXEC);
+    if (fd < 0) return false;
+    struct stat st;
+    if (fstat(fd, &st) != 0) { close(fd); return false; }
+    AMediaExtractor *ex = AMediaExtractor_new();
+    AMediaCodec *codec = nullptr;
+    int rate = 0, chans = 0, encoding = 2;            /* 2: ENCODING_PCM_16BIT, 4: ENCODING_PCM_FLOAT */
+    std::vector<int16_t> src;                         /* decoded, interleaved, source rate/channels */
+    if (AMediaExtractor_setDataSourceFd(ex, fd, 0, (off64_t)st.st_size) == AMEDIA_OK) {
+        size_t tracks = AMediaExtractor_getTrackCount(ex);
+        for (size_t i = 0; i < tracks && !codec; i++) {
+            AMediaFormat *fmt = AMediaExtractor_getTrackFormat(ex, i);
+            const char *mime = nullptr;
+            if (AMediaFormat_getString(fmt, AMEDIAFORMAT_KEY_MIME, &mime) && mime && !strncmp(mime, "audio/", 6)) {
+                AMediaFormat_getInt32(fmt, AMEDIAFORMAT_KEY_SAMPLE_RATE, &rate);
+                AMediaFormat_getInt32(fmt, AMEDIAFORMAT_KEY_CHANNEL_COUNT, &chans);
+                AMediaExtractor_selectTrack(ex, i);
+                codec = AMediaCodec_createDecoderByType(mime);
+                if (codec && AMediaCodec_configure(codec, fmt, nullptr, nullptr, 0) != AMEDIA_OK) {
+                    AMediaCodec_delete(codec);
+                    codec = nullptr;
+                }
+            }
+            AMediaFormat_delete(fmt);
+        }
+    }
+    if (codec && AMediaCodec_start(codec) == AMEDIA_OK) {
+        bool in_eos = false, out_eos = false;
+        int idle = 0;
+        while (!out_eos && idle < 2000) {
+            if (!in_eos) {
+                ssize_t ib = AMediaCodec_dequeueInputBuffer(codec, 5000);
+                if (ib >= 0) {
+                    size_t cap = 0;
+                    uint8_t *buf = AMediaCodec_getInputBuffer(codec, (size_t)ib, &cap);
+                    ssize_t n = buf ? AMediaExtractor_readSampleData(ex, buf, cap) : -1;
+                    if (n < 0) {
+                        AMediaCodec_queueInputBuffer(codec, (size_t)ib, 0, 0, 0, AMEDIACODEC_BUFFER_FLAG_END_OF_STREAM);
+                        in_eos = true;
+                    } else {
+                        AMediaCodec_queueInputBuffer(codec, (size_t)ib, 0, (size_t)n,
+                                                     (uint64_t)std::max<int64_t>(0, AMediaExtractor_getSampleTime(ex)), 0);
+                        AMediaExtractor_advance(ex);
+                    }
+                }
+            }
+            AMediaCodecBufferInfo info;
+            ssize_t ob = AMediaCodec_dequeueOutputBuffer(codec, &info, 5000);
+            if (ob >= 0) {
+                idle = 0;
+                size_t cap = 0;
+                uint8_t *buf = AMediaCodec_getOutputBuffer(codec, (size_t)ob, &cap);
+                if (buf && info.size > 0 && (size_t)info.offset + (size_t)info.size <= cap) {
+                    const uint8_t *p = buf + info.offset;
+                    size_t at = src.size();
+                    if (encoding == 4) {
+                        size_t n = (size_t)info.size / 4;
+                        src.resize(at + n);
+                        for (size_t k = 0; k < n; k++) {
+                            float f;
+                            memcpy(&f, p + k * 4, 4);
+                            f = f > 1.0f ? 1.0f : f < -1.0f ? -1.0f : f;
+                            src[at + k] = (int16_t)lrintf(f * 32767.0f);
+                        }
+                    } else {
+                        src.resize(at + (size_t)info.size / 2);
+                        memcpy(&src[at], p, (size_t)info.size & ~(size_t)1);
+                    }
+                }
+                if (info.flags & AMEDIACODEC_BUFFER_FLAG_END_OF_STREAM) out_eos = true;
+                AMediaCodec_releaseOutputBuffer(codec, (size_t)ob, false);
+            } else if (ob == AMEDIACODEC_INFO_OUTPUT_FORMAT_CHANGED) {
+                AMediaFormat *fmt = AMediaCodec_getOutputFormat(codec);
+                AMediaFormat_getInt32(fmt, AMEDIAFORMAT_KEY_SAMPLE_RATE, &rate);
+                AMediaFormat_getInt32(fmt, AMEDIAFORMAT_KEY_CHANNEL_COUNT, &chans);
+                AMediaFormat_getInt32(fmt, AMEDIAFORMAT_KEY_PCM_ENCODING, &encoding);
+                AMediaFormat_delete(fmt);
+            } else if (ob == AMEDIACODEC_INFO_TRY_AGAIN_LATER) {
+                if (in_eos) idle++;                   /* a decoder that never flags the end */
+            }
+        }
+        AMediaCodec_stop(codec);
+    }
+    if (codec) AMediaCodec_delete(codec);
+    AMediaExtractor_delete(ex);
+    close(fd);
+    if (src.empty() || rate <= 0 || chans <= 0) return false;
+
+    /* Channels: mono doubled; more than two keep front left/right. */
+    size_t frames = src.size() / (size_t)chans;
+    std::vector<int16_t> st2(frames * 2);
+    for (size_t i = 0; i < frames; i++) {
+        st2[i * 2] = src[i * chans];
+        st2[i * 2 + 1] = src[i * chans + (chans > 1 ? 1 : 0)];
+    }
+    if (rate == 48000) { out.swap(st2); return true; }
+    /* Rate: 4-point cubic (Catmull-Rom) interpolation to 48 kHz. */
+    size_t n_out = (size_t)((double)frames * 48000.0 / rate);
+    double step = (double)rate / 48000.0;
+    out.resize(n_out * 2);
+    for (size_t i = 0; i < n_out; i++) {
+        double x = i * step;
+        size_t k = (size_t)x;
+        float t = (float)(x - (double)k);
+        for (int c = 0; c < 2; c++) {
+            auto at = [&](ptrdiff_t j) -> float {
+                j = j < 0 ? 0 : j >= (ptrdiff_t)frames ? (ptrdiff_t)frames - 1 : j;
+                return (float)st2[(size_t)j * 2 + c];
+            };
+            float p0 = at((ptrdiff_t)k - 1), p1 = at((ptrdiff_t)k), p2 = at((ptrdiff_t)k + 1), p3 = at((ptrdiff_t)k + 2);
+            float v = p1 + 0.5f * t * (p2 - p0 + t * (2.0f * p0 - 5.0f * p1 + 4.0f * p2 - p3 + t * (3.0f * (p1 - p2) + p3 - p0)));
+            out[i * 2 + c] = (int16_t)(v > 32767.0f ? 32767 : v < -32768.0f ? -32768 : (int)lrintf(v));
+        }
+    }
+    return !out.empty();
+}
+#else
+static bool decode_mp3(const std::string &, std::vector<int16_t> &out) { out.clear(); return false; }
+#endif
 
 /* ======================================================================
  * Optional situation commentary
@@ -1068,6 +1432,7 @@ static std::string s_commentary_test;
 static std::atomic<ULONGLONG> s_commentary_pass_serial{ 0 };
 static std::atomic<DWORD> s_commentary_last_pass_tick{ 0 };
 
+#ifdef _WIN32
 static std::string narrow(const std::wstring &w)
 {
     if (w.empty()) return "";
@@ -1076,9 +1441,24 @@ static std::string narrow(const std::wstring &w)
     WideCharToMultiByte(CP_UTF8, 0, w.c_str(), (int)w.size(), &s[0], n, nullptr, nullptr);
     return s;
 }
+#endif
 
 static DWORD WINAPI commentary_index_thread(void *)
 {
+#ifndef _WIN32
+    std::string dir = s_commentary_dir;
+    for (char &ch : dir) if (ch == '\\') ch = '/';
+    WIN32_FIND_DATAA fd;
+    HANDLE h = FindFirstFileA((dir + "/*.wav").c_str(), &fd);
+    std::vector<CommentaryClip> found;
+    if (h != INVALID_HANDLE_VALUE) {
+        do {
+            if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
+            found.push_back({ dir + "/" + fd.cFileName, upper(fd.cFileName) });
+        } while (FindNextFileA(h, &fd));
+        FindClose(h);
+    }
+#else
     std::wstring dir = widen(s_commentary_dir), mask = dir + L"\\*.wav";
     WIN32_FIND_DATAW fd;
     HANDLE h = FindFirstFileW(mask.c_str(), &fd);
@@ -1091,6 +1471,7 @@ static DWORD WINAPI commentary_index_thread(void *)
         } while (FindNextFileW(h, &fd));
         FindClose(h);
     }
+#endif
     size_t count = 0;
     {
         std::lock_guard<std::mutex> g(s_commentary.lock);
@@ -1602,8 +1983,19 @@ static void capture_mix(int16_t *buf, int frames)
  * Media Foundation on a thread in real time to BGRA frames; shown full screen
  * through the HUD layer; its audio plays through the theme voice.
  * ====================================================================== */
+#ifdef _WIN32
 static const GUID k_mf_advanced_video =
     { 0x0f81da2c, 0xb537, 0x4672, { 0xa8, 0xb2, 0xa6, 0x81, 0xb1, 0x73, 0x07, 0xa3 } };
+static bool video_skip(const std::string &) { return false; }
+#else
+/* No video decode here: a package's open is skipped (its audio too), once logged. */
+static bool video_skip(const std::string &path)
+{
+    static bool logged;
+    if (!logged) { logged = true; fprintf(stderr, "[PRES] pregame video is Windows-only, skipped: %s\n", path.c_str()); }
+    return true;
+}
+#endif
 
 struct Video {
     std::mutex lock;
@@ -1614,6 +2006,9 @@ struct Video {
     std::atomic<int> generation{ 0 };
 } s_video;
 
+#ifndef _WIN32
+static void video_play(const std::string &) {}     /* never reached: video_skip */
+#else
 static void video_thread(std::string path, int gen)
 {
     CoInitializeEx(nullptr, COINIT_MULTITHREADED);
@@ -1683,6 +2078,7 @@ static void video_play(const std::string &path)
     s_video.state = 1;
     std::thread(video_thread, path, gen).detach();
 }
+#endif
 
 /* ======================================================================
  * Events
@@ -2170,6 +2566,12 @@ static void service_live_qb(const GameState &g, bool visible, const JVal *anims)
 /* ======================================================================
  * Rendering
  * ====================================================================== */
+#ifndef _WIN32
+/* JSON-layout packages are not loaded off Windows (load_packages): the
+ * renderer never starts and nothing is drawn. */
+struct Renderer { int w = 0, h = 0; } R;
+static bool renderer_init() { return false; }
+#else
 struct Renderer {
     ID2D1Factory *d2d = nullptr;
     IDWriteFactory *dw = nullptr;
@@ -2248,6 +2650,7 @@ static IDWriteTextFormat *text_format(const std::string &family, float size, int
     R.formats[key] = f;
     return f;
 }
+#endif
 
 /* Values a template or colour can name. */
 struct Ctx {
@@ -2476,6 +2879,7 @@ static bool slot_rect(const Ctx &c, const std::string &at, float r[4])
     return true;
 }
 
+#ifdef _WIN32
 /* Draw one element (units; the render target's transform maps them). */
 static void draw_element(const Ctx &c, const JVal &e, float alpha, float dx, float dy, float clip_w_frac)
 {
@@ -2604,6 +3008,7 @@ static void draw_element(const Ctx &c, const JVal &e, float alpha, float dx, flo
     }
     if (clipped) rt->PopAxisAlignedClip();
 }
+#endif
 
 static float motion_ease(float p, const std::string &name)
 {
@@ -2670,6 +3075,7 @@ static MotionPose motion_pose(const JVal &L, double local)
     return prev;
 }
 
+#ifdef _WIN32
 static void draw_layer(const Ctx &c, const JVal &L, double t, double duration)
 {
     double start = L.num("start", 0), end = L.num("end", duration);
@@ -2731,6 +3137,7 @@ static void draw_layer(const Ctx &c, const JVal &L, double t, double duration)
     if (crop_y) R.rt->PopAxisAlignedClip();
     R.rt->SetTransform(old);
 }
+#endif
 
 /* ======================================================================
  * Frame logic (presenter thread)
@@ -2971,7 +3378,7 @@ static void music_logic(const GameState &g, bool native_on)
             played_this_load = true;
             const JVal *pv = pkg->root.get("pregame_video");
             std::string vfile = pv ? pv->str("file") : "";
-            if (!vfile.empty() && file_exists(pkg->dir + "/" + vfile)) {
+            if (!vfile.empty() && file_exists(pkg->dir + "/" + vfile) && !video_skip(pkg->dir + "/" + vfile)) {
                 std::string path = pkg->dir + "/" + vfile;
                 float v0 = s_sel_vol / 10.0f;
                 video_play(path);
@@ -4883,10 +5290,15 @@ static std::string native_confirm_prompt()
     if (style != 2) return "A";
     UINT key = (UINT)nfl2k5_controls_key(0);
     if (!key) return "";
+#ifndef _WIN32
+    /* No keyboard layout API here: Win32 virtual keys for letters and digits are their ASCII. */
+    return (key >= '0' && key <= '9') || (key >= 'A' && key <= 'Z') ? std::string(1, (char)key) : "";
+#else
     UINT character = MapVirtualKeyA(key, MAPVK_VK_TO_CHAR) & 0xFFFFu;
     if (character >= 32 && character < 127) return std::string(1, (char)character);
     char label[64];
     return GetKeyNameTextA((LONG)(MapVirtualKeyA(key, MAPVK_VK_TO_VSC) << 16), label, sizeof label) ? label : "";
+#endif
 }
 
 static std::string native_coin_choices(uint32_t ctx)
@@ -5725,6 +6137,12 @@ static int html_hud(const XboxHudFrame *f, XboxHudImage *img, const GameState &g
      * shown size that stays well off the current scale for a second
      * restarts the page at the right one. */
     float want_scale = std::max(1.0f, std::min(2.0f, dh / pkg.canvas_h));
+#if defined(__ANDROID__)
+    /* Battery: the page rasterises about 960 px wide at any screen size. The
+     * surface is then smaller than the shown rectangle; img->w/h are the
+     * surface's and img->dw/dh the rectangle's, so the presenter scales it. */
+    want_scale = 960.0f / (float)cw;
+#endif
     static double scale_off_since;
     if (s_html.package == pk && (fabsf(want_scale - s_html.scale) > 0.2f || abs(cw - s_html.canvas_w) > 8)) {
         if (!scale_off_since) scale_off_since = now_s();
@@ -5952,7 +6370,11 @@ static int frontend_hud(const XboxHudFrame *f, XboxHudImage *img)
         c.eras_teams_dir = eras_teams_root();
         c.canvas_width = 1920;
         c.canvas_height = 1080;
+#if defined(__ANDROID__)
+        c.raster_scale = s_fe_scale = 960.0f / 1920.0f;    /* about 960 px wide, scaled up by dw/dh (html_hud) */
+#else
         c.raster_scale = s_fe_scale = std::max(1.0f, std::min(2.0f, dh / 1080.0f));
+#endif
         s_fe_host = nfl2k5::create_webview2_presentation_host();
         s_fe_host->start(c);
         s_fe_host_gen = gen;
@@ -6182,6 +6604,9 @@ static int hud_callback(const XboxHudFrame *f, XboxHudImage *img)
     }
     if (s_html.host) html_stop();       /* switched back to a JSON package or ESPN */
     if (!custom_active() || !renderer_init()) return 0;
+#ifndef _WIN32
+    return 0;                           /* JSON-layout renderer: Windows only (never reached) */
+#else
     const Package &pkg = s_pkgs[s_sel_pkg];
     const JVal *sb = pkg.root.get("scorebug");
     if (!sb) return 0;
@@ -6329,6 +6754,7 @@ static int hud_callback(const XboxHudFrame *f, XboxHudImage *img)
     img->x = X; img->y = Y;
     img->changed = changed;
     return 1;
+#endif
 }
 
 /* Called once at startup (nfl2k5_video_menu_install). */
@@ -6346,7 +6772,9 @@ static int in_match(void)
 extern "C" void nfl2k5_presentation_init(void)
 {
     xbox_present_in_match_fn = in_match;
+#ifdef _WIN32
     MFStartup(MF_VERSION, MFSTARTUP_LITE);
+#endif
     load_teams();
     load_packages();
     load_settings();
