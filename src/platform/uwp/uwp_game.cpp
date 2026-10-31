@@ -201,6 +201,72 @@ void poll_pads()
     }
 }
 
+/* ---- CoreWindow keys -> SDL keyboard state ------------------------------
+ * The game reads the keyboard with SDL_GetKeyboardState, but the UWP SDL has
+ * only the dummy video driver, which never sees a key. The window's KeyDown/
+ * KeyUp land in g_uwp_keys (Windows virtual-key codes); changes go to SDL's
+ * internal key entry point (the static UWP SDL links it in). */
+extern "C" volatile unsigned char g_uwp_keys[256];   /* uwp_win32_shim.c */
+extern "C" bool SDL_SendKeyboardKey(Uint64 timestamp, SDL_KeyboardID keyboardID, int rawcode, SDL_Scancode scancode, bool down);
+
+SDL_Scancode vk_to_scancode(int vk)
+{
+    if (vk >= 'A' && vk <= 'Z') return (SDL_Scancode)(SDL_SCANCODE_A + (vk - 'A'));
+    if (vk >= '1' && vk <= '9') return (SDL_Scancode)(SDL_SCANCODE_1 + (vk - '1'));
+    if (vk == '0') return SDL_SCANCODE_0;
+    if (vk >= VK_F1 && vk <= VK_F12) return (SDL_Scancode)(SDL_SCANCODE_F1 + (vk - VK_F1));
+    if (vk >= VK_NUMPAD1 && vk <= VK_NUMPAD9) return (SDL_Scancode)(SDL_SCANCODE_KP_1 + (vk - VK_NUMPAD1));
+    switch (vk) {
+    case VK_RETURN: return SDL_SCANCODE_RETURN;
+    case VK_ESCAPE: return SDL_SCANCODE_ESCAPE;
+    case VK_BACK: return SDL_SCANCODE_BACKSPACE;
+    case VK_TAB: return SDL_SCANCODE_TAB;
+    case VK_SPACE: return SDL_SCANCODE_SPACE;
+    case VK_LEFT: return SDL_SCANCODE_LEFT;
+    case VK_RIGHT: return SDL_SCANCODE_RIGHT;
+    case VK_UP: return SDL_SCANCODE_UP;
+    case VK_DOWN: return SDL_SCANCODE_DOWN;
+    case VK_SHIFT: case VK_LSHIFT: return SDL_SCANCODE_LSHIFT;
+    case VK_RSHIFT: return SDL_SCANCODE_RSHIFT;
+    case VK_CONTROL: case VK_LCONTROL: return SDL_SCANCODE_LCTRL;
+    case VK_RCONTROL: return SDL_SCANCODE_RCTRL;
+    case VK_MENU: case VK_LMENU: return SDL_SCANCODE_LALT;
+    case VK_RMENU: return SDL_SCANCODE_RALT;
+    case VK_INSERT: return SDL_SCANCODE_INSERT;
+    case VK_DELETE: return SDL_SCANCODE_DELETE;
+    case VK_HOME: return SDL_SCANCODE_HOME;
+    case VK_END: return SDL_SCANCODE_END;
+    case VK_PRIOR: return SDL_SCANCODE_PAGEUP;
+    case VK_NEXT: return SDL_SCANCODE_PAGEDOWN;
+    case VK_NUMPAD0: return SDL_SCANCODE_KP_0;
+    case VK_OEM_MINUS: return SDL_SCANCODE_MINUS;
+    case VK_OEM_PLUS: return SDL_SCANCODE_EQUALS;
+    case VK_OEM_COMMA: return SDL_SCANCODE_COMMA;
+    case VK_OEM_PERIOD: return SDL_SCANCODE_PERIOD;
+    case VK_OEM_1: return SDL_SCANCODE_SEMICOLON;
+    case VK_OEM_2: return SDL_SCANCODE_SLASH;
+    case VK_OEM_3: return SDL_SCANCODE_GRAVE;
+    case VK_OEM_4: return SDL_SCANCODE_LEFTBRACKET;
+    case VK_OEM_5: return SDL_SCANCODE_BACKSLASH;
+    case VK_OEM_6: return SDL_SCANCODE_RIGHTBRACKET;
+    case VK_OEM_7: return SDL_SCANCODE_APOSTROPHE;
+    }
+    return SDL_SCANCODE_UNKNOWN;
+}
+
+void forward_keys()
+{
+    static unsigned char sent[256];
+    if (!SDL_WasInit(SDL_INIT_EVENTS)) return;
+    for (int vk = 1; vk < 256; vk++) {
+        unsigned char down = g_uwp_keys[vk] ? 1 : 0;
+        if (down == sent[vk]) continue;
+        sent[vk] = down;
+        SDL_Scancode sc = vk_to_scancode(vk);
+        if (sc != SDL_SCANCODE_UNKNOWN) SDL_SendKeyboardKey(0, 0 /* global keyboard */, vk, sc, down != 0);
+    }
+}
+
 /* First line of <local>\<name> (UTF-8), or empty. */
 std::wstring read_line_file(const std::wstring &local, const wchar_t *name)
 {
@@ -341,6 +407,7 @@ extern "C" void uwp_game_tick(void)
         poll_pads();
     } catch (...) {
     }
+    forward_keys();
 }
 
 extern "C" int uwp_game_exited(int *code)
