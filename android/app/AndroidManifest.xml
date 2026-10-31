@@ -30,7 +30,12 @@
         android:requestLegacyExternalStorage="true"
         android:extractNativeLibs="true"
         android:hardwareAccelerated="true"
-        android:isGame="true">
+        android:isGame="true"
+        android:appCategory="game">
+
+        <!-- Android 12+ Game Mode (Samsung Game Booster's battery/performance
+             switch): NFL2K5Activity passes the mode to the game. -->
+        <meta-data android:name="android.game_mode_config" android:resource="@xml/game_mode_config" />
 
         <!-- Back is the game's B button (src/platform/android/touch_pad.c), not "close the app" -->
         <meta-data android:name="SDL_ENV.SDL_ANDROID_TRAP_BACK_BUTTON" android:value="1"/>

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Game modes the game handles itself (src/main.c, NFL2K5_GAME_MODE):
+     battery = 1x internal resolution and 30 FPS presentation. -->
+<game-mode-config xmlns:android="http://schemas.android.com/apk/res/android"
+    android:supportsBatteryGameMode="true"
+    android:supportsPerformanceGameMode="true"
+    android:allowGameDownscaling="false"
+    android:allowGameFpsOverride="false" />

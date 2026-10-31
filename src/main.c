@@ -1110,6 +1110,9 @@ int main(int argc, char **argv)
     android_pick_root();
     fprintf(stderr, "[ANDROID] game folder %s\n", getenv("NFL2K5_ROOT"));
     setenv("RECOMP_RENDERER", "vulkan", 0);   /* the GPU renderer (gx) on Vulkan; "cpu" for software */
+    SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight");   /* SDL picked portrait from the 640x480 window */
+    if (getenv("NFL2K5_GAME_MODE"))
+        fprintf(stderr, "[ANDROID] game mode: %s\n", getenv("NFL2K5_GAME_MODE"));
     {   /* Compiled pipelines kept across runs (SDL Vulkan, local patch): the
          * Adreno driver spends ~0.7 s on each new one, which froze the game
          * whenever a new scene appeared. */

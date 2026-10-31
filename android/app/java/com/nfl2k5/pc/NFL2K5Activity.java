@@ -45,6 +45,19 @@ public class NFL2K5Activity extends SDLActivity {
                                               "android.permission.WRITE_EXTERNAL_STORAGE" }, 1);
         }
         getExternalFilesDir(null);   /* creates Android/data/com.nfl2k5.pc/files */
+        /* Landscape from the first frame (SDL also gets SDL_HINT_ORIENTATIONS) */
+        setRequestedOrientation(android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+        /* Android 12+ Game Mode, e.g. Samsung Game Booster's battery or
+         * performance setting: read by the game at start (src/main.c). */
+        if (Build.VERSION.SDK_INT >= 31) {
+            try {
+                android.app.GameManager gm = getSystemService(android.app.GameManager.class);
+                int mode = gm != null ? gm.getGameMode() : 0;
+                android.system.Os.setenv("NFL2K5_GAME_MODE",
+                    mode == android.app.GameManager.GAME_MODE_BATTERY ? "battery" :
+                    mode == android.app.GameManager.GAME_MODE_PERFORMANCE ? "performance" : "standard", true);
+            } catch (Exception e) { }
+        }
         super.onCreate(savedInstanceState);
     }
 
