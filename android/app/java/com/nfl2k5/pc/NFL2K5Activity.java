@@ -79,6 +79,41 @@ public class NFL2K5Activity extends SDLActivity {
         }});
     }
 
+    /* ---- Rumble on the phone itself (src/nfl2k5_controls.c phone_rumble) ----
+     * Touch play has no controller to rumble: the game's motor speeds pulse
+     * the phone's vibrator instead. Called from the game thread with short
+     * pulses (about 100 ms, already rate-limited and capped there);
+     * ms <= 0 or amplitude <= 0 stops it. Needs android.permission.VIBRATE. */
+    private static android.os.Vibrator sVibrator;
+    private static boolean sVibratorChecked;
+    private static android.media.AudioAttributes sGameUsage;
+
+    public static void phoneRumble(int ms, int amplitude) {
+        try {
+            if (!sVibratorChecked) {
+                android.content.Context c = mSingleton;
+                if (c == null) return;
+                sVibratorChecked = true;
+                android.os.Vibrator v = (android.os.Vibrator) c.getSystemService(android.content.Context.VIBRATOR_SERVICE);
+                sVibrator = v != null && v.hasVibrator() ? v : null;
+                sGameUsage = new android.media.AudioAttributes.Builder()
+                    .setUsage(android.media.AudioAttributes.USAGE_GAME).build();
+            }
+            android.os.Vibrator v = sVibrator;
+            if (v == null) return;
+            if (ms <= 0 || amplitude <= 0) { v.cancel(); return; }
+            if (Build.VERSION.SDK_INT >= 26) {
+                int a = v.hasAmplitudeControl() ? Math.max(1, Math.min(255, amplitude))
+                                                : android.os.VibrationEffect.DEFAULT_AMPLITUDE;
+                v.vibrate(android.os.VibrationEffect.createOneShot(ms, a), sGameUsage);
+            } else {
+                v.vibrate(ms);
+            }
+        } catch (Exception e) {
+            /* no vibrator / permission: stay silent */
+        }
+    }
+
     @Override
     protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);

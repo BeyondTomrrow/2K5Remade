@@ -7,6 +7,7 @@
  */
 #include <SDL3/SDL.h>
 #include <math.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -69,6 +70,7 @@ static const int k_key_default[K_COUNT] = {
 
 typedef struct {
     int vibration;
+    int vib_strength;   /* percent, 25..100 */
     int dz_left, dz_right, dz_trig;
     int mouse;
     int prompts;
@@ -140,6 +142,7 @@ static void cfg_defaults(Controls *c)
 {
     int i;
     c->vibration = 1;
+    c->vib_strength = 100;
     c->dz_left = 12; c->dz_right = 12; c->dz_trig = 5;
     c->mouse = 1;
     c->prompts = 0;
@@ -154,10 +157,10 @@ static void cfg_save(void)
     int i;
     if (!f) return;
     fprintf(f, "; NFL 2K5 controls (F1 > Controls pages edit these)\n"
-               "vibration = %d\ndeadzone_left = %d\ndeadzone_right = %d\ndeadzone_trigger = %d\nmouse = %d\n"
+               "vibration = %d\nvibration_strength = %d\ndeadzone_left = %d\ndeadzone_right = %d\ndeadzone_trigger = %d\nmouse = %d\n"
                "; prompts: 0 automatic (the last controller used), 1 Xbox, 2 PlayStation, 3 keyboard, 4 original Xbox\nprompts = %d\n"
                "; map_<game button> = <controller button>: a b x y lb rb lt rt start back ls rs dup ddown dleft dright\n",
-            s_cfg.vibration, s_cfg.dz_left, s_cfg.dz_right, s_cfg.dz_trig, s_cfg.mouse, s_cfg.prompts);
+            s_cfg.vibration, s_cfg.vib_strength, s_cfg.dz_left, s_cfg.dz_right, s_cfg.dz_trig, s_cfg.mouse, s_cfg.prompts);
     for (i = 0; i < C_COUNT; i++) fprintf(f, "map_%s = %s\n", k_ctl_keys[i], k_ctl_keys[s_cfg.map[i]]);
     fprintf(f, "; key_<game button> = Windows virtual-key code (decimal), 0 = none\n");
     for (i = 0; i < K_COUNT; i++) fprintf(f, "%s = %d\n", k_key_ini[i], s_cfg.keys[i]);
@@ -177,6 +180,7 @@ static void cfg_load(void)
         if (line[0] == ';' || sscanf(line, " %63[a-z_] = %63s", k, v) != 2) continue;
         n = atoi(v);
         if (!strcmp(k, "vibration")) s_cfg.vibration = n != 0;
+        else if (!strcmp(k, "vibration_strength")) s_cfg.vib_strength = n;
         else if (!strcmp(k, "deadzone_left")) s_cfg.dz_left = n;
         else if (!strcmp(k, "deadzone_right")) s_cfg.dz_right = n;
         else if (!strcmp(k, "deadzone_trigger")) s_cfg.dz_trig = n;
@@ -193,6 +197,7 @@ static void cfg_load(void)
     s_cfg.dz_left = CLAMP(s_cfg.dz_left, 0, 50);
     s_cfg.dz_right = CLAMP(s_cfg.dz_right, 0, 50);
     s_cfg.dz_trig = CLAMP(s_cfg.dz_trig, 0, 50);
+    s_cfg.vib_strength = CLAMP(s_cfg.vib_strength, 25, 100);
 #undef CLAMP
 }
 
@@ -503,17 +508,199 @@ int nfl2k5_controls_port_dev(int port)
     return s.connected ? s.dev : -1;
 }
 
+/* ---- Rumble ----------------------------------------------------------------
+ * The game's XInputSetState (src/nfl2k5_input_hle.c) lands here with the two
+ * motor speeds of XINPUT_RUMBLE (0..65535). A connected pad (Xbox, DualSense,
+ * DS4, ...) gets SDL_RumbleGamepad; on Android with no pad on port 1 (touch
+ * play) the phone's own vibrator pulses instead (rate-limited, capped).
+ * The game resends the same speeds every frame or two, so a pad is only told
+ * again when the speeds change or its 1 s rumble is about to run out.
+ * NFL2K5_RUMBLE_LOG=0 silences the [RUMBLE] log lines. */
+#ifdef __ANDROID__
+#include <jni.h>
+#include <sys/prctl.h>
+static jclass    s_act_class;
+static jmethodID s_phone_rumble;
+
+/* NFL2K5Activity.phoneRumble(ms, amplitude 1..255; 0 = stop) */
+static void phone_rumble_call(int ms, int amp)
+{
+    char name[17] = { 0 };
+    JNIEnv *env;
+    prctl(PR_GET_NAME, name, 0, 0, 0);
+    env = (JNIEnv *)SDL_GetAndroidJNIEnv();   /* attaching renames the thread */
+    if (name[0]) prctl(PR_SET_NAME, name, 0, 0, 0);
+    if (!env) return;
+    if (!s_act_class) {
+        jobject act = (jobject)SDL_GetAndroidActivity();
+        jclass c = act ? (*env)->GetObjectClass(env, act) : NULL;
+        if (act) (*env)->DeleteLocalRef(env, act);
+        if (!c) return;
+        s_phone_rumble = (*env)->GetStaticMethodID(env, c, "phoneRumble", "(II)V");
+        if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
+        s_act_class = (jclass)(*env)->NewGlobalRef(env, c);
+        (*env)->DeleteLocalRef(env, c);
+    }
+    if (!s_phone_rumble) return;
+    (*env)->CallStaticVoidMethod(env, s_act_class, s_phone_rumble, (jint)ms, (jint)amp);
+    if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
+}
+#endif
+
+static int rumble_log_on(void)
+{
+    static int on = -1;
+    if (on < 0) {
+        const char *v = getenv("NFL2K5_RUMBLE_LOG");
+        on = !v || (*v && *v != '0');
+    }
+    return on;
+}
+
+static void rumble_log(const char *fmt, ...)
+{
+    static int lines;
+    char buf[200];
+    va_list ap;
+    if (!rumble_log_on() || lines >= 600) return;
+    if (++lines == 600) { fprintf(stderr, "[RUMBLE] (log limit reached)\n"); return; }
+    va_start(ap, fmt);
+    vsnprintf(buf, sizeof buf, fmt, ap);
+    va_end(ap);
+    fprintf(stderr, "[RUMBLE] %s\n", buf);
+}
+
+#ifdef __ANDROID__
+/* Phone vibrator for touch play: 100 ms pulses re-armed every 90 ms while the
+ * game holds the motors on, a new pulse at once when it gets clearly
+ * stronger, stopped when the motors stop, and never more than 700 ms in one
+ * go (a game that leaves the motors on cannot drain the battery). */
+static void phone_rumble(unsigned left, unsigned right)
+{
+    static int state;                     /* 0 idle, 1 pulsing, 2 capped */
+    static int last_amp;
+    static Uint64 since, next;
+    Uint64 now = SDL_GetTicks();
+    unsigned m = left > right ? left : right;
+    int amp = (int)(m >> 8);
+    if (amp < 16) {
+        if (state == 1) { phone_rumble_call(0, 0); rumble_log("phone stop"); }
+        state = 0;
+        return;
+    }
+    if (state == 2) return;
+    if (state == 0) since = now;
+    if (now - since > 700) {
+        phone_rumble_call(0, 0);
+        rumble_log("phone capped after %u ms", (unsigned)(now - since));
+        state = 2;
+        return;
+    }
+    if (state == 1 && now < next && amp <= last_amp + 48) return;
+    phone_rumble_call(100, amp > 255 ? 255 : amp);
+    if (state == 0 || amp != last_amp) rumble_log("phone pulse amp %d", amp);
+    state = 1;
+    last_amp = amp;
+    next = now + 90;
+}
+#endif
+
+static unsigned s_req_l[4], s_req_r[4];  /* what the game asked for (0..65535) */
+static unsigned s_out_l[4], s_out_r[4];  /* what the pad / phone was given */
+static Uint64   s_out_sent[4];
+static int      s_out_where[4];          /* 0 none, 1 pad, 2 phone */
+
+/* Drive port's pad (or the phone) with the game's request, scaled by the
+ * Vibration / Vibration Strength settings. Called on every XInputSetState and
+ * from nfl2k5_controls_rumble_tick, which re-arms a running pad rumble (1 s
+ * at a time, so it dies on its own if the game stops polling) and keeps the
+ * phone's pulses going. */
+static void rumble_apply(int port)
+{
+    unsigned left = s_req_l[port], right = s_req_r[port];
+    Uint64 now = SDL_GetTicks();
+    SDL_Gamepad *pad;
+    if (!s_cfg.vibration) left = right = 0;
+    left = left * (unsigned)s_cfg.vib_strength / 100u;
+    right = right * (unsigned)s_cfg.vib_strength / 100u;
+
+    SDL_LockMutex(s_lock);
+    pad = s_pads[port] && SDL_GamepadConnected(s_pads[port]) ? s_pads[port] : NULL;
+    if (pad) {
+        int same = left == s_out_l[port] && right == s_out_r[port] && s_out_where[port] == 1;
+        if (!same || ((left || right) && now - s_out_sent[port] >= 400)) {
+            bool ok = SDL_RumbleGamepad(pad, (Uint16)left, (Uint16)right, (left || right) ? 1000 : 0);
+            if (!same)
+                rumble_log("port %d L=%u R=%u -> SDL_RumbleGamepad(%s) %s%s", port + 1, left, right,
+                           SDL_GetGamepadName(pad) ? SDL_GetGamepadName(pad) : "pad",
+                           ok ? "ok" : "failed: ", ok ? "" : SDL_GetError());
+            s_out_sent[port] = now;
+        }
+        s_out_where[port] = 1;
+    } else {
+        if (left != s_out_l[port] || right != s_out_r[port])
+            rumble_log("port %d L=%u R=%u (no controller%s)", port + 1, left, right,
+#ifdef __ANDROID__
+                       port == 0 ? ": phone vibrator" : ""
+#else
+                       ""
+#endif
+                       );
+        s_out_where[port] = 0;
+#ifdef __ANDROID__
+        if (port == 0) { phone_rumble(left, right); s_out_where[port] = 2; }
+#endif
+    }
+    s_out_l[port] = left;
+    s_out_r[port] = right;
+    SDL_UnlockMutex(s_lock);
+}
+
 void nfl2k5_controls_rumble(int port, unsigned left, unsigned right)
 {
     controls_init();
-    if (!s_cfg.vibration) left = right = 0;
     if (port < 0 || port > 3) return;
+    s_req_l[port] = left > 65535u ? 65535u : left;
+    s_req_r[port] = right > 65535u ? 65535u : right;
+    rumble_apply(port);
+}
 
+/* From XInputGetState (the game polls every frame). */
+void nfl2k5_controls_rumble_tick(void)
+{
+    static Uint64 next;
+    Uint64 now = SDL_GetTicks();
+    if (now < next) return;
+    next = now + 50;
+    for (int i = 0; i < 4; i++)
+        if (s_out_l[i] || s_out_r[i] || s_req_l[i] || s_req_r[i])
+            rumble_apply(i);
+}
+
+/* A short buzz at the chosen strength when Vibration is turned on or its
+ * strength changed in the Controls screen, so the setting can be felt. */
+static void rumble_preview(void)
+{
+    unsigned v = 0xC000u * (unsigned)s_cfg.vib_strength / 100u;
+    SDL_Gamepad *pad;
     SDL_LockMutex(s_lock);
-    if (s_pads[port] && SDL_GamepadConnected(s_pads[port])) {
-        SDL_RumbleGamepad(s_pads[port], (Uint16)left, (Uint16)right, 1000);
-    }
+    pad = s_pads[0] && SDL_GamepadConnected(s_pads[0]) ? s_pads[0] : NULL;
+    if (pad) SDL_RumbleGamepad(pad, (Uint16)v, (Uint16)v, 250);
+#ifdef __ANDROID__
+    else phone_rumble_call(150, (int)(v >> 8));
+#endif
     SDL_UnlockMutex(s_lock);
+    rumble_log("preview at %d%%", s_cfg.vib_strength);
+}
+
+int nfl2k5_vibration_get(void) { controls_init(); return s_cfg.vibration; }
+void nfl2k5_vibration_set(int on)
+{
+    controls_init();
+    s_cfg.vibration = on != 0;
+    cfg_save();
+    for (int i = 0; i < 4; i++) rumble_apply(i);
+    if (on) rumble_preview();
 }
 
 static int menu_pad(XBOX_GAMEPAD *g)
@@ -746,3 +933,117 @@ void nfl2k5_controls_menu_init(void)
 }
 
 void nfl2k5_controls_start(void) { controls_init(); }
+/* ---- Options > Controls: a settings screen in the game's own menus ---------
+ * Rows for src/nfl2k5_video_menu.c (same scheme as Video Settings / Phone
+ * Settings): vibration, dead zones, prompt style and one row per game button
+ * choosing which button of the real controller drives it. Saved to
+ * controls.ini like the PC's F1 Controls pages (which edit the same s_cfg). */
+enum { CM_VIB, CM_VIBSTR, CM_DZL, CM_DZR, CM_DZT, CM_PROMPTS,
+#ifndef __ANDROID__
+       CM_MOUSE,
+#endif
+       CM_LAYOUT, CM_BUTTONS, CM_COUNT = CM_BUTTONS + C_COUNT };
+static const char *const k_cm_labels[CM_BUTTONS] = {
+    "Vibration", "Vibration Strength", "Left Stick Dead Zone", "Right Stick Dead Zone",
+    "Trigger Dead Zone", "Button Prompts",
+#ifndef __ANDROID__
+    "Mouse as Controller",
+#endif
+    "Button Layout" };
+static const char *const k_cm_button_labels[C_COUNT] = {
+    "A Button", "B Button", "X Button", "Y Button", "White Button", "Black Button",
+    "Left Trigger", "Right Trigger", "Start", "Back", "Left Stick Click", "Right Stick Click",
+    "D-Pad Up", "D-Pad Down", "D-Pad Left", "D-Pad Right" };
+static const char *const k_cm_xbox_values[C_COUNT] = {
+    "A", "B", "X", "Y", "LB", "RB", "LT", "RT", "Start", "Back",
+    "Left Stick Click", "Right Stick Click", "D-Pad Up", "D-Pad Down", "D-Pad Left", "D-Pad Right" };
+
+static int cm_default_layout(void)
+{
+    for (int i = 0; i < C_COUNT; i++) if (s_cfg.map[i] != i) return 0;
+    return 1;
+}
+
+int nfl2k5_ctlmenu_rows(void) { return CM_COUNT; }
+const char *nfl2k5_ctlmenu_label(int r)
+{
+    if (r >= 0 && r < CM_BUTTONS) return k_cm_labels[r];
+    if (r >= CM_BUTTONS && r < CM_COUNT) return k_cm_button_labels[r - CM_BUTTONS];
+    return "";
+}
+int nfl2k5_ctlmenu_toggle(int r)
+{
+#ifndef __ANDROID__
+    if (r == CM_MOUSE) return 1;
+#endif
+    return r == CM_VIB;
+}
+int nfl2k5_ctlmenu_values(int r)
+{
+    switch (r) {
+    case CM_VIBSTR: return 4;                 /* 25 50 75 100 % */
+    case CM_DZL: case CM_DZR: case CM_DZT: return 51;   /* 0..50 % */
+    case CM_PROMPTS: return 5;
+    case CM_LAYOUT: return 2;
+    default: return r >= CM_BUTTONS && r < CM_COUNT ? C_COUNT : 2;
+    }
+}
+int nfl2k5_ctlmenu_get(int r)
+{
+    controls_init();
+    switch (r) {
+    case CM_VIB: return s_cfg.vibration;
+    case CM_VIBSTR: return (s_cfg.vib_strength - 1) / 25;
+    case CM_DZL: return s_cfg.dz_left;
+    case CM_DZR: return s_cfg.dz_right;
+    case CM_DZT: return s_cfg.dz_trig;
+    case CM_PROMPTS: return s_cfg.prompts % 5;
+#ifndef __ANDROID__
+    case CM_MOUSE: return s_cfg.mouse;
+#endif
+    case CM_LAYOUT: return cm_default_layout() ? 0 : 1;
+    }
+    return r >= CM_BUTTONS && r < CM_COUNT ? s_cfg.map[r - CM_BUTTONS] : 0;
+}
+void nfl2k5_ctlmenu_set(int r, int v)
+{
+    controls_init();
+    switch (r) {
+    case CM_VIB: nfl2k5_vibration_set(v); return;
+    case CM_VIBSTR: s_cfg.vib_strength = 25 * (v % 4 + 1); cfg_save(); if (s_cfg.vibration) rumble_preview(); return;
+    case CM_DZL: s_cfg.dz_left = v % 51; break;
+    case CM_DZR: s_cfg.dz_right = v % 51; break;
+    case CM_DZT: s_cfg.dz_trig = v % 51; break;
+    case CM_PROMPTS: s_cfg.prompts = v % 5; break;
+#ifndef __ANDROID__
+    case CM_MOUSE: s_cfg.mouse = v != 0; break;
+#endif
+    case CM_LAYOUT:
+        /* Default restores the standard layout; Custom is shown while any
+         * button below is changed (choosing it alone changes nothing). */
+        if (v == 0) for (int i = 0; i < C_COUNT; i++) s_cfg.map[i] = i;
+        break;
+    default:
+        if (r < CM_BUTTONS || r >= CM_COUNT) return;
+        s_cfg.map[r - CM_BUTTONS] = (v % C_COUNT + C_COUNT) % C_COUNT;
+        break;
+    }
+    cfg_save();
+    fprintf(stderr, "[CONTROLS] menu: %s -> %d\n", nfl2k5_ctlmenu_label(r), nfl2k5_ctlmenu_get(r));
+}
+void nfl2k5_ctlmenu_value_name(int r, int v, char *b, size_t n)
+{
+    static const char *const prompts[5] = { "Automatic", "Xbox", "PlayStation", "Keyboard", "Original Xbox" };
+    switch (r) {
+    case CM_VIBSTR: snprintf(b, n, "%d%%", 25 * (v % 4 + 1)); return;
+    case CM_DZL: case CM_DZR: case CM_DZT: snprintf(b, n, "%d%%", v); return;
+    case CM_PROMPTS: snprintf(b, n, "%s", prompts[(unsigned)v % 5u]); return;
+    case CM_LAYOUT: snprintf(b, n, "%s", v ? "Custom" : "Default"); return;
+    }
+    if (r >= CM_BUTTONS && r < CM_COUNT) {
+        int c = (unsigned)v % C_COUNT;
+        snprintf(b, n, "%s", any_ps() ? k_ps_names[c] : k_cm_xbox_values[c]);
+        return;
+    }
+    snprintf(b, n, "%s", v ? "On" : "Off");
+}

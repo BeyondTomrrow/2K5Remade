@@ -204,6 +204,18 @@ static void phone_name(int r, int v, char *b, size_t n) { nfl2k5_phone_value_nam
 static const char *s_phone_labels[VM_MAX_ROWS];
 #endif
 
+/* ---- Controls rows (src/nfl2k5_controls.c): vibration, dead zones, prompts,
+ * button remapping ---- */
+extern int nfl2k5_ctlmenu_rows(void);
+extern const char *nfl2k5_ctlmenu_label(int r);
+extern int nfl2k5_ctlmenu_toggle(int r);
+extern int nfl2k5_ctlmenu_values(int r);
+extern int nfl2k5_ctlmenu_get(int r);
+extern void nfl2k5_ctlmenu_set(int r, int v);
+extern void nfl2k5_ctlmenu_value_name(int r, int v, char *b, size_t n);
+static void ctl_name(int r, int v, char *b, size_t n) { nfl2k5_ctlmenu_value_name(r, v, b, n); }
+static const char *s_ctl_labels[VM_MAX_ROWS];
+
 static const char *s_video_labels[VM_MAX_ROWS];
 static const char *s_mod_labels[VM_MAX_ROWS];
 static const char *const k_custom_labels[] = { "Griddy", "Slide", "Stank", "Slickback" };
@@ -283,8 +295,11 @@ static VmScreen s_screens[] = {
 #ifdef __ANDROID__
     { "Phone Settings", 0, s_phone_labels, nfl2k5_phone_toggle, nfl2k5_phone_values, nfl2k5_phone_get, nfl2k5_phone_set, phone_name },
 #endif
+    /* keep last: VM_CONTROLS */
+    { "Controls", 0, s_ctl_labels, nfl2k5_ctlmenu_toggle, nfl2k5_ctlmenu_values, nfl2k5_ctlmenu_get, nfl2k5_ctlmenu_set, ctl_name },
 };
 #define VM_SCREENS ((int)(sizeof s_screens / sizeof s_screens[0]))
+#define VM_CONTROLS (VM_SCREENS - 1)
 
 /* One function for every row slot: the lookup remembers which address the
  * game is calling. Plain `ret`, results in eax. Value strings are written
@@ -545,7 +560,7 @@ void nfl2k5_video_menu_install(void)
     if (!GetCurrentDirectoryA(sizeof(root), root)) snprintf(root, sizeof(root), ".");
     nfl2k5_modpacks_init(root);
     if (getenv("NFL2K5_NO_VIDEO_MENU")) return;
-    s_heap_size = 512u * 1024u;
+    s_heap_size = 1024u * 1024u;   /* each row keeps ~8 KB of value strings; Controls adds 24 rows */
     s_heap = xbox_HeapAlloc(s_heap_size, 16);
     if (!s_heap) { fprintf(stderr, "[VIDEOMENU] no guest memory\n"); return; }
     s_custom_selector_rows = vm_alloc(4u * 12u);
@@ -593,6 +608,16 @@ void nfl2k5_video_menu_install(void)
     for (k = 0; k < sizeof k_options_headers / sizeof k_options_headers[0]; k++) {
         int n = vm_add_link(k_options_headers[k], video, vm_wstr("Video Settings"));
         fprintf(stderr, "[VIDEOMENU] Options menu %08X: %d rows\n", (unsigned)k_options_headers[k], n);
+    }
+    if (!getenv("NFL2K5_NO_CONTROLS_MENU")) {   /* "Controls" right under Video Settings */
+        uint32_t controls;
+        s_screens[VM_CONTROLS].rows = nfl2k5_ctlmenu_rows();
+        for (i = 0; i < s_screens[VM_CONTROLS].rows && i < VM_MAX_ROWS; i++)
+            s_ctl_labels[i] = nfl2k5_ctlmenu_label(i);
+        controls = vm_build_screen(VM_CONTROLS);
+        for (k = 0; controls && k < sizeof k_options_headers / sizeof k_options_headers[0]; k++)
+            vm_add_link(k_options_headers[k], controls, vm_wstr("Controls"));
+        fprintf(stderr, "[VIDEOMENU] Controls %08X: %d rows\n", (unsigned)controls, s_screens[VM_CONTROLS].rows);
     }
 #ifdef __ANDROID__
     {   /* touch controls, battery saver, pausing, adding songs: under Video Settings */

@@ -20,6 +20,7 @@ extern void *xbox_FramebufferWindowHwnd(void);
 extern unsigned nfl2k5_controls_ports(void);
 extern int nfl2k5_controls_get(int port, XBOX_GAMEPAD *g, int use_pads);
 extern void nfl2k5_controls_rumble(int port, unsigned left, unsigned right);
+extern void nfl2k5_controls_rumble_tick(void);
 
 static Uint64 s_first_poll_ms;
 
@@ -429,12 +430,18 @@ int nfl2k5_hle_XInputGetCapabilities(void)
     if (!is_our_handle(MEM32(g_esp + 4u)))
         return 0;
     caps = MEM32(g_esp + 8u);
-    MEM8(caps) = 1;
-    MEM16(caps + 2u) = 0;
+    /* XINPUT_CAPABILITIES is packed: SubType +0, Reserved +1, In.Gamepad +3
+     * (18 bytes), Out.Rumble +21/+23. The game keeps Out.Rumble as the mask
+     * it ANDs every motor speed with before XInputSetState (0x39255 /
+     * 0x399D4). These used to be written at +2/+4/+26/+28, which left the
+     * masks 0x00FF and 0x0000: the left motor got at most 255/65535 and the
+     * right motor nothing -- why the PC never rumbled (2026-10-31). */
+    MEM8(caps) = 1;                                 /* XINPUT_DEVSUBTYPE_GC_GAMEPAD */
+    MEM16(caps + 1u) = 0;
     memset(&all, 0xFF, sizeof all);
-    put_gamepad(caps + 4u, &all);
-    MEM16(caps + 26u) = 0xFFFFu;
-    MEM16(caps + 28u) = 0xFFFFu;
+    put_gamepad(caps + 3u, &all);
+    MEM16(caps + 21u) = 0xFFFFu;
+    MEM16(caps + 23u) = 0xFFFFu;
     g_eax = 0;
     g_esp += 12u;
     return 1;
@@ -450,6 +457,8 @@ int nfl2k5_hle_XInputGetState(void)
     if (!is_our_handle(MEM32(g_esp + 4u)))
         return 0;
     nfl2k5_live_qb_guest_tick();
+    if (host_pad_mode() != 2)
+        nfl2k5_controls_rumble_tick();          /* keeps a running rumble alive (src/nfl2k5_controls.c) */
     {
         extern volatile DWORD g_xbox_game_tid;
         g_xbox_game_tid = (DWORD)SDL_GetCurrentThreadID();
@@ -523,8 +532,18 @@ int nfl2k5_hle_XInputSetState(void)
      * XINPUT_RUMBLE { wLeftMotorSpeed, wRightMotorSpeed } at +66. */
     if (host_pad_mode() != 2)
         nfl2k5_controls_rumble((int)(MEM32(g_esp + 4u) & 3u), MEM16(fb + 66u), MEM16(fb + 68u));
-    MEM32(fb) = 0;                                  /* XINPUT_FEEDBACK_HEADER.dwStatus */
-    g_eax = 0;
+    else if (MEM16(fb + 66u) || MEM16(fb + 68u)) {
+        static int n;
+        if (n++ < 50)
+            fprintf(stderr, "[RUMBLE] port %u L=%u R=%u (host pads ignored: NFL2K5_NO_HOST_PAD=always)\n",
+                    (unsigned)(MEM32(g_esp + 4u) & 3u) + 1u, MEM16(fb + 66u), MEM16(fb + 68u));
+    }
+    /* Like the real XInputSetState: ERROR_IO_PENDING, with the request
+     * already complete in dwStatus. The game's rumble state machine (0x399D4)
+     * only counts a request as sent on ERROR_IO_PENDING (0x39A12); any other
+     * result is treated as a failed send (state reset to 1). */
+    MEM32(fb) = 0;                                  /* XINPUT_FEEDBACK_HEADER.dwStatus = ERROR_SUCCESS */
+    g_eax = 0x3E5u;                                 /* ERROR_IO_PENDING */
     g_esp += 12u;
     return 1;
 }
