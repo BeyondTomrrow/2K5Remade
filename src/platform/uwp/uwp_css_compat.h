@@ -212,10 +212,74 @@ inline void svg_intrinsic_size(std::string &svg)
     svg.insert(at + 4, attrs);
 }
 
+/* A gradient colour stop with two positions ("#fff 0 38%") is newer than
+ * EdgeHTML 18, which then drops the whole background: the SNF clock digits
+ * (gradient text) vanished (2026-10-31). Write it as two stops. */
+inline void split_double_stops(std::string &css)
+{
+    static const char *fns[] = {"linear-gradient(", "radial-gradient(", "repeating-linear-gradient(",
+                                "repeating-radial-gradient("};
+    auto is_pos = [](const std::string &t) {
+        if (t.empty()) return false;
+        char c = t[0];
+        return isdigit((unsigned char)c) || c == '.' || c == '-' || c == '+' || t.compare(0, 5, "calc(") == 0;
+    };
+    for (const char *fn : fns) {
+        size_t flen = strlen(fn);
+        for (size_t at = css.find(fn); at != std::string::npos; at = css.find(fn, at + 1)) {
+            if (at > 0 && (isalnum((unsigned char)css[at - 1]) || css[at - 1] == '-')) continue;
+            size_t open = at + flen - 1, k = open + 1;
+            int depth = 1;
+            for (; k < css.size() && depth > 0; k++) {
+                if (css[k] == '(') depth++;
+                else if (css[k] == ')') depth--;
+            }
+            if (depth != 0) break;
+            size_t close = k - 1;
+            std::string inner = css.substr(open + 1, close - open - 1), out;
+            std::vector<std::string> parts(1);
+            depth = 0;
+            for (char ch : inner) {
+                if (ch == '(') depth++;
+                else if (ch == ')') depth--;
+                if (ch == ',' && depth == 0) { parts.emplace_back(); continue; }
+                parts.back() += ch;
+            }
+            bool changed = false;
+            for (size_t p = 0; p < parts.size(); p++) {
+                std::vector<std::string> tok;
+                depth = 0;
+                std::string cur;
+                for (char ch : parts[p]) {
+                    if (ch == '(') depth++;
+                    else if (ch == ')') depth--;
+                    if (isspace((unsigned char)ch) && depth == 0) { if (!cur.empty()) tok.push_back(cur), cur.clear(); continue; }
+                    cur += ch;
+                }
+                if (!cur.empty()) tok.push_back(cur);
+                if (p) out += ',';
+                bool shape = p == 0 && (parts[p].find(" at ") != std::string::npos || parts[p].find("circle") != std::string::npos ||
+                                        parts[p].find("ellipse") != std::string::npos || parts[p].find("closest") != std::string::npos ||
+                                        parts[p].find("farthest") != std::string::npos);
+                if (!shape && tok.size() >= 3 && !is_pos(tok[0]) && is_pos(tok[tok.size() - 2]) && is_pos(tok.back())) {
+                    std::string col;
+                    for (size_t t = 0; t + 2 < tok.size(); t++) col += (t ? " " : "") + tok[t];
+                    out += col + " " + tok[tok.size() - 2] + "," + col + " " + tok.back();
+                    changed = true;
+                } else {
+                    out += parts[p];
+                }
+            }
+            if (changed) css.replace(open + 1, close - open - 1, out);
+        }
+    }
+}
+
 /* Everything the WebView host applies to served HTML and CSS. */
 inline void edgehtml_compat(std::string &css)
 {
     expand_inset(css);
+    split_double_stops(css);
     fallback_color_mix(css);
     fallback_conic(css);
 }
