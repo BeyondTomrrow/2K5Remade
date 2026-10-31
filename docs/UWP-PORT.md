@@ -196,42 +196,54 @@ compile a snapshot instead: `-DNFL2K5_UWP_INTERP_SRC=<file>` (cache variable).
   Unsigned packages are refused ("an unsigned package cannot include
   Executable activations").
 
-## Status (2026-10-31)
+## Status (2026-10-31, installed package)
 
-Verified on this PC (Windows 11, RTX 2060 SUPER):
+The user installed the package with `Install NFL2K5 UWP.cmd`; it runs from
+`C:\Program Files\WindowsApps` in its AppContainer on this PC.
 
-- Both exes (`build-uwp\NFL2K5.exe`, `build-uwp\game\NFL2K5.exe`) link with
-  **0 imports outside the UWP API set** (App Certification Kit allow-list).
-- **Probes in an AppContainer: 15/15 pass.** The guest memory map works as it is
-  (RAM view at 0x10000, 28 mirrors, fixed apertures, 4 GB placeholder variant),
-  and so do VEH write traps, dxcompiler.dll from the package, LocalState I/O and
-  thread affinity. Outside paths are denied, as expected.
-- **Self-tests in an AppContainer:** SDL audio opens the **xaudio2** driver and
-  plays at real-time rate. **Custom music:** MP3, AAC (.m4a) and WAV convert to
-  the game's WMA through Media Foundation.
-- **The game runs from the UWP-linked exe** (unpackaged `--hwnd-test`, not
-  sandboxed). It boots, plays the intro movie and runs the attract loop on
-  **Direct3D 12 through the UWP-minimal SDL_GPU** (`[GX] window claimed for
-  Direct3D 12`, `[PRESENT] presenting through Direct3D 12 (SDL_GPU)`). Audio
-  plays through **XAudio2** (`[UWP] SDL audio driver: xaudio2`). Screenshot:
-  `D:\claude-overflow\uwp-shots\uwp-game-hwndtest-2.png`.
-- The JS shim (node test) and the CSS `inset` rewrite (unit test, plus all
-  25 package files) pass.
-- The desktop build (`build\Release`) still builds (under the build lock).
+Works (screenshots in `D:\claude-overflow\uwp-checklist\`):
 
-Not verified (needs the package installed, or a console):
+- Boot, title, menus, a CPU vs CPU Quick Game through to the halftime show,
+  XAudio2 sound and menu music, keyboard, XAML host mode with the HTML
+  scorebug drawn as a transparent EdgeHTML WebView over the SwapChainPanel.
+- Saves: the VIP profile is created, saved and loaded on the next start
+  (`LocalState\NFL2K5-PC\saves`). GetFinalPathNameByHandleW is denied in an
+  AppContainer for every name type, so the kernel layer keeps each directory
+  handle's host path (`kernel_file.c`); before that, save folders listed as
+  empty and every save failed with "Cannot create save on Xbox Hard Disk".
+- F1 menu text, the music toast and the PlayStation prompt sheet: the GDI
+  calls are implemented on Direct2D/DirectWrite (`uwp_gdi_d2d.cpp`). The video
+  menu hides the display-mode, desktop-resolution and API rows on UWP.
+- EdgeHTML compatibility for the packages, applied as the host serves them:
+  `inset`, `color-mix()` (literal pairs mixed exactly, var() mixes take the
+  larger share), `conic-gradient()`, canvas `measureText()` ink/font boxes
+  (polyfill: the SNF scores, clock and quarter were NaN-sized), `.svg` images
+  as data URIs plus an intrinsic size. `NFL2K5_HTMLPRES_PROBE=1` logs element
+  layout every 15 s for comparing with WebView2.
+- `LocalState\env.txt` sets environment variables; `NFL2K5_PRESS_FILE` drives
+  the game without window focus (used by the test scripts).
+- The selected mod pack is kept in `LocalState\NFL2K5-PC\mods\active-pack.ini`
+  and applies at the next start (a UWP app cannot hand off to another exe).
 
-- The packaged app itself: the CoreWindow swap chain path, the XAML host
-  mode (SwapChainPanel + composition swap chain), the EdgeHTML WebView host
-  (page load, ScriptNotify, CapturePreviewToStreamAsync transparency),
-  Windows.Gaming.Input -> SDL virtual gamepads, keyboard, suspend/resume.
-  `Install NFL2K5 UWP.cmd` covers this PC once someone runs it.
-- Running the game itself inside the AppContainer. That needs the game folder
-  readable by ALL APPLICATION PACKAGES, which is what the installer grants.
-- Anything on Xbox: memory map at fixed addresses, D3D12 FL11 on the console,
-  USB drive access, Game mode memory.
+Xbox readiness (cannot be tested without a console):
 
-Known gaps: the F1 overlay and prompt art drawn with GDI are blank (the shim
-fails them; DirectWrite is the way); there is no crash symbolisation (dbghelp);
-the `.2k5patch` disc-image installer (it starts another exe) is unavailable in
-UWP; flex `gap` and `aspect-ratio` in the HTML packages are not handled.
+- Set the app to **Game** in Dev Home / Device Portal (5 GB instead of 1 GB);
+  this is not a manifest setting.
+- XAML mode sets `RequiresPointerMode = WhenRequested` and swallows Back, so
+  the pad is not turned into a mouse cursor and B does not leave the app.
+- Needs the Microsoft.VCLibs.140.00 UWP framework package installed on the
+  console; game files in LocalState or on an NTFS USB drive that grants ALL
+  APPLICATION PACKAGES read.
+- Untested there: fixed-address guest memory map, D3D12 FL11, suspend/resume
+  (no Trim on suspend yet), EdgeHTML version on the console.
+
+Open:
+
+- The 4th boot movie never decodes on D3D12, so the intro is skipped by
+  default (`NFL2K5_SKIP_INTRO`); the renderer work on the D3D12/Vulkan intro
+  freeze is expected to fix both.
+- Controllers: Windows.Gaming.Input -> SDL virtual gamepads (with rumble) is
+  in place but no pad was connected for a test.
+- Header prompt icons sometimes show the original Xbox L/R/white/black art
+  instead of the modern LT/RT art; not investigated.
+- The `.2k5patch` disc-image installer (it starts another exe) is unavailable.
