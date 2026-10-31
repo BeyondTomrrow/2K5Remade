@@ -54,6 +54,14 @@ try {
         $state.aclFolders += $dir
         Write-Host "Granted ALL APPLICATION PACKAGES read/execute on $dir"
     }
+    # The root itself (this folder and the files directly in it, not its other
+    # subfolders): the game makes it the current directory at boot.
+    if (-not ((Get-Acl $GameRoot).Access | Where-Object { $_.IdentityReference.Value -match 'ALL APPLICATION PACKAGES' -and $_.FileSystemRights -match 'Read' })) {
+        & icacls $GameRoot /grant '*S-1-15-2-1:(OI)RX' /Q | Out-Null
+        if ($LASTEXITCODE) { throw "icacls failed on $GameRoot" }
+        $state.aclFolders += $GameRoot
+        Write-Host "Granted ALL APPLICATION PACKAGES read/execute on $GameRoot (folder and its files only)"
+    }
     $state | ConvertTo-Json | Set-Content -Path $statePath -Encoding ascii
 
     # 4. root.txt in the app's LocalState. The folder appears when the app

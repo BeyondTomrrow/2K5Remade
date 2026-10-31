@@ -1491,7 +1491,7 @@ int main(int argc, char **argv)
             char lp[MAX_PATH];
             CreateDirectoryA("logs", NULL);
             if (freopen(xbox_user_path("logs\\session.log", lp, sizeof(lp)), "w", stderr))
-                setvbuf(stderr, NULL, _IOLBF, 1 << 16);
+                setvbuf(stderr, NULL, getenv("NFL2K5_LOG_UNBUFFERED") ? _IONBF : _IOLBF, 1 << 16);
         }
     }
 #endif
@@ -1514,6 +1514,12 @@ int main(int argc, char **argv)
     snprintf(original_dir, sizeof(original_dir), "%s/original", root);
     snprintf(original_xbe, sizeof(original_xbe), "%s/default.xbe", original_dir);
     snprintf(save_dir, sizeof(save_dir), "%s/saves", root);
+#ifdef NFL2K5_UWP
+    /* The app may only write its own LocalState: there (LocalState\NFL2K5-PC\
+     * saves), the hard disk images open, and the PC build's saves stay out of
+     * it. In <root>\saves the title found no hard disk and quit (2026-10-31). */
+    xbox_user_path("saves", save_dir, sizeof(save_dir));
+#endif
 
     const char *game_dir = file_exists(disc_xbe) ? disc_dir : original_dir;
     const char *xbe_path = file_exists(disc_xbe) ? disc_xbe : original_xbe;
@@ -1559,8 +1565,11 @@ int main(int argc, char **argv)
     RECOMP_ICALL_FEEDBACK_INIT();
 
     {
+        /* NFL2K5_LOG_UNBUFFERED=1: every line reaches the log at once, so the
+         * last one is where a process that died without a crash report was. */
         static char stderr_buf[1 << 16];
-        setvbuf(stderr, stderr_buf, _IOFBF, sizeof(stderr_buf));
+        if (getenv("NFL2K5_LOG_UNBUFFERED")) setvbuf(stderr, NULL, _IONBF, 0);
+        else setvbuf(stderr, stderr_buf, _IOFBF, sizeof(stderr_buf));
         CloseHandle(CreateThread(NULL, 0, nfl2k5_stderr_flusher, NULL, 0, NULL));
     }
 

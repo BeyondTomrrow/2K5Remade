@@ -31,6 +31,9 @@
 #include <atomic>
 #include <cstdio>
 #include <cstdlib>
+#include <csignal>
+#include <cstring>
+#include <exception>
 #include <string>
 #include <vector>
 
@@ -216,6 +219,28 @@ std::wstring read_line_file(const std::wstring &local, const wchar_t *name)
     return w;
 }
 
+/* Return addresses of the calling thread as module+offset, for the PDB
+ * beside build-uwp\game\NFL2K5.exe. */
+void log_backtrace()
+{
+    void *frames[48];
+    USHORT n = RtlCaptureStackBackTrace(1, 48, frames, nullptr);
+    for (USHORT i = 0; i < n; i++) {
+        HMODULE mod = nullptr;
+        char name[MAX_PATH] = "?";
+        if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                               (LPCSTR)frames[i], &mod) && mod) {
+            GetModuleFileNameA(mod, name, sizeof name);
+            const char *base = strrchr(name, '\\');
+            fprintf(stderr, "[UWP]   #%u %s+0x%llX\n", i, base ? base + 1 : name,
+                    (unsigned long long)((uintptr_t)frames[i] - (uintptr_t)mod));
+        } else {
+            fprintf(stderr, "[UWP]   #%u %p\n", i, frames[i]);
+        }
+    }
+    fflush(stderr);
+}
+
 } // namespace
 
 static void game_start(const char *prop, void *window, const wchar_t *local_dir, const wchar_t *install_dir)
@@ -248,6 +273,35 @@ static void game_start(const char *prop, void *window, const wchar_t *local_dir,
         if (!more.empty()) extra += ";" + utf8(more);
         _putenv_s("NFL2K5_EXTRA_MUSIC", extra.c_str());
     }
+    {   /* LocalState\env.txt: NAME=VALUE lines, the environment variables a
+         * desktop test would set (a packaged app gets no command line or
+         * environment from its launcher). '#' starts a comment line. */
+        FILE *f = _wfopen((local + L"\\env.txt").c_str(), L"rb");
+        char line[1024];
+        while (f && fgets(line, sizeof line, f)) {
+            size_t n = strlen(line);
+            while (n && (line[n - 1] == '\n' || line[n - 1] == '\r' || line[n - 1] == ' ')) line[--n] = 0;
+            char *eq = strchr(line, '=');
+            if (!n || line[0] == '#' || !eq || eq == line) continue;
+            *eq = 0;
+            _putenv_s(line, eq + 1);
+            fprintf(stderr, "[UWP] env.txt: %s=%s\n", line, eq + 1);
+        }
+        if (f) fclose(f);
+    }
+    /* A packaged app that dies leaves no console and often no WER report:
+     * say in the log which way it went. */
+    atexit([] { fprintf(stderr, "[UWP] exit() called\n"); fflush(stderr); });
+    signal(SIGABRT, [](int) { fprintf(stderr, "[UWP] abort()\n"); fflush(stderr); });
+    std::set_terminate([] { fprintf(stderr, "[UWP] std::terminate (uncaught C++ exception)\n"); log_backtrace(); abort(); });
+    /* The release CRT ends the process with a fail-fast (no exception, no
+     * report) when a checked function gets a bad argument (an _s function's
+     * buffer too small, a NULL FILE*...). */
+    _set_invalid_parameter_handler([](const wchar_t *, const wchar_t *, const wchar_t *, unsigned, uintptr_t) {
+        fprintf(stderr, "[UWP] CRT invalid parameter: the CRT would fail-fast here\n");
+        log_backtrace();
+        TerminateProcess(GetCurrentProcess(), 0xC0000417);
+    });
     _putenv_s("NFL2K5_INSTALL_DIR", utf8(install_dir).c_str());
     _wputenv_s(L"NFL2K5_UWP_LOCALSTATE", local_dir);   /* SHGetFolderPathW shim */
     fprintf(stderr, "[UWP] NFL2K5 UWP build; install %s\n", utf8(install_dir).c_str());

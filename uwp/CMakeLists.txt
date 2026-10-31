@@ -21,7 +21,7 @@ endif()
 
 set(NFL2K5_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/..")
 set(NFL2K5_UWP_PUBLISHER "CN=NFL2K5 Dev" CACHE STRING "Package publisher (must match the signing certificate subject)")
-set(NFL2K5_UWP_PKG_VERSION "0.2.0.0" CACHE STRING "Package version (four parts)")
+set(NFL2K5_UWP_PKG_VERSION "0.2.1.0" CACHE STRING "Package version (four parts)")
 
 # MSVC's store CRT import libraries (msvcrt.lib -> vcruntime140_app.dll).
 get_filename_component(_msvc_bin "${CMAKE_CXX_COMPILER}" DIRECTORY)
