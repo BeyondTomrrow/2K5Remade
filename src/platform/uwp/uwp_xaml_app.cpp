@@ -74,7 +74,12 @@ void SDLCALL set_swapchain(void *swapchain)
         com_ptr<ISwapChainPanelNative> native = s_panel.as<ISwapChainPanelNative>();
         HRESULT hr = native->SetSwapChain(static_cast<IDXGISwapChain *>(swapchain));
         fprintf(stderr, "[UWP] SwapChainPanel.SetSwapChain 0x%08lX\n", (unsigned long)hr);
-        if (SUCCEEDED(hr) && swapchain) s_swap_ok = true;   /* the 45 s check reads it */
+        if (SUCCEEDED(hr) && swapchain) {
+            s_swap_ok = true;   /* the 45 s check reads it */
+            /* The XAML start works: closing the app from here on (even killed)
+             * must not count as a failed start. */
+            DeleteFileW(marker_path().c_str());
+        }
     };
     if (s_dispatcher.HasThreadAccess()) {
         apply();
