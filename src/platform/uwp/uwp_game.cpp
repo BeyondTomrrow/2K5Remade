@@ -277,6 +277,12 @@ extern "C" void uwp_game_start_hwnd(void *hwnd, const wchar_t *local_dir, const 
 
 extern "C" void uwp_game_tick(void)
 {
+    static bool audio_logged;
+    if (!audio_logged && SDL_WasInit(SDL_INIT_AUDIO)) {
+        audio_logged = true;
+        const char *d = SDL_GetCurrentAudioDriver();
+        fprintf(stderr, "[UWP] SDL audio driver: %s\n", d ? d : "(none)");
+    }
     try {
         poll_pads();
     } catch (...) {

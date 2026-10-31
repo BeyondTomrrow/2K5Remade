@@ -21,7 +21,7 @@ endif()
 
 set(NFL2K5_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/..")
 set(NFL2K5_UWP_PUBLISHER "CN=NFL2K5 Dev" CACHE STRING "Package publisher (must match the signing certificate subject)")
-set(NFL2K5_UWP_PKG_VERSION "0.1.0.0" CACHE STRING "Package version (four parts)")
+set(NFL2K5_UWP_PKG_VERSION "0.2.0.0" CACHE STRING "Package version (four parts)")
 
 # MSVC's store CRT import libraries (msvcrt.lib -> vcruntime140_app.dll).
 get_filename_component(_msvc_bin "${CMAKE_CXX_COMPILER}" DIRECTORY)
@@ -79,6 +79,9 @@ if(NFL2K5_UWP_GAME)
   add_subdirectory(${NFL2K5_ROOT}/external/xboxrecomp ${CMAKE_BINARY_DIR}/xboxrecomp EXCLUDE_FROM_ALL)
   # Desktop-only libraries the xboxrecomp targets ask for (IME): dropped, the
   # shim answers the few calls instead.
+  foreach(_t xbox_video xbox_dsound xbox_d3d8 xbox_kernel xbox_apu xbox_nv2a xbox_input xbox_usb platform)
+    target_compile_definitions(${_t} PRIVATE NFL2K5_UWP=1)   # the few #ifdef hooks in xboxrecomp
+  endforeach()
   foreach(_t xbox_video xbox_dsound xbox_d3d8 xbox_kernel)
     get_target_property(_libs ${_t} INTERFACE_LINK_LIBRARIES)
     if(_libs)

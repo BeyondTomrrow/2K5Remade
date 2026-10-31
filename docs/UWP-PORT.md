@@ -4,9 +4,10 @@ Status: started 2026-10-31. Goal: run the recompiled game as a UWP app, on
 Xbox One / Series consoles in Dev Mode (the way RetroArch and xemu UWP builds
 run) and as a Store-style Windows app.
 
-Stage 1 (CoreWindow + D3D12 shell, probes, packaging) works. Stage 2 (the
-game) builds and links; see "Status" at the end for what has run and what is
-still open.
+Stage 1 (CoreWindow + D3D12 shell, probes, packaging) works. Stage 2: the
+game builds as a UWP app, runs from the UWP-linked exe on this PC with D3D12 and
+XAudio2, and is packaged with a one-click installer. See "Status" at the end
+for what is verified and what is still open.
 
 ## Recommendation
 
@@ -54,9 +55,9 @@ Why this way round:
 | Run-time shader compile | `dxcompiler.dll` + `dxil.dll` have **zero** imports outside the UWP API set and load from the package in the AppContainer. Ship them in the package. A precompiled shader cache is still worth adding for first-run stutter (and as a fallback if a console refuses unsigned-by-MS DXIL, not expected). | `check-imports.py` on both DLLs; probe |
 | Files | The AppContainer can read its install folder and read/write LocalState. Anything else gets ACCESS_DENIED unless the folder's ACL grants ALL APPLICATION PACKAGES (verified: `E:\2K5Remade\README.md` is denied). On Xbox Dev Mode, USB drives mount as **E:** and are readable by Win32 calls if the NTFS ACL grants ALL APPLICATION PACKAGES (community tools set this). `broadFileSystemAccess` is **not** supported on Xbox. Plan: game files in LocalState (upload with Device Portal's file explorer), or a USB folder named in `LocalState\root.txt`. | probe; Emulation Revival dev-mode utilities; MS docs |
 | File size | 2 GB per-file limit reported on Xbox UWP. Our disc files are far smaller. | TechRepublic |
-| WebView2 | Not on Xbox. The HTML scorebug packages fall back to the native HUD (`uwp_webview2_stub.cpp`). A later option is to host packages in the XAML `WebView` (EdgeHTML on Xbox), capturing frames with `CapturePreviewToStreamAsync`. | - |
+| WebView2 | Not on Xbox. In XAML host mode the HTML scorebug packages run in the XAML `WebView` (EdgeHTML on Xbox) and frames are captured with `CapturePreviewToStreamAsync` (see below). In CoreWindow mode, or for a package EdgeHTML cannot run, the native scorebug is used. | - |
 | Threading | CoreApplication owns the main (ASTA) thread, so the game runs on its own thread and the UI thread only dispatches events and polls gamepads. Suspend/resume: Xbox suspends games in the background, so D3D12 must `Trim` on suspend (TODO in stage 2). | - |
-| Audio | XAudio2 2.9 and WASAPI (`ActivateAudioInterfaceAsync`) are UWP APIs. SDL's WASAPI uses `IMMDeviceEnumerator` (desktop) and is off in the UWP build. The game's SDL3 audio stream output needs a UWP sink: the planned way is XAudio2 directly in the apu output layer. Until then audio goes to SDL's dummy driver (silent). | - |
+| Audio | XAudio2 2.9 and WASAPI (`ActivateAudioInterfaceAsync`) are UWP APIs. SDL's WASAPI uses `IMMDeviceEnumerator` (desktop) and is off in the UWP build. The UWP SDL has an XAudio2 2.9 playback driver instead, so the game's SDL3 audio stream plays through XAudio2 (verified in an AppContainer and in the game). | self-test, game log |
 | Store/WACK | Restricted APIs are fine in Dev Mode sideloading. A Store submission would need the restricted capabilities justified, and emulator-like apps are not accepted on Xbox retail. | TweakTown (RetroArch removal) |
 
 ## What is Win32-only in our code (import check)
@@ -105,41 +106,132 @@ is linked with `/APPCONTAINER` against `WindowsApp.lib` and the store CRT
 (`vcruntime140_app.dll` from the `Microsoft.VCLibs.140.00` framework package).
 
 ```
-tools\uwp\build-uwp.ps1                 # shell -> build-uwp\NFL2K5.exe (+ import check)
 tools\uwp\build-sdl-uwp.ps1             # UWP-minimal SDL3 -> E:\2K5Remade-local\sdl3-uwp
-tools\uwp\build-uwp.ps1 -Game           # + game -> build-uwp\game\NFL2K5.exe
-tools\uwp\package-uwp.ps1 -Sign         # layout + makeappx + signtool -> dist\uwp\NFL2K5_<ver>_x64.msix
-tools\uwp\package-uwp.ps1 -Sign -NewCert   # first time: self-signed cert in E:\2K5Remade-local\uwp-cert
-tools\uwp\probe-appcontainer.ps1        # run the probes in an AppContainer (no install needed)
+tools\uwp\build-uwp.ps1                 # stage-1 shell -> build-uwp\NFL2K5.exe (+ import check)
+tools\uwp\build-uwp.ps1 -Game -Jobs 2   # + game -> build-uwp\game\NFL2K5.exe (first time: ~1 h of generated code)
+tools\uwp\package-uwp.ps1 -Game -Sign   # layout + makeappx + signtool -> dist\uwp\NFL2K5_<ver>_x64.msix,
+                                        #   + NFL2K5Dev.cer and the installer scripts
+tools\uwp\package-uwp.ps1 -Sign -NewCert   # first time only: self-signed cert in E:\2K5Remade-local\uwp-cert
+tools\uwp\probe-appcontainer.ps1        # memory-map/VEH/file/DXC probes in an AppContainer
+tools\uwp\selftest-appcontainer.ps1     # audio + custom-music self-tests in an AppContainer
+tools\uwp\run-game-test.ps1             # the game, unpackaged (--hwnd-test), with screenshots
+node tools\uwp\test-webview-shim.js     # the WebView JS shim
+tools\uwp\test-css-compat.cpp           # the EdgeHTML CSS rewrite (see the file for the build line)
 ```
 
 The SDL source for the UWP build is `E:\2K5Remade-local\sdl-src-uwp`: a copy
 of the desktop build's SDL (8bf3b7215 + local patches) with its own local git
-holding the UWP commits. The desktop `sdl-src` is untouched.
+holding the UWP commits (`SDL_UWP_MINIMAL` CMake option, CoreWindow /
+composition / test-HWND swap chains in the D3D12 backend, XAudio2 playback
+driver, no helper window). The desktop `sdl-src` is untouched.
+
+When the interpreter sources are mid-edit by someone else, the UWP build can
+compile a snapshot instead: `-DNFL2K5_UWP_INTERP_SRC=<file>` (cache variable).
+
+## Sound, custom music, HTML scorebugs
+
+- **Sound.** The APU output layer already writes an SDL3 audio stream; the
+  UWP SDL gets an XAudio2 2.9 playback driver (`src/audio/xaudio2/SDL_xaudio2_uwp.cpp`
+  in the SDL fork), so the stream plays through XAudio2 with no change to the
+  tuned APU/resampler code. The log line `[UWP] SDL audio driver: xaudio2`
+  confirms it at run time.
+- **Custom music.** The Windows path was already Media Foundation (decode
+  MP3/AAC/WMA/WAV with the source reader, encode the WMA the game's player
+  needs with the sink writer); FFmpeg is only used on Linux/Android and is
+  unchanged. The one helper not in the UWP set,
+  `MFTranscodeGetAudioOutputAvailableTypes`, is rebuilt from `MFTEnumEx` + the
+  WMA encoder MFT (`uwp_mf_shim.cpp`). Song folders: `<root>\Music`,
+  `LocalState\Music`, and a folder named in `LocalState\music.txt` (e.g. a
+  USB drive), each with one subfolder per playlist.
+- **HTML scorebugs.** XAML host mode (`uwp_xaml_app.cpp`): the game draws into
+  a SwapChainPanel (composition swap chain) and the presentation package runs
+  in a XAML `WebView` (EdgeHTML on Xbox) behind it (`uwp_webview_host.cpp`):
+  Android's JS shim (`chrome.webview` polyfill, `__nfl2k5_recv`,
+  `__nfl2k5_busy`; page-to-game messages via `window.external.notify`), files
+  served from the game folder in `WebResourceRequested` under the same
+  `https://presentation.local/` (teams/erateams/portraits) names, frames
+  captured with `CapturePreviewToStreamAsync` only while the page changes.
+  EdgeHTML 18 has no `document.getAnimations()`, so the shim counts CSS
+  animations from their events and keeps a page busy for 1.5 s after a change
+  (transitions). The CSS `inset` shorthand (57 uses in the current packages)
+  is rewritten to top/right/bottom/left as files are served. A package that
+  fails to load, throws before its first frame, or whose capture has no
+  transparency falls back to the native scorebug for the session, with the
+  reason in the log. Not handled: flex-box `gap` and `aspect-ratio` (EdgeHTML
+  lacks them; layouts using them may be off), `getAnimations`-driven code in
+  `CBS_2026/replay-wipe.js` and `preview-clock.js` (they check for it and
+  skip).
+- **Modes.** XAML host mode is the default. CoreWindow mode (no WebView, native
+  scorebug) is used when `LocalState\xaml-mode.txt` starts with `off`, and
+  is switched on automatically if a XAML start dies within 45 s or the game's
+  picture never reaches the panel (the next start then uses CoreWindow mode).
+- **Saves and settings** always go to LocalState (`LocalState\NFL2K5-PC`),
+  also when `root.txt` points at a read-only game folder.
 
 ### Installing
 
+- **Windows (this PC):** `dist\uwp\Install NFL2K5 UWP.cmd` (double-click; it
+  lists what it changes, then one UAC prompt): trusts `NFL2K5Dev.cer` in
+  Local Machine > Trusted People, installs the `.msix` (and the VCLibs
+  runtime if missing and its .appx is present; this PC already has it),
+  grants ALL APPLICATION PACKAGES read/execute on `E:\2K5Remade\original`,
+  `mods`, `Music`, `assets`, `data`, `font`, `moment-audio` (existing ones
+  only; no copies), writes `root.txt` into the app's LocalState and starts the
+  app. It records what it changed in `install-state.json`;
+  `Uninstall NFL2K5 UWP.cmd` undoes exactly that (package, certificate if it
+  added it, ACL entries it added). The .pfx is never shipped. The UAC prompt
+  must be answered by the same Windows account that will play (an admin
+  account), because the package and LocalState are per user.
 - **Xbox (Dev Mode):** Dev Home → Device Portal (browser) → Apps → Add →
-  the `.msix`. Add the dependency `Microsoft.VCLibs.x64.14.00.appx` (the UWP
+  the `.msix` plus the dependency `Microsoft.VCLibs.x64.14.00.appx` (the UWP
   one, from the VS "Universal Windows Platform development" workload's
-  `ExtensionSDKs\Microsoft.VCLibs\14.0\Appx\Retail\x64`, or from a machine
-  that has it). Then in Dev Home select the app → View details → App type:
-  **Game**. Copy the game files into the app's LocalState with Device
-  Portal's File explorer, or point `LocalState\root.txt` at a USB folder.
-- **Windows:** the package is signed with a self-signed certificate. To
-  install it you need either **Developer Mode** (Settings → System → For
-  developers; then `Add-AppxPackage -Register build-uwp\layout\AppxManifest.xml`),
-  or the `.cer` trusted in *Local Machine → Trusted People* (admin). Both
-  are system settings, so they were not changed here. Unsigned packages with
-  the OID publisher are refused ("an unsigned package cannot include
+  `ExtensionSDKs\Microsoft.VCLibs\14.0\Appx\Retail\x64`, or a machine that
+  has it). In Dev Home select the app → View details → App type: **Game**
+  (5 GB instead of 1 GB). Game files: copy them into the app's LocalState
+  with Device Portal's File explorer, or put them on an NTFS USB drive (it
+  mounts as E:) whose folders grant ALL APPLICATION PACKAGES read, and write
+  that folder into `LocalState\root.txt`.
+- **Without the installer:** Developer Mode on (Settings → System → For
+  developers), then `Add-AppxPackage -Register build-uwp\layout\AppxManifest.xml`.
+  Unsigned packages are refused ("an unsigned package cannot include
   Executable activations").
 
-## Status
+## Status (2026-10-31)
 
-See the report at the end of the 2026-10-31 session, kept in sync below.
+Verified on this PC (Windows 11, RTX 2060 SUPER):
 
-- Stage 1: `build-uwp\NFL2K5.exe` builds with no imports outside the UWP API set.
-  `dist\uwp\NFL2K5_0.1.0.0_x64.msix` packs and signs. All 15 probes pass in an AppContainer
-  on this PC. The CoreWindow/D3D12 screen itself has not been seen yet:
-  installing needs Developer Mode on this PC (see above).
-- Stage 2: see the commit log for the current state.
+- Both exes (`build-uwp\NFL2K5.exe`, `build-uwp\game\NFL2K5.exe`) link with
+  **0 imports outside the UWP API set** (App Certification Kit allow-list).
+- **Probes in an AppContainer: 15/15 pass.** The guest memory map works as it is
+  (RAM view at 0x10000, 28 mirrors, fixed apertures, 4 GB placeholder variant),
+  and so do VEH write traps, dxcompiler.dll from the package, LocalState I/O and
+  thread affinity. Outside paths are denied, as expected.
+- **Self-tests in an AppContainer:** SDL audio opens the **xaudio2** driver and
+  plays at real-time rate. **Custom music:** MP3, AAC (.m4a) and WAV convert to
+  the game's WMA through Media Foundation.
+- **The game runs from the UWP-linked exe** (unpackaged `--hwnd-test`, not
+  sandboxed). It boots, plays the intro movie and runs the attract loop on
+  **Direct3D 12 through the UWP-minimal SDL_GPU** (`[GX] window claimed for
+  Direct3D 12`, `[PRESENT] presenting through Direct3D 12 (SDL_GPU)`). Audio
+  plays through **XAudio2** (`[UWP] SDL audio driver: xaudio2`). Screenshot:
+  `D:\claude-overflow\uwp-shots\uwp-game-hwndtest-2.png`.
+- The JS shim (node test) and the CSS `inset` rewrite (unit test, plus all
+  25 package files) pass.
+- The desktop build (`build\Release`) still builds (under the build lock).
+
+Not verified (needs the package installed, or a console):
+
+- The packaged app itself: the CoreWindow swap chain path, the XAML host
+  mode (SwapChainPanel + composition swap chain), the EdgeHTML WebView host
+  (page load, ScriptNotify, CapturePreviewToStreamAsync transparency),
+  Windows.Gaming.Input -> SDL virtual gamepads, keyboard, suspend/resume.
+  `Install NFL2K5 UWP.cmd` covers this PC once someone runs it.
+- Running the game itself inside the AppContainer. That needs the game folder
+  readable by ALL APPLICATION PACKAGES, which is what the installer grants.
+- Anything on Xbox: memory map at fixed addresses, D3D12 FL11 on the console,
+  USB drive access, Game mode memory.
+
+Known gaps: the F1 overlay and prompt art drawn with GDI are blank (the shim
+fails them; DirectWrite is the way); there is no crash symbolisation (dbghelp);
+the `.2k5patch` disc-image installer (it starts another exe) is unavailable in
+UWP; flex `gap` and `aspect-ratio` in the HTML packages are not handled.

@@ -10,7 +10,7 @@
  *
  * Plain CoreWindow mode (uwp_main.cpp) stays as the fallback: it is used when
  * LocalState\xaml-mode.txt starts with "off", and automatically after a XAML
- * start that did not survive its first 20 seconds (the marker file
+ * start that did not survive its first 45 seconds (the marker file
  * xaml-starting.marker is still there on the next launch).
  *
  * Built without .xaml files or the XAML compiler: the tree is made in code
@@ -58,6 +58,7 @@ using namespace winrt::Windows::UI::Xaml::Controls;
 namespace {
 
 std::atomic<bool> s_active{false};
+std::atomic<bool> s_swap_ok{false};   /* the game's swap chain reached the panel */
 CoreDispatcher s_dispatcher{nullptr};
 Grid s_root{nullptr};
 SwapChainPanel s_panel{nullptr};
@@ -134,13 +135,25 @@ struct XamlApp : ApplicationT<XamlApp> {
             if (uwp_game_exited(&code)) Application::Current().Exit();
         });
 
-        /* Survived 20 s: the XAML start works here, forget the marker. */
+        /* 45 s in: if the game's picture reached the panel, the XAML start
+         * works here and the marker goes. If not (a black screen, nothing
+         * crashed), switch this install to CoreWindow mode and close, so the
+         * next start shows the game. */
         survive = DispatcherTimer();
-        survive.Interval(std::chrono::seconds(20));
+        survive.Interval(std::chrono::seconds(45));
         survive.Tick([this](auto &&, auto &&) {
             survive.Stop();
             DeleteFileW(marker_path().c_str());
-            fprintf(stderr, "[UWP] XAML host mode running\n");
+            if (s_swap_ok) {
+                fprintf(stderr, "[UWP] XAML host mode running\n");
+                return;
+            }
+            fprintf(stderr, "[UWP] no swap chain on the SwapChainPanel after 45 s: CoreWindow mode from the next start\n");
+            if (FILE *f = _wfopen((s_local + L"\\xaml-mode.txt").c_str(), L"wb")) {
+                fputs("off (automatic: the game's picture never reached the XAML panel; delete this file to try again)\r\n", f);
+                fclose(f);
+            }
+            Application::Current().Exit();
         });
         survive.Start();
 
@@ -173,7 +186,7 @@ extern "C" int uwp_xaml_wanted(const wchar_t *local_dir)
          * the player deletes xaml-mode.txt. */
         DeleteFileW(marker.c_str());
         if (FILE *f = _wfopen(mode.c_str(), L"wb")) {
-            fputs("off (automatic: the XAML host did not survive its first 20 seconds; delete this file to try again)\r\n", f);
+            fputs("off (automatic: the XAML host did not survive its first 45 seconds; delete this file to try again)\r\n", f);
             fclose(f);
         }
         return 0;

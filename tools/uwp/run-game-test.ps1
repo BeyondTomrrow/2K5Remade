@@ -21,7 +21,7 @@
 #>
 param(
     [int]$Seconds = 90,
-    [int[]]$ShotsAt = @(20, 45, 80),
+    [string]$ShotsAt = "20,45,80",   # seconds; a string so -File callers can pass "20,45,80"
     [string]$ShotDir = 'D:\claude-overflow\uwp-shots',
     [string]$Root = 'E:\2K5Remade-local\uwp-root',
     [string]$Stage = 'E:\2K5Remade-local\uwp-stage-game',
@@ -50,20 +50,22 @@ using System; using System.Runtime.InteropServices; using System.Drawing;
 public static class UwpShot {
   [StructLayout(LayoutKind.Sequential)] public struct RECT { public int L, T, R, B; }
   [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
+  [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr FindWindowW(string cls, string title);
   [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
   [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
-  [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr h, IntPtr dc, uint flags);
+  [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int cx, int cy, uint flags);
+  /* Brought to the top without waiting on the window (SWP_ASYNCWINDOWPOS:
+   * PrintWindow hung on this window once, 2026-10-31), then copied from the
+   * screen. */
   public static bool Save(IntPtr h, string path) {
     RECT r; if (!GetWindowRect(h, out r) || r.R <= r.L) return false;
+    SetWindowPos(h, new IntPtr(-1), 0, 0, 0, 0, 0x4000 | 0x0001 | 0x0002 | 0x0010);
+    System.Threading.Thread.Sleep(500);
     using (var bmp = new Bitmap(r.R - r.L, r.B - r.T)) {
-      using (var g = Graphics.FromImage(bmp)) {
-        /* PW_RENDERFULLCONTENT (2): works for flip-model D3D windows even
-         * when another window covers this one. */
-        IntPtr dc = g.GetHdc(); bool ok = PrintWindow(h, dc, 2); g.ReleaseHdc(dc);
-        if (!ok) g.CopyFromScreen(r.L, r.T, 0, 0, bmp.Size);
-      }
+      using (var g = Graphics.FromImage(bmp)) g.CopyFromScreen(r.L, r.T, 0, 0, bmp.Size);
       bmp.Save(path, System.Drawing.Imaging.ImageFormat.Png);
     }
+    SetWindowPos(h, new IntPtr(-2), 0, 0, 0, 0, 0x4000 | 0x0001 | 0x0002 | 0x0010);
     return true;
   }
 }
@@ -82,14 +84,12 @@ try {
     Write-Host "started pid $($p.Id)"
     $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
     $t0 = Get-Date
-    foreach ($at in ($ShotsAt | Sort-Object)) {
+    foreach ($at in ($ShotsAt -split "," | ForEach-Object { [int]$_ } | Sort-Object)) {
         while (((Get-Date) - $t0).TotalSeconds -lt $at -and -not $p.HasExited) { Start-Sleep -Milliseconds 500 }
         if ($p.HasExited) { break }
-        $p.Refresh()
-        $h = $p.MainWindowHandle
+
+        $h = [UwpShot]::FindWindowW("NFL2K5UwpTest", $null)   # the --hwnd-test window (uwp_hwnd_test.cpp)
         if ($h -ne [IntPtr]::Zero) {
-            [UwpShot]::SetForegroundWindow($h) | Out-Null
-            Start-Sleep -Milliseconds 400
             $f = Join-Path $ShotDir "uwp-game-$stamp-${at}s.png"
             if ([UwpShot]::Save($h, $f)) { Write-Host "shot $f" }
         } else { Write-Host "no window at ${at}s" }

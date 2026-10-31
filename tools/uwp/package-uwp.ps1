@@ -24,18 +24,20 @@ param(
     [switch]$NewCert,
     [string]$CertPath = 'E:\2K5Remade-local\uwp-cert\NFL2K5Dev.pfx',
     [string]$CertPassword = 'nfl2k5-dev',
-    [switch]$NoDxc
+    [switch]$NoDxc,
+    [switch]$Game      # package the game (build-uwp\game\NFL2K5.exe) instead of the stage-1 shell
 )
 $ErrorActionPreference = 'Stop'
 $Root = (Resolve-Path "$PSScriptRoot\..\..").Path
 . "$PSScriptRoot\uwp-env.ps1"
 $build = "$Root\build-uwp"
 $layout = "$build\layout"
-if (-not (Test-Path "$build\NFL2K5.exe")) { throw 'build-uwp\NFL2K5.exe missing: run tools\uwp\build-uwp.ps1' }
+$exe = if ($Game) { "$build\game\NFL2K5.exe" } else { "$build\NFL2K5.exe" }
+if (-not (Test-Path $exe)) { throw "$exe missing: run tools\uwp\build-uwp.ps1 (with -Game for the game)" }
 
 if (Test-Path $layout) { Remove-Item -Recurse -Force $layout }
 New-Item -ItemType Directory -Force "$layout\Assets" | Out-Null
-Copy-Item "$build\NFL2K5.exe", "$build\AppxManifest.xml" $layout
+Copy-Item $exe, "$build\AppxManifest.xml" $layout
 if (-not $NoDxc) {
     $dxcBin = 'E:\2K5Remade-local\dxc\bin\x64'
     foreach ($d in 'dxcompiler.dll', 'dxil.dll') {
@@ -92,5 +94,14 @@ if ($Sign) {
     if (-not (Test-Path $CertPath)) { throw "No certificate at $CertPath (use -NewCert)" }
     & "$UwpSdkBin\signtool.exe" sign /fd SHA256 /f $CertPath /p $CertPassword $msix
     if ($LASTEXITCODE) { throw 'signtool failed' }
+}
+if ($Sign) {
+    # The public half of the test certificate goes next to the package (the
+    # installer trusts it); the .pfx never leaves E:\2K5Remade-local.
+    Copy-Item ([IO.Path]::ChangeExtension($CertPath, '.cer')) "$Root\dist\uwp\NFL2K5Dev.cer" -Force
+}
+if ($Game) {
+    # One-click install/uninstall for the PC (tools\uwp\installer).
+    Copy-Item "$PSScriptRoot\installer\*" "$Root\dist\uwp\" -Force
 }
 Write-Host "Package: $msix"

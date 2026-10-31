@@ -220,8 +220,9 @@ int nfl2k5_modpacks_boot_dispatch(const char *root)
             mp_write_active("");
         }
     }
-#ifdef __ANDROID__
-    /* one app, no other executable to hand off to: main.c loads the pack */
+#if defined(__ANDROID__) || defined(NFL2K5_UWP)
+    /* one app, no other executable to hand off to: main.c loads the pack
+     * (UWP: a packaged app cannot start another exe anyway) */
     (void)target; (void)current;
     return 0;
 #else
