@@ -1,0 +1,977 @@
+--- a/src/gpu/vulkan/SDL_gpu_vulkan.c
++++ b/src/gpu/vulkan/SDL_gpu_vulkan.c
+@@ -973,11 +973,19 @@
+     Uint32 availableFenceCapacity;
+ } VulkanFencePool;
+ 
++#define TS_PER_CB 128
++#define TS_CBS 64
+ typedef struct VulkanCommandBuffer
+ {
+     CommandBufferCommonHeader common;
+     VulkanRenderer *renderer;
+ 
++    /* 2K5Remade local: GPU pass timing (SDL_GPU_PASS_TIMING=1) */
++    Sint32 tsSlot;
++    Uint32 tsCount;
++    Uint8 tsKind[TS_PER_CB];
++    Uint16 tsW[TS_PER_CB], tsH[TS_PER_CB];
++
+     VkCommandBuffer commandBuffer;
+     VulkanCommandPool *commandPool;
+ 
+@@ -1262,6 +1270,22 @@
+     SDL_Mutex *descriptorSetLayoutFetchLock;
+     SDL_Mutex *windowLock;
+ 
++    /* 2K5Remade local: pipeline cache loaded from / saved to the file named
++     * by SDL_GPU_VULKAN_PIPELINE_CACHE (SDL_SaveGPUPipelineCacheVulkan). */
++    VkPipelineCache pipelineCache;
++
++    /* 2K5Remade local: GPU pass timing */
++    VkQueryPool tsPool;
++    double tsPeriodNs;
++    Sint32 tsSlots;
++    struct { Uint8 kind; Uint16 w, h; double ms; Uint32 n; } tsAgg[48];
++    Uint32 tsAggN, tsCbs;
++    double tsTotalMs;
++    bool tsLog;            /* SDL_GPU_PASS_TIMING: per-pass log every 300 command buffers */
++    double tsAccumMs;      /* GPU time of the command buffers since the last one that presented */
++    double tsFrameMs, tsFrameAvg;
++    Uint32 tsFrames;
++
+     // We don't want transfer commands to block each other,
+     // but we want all transfers to block during defrag.
+     SDL_RWLock *defragLock;
+@@ -4914,6 +4938,102 @@
+ 
+ // Command Buffers
+ 
++/* 2K5Remade local: GPU pass timing. Each command buffer writes a timestamp
++ * where every render pass, copy pass, blit, mip generation and defrag begins
++ * and one at the end; the time between two stamps belongs to what began at
++ * the first. Results are read when the command buffer is cleaned and logged
++ * every 300 command buffers, grouped by kind and target size. */
++enum { TSK_START, TSK_RENDER, TSK_COPY, TSK_BLIT, TSK_MIPS, TSK_DEFRAG, TSK_END, TSK_UPBUF, TSK_UPTEX, TSK_CPTEX };
++static const char *const tsk_names[] = { "start", "render", "copy", "blit", "mips", "defrag", "end", "upload-buffer(KB)", "upload-texture", "copy-texture" };
++
++static void VULKAN_INTERNAL_Stamp(VulkanRenderer *renderer, VulkanCommandBuffer *cb, Uint8 kind, Uint32 w, Uint32 h)
++{
++    if (renderer->tsPool == VK_NULL_HANDLE || cb->tsSlot < 0 || cb->tsCount >= TS_PER_CB) {
++        return;
++    }
++    renderer->vkCmdWriteTimestamp(cb->commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, renderer->tsPool,
++                                  (Uint32)cb->tsSlot * TS_PER_CB + cb->tsCount);
++    cb->tsKind[cb->tsCount] = kind;
++    cb->tsW[cb->tsCount] = (Uint16)(w > 65535 ? 65535 : w);
++    cb->tsH[cb->tsCount] = (Uint16)(h > 65535 ? 65535 : h);
++    cb->tsCount += 1;
++}
++
++static void VULKAN_INTERNAL_StampCollect(VulkanRenderer *renderer, VulkanCommandBuffer *cb)
++{
++    Uint64 t[TS_PER_CB];
++    Uint32 i, k;
++    if (renderer->tsPool == VK_NULL_HANDLE || cb->tsSlot < 0 || cb->tsCount < 2) {
++        cb->tsCount = 0;
++        return;
++    }
++    if (renderer->vkGetQueryPoolResults(renderer->logicalDevice, renderer->tsPool, (Uint32)cb->tsSlot * TS_PER_CB,
++                                        cb->tsCount, sizeof(t), t, sizeof(Uint64), VK_QUERY_RESULT_64_BIT) == VK_SUCCESS) {
++        double cbms = (double)(t[cb->tsCount - 1] - t[0]) * renderer->tsPeriodNs / 1e6;
++        renderer->tsTotalMs += cbms;
++        renderer->tsAccumMs += cbms;
++        if (cb->presentDataCount > 0) {
++            renderer->tsFrameMs = renderer->tsAccumMs;
++            renderer->tsFrameAvg = renderer->tsFrames++ ? renderer->tsFrameAvg * 0.9 + renderer->tsAccumMs * 0.1 : renderer->tsAccumMs;
++            renderer->tsAccumMs = 0;
++        }
++        for (i = 0; i + 1 < cb->tsCount; i += 1) {
++            double ms = (double)(t[i + 1] - t[i]) * renderer->tsPeriodNs / 1e6;
++            for (k = 0; k < renderer->tsAggN; k += 1) {
++                if (renderer->tsAgg[k].kind == cb->tsKind[i] && renderer->tsAgg[k].w == cb->tsW[i] && renderer->tsAgg[k].h == cb->tsH[i]) {
++                    break;
++                }
++            }
++            if (k == renderer->tsAggN) {
++                if (k == SDL_arraysize(renderer->tsAgg)) {
++                    k -= 1; /* full: lump into the last entry */
++                } else {
++                    renderer->tsAggN += 1;
++                    renderer->tsAgg[k].kind = cb->tsKind[i];
++                    renderer->tsAgg[k].w = cb->tsW[i];
++                    renderer->tsAgg[k].h = cb->tsH[i];
++                    renderer->tsAgg[k].ms = 0;
++                    renderer->tsAgg[k].n = 0;
++                }
++            }
++            renderer->tsAgg[k].ms += ms;
++            renderer->tsAgg[k].n += 1;
++        }
++        if (++renderer->tsCbs == 300 && !renderer->tsLog) {
++            renderer->tsCbs = 0;
++            renderer->tsAggN = 0;
++            renderer->tsTotalMs = 0;
++        } else if (renderer->tsCbs == 300) {
++            char line[2048];
++            size_t len = 0;
++            Uint32 j, best;
++            bool used[48];
++            SDL_zeroa(used);
++            len += SDL_snprintf(line + len, sizeof(line) - len, "GPU pass timing: %.2f ms per command buffer;", renderer->tsTotalMs / 300.0);
++            for (j = 0; j < 10 && j < renderer->tsAggN; j += 1) {
++                best = 0xFFFFFFFF;
++                for (k = 0; k < renderer->tsAggN; k += 1) {
++                    if (!used[k] && (best == 0xFFFFFFFF || renderer->tsAgg[k].ms > renderer->tsAgg[best].ms)) {
++                        best = k;
++                    }
++                }
++                used[best] = true;
++                len += SDL_snprintf(line + len, sizeof(line) - len, " %s %ux%u %.2f ms (%.1f/cb)", tsk_names[renderer->tsAgg[best].kind],
++                                    renderer->tsAgg[best].w, renderer->tsAgg[best].h, renderer->tsAgg[best].ms / 300.0,
++                                    renderer->tsAgg[best].n / 300.0);
++                if (len >= sizeof(line) - 64) {
++                    break;
++                }
++            }
++            SDL_LogInfo(SDL_LOG_CATEGORY_GPU, "%s", line);
++            renderer->tsCbs = 0;
++            renderer->tsAggN = 0;
++            renderer->tsTotalMs = 0;
++        }
++    }
++    cb->tsCount = 0;
++}
++
+ static bool VULKAN_INTERNAL_BeginCommandBuffer(
+     VulkanRenderer *renderer,
+     VulkanCommandBuffer *commandBuffer)
+@@ -4933,6 +5053,13 @@
+ 
+     CHECK_VULKAN_ERROR_AND_RETURN(result, vkBeginCommandBuffer, false);
+ 
++    commandBuffer->tsCount = 0;
++    if (renderer->tsPool != VK_NULL_HANDLE && commandBuffer->tsSlot >= 0) {
++        renderer->vkCmdResetQueryPool(commandBuffer->commandBuffer, renderer->tsPool,
++                                      (Uint32)commandBuffer->tsSlot * TS_PER_CB, TS_PER_CB);
++        VULKAN_INTERNAL_Stamp(renderer, commandBuffer, TSK_START, 0, 0);
++    }
++
+     return true;
+ }
+ 
+@@ -4948,6 +5075,101 @@
+     return true;
+ }
+ 
++/* 2K5Remade local: the pipeline cache on disk. NVIDIA's own shader cache
++ * is size-limited and shared by every game, and drivers without one compile
++ * every pipeline from scratch each run (~0.1-0.8 s each). The file holds the
++ * driver's VkPipelineCache blob; the driver checks its header (vendor,
++ * device, driver UUID) and ignores data from another driver. */
++static bool VULKAN_INTERNAL_SavePipelineCache(VulkanRenderer *renderer, const char *path)
++{
++    size_t size = 0;
++    void *data;
++    char tmp[1024];
++    SDL_IOStream *io;
++    bool ok = false;
++    if (renderer->pipelineCache == VK_NULL_HANDLE || !path || !*path) {
++        return false;
++    }
++    if (renderer->vkGetPipelineCacheData(renderer->logicalDevice, renderer->pipelineCache, &size, NULL) != VK_SUCCESS || size == 0) {
++        return false;
++    }
++    data = SDL_malloc(size);
++    if (!data) {
++        return false;
++    }
++    if (renderer->vkGetPipelineCacheData(renderer->logicalDevice, renderer->pipelineCache, &size, data) == VK_SUCCESS) {
++        SDL_snprintf(tmp, sizeof(tmp), "%s.tmp", path);
++        io = SDL_IOFromFile(tmp, "wb");
++        if (io) {
++            ok = SDL_WriteIO(io, data, size) == size;
++            ok = SDL_CloseIO(io) && ok;
++            if (ok) {
++                ok = SDL_RenamePath(tmp, path);
++            }
++            if (!ok) {
++                SDL_RemovePath(tmp);
++            }
++        }
++    }
++    SDL_free(data);
++    return ok;
++}
++
++static void VULKAN_INTERNAL_LoadPipelineCache(VulkanRenderer *renderer)
++{
++    const char *path = SDL_getenv("SDL_GPU_VULKAN_PIPELINE_CACHE");
++    VkPipelineCacheCreateInfo ci;
++    size_t size = 0;
++    void *data = NULL;
++    SDL_zero(ci);
++    ci.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
++    if (path && *path) {
++        data = SDL_LoadFile(path, &size);
++    }
++    ci.initialDataSize = data ? size : 0;
++    ci.pInitialData = data;
++    if (renderer->vkCreatePipelineCache(renderer->logicalDevice, &ci, NULL, &renderer->pipelineCache) != VK_SUCCESS) {
++        /* rejected data: start empty */
++        ci.initialDataSize = 0;
++        ci.pInitialData = NULL;
++        if (renderer->vkCreatePipelineCache(renderer->logicalDevice, &ci, NULL, &renderer->pipelineCache) != VK_SUCCESS) {
++            renderer->pipelineCache = VK_NULL_HANDLE;
++        }
++    }
++    if (path && *path) {
++        SDL_LogInfo(SDL_LOG_CATEGORY_GPU, "Vulkan pipeline cache: %u KB loaded from %s", (unsigned)(data ? size >> 10 : 0), path);
++    }
++    SDL_free(data);
++}
++
++/* Writes the device's pipeline cache to `path` (temporary file, then
++ * rename). Returns false on other drivers or when nothing could be written. */
++/* 2K5Remade local: GPU time of the last presented frame and its running
++ * average, from the pass timestamps (SDL_GPU_FRAME_TIMING=1 or
++ * SDL_GPU_PASS_TIMING=1 at device creation). False when unavailable. */
++SDL_DECLSPEC bool SDLCALL SDL_GetGPUFrameTimeVulkan(SDL_GPUDevice *device, double *last_ms, double *avg_ms)
++{
++    VulkanRenderer *renderer;
++    if (!device || SDL_strcmp(SDL_GetGPUDeviceDriver(device), "vulkan") != 0) {
++        return false;
++    }
++    renderer = (VulkanRenderer *)device->driverData;
++    if (renderer->tsPool == VK_NULL_HANDLE || renderer->tsFrames == 0) {
++        return false;
++    }
++    if (last_ms) *last_ms = renderer->tsFrameMs;
++    if (avg_ms) *avg_ms = renderer->tsFrameAvg;
++    return true;
++}
++
++SDL_DECLSPEC bool SDLCALL SDL_SaveGPUPipelineCacheVulkan(SDL_GPUDevice *device, const char *path)
++{
++    if (!device || SDL_strcmp(SDL_GetGPUDeviceDriver(device), "vulkan") != 0) {
++        return false;
++    }
++    return VULKAN_INTERNAL_SavePipelineCache((VulkanRenderer *)device->driverData, path);
++}
++
+ static void VULKAN_DestroyDevice(
+     SDL_GPUDevice *device)
+ {
+@@ -5044,6 +5266,13 @@
+     SDL_DestroyMutex(renderer->descriptorSetLayoutFetchLock);
+     SDL_DestroyMutex(renderer->windowLock);
+ 
++    if (renderer->pipelineCache != VK_NULL_HANDLE) {
++        const char *cachePath = SDL_getenv("SDL_GPU_VULKAN_PIPELINE_CACHE");
++        if (cachePath && *cachePath) {
++            VULKAN_INTERNAL_SavePipelineCache(renderer, cachePath);
++        }
++        renderer->vkDestroyPipelineCache(renderer->logicalDevice, renderer->pipelineCache, NULL);
++    }
+     renderer->vkDestroyDevice(renderer->logicalDevice, NULL);
+     renderer->vkDestroyInstance(renderer->instance, NULL);
+ 
+@@ -6587,10 +6816,9 @@
+     vkPipelineCreateInfo.basePipelineHandle = VK_NULL_HANDLE;
+     vkPipelineCreateInfo.basePipelineIndex = 0;
+ 
+-    // TODO: enable pipeline caching
+     vulkanResult = renderer->vkCreateGraphicsPipelines(
+         renderer->logicalDevice,
+-        VK_NULL_HANDLE,
++        renderer->pipelineCache,
+         1,
+         &vkPipelineCreateInfo,
+         NULL,
+@@ -6725,7 +6953,7 @@
+ 
+     vulkanResult = renderer->vkCreateComputePipelines(
+         renderer->logicalDevice,
+-        (VkPipelineCache)VK_NULL_HANDLE,
++        renderer->pipelineCache,
+         1,
+         &vkShaderCreateInfo,
+         NULL,
+@@ -7869,6 +8097,12 @@
+     Uint32 framebufferWidth = SDL_MAX_UINT32;
+     Uint32 framebufferHeight = SDL_MAX_UINT32;
+ 
++    if (renderer->tsPool != VK_NULL_HANDLE) {
++        const TextureCommonHeader *tc = numColorTargets ? (const TextureCommonHeader *)colorTargetInfos[0].texture
++                                      : depthStencilTargetInfo ? (const TextureCommonHeader *)depthStencilTargetInfo->texture : NULL;
++        VULKAN_INTERNAL_Stamp(renderer, vulkanCommandBuffer, TSK_RENDER, tc ? tc->info.width : 0, tc ? tc->info.height : 0);
++    }
++
+     for (i = 0; i < numColorTargets; i += 1) {
+         VulkanTextureContainer *textureContainer = (VulkanTextureContainer *)colorTargetInfos[i].texture;
+ 
+@@ -8825,8 +9059,8 @@
+ static void VULKAN_BeginCopyPass(
+     SDL_GPUCommandBuffer *commandBuffer)
+ {
+-    // no-op
+-    (void)commandBuffer;
++    VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer *)commandBuffer;
++    VULKAN_INTERNAL_Stamp(vulkanCommandBuffer->renderer, vulkanCommandBuffer, TSK_COPY, 0, 0);
+ }
+ 
+ static void VULKAN_UploadToTexture(
+@@ -8842,6 +9076,8 @@
+     VulkanTextureSubresource *vulkanTextureSubresource;
+     VkBufferImageCopy imageCopy;
+ 
++    VULKAN_INTERNAL_Stamp(renderer, vulkanCommandBuffer, TSK_UPTEX, destination->w, destination->h);
++
+     SDL_LockRWLockForReading(renderer->defragLock);
+ 
+     // Note that the transfer buffer does not need a barrier, as it is synced by the client
+@@ -8901,6 +9137,7 @@
+     VulkanBufferContainer *bufferContainer = (VulkanBufferContainer *)destination->buffer;
+     VkBufferCopy bufferCopy;
+ 
++    VULKAN_INTERNAL_Stamp(renderer, vulkanCommandBuffer, TSK_UPBUF, 1u << (SDL_MostSignificantBitIndex32((destination->size >> 10) | 1) + 1), 0);
+     SDL_LockRWLockForReading(renderer->defragLock);
+ 
+     // Note that the transfer buffer does not need a barrier, as it is synced by the client
+@@ -9059,6 +9296,7 @@
+     VulkanTextureSubresource *dstSubresource;
+     VkImageCopy imageCopy;
+ 
++    VULKAN_INTERNAL_Stamp(renderer, vulkanCommandBuffer, TSK_CPTEX, w, h);
+     SDL_LockRWLockForReading(renderer->defragLock);
+ 
+     srcSubresource = VULKAN_INTERNAL_FetchTextureSubresource(
+@@ -9198,6 +9436,8 @@
+     VulkanTextureSubresource *dstTextureSubresource;
+     VkImageBlit blit;
+ 
++    VULKAN_INTERNAL_Stamp(renderer, vulkanCommandBuffer, TSK_MIPS, ((TextureCommonHeader *)texture)->info.width,
++                          ((TextureCommonHeader *)texture)->info.height);
+     SDL_LockRWLockForReading(renderer->defragLock);
+ 
+     // Blit each slice sequentially. Barriers, barriers everywhere!
+@@ -9305,7 +9545,9 @@
+     TextureCommonHeader *srcHeader = (TextureCommonHeader *)info->source.texture;
+     TextureCommonHeader *dstHeader = (TextureCommonHeader *)info->destination.texture;
+     VkImageBlit region;
+-    Uint32 srcLayer = srcHeader->info.type == SDL_GPU_TEXTURETYPE_3D ? 0 : info->source.layer_or_depth_plane;
++    Uint32 srcLayer;
++    VULKAN_INTERNAL_Stamp(renderer, vulkanCommandBuffer, TSK_BLIT, dstHeader->info.width, dstHeader->info.height);
++    srcLayer = srcHeader->info.type == SDL_GPU_TEXTURETYPE_3D ? 0 : info->source.layer_or_depth_plane;
+     Uint32 srcDepth = srcHeader->info.type == SDL_GPU_TEXTURETYPE_3D ? info->source.layer_or_depth_plane : 0;
+     Uint32 dstLayer = dstHeader->info.type == SDL_GPU_TEXTURETYPE_3D ? 0 : info->destination.layer_or_depth_plane;
+     Uint32 dstDepth = dstHeader->info.type == SDL_GPU_TEXTURETYPE_3D ? info->destination.layer_or_depth_plane : 0;
+@@ -9443,6 +9685,8 @@
+ 
+     commandBuffer = SDL_malloc(sizeof(VulkanCommandBuffer));
+     commandBuffer->renderer = renderer;
++    commandBuffer->tsCount = 0;
++    commandBuffer->tsSlot = renderer->tsPool != VK_NULL_HANDLE && renderer->tsSlots < TS_CBS ? renderer->tsSlots++ : -1;
+     commandBuffer->commandPool = vulkanCommandPool;
+     commandBuffer->commandBuffer = commandBufferHandle;
+ 
+@@ -10551,6 +10795,10 @@
+     VulkanCommandBuffer *commandBuffer,
+     bool cancel)
+ {
++    if (!cancel) {
++        VULKAN_INTERNAL_StampCollect(renderer, commandBuffer);
++    }
++    commandBuffer->tsCount = 0;
+     if (commandBuffer->autoReleaseFence) {
+         VULKAN_ReleaseFence(
+             (SDL_GPURenderer *)renderer,
+@@ -10810,12 +11058,14 @@
+     if (performCleanups &&
+         renderer->allocationsToDefragCount > 0 &&
+         !renderer->defragInProgress) {
++        VULKAN_INTERNAL_Stamp(renderer, vulkanCommandBuffer, TSK_DEFRAG, renderer->allocationsToDefragCount, 0);
+         if (!VULKAN_INTERNAL_DefragmentMemory(renderer, vulkanCommandBuffer))
+         {
+             SDL_LogError(SDL_LOG_CATEGORY_GPU, "%s", "Failed to defragment memory, likely OOM!");
+         }
+     }
+ 
++    VULKAN_INTERNAL_Stamp(renderer, vulkanCommandBuffer, TSK_END, 0, 0);
+     if (!VULKAN_INTERNAL_EndCommandBuffer(renderer, vulkanCommandBuffer)) {
+         SDL_UnlockMutex(renderer->submitLock);
+         return false;
+@@ -13512,6 +13762,29 @@
+     renderer->descriptorSetLayoutFetchLock = SDL_CreateMutex();
+     renderer->windowLock = SDL_CreateMutex();
+ 
++    VULKAN_INTERNAL_LoadPipelineCache(renderer);
++
++    renderer->tsPool = VK_NULL_HANDLE;
++    renderer->tsSlots = 0;
++    renderer->tsAggN = renderer->tsCbs = 0;
++    renderer->tsTotalMs = 0;
++    renderer->tsLog = SDL_GetHintBoolean("SDL_GPU_PASS_TIMING", false);
++    renderer->tsAccumMs = renderer->tsFrameMs = renderer->tsFrameAvg = 0;
++    renderer->tsFrames = 0;
++    if ((renderer->tsLog || SDL_GetHintBoolean("SDL_GPU_FRAME_TIMING", false)) &&
++        renderer->physicalDeviceProperties.properties.limits.timestampPeriod > 0) {
++        VkQueryPoolCreateInfo qi;
++        SDL_zero(qi);
++        qi.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
++        qi.queryType = VK_QUERY_TYPE_TIMESTAMP;
++        qi.queryCount = TS_PER_CB * TS_CBS;
++        if (renderer->vkCreateQueryPool(renderer->logicalDevice, &qi, NULL, &renderer->tsPool) != VK_SUCCESS) {
++            renderer->tsPool = VK_NULL_HANDLE;
++        }
++        renderer->tsPeriodNs = renderer->physicalDeviceProperties.properties.limits.timestampPeriod;
++        SDL_LogInfo(SDL_LOG_CATEGORY_GPU, "GPU pass timing %s", renderer->tsPool != VK_NULL_HANDLE ? "on" : "unavailable");
++    }
++
+     /*
+      * Create submitted command buffer list
+      */
+--- a/src/gpu/vulkan/SDL_gpu_vulkan_vkfuncs.h
++++ b/src/gpu/vulkan/SDL_gpu_vulkan_vkfuncs.h
+@@ -123,6 +123,11 @@
+ VULKAN_DEVICE_FUNCTION(vkCreateImage)
+ VULKAN_DEVICE_FUNCTION(vkCreateImageView)
+ VULKAN_DEVICE_FUNCTION(vkCreatePipelineCache)
++VULKAN_DEVICE_FUNCTION(vkCreateQueryPool)
++VULKAN_DEVICE_FUNCTION(vkDestroyQueryPool)
++VULKAN_DEVICE_FUNCTION(vkCmdResetQueryPool)
++VULKAN_DEVICE_FUNCTION(vkCmdWriteTimestamp)
++VULKAN_DEVICE_FUNCTION(vkGetQueryPoolResults)
+ VULKAN_DEVICE_FUNCTION(vkCreatePipelineLayout)
+ VULKAN_DEVICE_FUNCTION(vkCreateRenderPass)
+ VULKAN_DEVICE_FUNCTION(vkCreateSampler)
+--- a/src/gpu/d3d12/SDL_gpu_d3d12.c
++++ b/src/gpu/d3d12/SDL_gpu_d3d12.c
+@@ -174,6 +174,7 @@
+ static const IID D3D_IID_ID3D12CommandQueue = { 0x0ec870a6, 0x5d7e, 0x4c22, { 0x8c, 0xfc, 0x5b, 0xaa, 0xe0, 0x76, 0x16, 0xed } };
+ static const IID D3D_IID_ID3D12DescriptorHeap = { 0x8efb471d, 0x616c, 0x4f49, { 0x90, 0xf7, 0x12, 0x7b, 0xb7, 0x63, 0xfa, 0x51 } };
+ static const IID D3D_IID_ID3D12Resource = { 0x696442be, 0xa72e, 0x4059, { 0xbc, 0x79, 0x5b, 0x5c, 0x98, 0x04, 0x0f, 0xad } };
++static const IID D3D_IID_ID3D12QueryHeap = { 0x0d9658ae, 0xed45, 0x469e, { 0xa6, 0x1d, 0x97, 0x0e, 0xc5, 0x83, 0xca, 0xb4 } };
+ static const IID D3D_IID_ID3D12CommandAllocator = { 0x6102dee4, 0xaf59, 0x4b09, { 0xb9, 0x99, 0xb4, 0x4d, 0x73, 0xf0, 0x9b, 0x24 } };
+ static const IID D3D_IID_ID3D12CommandList = { 0x7116d91c, 0xe7e4, 0x47ce, { 0xb8, 0xc6, 0xec, 0x81, 0x68, 0xf4, 0x37, 0xe5 } };
+ static const IID D3D_IID_ID3D12GraphicsCommandList = { 0x5b160d0f, 0xac1b, 0x4185, { 0x8b, 0xa8, 0xb3, 0xae, 0x42, 0xa5, 0xa4, 0x55 } };
+@@ -942,6 +943,20 @@
+ 
+     bool debug_mode;
+     bool GPUUploadHeapSupported;
++    bool uniformsInVram; /* 2K5Remade local: no GPU upload heap: uniforms copied into video memory at submit */
++    /* 2K5Remade local: GPU pass timing */
++    ID3D12QueryHeap *tsHeap;
++    ID3D12Resource *tsReadback;
++    Uint64 *tsMapped;
++    double tsPeriodNs;
++    Sint32 tsSlots;
++    struct { Uint8 kind; Uint16 w, h; double ms; Uint32 n; } tsAgg[48];
++    Uint32 tsAggN, tsCbs;
++    double tsTotalMs;
++    bool tsLog;            /* SDL_GPU_PASS_TIMING: per-pass log every 300 command buffers */
++    double tsAccumMs;      /* GPU time of the command buffers since the last one that presented */
++    double tsFrameMs, tsFrameAvg;
++    Uint32 tsFrames;
+     bool UnrestrictedBufferTextureCopyPitchSupported;
+     // FIXME: these might not be necessary since we're not using custom heaps
+     bool UMA;
+@@ -1042,6 +1057,14 @@
+ 
+     ID3D12CommandAllocator *commandAllocator;
+     ID3D12GraphicsCommandList *graphicsCommandList;
++    /* 2K5Remade local: GPU pass timing (SDL_GPU_PASS_TIMING=1) */
++    Sint32 tsSlot;
++    Uint32 tsCount;
++    Uint8 tsKind[128];
++    Uint16 tsW[128], tsH[128];
++    ID3D12CommandAllocator *uniformCopyAllocator; /* 2K5Remade local (uniformsInVram) */
++    ID3D12GraphicsCommandList *uniformCopyList;
++    bool uniformCopyOpen;
+     D3D12Fence *inFlightFence;
+     bool autoReleaseFence;
+ 
+@@ -1264,6 +1287,7 @@
+ struct D3D12UniformBuffer
+ {
+     D3D12Buffer *buffer;
++    D3D12Buffer *staging; /* 2K5Remade local: CPU-written copy when `buffer` is in video memory */
+     Uint32 writeOffset;
+     Uint32 drawOffset;
+ };
+@@ -1639,6 +1663,12 @@
+     if (commandBuffer->commandAllocator) {
+         ID3D12CommandAllocator_Release(commandBuffer->commandAllocator);
+     }
++    if (commandBuffer->uniformCopyList) {
++        ID3D12GraphicsCommandList_Release(commandBuffer->uniformCopyList);
++    }
++    if (commandBuffer->uniformCopyAllocator) {
++        ID3D12CommandAllocator_Release(commandBuffer->uniformCopyAllocator);
++    }
+     SDL_free(commandBuffer->presentDatas);
+     SDL_free(commandBuffer->usedTextures);
+     SDL_free(commandBuffer->usedBuffers);
+@@ -1671,6 +1701,9 @@
+     for (Uint32 i = 0; i < renderer->uniformBufferPoolCount; i += 1) {
+         D3D12_INTERNAL_DestroyBuffer(
+             renderer->uniformBufferPool[i]->buffer);
++        if (renderer->uniformBufferPool[i]->staging) {
++            D3D12_INTERNAL_DestroyBuffer(renderer->uniformBufferPool[i]->staging);
++        }
+         SDL_free(renderer->uniformBufferPool[i]);
+     }
+ 
+@@ -3821,7 +3854,15 @@
+         initialState = D3D12_RESOURCE_STATE_COPY_DEST;
+     } else if (type == D3D12_BUFFER_TYPE_UNIFORM) {
+         // D3D12 is badly designed, so we have to check if the fast path for uniform buffers is enabled
+-        if (renderer->GPUUploadHeapSupported) {
++        if (renderer->uniformsInVram) {
++            /* 2K5Remade local: video memory, filled by a copy from the
++             * staging buffer before the command buffer runs. Shaders read
++             * constants from VRAM instead of across PCIe from system memory
++             * (GPUs without resizable BAR, e.g. RTX 20 series). */
++            heapProperties.Type = D3D12_HEAP_TYPE_DEFAULT;
++            heapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
++            heapProperties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
++        } else if (renderer->GPUUploadHeapSupported) {
+             heapProperties.Type = D3D12_HEAP_TYPE_GPU_UPLOAD;
+             heapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+             heapProperties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+@@ -4391,6 +4432,112 @@
+     return container->activeBuffer;
+ }
+ 
++/* 2K5Remade local: GPU pass timing, as in SDL_gpu_vulkan.c: a timestamp where
++ * each render pass, copy and upload begins and one at submit; the time up to
++ * the next stamp belongs to what began at the first. */
++#define D3D12_TS_PER_CB 128
++#define D3D12_TS_CBS 64
++enum { TSK_START, TSK_RENDER, TSK_COPY, TSK_BLIT, TSK_MIPS, TSK_DEFRAG, TSK_END, TSK_UPBUF, TSK_UPTEX, TSK_CPTEX };
++static const char *const tsk_names[] = { "start", "render", "copy", "blit", "mips", "defrag", "end", "upload-buffer(KB)", "upload-texture", "copy-texture" };
++
++static void D3D12_INTERNAL_Stamp(D3D12Renderer *renderer, D3D12CommandBuffer *cb, Uint8 kind, Uint32 w, Uint32 h)
++{
++    if (!renderer->tsHeap || cb->tsSlot < 0 || cb->tsCount >= D3D12_TS_PER_CB) {
++        return;
++    }
++    ID3D12GraphicsCommandList_EndQuery(cb->graphicsCommandList, renderer->tsHeap, D3D12_QUERY_TYPE_TIMESTAMP,
++                                       (UINT)cb->tsSlot * D3D12_TS_PER_CB + cb->tsCount);
++    cb->tsKind[cb->tsCount] = kind;
++    cb->tsW[cb->tsCount] = (Uint16)(w > 65535 ? 65535 : w);
++    cb->tsH[cb->tsCount] = (Uint16)(h > 65535 ? 65535 : h);
++    cb->tsCount += 1;
++}
++
++static void D3D12_INTERNAL_StampResolve(D3D12Renderer *renderer, D3D12CommandBuffer *cb)
++{
++    if (!renderer->tsHeap || cb->tsSlot < 0 || cb->tsCount == 0) {
++        return;
++    }
++    ID3D12GraphicsCommandList_ResolveQueryData(cb->graphicsCommandList, renderer->tsHeap, D3D12_QUERY_TYPE_TIMESTAMP,
++                                               (UINT)cb->tsSlot * D3D12_TS_PER_CB, cb->tsCount, renderer->tsReadback,
++                                               (UINT64)cb->tsSlot * D3D12_TS_PER_CB * sizeof(Uint64));
++}
++
++static void D3D12_INTERNAL_StampCollect(D3D12Renderer *renderer, D3D12CommandBuffer *cb)
++{
++    const Uint64 *t;
++    Uint32 i, k;
++    if (!renderer->tsHeap || !renderer->tsMapped || cb->tsSlot < 0 || cb->tsCount < 2) {
++        cb->tsCount = 0;
++        return;
++    }
++    t = renderer->tsMapped + (size_t)cb->tsSlot * D3D12_TS_PER_CB;
++    {
++        double cbms = (double)(t[cb->tsCount - 1] - t[0]) * renderer->tsPeriodNs / 1e6;
++        renderer->tsTotalMs += cbms;
++        renderer->tsAccumMs += cbms;
++        if (cb->presentDataCount > 0) {
++            renderer->tsFrameMs = renderer->tsAccumMs;
++            renderer->tsFrameAvg = renderer->tsFrames++ ? renderer->tsFrameAvg * 0.9 + renderer->tsAccumMs * 0.1 : renderer->tsAccumMs;
++            renderer->tsAccumMs = 0;
++        }
++    }
++    for (i = 0; i + 1 < cb->tsCount; i += 1) {
++        double ms = (double)(t[i + 1] - t[i]) * renderer->tsPeriodNs / 1e6;
++        for (k = 0; k < renderer->tsAggN; k += 1) {
++            if (renderer->tsAgg[k].kind == cb->tsKind[i] && renderer->tsAgg[k].w == cb->tsW[i] && renderer->tsAgg[k].h == cb->tsH[i]) {
++                break;
++            }
++        }
++        if (k == renderer->tsAggN) {
++            if (k == SDL_arraysize(renderer->tsAgg)) {
++                k -= 1;
++            } else {
++                renderer->tsAggN += 1;
++                renderer->tsAgg[k].kind = cb->tsKind[i];
++                renderer->tsAgg[k].w = cb->tsW[i];
++                renderer->tsAgg[k].h = cb->tsH[i];
++                renderer->tsAgg[k].ms = 0;
++                renderer->tsAgg[k].n = 0;
++            }
++        }
++        renderer->tsAgg[k].ms += ms;
++        renderer->tsAgg[k].n += 1;
++    }
++    if (++renderer->tsCbs == 300 && !renderer->tsLog) {
++        renderer->tsCbs = 0;
++        renderer->tsAggN = 0;
++        renderer->tsTotalMs = 0;
++    } else if (renderer->tsCbs == 300) {
++        char line[2048];
++        size_t len = 0;
++        Uint32 j, best;
++        bool used[48];
++        SDL_zeroa(used);
++        len += SDL_snprintf(line + len, sizeof(line) - len, "GPU pass timing: %.2f ms per command buffer;", renderer->tsTotalMs / 300.0);
++        for (j = 0; j < 10 && j < renderer->tsAggN; j += 1) {
++            best = 0xFFFFFFFF;
++            for (k = 0; k < renderer->tsAggN; k += 1) {
++                if (!used[k] && (best == 0xFFFFFFFF || renderer->tsAgg[k].ms > renderer->tsAgg[best].ms)) {
++                    best = k;
++                }
++            }
++            used[best] = true;
++            len += SDL_snprintf(line + len, sizeof(line) - len, " %s %ux%u %.2f ms (%.1f/cb)", tsk_names[renderer->tsAgg[best].kind],
++                                renderer->tsAgg[best].w, renderer->tsAgg[best].h, renderer->tsAgg[best].ms / 300.0,
++                                renderer->tsAgg[best].n / 300.0);
++            if (len >= sizeof(line) - 64) {
++                break;
++            }
++        }
++        SDL_LogInfo(SDL_LOG_CATEGORY_GPU, "%s", line);
++        renderer->tsCbs = 0;
++        renderer->tsAggN = 0;
++        renderer->tsTotalMs = 0;
++    }
++    cb->tsCount = 0;
++}
++
+ static void D3D12_BeginRenderPass(
+     SDL_GPUCommandBuffer *commandBuffer,
+     const SDL_GPUColorTargetInfo *colorTargetInfos,
+@@ -4402,6 +4549,12 @@
+     Uint32 framebufferWidth = SDL_MAX_UINT32;
+     Uint32 framebufferHeight = SDL_MAX_UINT32;
+ 
++    if (d3d12CommandBuffer->renderer->tsHeap) {
++        const TextureCommonHeader *tc = numColorTargets ? (const TextureCommonHeader *)colorTargetInfos[0].texture
++                                      : depthStencilTargetInfo ? (const TextureCommonHeader *)depthStencilTargetInfo->texture : NULL;
++        D3D12_INTERNAL_Stamp(d3d12CommandBuffer->renderer, d3d12CommandBuffer, TSK_RENDER, tc ? tc->info.width : 0, tc ? tc->info.height : 0);
++    }
++
+     for (Uint32 i = 0; i < numColorTargets; i += 1) {
+         D3D12TextureContainer *container = (D3D12TextureContainer *)colorTargetInfos[i].texture;
+         Uint32 h = container->header.info.height >> colorTargetInfos[i].mip_level;
+@@ -4621,6 +4774,18 @@
+             SDL_UnlockMutex(renderer->acquireUniformBufferLock);
+             return NULL;
+         }
++        if (renderer->uniformsInVram) {
++            uniformBuffer->staging = D3D12_INTERNAL_CreateBuffer(
++                renderer,
++                0,
++                UNIFORM_BUFFER_SIZE,
++                D3D12_BUFFER_TYPE_UPLOAD,
++                NULL);
++            if (!uniformBuffer->staging) {
++                SDL_UnlockMutex(renderer->acquireUniformBufferLock);
++                return NULL;
++            }
++        }
+     }
+ 
+     SDL_UnlockMutex(renderer->acquireUniformBufferLock);
+@@ -4628,12 +4793,17 @@
+     uniformBuffer->drawOffset = 0;
+     uniformBuffer->writeOffset = 0;
+ 
+-    HRESULT res = ID3D12Resource_Map(
+-        uniformBuffer->buffer->handle,
+-        0,
+-        NULL,
+-        (void **)&uniformBuffer->buffer->mapPointer);
+-    CHECK_D3D12_ERROR_AND_RETURN("Failed to map buffer pool!", NULL);
++    if (uniformBuffer->staging) {
++        /* the persistently mapped upload buffer takes the writes */
++        uniformBuffer->buffer->mapPointer = uniformBuffer->staging->mapPointer;
++    } else {
++        HRESULT res = ID3D12Resource_Map(
++            uniformBuffer->buffer->handle,
++            0,
++            NULL,
++            (void **)&uniformBuffer->buffer->mapPointer);
++        CHECK_D3D12_ERROR_AND_RETURN("Failed to map buffer pool!", NULL);
++    }
+ 
+     D3D12_INTERNAL_TrackUniformBuffer(commandBuffer, uniformBuffer);
+ 
+@@ -4695,10 +4865,12 @@
+ 
+     // If there is no more room, acquire a new uniform buffer
+     if (uniformBuffer->writeOffset + blockSize >= UNIFORM_BUFFER_SIZE) {
+-        ID3D12Resource_Unmap(
+-            uniformBuffer->buffer->handle,
+-            0,
+-            NULL);
++        if (!uniformBuffer->staging) {
++            ID3D12Resource_Unmap(
++                uniformBuffer->buffer->handle,
++                0,
++                NULL);
++        }
+         uniformBuffer->buffer->mapPointer = NULL;
+ 
+         uniformBuffer = D3D12_INTERNAL_AcquireUniformBufferFromPool(commandBuffer);
+@@ -5963,8 +6135,8 @@
+ static void D3D12_BeginCopyPass(
+     SDL_GPUCommandBuffer *commandBuffer)
+ {
+-    // no-op
+-    (void)commandBuffer;
++    D3D12CommandBuffer *cb = (D3D12CommandBuffer *)commandBuffer;
++    D3D12_INTERNAL_Stamp(cb->renderer, cb, TSK_COPY, 0, 0);
+ }
+ 
+ static void D3D12_UploadToTexture(
+@@ -5982,6 +6154,8 @@
+     Uint32 pixelsPerRow = source->pixels_per_row;
+     Uint32 blockWidth;
+     Uint32 blockSize;
++
++    D3D12_INTERNAL_Stamp(renderer, d3d12CommandBuffer, TSK_UPTEX, destination->w, destination->h);
+     Uint32 rowPitch;
+     Uint32 blockHeight;
+     Uint32 alignedRowPitch;
+@@ -6172,6 +6346,8 @@
+     D3D12BufferContainer *transferBufferContainer = (D3D12BufferContainer *)source->transfer_buffer;
+     D3D12BufferContainer *bufferContainer = (D3D12BufferContainer *)destination->buffer;
+ 
++    D3D12_INTERNAL_Stamp(d3d12CommandBuffer->renderer, d3d12CommandBuffer, TSK_UPBUF,
++                         1u << (SDL_MostSignificantBitIndex32((destination->size >> 10) | 1) + 1), 0);
+     // The transfer buffer does not need a barrier, it is synced by the client.
+ 
+     D3D12Buffer *buffer = D3D12_INTERNAL_PrepareBufferForWrite(
+@@ -6210,6 +6386,8 @@
+     D3D12_TEXTURE_COPY_LOCATION sourceLocation;
+     D3D12_TEXTURE_COPY_LOCATION destinationLocation;
+ 
++    D3D12_INTERNAL_Stamp(d3d12CommandBuffer->renderer, d3d12CommandBuffer, TSK_CPTEX, w, h);
++
+     D3D12TextureSubresource *sourceSubresource = D3D12_INTERNAL_FetchTextureSubresource(
+         (D3D12TextureContainer *)source->texture,
+         source->layer,
+@@ -7409,6 +7587,8 @@
+     commandBuffer->graphicsCommandList = commandList;
+ 
+     commandBuffer->renderer = renderer;
++    commandBuffer->tsCount = 0;
++    commandBuffer->tsSlot = renderer->tsHeap && renderer->tsSlots < D3D12_TS_CBS ? renderer->tsSlots++ : -1;
+     commandBuffer->inFlightFence = NULL;
+ 
+     // Window handling
+@@ -7522,6 +7702,9 @@
+         return NULL;
+     }
+ 
++    commandBuffer->tsCount = 0;
++    D3D12_INTERNAL_Stamp(renderer, commandBuffer, TSK_START, 0, 0);
++
+     // Set the bind state
+     commandBuffer->currentGraphicsPipeline = NULL;
+ 
+@@ -7857,6 +8040,8 @@
+         return false;
+     }
+ 
++    D3D12_INTERNAL_StampCollect(renderer, commandBuffer);
++
+     res = ID3D12CommandAllocator_Reset(commandBuffer->commandAllocator);
+     CHECK_D3D12_ERROR_AND_RETURN("Could not reset command allocator", false);
+ 
+@@ -7968,20 +8153,26 @@
+ 
+     // Unmap uniform buffers
+     for (Uint32 i = 0; i < MAX_UNIFORM_BUFFERS_PER_STAGE; i += 1) {
+-        if (d3d12CommandBuffer->vertexUniformBuffers[i] != NULL) {
++        if (d3d12CommandBuffer->vertexUniformBuffers[i] != NULL &&
++            !d3d12CommandBuffer->vertexUniformBuffers[i]->staging) {
+             ID3D12Resource_Unmap(
+                 d3d12CommandBuffer->vertexUniformBuffers[i]->buffer->handle,
+                 0,
+                 NULL);
+             d3d12CommandBuffer->vertexUniformBuffers[i]->buffer->mapPointer = NULL;
++        } else if (d3d12CommandBuffer->vertexUniformBuffers[i] != NULL) {
++            d3d12CommandBuffer->vertexUniformBuffers[i]->buffer->mapPointer = NULL;
+         }
+ 
+-        if (d3d12CommandBuffer->fragmentUniformBuffers[i] != NULL) {
++        if (d3d12CommandBuffer->fragmentUniformBuffers[i] != NULL &&
++            !d3d12CommandBuffer->fragmentUniformBuffers[i]->staging) {
+             ID3D12Resource_Unmap(
+                 d3d12CommandBuffer->fragmentUniformBuffers[i]->buffer->handle,
+                 0,
+                 NULL);
+             d3d12CommandBuffer->fragmentUniformBuffers[i]->buffer->mapPointer = NULL;
++        } else if (d3d12CommandBuffer->fragmentUniformBuffers[i] != NULL) {
++            d3d12CommandBuffer->fragmentUniformBuffers[i]->buffer->mapPointer = NULL;
+         }
+ 
+         // TODO: compute uniforms
+@@ -8007,6 +8198,9 @@
+             &barrierDesc);
+     }
+ 
++    D3D12_INTERNAL_Stamp(renderer, d3d12CommandBuffer, TSK_END, 0, 0);
++    D3D12_INTERNAL_StampResolve(renderer, d3d12CommandBuffer);
++
+     // Notify the command buffer that we have completed recording
+     res = ID3D12GraphicsCommandList_Close(d3d12CommandBuffer->graphicsCommandList);
+     CHECK_D3D12_ERROR_AND_RETURN("Failed to close command list!", false);
+@@ -8020,6 +8214,64 @@
+         CHECK_D3D12_ERROR_AND_RETURN("Failed to convert command list!", false);
+     }
+ 
++    /* 2K5Remade local: the uniform data into video memory first, as a
++     * separate submission on the same queue so it is complete before the
++     * main list reads it. */
++    if (renderer->uniformsInVram && d3d12CommandBuffer->usedUniformBufferCount > 0) {
++        D3D12CommandBuffer *cb = d3d12CommandBuffer;
++        bool ok = true;
++        if (!cb->uniformCopyAllocator) {
++            ok = SUCCEEDED(ID3D12Device_CreateCommandAllocator(renderer->device, D3D12_COMMAND_LIST_TYPE_DIRECT,
++                                                              D3D_GUID(D3D_IID_ID3D12CommandAllocator),
++                                                              (void **)&cb->uniformCopyAllocator)) &&
++                 SUCCEEDED(ID3D12Device_CreateCommandList(renderer->device, 0, D3D12_COMMAND_LIST_TYPE_DIRECT,
++                                                          cb->uniformCopyAllocator, NULL,
++                                                          D3D_GUID(D3D_IID_ID3D12GraphicsCommandList),
++                                                          (void **)&cb->uniformCopyList));
++            cb->uniformCopyOpen = ok; /* a new list starts open */
++        } else if (!cb->uniformCopyOpen) {
++            ok = SUCCEEDED(ID3D12CommandAllocator_Reset(cb->uniformCopyAllocator)) &&
++                 SUCCEEDED(ID3D12GraphicsCommandList_Reset(cb->uniformCopyList, cb->uniformCopyAllocator, NULL));
++            cb->uniformCopyOpen = ok;
++        }
++        if (ok) {
++            D3D12_RESOURCE_BARRIER barriers[64];
++            Uint32 nb = 0;
++            ID3D12CommandList *copyList = NULL;
++            for (Uint32 i = 0; i < cb->usedUniformBufferCount; i += 1) {
++                D3D12UniformBuffer *u = cb->usedUniformBuffers[i];
++                if (!u->staging || u->writeOffset == 0) {
++                    continue;
++                }
++                /* the buffer rests in COMMON between submissions (buffers decay
++                 * after each ExecuteCommandLists): the copy promotes it */
++                ID3D12GraphicsCommandList_CopyBufferRegion(cb->uniformCopyList, u->buffer->handle, 0,
++                                                           u->staging->handle, 0, u->writeOffset);
++                barriers[nb].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
++                barriers[nb].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
++                barriers[nb].Transition.pResource = u->buffer->handle;
++                barriers[nb].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
++                barriers[nb].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
++                barriers[nb].Transition.StateAfter = D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
++                nb += 1;
++                if (nb == SDL_arraysize(barriers)) {
++                    ID3D12GraphicsCommandList_ResourceBarrier(cb->uniformCopyList, nb, barriers);
++                    nb = 0;
++                }
++            }
++            if (nb) {
++                ID3D12GraphicsCommandList_ResourceBarrier(cb->uniformCopyList, nb, barriers);
++            }
++            cb->uniformCopyOpen = false;
++            if (SUCCEEDED(ID3D12GraphicsCommandList_Close(cb->uniformCopyList)) &&
++                SUCCEEDED(ID3D12GraphicsCommandList_QueryInterface(cb->uniformCopyList, D3D_GUID(D3D_IID_ID3D12CommandList),
++                                                                   (void **)&copyList))) {
++                ID3D12CommandQueue_ExecuteCommandLists(renderer->commandQueue, 1, &copyList);
++                ID3D12CommandList_Release(copyList);
++            }
++        }
++    }
++
+     // Submit the command list to the queue
+     ID3D12CommandQueue_ExecuteCommandLists(
+         renderer->commandQueue,
+@@ -9789,6 +10041,18 @@
+         renderer->GPUUploadHeapSupported = options16.GPUUploadHeapSupported;
+     }
+ #endif
++    /* 2K5Remade local: SDL_GPU_D3D12_UNIFORMS_VRAM=1 turns it on (under test) */
++    renderer->uniformsInVram = !renderer->GPUUploadHeapSupported && !renderer->UMA &&
++                               SDL_GetHintBoolean("SDL_GPU_D3D12_UNIFORMS_VRAM", false);
++    SDL_LogInfo(SDL_LOG_CATEGORY_GPU, "D3D12 uniforms: %s", renderer->GPUUploadHeapSupported ? "GPU upload heap"
++                                      : renderer->uniformsInVram ? "video memory, copied at submit" : "upload heap");
++    renderer->tsHeap = NULL;
++    renderer->tsReadback = NULL;
++    renderer->tsMapped = NULL;
++    renderer->tsSlots = 0;
++    renderer->tsAggN = renderer->tsCbs = 0;
++    renderer->tsTotalMs = 0;
++    renderer->tsPeriodNs = 0;
+ 
+     // Check for unrestricted texture-buffer copy pitch support
+     D3D12_FEATURE_DATA_D3D12_OPTIONS13 options13;
+@@ -9832,6 +10096,36 @@
+     }
+ #endif
+ 
++    renderer->tsLog = SDL_GetHintBoolean("SDL_GPU_PASS_TIMING", false);
++    renderer->tsAccumMs = renderer->tsFrameMs = renderer->tsFrameAvg = 0;
++    renderer->tsFrames = 0;
++    if (renderer->tsLog || SDL_GetHintBoolean("SDL_GPU_FRAME_TIMING", false)) {
++        UINT64 freq = 0;
++        D3D12_QUERY_HEAP_DESC qh;
++        D3D12_HEAP_PROPERTIES hp;
++        D3D12_RESOURCE_DESC rd;
++        SDL_zero(qh); SDL_zero(hp); SDL_zero(rd);
++        qh.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
++        qh.Count = D3D12_TS_PER_CB * D3D12_TS_CBS;
++        hp.Type = D3D12_HEAP_TYPE_READBACK;
++        rd.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
++        rd.Width = (UINT64)qh.Count * sizeof(Uint64);
++        rd.Height = 1; rd.DepthOrArraySize = 1; rd.MipLevels = 1;
++        rd.SampleDesc.Count = 1; rd.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
++        if (SUCCEEDED(ID3D12CommandQueue_GetTimestampFrequency(renderer->commandQueue, &freq)) && freq &&
++            SUCCEEDED(ID3D12Device_CreateQueryHeap(renderer->device, &qh, D3D_GUID(D3D_IID_ID3D12QueryHeap), (void **)&renderer->tsHeap)) &&
++            SUCCEEDED(ID3D12Device_CreateCommittedResource(renderer->device, &hp, D3D12_HEAP_FLAG_NONE, &rd,
++                                                           D3D12_RESOURCE_STATE_COPY_DEST, NULL,
++                                                           D3D_GUID(D3D_IID_ID3D12Resource), (void **)&renderer->tsReadback)) &&
++            SUCCEEDED(ID3D12Resource_Map(renderer->tsReadback, 0, NULL, (void **)&renderer->tsMapped))) {
++            renderer->tsPeriodNs = 1e9 / (double)freq;
++        } else {
++            renderer->tsHeap = NULL; /* (leaked on failure: diagnostics only) */
++            renderer->tsMapped = NULL;
++        }
++        SDL_LogInfo(SDL_LOG_CATEGORY_GPU, "GPU pass timing %s", renderer->tsHeap ? "on" : "unavailable");
++    }
++
+     // Create indirect command signatures
+ 
+     D3D12_COMMAND_SIGNATURE_DESC commandSignatureDesc;
+@@ -10084,6 +10378,23 @@
+  * AMD FidelityFX / NVIDIA DLSS, which record their own command lists on this
+  * queue between SDL submissions. Between SDL commands a texture rests in its
+  * default state (returned in *state); external work must leave it there. */
++/* 2K5Remade local: GPU time of the last presented frame and its running
++ * average (SDL_GPU_FRAME_TIMING=1 or SDL_GPU_PASS_TIMING=1). */
++SDL_DECLSPEC bool SDLCALL SDL_GetGPUFrameTimeD3D12(SDL_GPUDevice *device, double *last_ms, double *avg_ms)
++{
++    D3D12Renderer *renderer;
++    if (!device || SDL_strcmp(SDL_GetGPUDeviceDriver(device), "direct3d12") != 0) {
++        return false;
++    }
++    renderer = (D3D12Renderer *)device->driverData;
++    if (!renderer->tsHeap || renderer->tsFrames == 0) {
++        return false;
++    }
++    if (last_ms) *last_ms = renderer->tsFrameMs;
++    if (avg_ms) *avg_ms = renderer->tsFrameAvg;
++    return true;
++}
++
+ SDL_DECLSPEC bool SDLCALL SDL_GetGPUNativeD3D12(SDL_GPUDevice *device, void **d3d12Device, void **commandQueue)
+ {
+     D3D12Renderer *renderer;
