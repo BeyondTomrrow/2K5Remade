@@ -16,8 +16,13 @@
  *     window.__nfl2k5_busy says whether anything changed (MutationObserver,
  *     running animations) so frames are captured only then (plus once a
  *     second); page -> game messages go through window.external.notify.
- *   - frames: CapturePreviewToStreamAsync -> PNG -> BitmapDecoder (BGRA8,
- *     premultiplied), at most ~30 a second and only while the page changes.
+ *   - shown (default): EdgeHTML's capture has no transparency, so the
+ *     WebView itself is drawn by XAML over the game's SwapChainPanel, on a
+ *     transparent background, in the largest 16:9 rectangle of the panel (where
+ *     the game puts the captured page elsewhere). No frames reach the game.
+ *   - frames (NFL2K5_UWP_WEBVIEW_CAPTURE=1): CapturePreviewToStreamAsync ->
+ *     PNG -> BitmapDecoder (BGRA8, premultiplied), at most ~30 a second and
+ *     only while the page changes.
  *   - fallback: a page that fails to load, throws before its first frame, or
  *     whose capture has no transparency (the engine cannot do it) reports
  *     status "error: ...", and nfl2k5_presentation.cpp goes back to the native
@@ -41,6 +46,7 @@
 #include <winrt/Windows.UI.Core.h>
 #include <winrt/Windows.UI.Xaml.h>
 #include <winrt/Windows.UI.Xaml.Controls.h>
+#include <winrt/Windows.UI.Xaml.Media.h>
 #include <winrt/Windows.Web.Http.h>
 #include <winrt/Windows.Web.Http.Headers.h>
 #include <winrt/Windows.Web.UI.h>
@@ -176,7 +182,9 @@ struct Shared {
     ULONGLONG last_draw = 0, last_full = 0;
     int frames_seen = 0;
     bool saw_alpha = false;
+    bool overlay = true;   /* the WebView is shown over the game (see the top) */
     wuxc::WebView web{nullptr};
+    wuxc::Viewbox box{nullptr};
     wux::DispatcherTimer timer{nullptr};
 
     mutable std::mutex status_lock;
@@ -316,6 +324,7 @@ fire_and_forget ask_and_capture(SharedPtr s)
 
 void tick(const SharedPtr &s)
 {
+    if (s->overlay) return;   /* XAML draws the page; nothing to capture */
     if (!s->ready || s->asking || s->capturing || s->stopped || s->failed()) return;
     ULONGLONG now = GetTickCount64();
     if (now - s->last_draw < 33) return;   /* ~30 frames a second at most */
@@ -382,10 +391,16 @@ void create_on_ui(const SharedPtr &s)
     }
     if (ppv <= 0) ppv = 1.0;
     wuxc::WebView web(wuxc::WebViewExecutionMode::SameThread);
-    web.Width(s->out_w / ppv);
-    web.Height(s->out_h / ppv);
-    web.HorizontalAlignment(wux::HorizontalAlignment::Left);
-    web.VerticalAlignment(wux::VerticalAlignment::Top);
+    if (s->overlay) {
+        /* The Viewbox scales the page's canvas to the panel. */
+        web.Width(s->out_w);
+        web.Height(s->out_h);
+    } else {
+        web.Width(s->out_w / ppv);
+        web.Height(s->out_h / ppv);
+        web.HorizontalAlignment(wux::HorizontalAlignment::Left);
+        web.VerticalAlignment(wux::VerticalAlignment::Top);
+    }
     web.IsHitTestVisible(false);
     web.DefaultBackgroundColor(winrt::Windows::UI::Colors::Transparent());
     web.Settings().IsJavaScriptEnabled(true);
@@ -418,9 +433,21 @@ void create_on_ui(const SharedPtr &s)
         sp->set_status("running");
         flush(sp);
     });
-    /* Behind the game's SwapChainPanel: attached and laid out (so it runs
-     * its animations) but never seen. */
-    root.Children().InsertAt(0, web);
+    if (s->overlay) {
+        /* Over the game's SwapChainPanel, in its largest 16:9 rectangle. */
+        wuxc::Viewbox box;
+        box.Stretch(winrt::Windows::UI::Xaml::Media::Stretch::Uniform);
+        box.HorizontalAlignment(wux::HorizontalAlignment::Center);
+        box.VerticalAlignment(wux::VerticalAlignment::Center);
+        box.IsHitTestVisible(false);
+        box.Child(web);
+        root.Children().Append(box);
+        s->box = box;
+    } else {
+        /* Behind the game's SwapChainPanel: attached and laid out (so it runs
+         * its animations) but never seen; its frames are captured. */
+        root.Children().InsertAt(0, web);
+    }
     s->web = web;
     s->timer = wux::DispatcherTimer();
     s->timer.Interval(std::chrono::milliseconds(16));
@@ -441,7 +468,13 @@ void destroy_on_ui(const SharedPtr &s)
         try {
             wuxc::Grid root = uwp_xaml_root();
             uint32_t index = 0;
-            if (root && root.Children().IndexOf(s->web, index)) root.Children().RemoveAt(index);
+            if (s->box) {
+                if (root && root.Children().IndexOf(s->box, index)) root.Children().RemoveAt(index);
+                s->box.Child(nullptr);
+                s->box = nullptr;
+            } else if (root && root.Children().IndexOf(s->web, index)) {
+                root.Children().RemoveAt(index);
+            }
             s->web.NavigateToString(L"");
         } catch (...) {
         }
@@ -460,6 +493,7 @@ public:
         if (!d) { s_->set_status("error: no XAML dispatcher"); return false; }
         Shared &s = *s_;
         s.config = config;
+        s.overlay = !getenv("NFL2K5_UWP_WEBVIEW_CAPTURE");
         s.css_w = config.canvas_width > 0 ? config.canvas_width : 1920;
         s.css_h = config.canvas_height > 0 ? config.canvas_height : 1080;
         s.scale = config.raster_scale > 0.05f ? config.raster_scale : 1.0f;
