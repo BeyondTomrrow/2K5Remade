@@ -74,6 +74,19 @@ unsigned nfl2k5_interp_setup(const uint8_t *base, size_t base_len)
             }
         }
         if (dirty) {
+            /* NFL2K5_INTERP_SKIP=lo-hi[,lo-hi...] (hex VAs, diagnostics): functions starting
+             * there keep the retail native code -- for bisecting a pack-only fault. */
+            const char *sk = getenv("NFL2K5_INTERP_SKIP");
+            int skip = 0;
+            while (sk && *sk && !skip) {
+                char *e;
+                uint32_t lo = (uint32_t)strtoul(sk, &e, 16), hi = lo;
+                if (*e == '-') hi = (uint32_t)strtoul(e + 1, &e, 16);
+                skip = start >= lo && start <= hi;
+                sk = *e == ',' ? e + 1 : NULL;
+            }
+            if (skip) continue;
+            if (getenv("NFL2K5_INTERP_LIST")) fprintf(stderr, "[INTERP] dirty %08X-%08X\n", start, end);
             g_interp_dirty_bits[start >> 3] |= (uint8_t)(1u << (start & 7));
             marked++;
         }

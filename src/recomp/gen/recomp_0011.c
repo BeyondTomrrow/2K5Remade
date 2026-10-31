@@ -85500,8 +85500,12 @@ loc_00178150: ;
         extern char *__cdecl getenv(const char *);
         extern int __cdecl fprintf(void *, const char *, ...);
         extern void *__cdecl __acrt_iob_func(unsigned);
+        /* A mod pack (nfl2k5_pack_build, src/main.c) skips the boot intro too: under
+         * SOFTDRINK 2K28 v0.7 the movies stop advancing until a button is pressed
+         * (cause not found yet, 2026-10-31). NFL2K5_PACK_INTRO=1 plays them. */
+        extern int nfl2k5_pack_build;
         static int skip = -1, calls;
-        if (skip < 0) { const char *v = getenv("NFL2K5_SKIP_INTRO"); skip = v && *v && *v != '0'; }
+        if (skip < 0) { const char *v = getenv("NFL2K5_SKIP_INTRO"); skip = (v && *v && *v != '0') || (nfl2k5_pack_build && !getenv("NFL2K5_PACK_INTRO")); }
         fprintf(__acrt_iob_func(2), "  [MOVIE] sub_00178150 call %d from %08X arg %08X%s\n", calls,
                 MEM32(esp), MEM32(esp + 4), skip && calls == 0 ? " (skipped: NFL2K5_SKIP_INTRO)" : "");
         if (skip && calls++ == 0) { eax = 2; esp += 8; return; /* ret 4 */ }

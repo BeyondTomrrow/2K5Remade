@@ -2883,7 +2883,11 @@ static void nfl2k5_io_worker(void)
                 fprintf(stderr, "[WORKER] State outside jump table: %08X\n", g_eax);
                 abort();
             }
-            uint32_t target = MEM32(0x0004D8C0u + g_eax * 4u);
+            /* the retail table, not guest memory: a pack can reuse those bytes */
+            static const uint32_t k_table[14] = {
+                0x4D82Fu, 0x4D837u, 0x4D83Eu, 0x4D845u, 0x4D84Cu, 0x4D853u, 0x4D85Au,
+                0x4D861u, 0x4D868u, 0x4D86Fu, 0x4D876u, 0x4D87Du, 0x4D884u, 0x4D89Fu };
+            uint32_t target = k_table[g_eax];
             int complete = 1;
             switch (target) {
             case 0x0004D82Fu: MEM32(0x00A7D300u) = g_esi; complete = 0; break;
@@ -3041,7 +3045,10 @@ extern int g_interp_active;
 int nfl2k5_interp_code_changed(uint32_t va);
 recomp_func_t recomp_lookup_manual(uint32_t address)
 {
+    static int native_worker = -1;
     recomp_func_t fn = lookup_manual_any(address);
+    if (native_worker < 0) native_worker = getenv("NFL2K5_PACK_NATIVE_WORKER") != NULL;
+    if (native_worker && address == 0x0004D810u) return fn;
     if (fn && g_interp_active && address < 0xFE000000u && nfl2k5_interp_code_changed(address))
         return NULL;
     return fn;
