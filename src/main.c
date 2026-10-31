@@ -879,6 +879,251 @@ static void *android_cpu_report_thread(void *arg)
     return NULL;
 }
 
+/* ---- Performance overlay: device figures (2026-10-31) ----------------------
+ * While the Full performance overlay shows (nv2a_gpu_perfhud.inc.c), every
+ * 2 s: the two busiest threads, battery level/current/drain/temperature
+ * (the sticky ACTION_BATTERY_CHANGED intent and BatteryManager, through
+ * JNI), the thermal status and headroom (libandroid), a CPU/SoC thermal zone
+ * and the GPU's busy share where the kernel lets an app read them. Same
+ * layout as XboxDeviceStats in nv2a_gpu_perfhud.inc.c. */
+#include <jni.h>
+#include <sys/prctl.h>
+#include <dlfcn.h>
+typedef struct {
+    volatile LONG seq;
+    int   valid;
+    char  top[2][16];
+    float top_pct[2];
+    int   ncores;
+    int   batt_pct;
+    int   batt_ma;
+    float batt_drain_pct_h;
+    int   charging;
+    float batt_temp_c;
+    float soc_temp_c;
+    int   thermal_status;
+    float thermal_headroom;
+    float gpu_pct;
+} XboxDeviceStats;
+extern XboxDeviceStats g_xbox_device_stats;
+extern volatile int g_xbox_perf_overlay;
+
+static int ps_read_int(const char *path, long *v)
+{
+    FILE *f = fopen(path, "r");
+    int ok;
+    if (!f) return 0;
+    ok = fscanf(f, "%ld", v) == 1;
+    fclose(f);
+    return ok;
+}
+
+/* level, scale, temperature and status from the sticky battery intent, and
+ * the current (uA) and remaining charge (uAh) from BatteryManager */
+static int ps_battery_jni(int *pct, int *temp10, int *charging, long *ua, long *uah)
+{
+    char name[17] = { 0 };
+    JNIEnv *env;
+    jobject act, filt = NULL, intent = NULL, bm = NULL;
+    jclass ctx = NULL, ifc = NULL, ic = NULL;
+    int ok = 0;
+    prctl(PR_GET_NAME, name, 0, 0, 0);
+    env = (JNIEnv *)SDL_GetAndroidJNIEnv();        /* attaching renames the thread: keep its name */
+    if (name[0]) prctl(PR_SET_NAME, name, 0, 0, 0);
+    if (!env || !(act = (jobject)SDL_GetAndroidActivity())) return 0;
+    (*env)->PushLocalFrame(env, 16);
+    ctx = (*env)->GetObjectClass(env, act);
+    ifc = (*env)->FindClass(env, "android/content/IntentFilter");
+    if (ctx && ifc) {
+        jmethodID ctor = (*env)->GetMethodID(env, ifc, "<init>", "(Ljava/lang/String;)V");
+        jmethodID reg = (*env)->GetMethodID(env, ctx, "registerReceiver",
+                                            "(Landroid/content/BroadcastReceiver;Landroid/content/IntentFilter;)Landroid/content/Intent;");
+        if (ctor && reg) {
+            filt = (*env)->NewObject(env, ifc, ctor, (*env)->NewStringUTF(env, "android.intent.action.BATTERY_CHANGED"));
+            if (filt) intent = (*env)->CallObjectMethod(env, act, reg, NULL, filt);
+        }
+    }
+    if ((*env)->ExceptionCheck(env)) { (*env)->ExceptionClear(env); intent = NULL; }
+    if (intent && (ic = (*env)->GetObjectClass(env, intent))) {
+        jmethodID gi = (*env)->GetMethodID(env, ic, "getIntExtra", "(Ljava/lang/String;I)I");
+        if (gi) {
+            int level = (*env)->CallIntMethod(env, intent, gi, (*env)->NewStringUTF(env, "level"), -1);
+            int scale = (*env)->CallIntMethod(env, intent, gi, (*env)->NewStringUTF(env, "scale"), 100);
+            int st = (*env)->CallIntMethod(env, intent, gi, (*env)->NewStringUTF(env, "status"), 1);
+            *temp10 = (*env)->CallIntMethod(env, intent, gi, (*env)->NewStringUTF(env, "temperature"), -10000);
+            *charging = st == 2 || st == 5;        /* BATTERY_STATUS_CHARGING / FULL */
+            if (level >= 0 && scale > 0) { *pct = level * 100 / scale; ok = 1; }
+        }
+        if ((*env)->ExceptionCheck(env)) { (*env)->ExceptionClear(env); ok = 0; }
+    }
+    if (ctx) {
+        jmethodID gs = (*env)->GetMethodID(env, ctx, "getSystemService", "(Ljava/lang/String;)Ljava/lang/Object;");
+        if (gs) bm = (*env)->CallObjectMethod(env, act, gs, (*env)->NewStringUTF(env, "batterymanager"));
+        if ((*env)->ExceptionCheck(env)) { (*env)->ExceptionClear(env); bm = NULL; }
+        if (bm) {
+            jclass bc = (*env)->GetObjectClass(env, bm);
+            jmethodID gp = bc ? (*env)->GetMethodID(env, bc, "getIntProperty", "(I)I") : NULL;
+            if (gp) {
+                *ua = (*env)->CallIntMethod(env, bm, gp, 2);    /* BATTERY_PROPERTY_CURRENT_NOW */
+                *uah = (*env)->CallIntMethod(env, bm, gp, 1);   /* BATTERY_PROPERTY_CHARGE_COUNTER */
+            }
+            if ((*env)->ExceptionCheck(env)) { (*env)->ExceptionClear(env); *ua = *uah = 0; }
+        }
+    }
+    (*env)->PopLocalFrame(env, NULL);
+    (*env)->DeleteLocalRef(env, act);
+    return ok;
+}
+
+/* the first readable thermal zone whose type names the CPU or SoC, m°C */
+static int ps_soc_zone(char *path, size_t n)
+{
+    int i;
+    for (i = 0; i < 64; i++) {
+        char tp[96], type[64] = "";
+        long v;
+        FILE *f;
+        snprintf(tp, sizeof tp, "/sys/class/thermal/thermal_zone%d/type", i);
+        if (!(f = fopen(tp, "r"))) { if (i > 8) break; continue; }
+        if (!fgets(type, sizeof type, f)) type[0] = 0;
+        fclose(f);
+        if (!strstr(type, "cpu") && !strstr(type, "soc") && !strstr(type, "CPU") && !strstr(type, "tsens"))
+            continue;
+        snprintf(path, n, "/sys/class/thermal/thermal_zone%d/temp", i);
+        if (ps_read_int(path, &v) && v > 0) return 1;
+    }
+    return 0;
+}
+
+static void *android_perf_stats_thread(void *arg)
+{
+    enum { MAXT = 160 };
+    static struct { int tid; unsigned long long t; char name[16]; } prev[MAXT], cur[MAXT];
+    int np = 0, gpu_src = -1, zone_ok = -1;
+    char zone[96] = "";
+    long hz = sysconf(_SC_CLK_TCK);
+    Uint64 t_prev = 0, drain_t0 = 0;
+    int drain_pct0 = -1;
+    void *lib = dlopen("libandroid.so", RTLD_NOW), *mgr = NULL;
+    void *(*th_acquire)(void) = lib ? (void *(*)(void))dlsym(lib, "AThermal_acquireManager") : NULL;
+    int (*th_status)(void *) = lib ? (int (*)(void *))dlsym(lib, "AThermal_getCurrentThermalStatus") : NULL;
+    float (*th_headroom)(void *, int) = lib ? (float (*)(void *, int))dlsym(lib, "AThermal_getThermalHeadroom") : NULL;
+    static const char *const k_gpu[] = { "/sys/class/kgsl/kgsl-3d0/gpu_busy_percentage", "/sys/kernel/gpu/gpu_busy" };
+    (void)arg;
+    for (;;) {
+        XboxDeviceStats ds = g_xbox_device_stats;
+        Uint64 now;
+        if (g_xbox_perf_overlay < 2) { np = 0; t_prev = 0; sleep(1); continue; }
+        now = SDL_GetTicks();
+        /* threads: CPU time since the last sample */
+        {
+            DIR *d = opendir("/proc/self/task");
+            struct dirent *e;
+            int nc = 0, i, j;
+            float best[2] = { -1, -1 };
+            int bi[2] = { -1, -1 };
+            while (d && (e = readdir(d)) && nc < MAXT) {
+                char path[64], buf[512], *p;
+                unsigned long long ut = 0, st = 0;
+                FILE *f;
+                if (e->d_name[0] < '0' || e->d_name[0] > '9') continue;
+                snprintf(path, sizeof path, "/proc/self/task/%s/stat", e->d_name);
+                if (!(f = fopen(path, "r"))) continue;
+                if (!fgets(buf, sizeof buf, f)) buf[0] = 0;
+                fclose(f);
+                cur[nc].tid = atoi(e->d_name);
+                cur[nc].name[0] = 0;
+                if ((p = strchr(buf, '(')) && strrchr(buf, ')')) {
+                    size_t l = (size_t)(strrchr(buf, ')') - p - 1);
+                    if (l >= sizeof cur[nc].name) l = sizeof cur[nc].name - 1;
+                    memcpy(cur[nc].name, p + 1, l); cur[nc].name[l] = 0;
+                    p = strrchr(buf, ')') + 2;
+                    sscanf(p, "%*c %*d %*d %*d %*d %*d %*u %*u %*u %*u %*u %llu %llu", &ut, &st);
+                }
+                cur[nc].t = ut + st;
+                nc++;
+            }
+            if (d) closedir(d);
+            if (np && t_prev && now > t_prev) {
+                double secs = (double)(now - t_prev) / 1000.0;
+                for (i = 0; i < nc; i++) {
+                    float pct;
+                    for (j = 0; j < np && prev[j].tid != cur[i].tid; j++) {}
+                    if (j == np) continue;
+                    pct = (float)((double)(cur[i].t - prev[j].t) * 100.0 / (double)hz / secs);
+                    if (pct > best[0]) { best[1] = best[0]; bi[1] = bi[0]; best[0] = pct; bi[0] = i; }
+                    else if (pct > best[1]) { best[1] = pct; bi[1] = i; }
+                }
+                for (i = 0; i < 2; i++) {
+                    ds.top[i][0] = 0;
+                    if (bi[i] >= 0 && best[i] >= 1.0f) {
+                        snprintf(ds.top[i], sizeof ds.top[i], "%s", cur[bi[i]].name);
+                        ds.top_pct[i] = best[i];
+                    }
+                }
+            }
+            memcpy(prev, cur, sizeof cur[0] * (size_t)nc);
+            np = nc;
+            t_prev = now;
+        }
+        ds.ncores = SDL_GetNumLogicalCPUCores();
+        /* battery */
+        {
+            int pct = -1, t10 = -10000, chg = 0;
+            long ua = 0, uah = 0, v;
+            if (!ps_battery_jni(&pct, &t10, &chg, &ua, &uah)) {
+                if (ps_read_int("/sys/class/power_supply/battery/capacity", &v)) pct = (int)v;
+                if (ps_read_int("/sys/class/power_supply/battery/temp", &v)) t10 = (int)v;
+                if (ps_read_int("/sys/class/power_supply/battery/current_now", &v)) ua = v;
+            }
+            ds.batt_pct = pct;
+            ds.charging = chg;
+            ds.batt_temp_c = t10 > -10000 ? (float)t10 / 10.0f : -1000.0f;
+            /* uA on most phones, mA on some: a game draws hundreds of mA */
+            ds.batt_ma = (int)(labs(ua) >= 20000 ? ua / 1000 : ua);
+            if (ds.batt_ma > 0 && !chg) ds.batt_ma = -ds.batt_ma;   /* show discharge as negative */
+            ds.batt_drain_pct_h = -1000.0f;
+            if (chg || pct < 0) { drain_pct0 = -1; }
+            else if (ds.batt_ma < 0 && uah > 0 && pct > 0) {
+                /* the current over the full capacity (remaining charge / level) */
+                double full_mah = (double)(labs(uah) >= 20000 ? uah / 1000 : uah) * 100.0 / pct;
+                if (full_mah > 500.0) ds.batt_drain_pct_h = (float)(-ds.batt_ma * 100.0 / full_mah);
+            }
+            if (!chg && pct >= 0) {
+                /* else the level's own fall, once it has moved */
+                if (drain_pct0 < 0) { drain_pct0 = pct; drain_t0 = now; }
+                else if (ds.batt_drain_pct_h < -999.0f && pct < drain_pct0 && now - drain_t0 > 120000)
+                    ds.batt_drain_pct_h = (float)((drain_pct0 - pct) * 3600000.0 / (double)(now - drain_t0));
+            }
+        }
+        /* temperature and thermal state */
+        if (zone_ok < 0) zone_ok = ps_soc_zone(zone, sizeof zone);
+        {
+            long v;
+            ds.soc_temp_c = zone_ok && ps_read_int(zone, &v) && v > 0 ? (v > 1000 ? (float)v / 1000.0f : (float)v) : -1000.0f;
+        }
+        if (th_acquire && !mgr) mgr = th_acquire();
+        ds.thermal_status = mgr && th_status ? th_status(mgr) : -1;
+        ds.thermal_headroom = mgr && th_headroom ? th_headroom(mgr, 0) : -1.0f;
+        /* GPU busy share (Adreno, some Mali/Exynos kernels) */
+        ds.gpu_pct = -1.0f;
+        if (gpu_src != -2) {
+            int k;
+            for (k = gpu_src >= 0 ? gpu_src : 0; k < 2; k++) {
+                long v;
+                if (ps_read_int(k_gpu[k], &v)) { ds.gpu_pct = (float)v; gpu_src = k; break; }
+                if (gpu_src >= 0) break;
+            }
+            if (ds.gpu_pct < 0 && gpu_src < 0) gpu_src = -2;   /* not readable here: stop trying */
+        }
+        ds.valid = 1;
+        ds.seq = g_xbox_device_stats.seq + 1;
+        g_xbox_device_stats = ds;
+        sleep(2);
+    }
+    return NULL;
+}
+
 /* A crash writes where it happened into the log: the signal, the faulting
  * address and the call stack as offsets in libmain.so (symbolised on the PC
  * with llvm-symbolizer and the unstripped library), then dies as before. The
@@ -1135,6 +1380,7 @@ int main(int argc, char **argv)
     {
         pthread_t t;
         if (pthread_create(&t, NULL, android_cpu_report_thread, NULL) == 0) pthread_detach(t);
+        if (pthread_create(&t, NULL, android_perf_stats_thread, NULL) == 0) pthread_detach(t);
     }
 #endif
 
