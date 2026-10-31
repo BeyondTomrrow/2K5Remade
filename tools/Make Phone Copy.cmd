@@ -6,7 +6,5 @@ if "%~1"=="" (
   pause
   exit /b 1
 )
-set "PS1=%~dp0make-phone-folder.ps1"
-if not exist "%PS1%" set "PS1=%~dp0tools\make-phone-folder.ps1"
-powershell -NoProfile -ExecutionPolicy Bypass -File "%PS1%" -Source "%~1"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0make-phone-folder.ps1" -Source "%~1"
 pause
