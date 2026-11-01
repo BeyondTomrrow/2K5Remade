@@ -239,9 +239,10 @@ Xbox readiness (cannot be tested without a console):
 
 Open:
 
-- The 4th boot movie never decodes on D3D12, so the intro is skipped by
-  default (`NFL2K5_SKIP_INTRO`); the renderer work on the D3D12/Vulkan intro
-  freeze is expected to fix both.
+- (Fixed) The boot intro froze on its 1st or 4th movie on every renderer: a
+  scheduler pulse ran a present on a second thread that spun holding the guest
+  lock. With xboxrecomp d7c26a4 the installed app plays all four movies, then
+  the title and the attract demo; the UWP skip default is gone.
 - Controllers: Windows.Gaming.Input -> SDL virtual gamepads (with rumble) is
   in place but no pad was connected for a test.
 - Header prompt icons sometimes show the original Xbox L/R/white/black art
