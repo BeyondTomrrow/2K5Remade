@@ -187,10 +187,40 @@ compile a snapshot instead: `-DNFL2K5_UWP_INTERP_SRC=<file>` (cache variable).
   one, from the VS "Universal Windows Platform development" workload's
   `ExtensionSDKs\Microsoft.VCLibs\14.0\Appx\Retail\x64`, or a machine that
   has it). In Dev Home select the app → View details → App type: **Game**
-  (5 GB instead of 1 GB). Game files: copy them into the app's LocalState
+  (5 GB instead of 1 GB). Game files (small installs only; LocalState is
+  capped, see the loose-folder install below): copy them into the app's LocalState
   with Device Portal's File explorer, or put them on an NTFS USB drive (it
   mounts as E:) whose folders grant ALL APPLICATION PACKAGES read, and write
   that folder into `LocalState\root.txt`.
+- **Xbox, game inside the app (loose-folder install, recommended):** Dev Mode
+  caps an app's LocalState at a few GB (the user's Device Portal upload of
+  the 6 GB of game files stopped with "out of storage" at about 3.3 GB). The
+  app also looks for `original\default.xbe` in its own install folder
+  (`uwp_game.cpp`; order: `root.txt`, `LocalState\original`, install folder,
+  LocalState; the log line `[UWP] game folder ... (why)` names the choice),
+  and every root is read-only to it (saves, settings, caches in
+  `LocalState\NFL2K5-PC`). `tools\uwp\make-xbox-loose.cmd` builds
+  `dist\xbox-loose\NFL2K5` = `build-uwp\layout` + `original\` (xbes and
+  `vc_53450030`, never `disc\`/`CACHE\`) + `mods\presentations`, `teams`,
+  `textures`, `presentation.ini` + `assets`, `data`, `font`, `moment-audio`
+  (`-IncludeSoftdrink`, `-IncludeMusic` optional), hard-linked on the same
+  drive. `tools\uwp\deploy-xbox-loose.cmd` asks for the console IP and the
+  Device Portal login, offers (asks first) to uninstall an msix-installed
+  NFL2K5, copies the folder to `D:\DevelopmentFiles\LooseApps\NFL2K5`
+  (console SMB share from `/ext/smb/developerfolder` with robocopy; fallback
+  file by file through `/api/app/packagemanager/upload`, skipping files
+  already there with the same size, 3 tries each) and registers it
+  (`/api/app/packagemanager/register?folder=<base64>`). Then App type:
+  Game in Dev Home. Player steps: `tools\uwp\README-XBOX.txt` (also copied
+  next to the loose folder), including the manual SMB way and the
+  "Register from Network Share" fallback if the console refuses the size.
+  Verified here: the install-folder root (a test package with the game
+  inside, installed from `C:\Program Files\WindowsApps`, root.txt set aside:
+  intro, title and demo with the SNF scorebug), the folder builder, and the
+  deploy script against a local mock of those endpoints (auth, CSRF, the
+  uninstall prompt, an upload cut off mid-file, resume, registration).
+  Not verified: a real console (endpoint behaviour, size limits of
+  DevelopmentFiles/loose installs, the SMB share).
 - **Without the installer:** Developer Mode on (Settings → System → For
   developers), then `Add-AppxPackage -Register build-uwp\layout\AppxManifest.xml`.
   Unsigned packages are refused ("an unsigned package cannot include

@@ -317,8 +317,29 @@ static void game_start(const char *prop, void *window, const wchar_t *local_dir,
     _wfreopen((local + L"\\nfl2k5-stdout.log").c_str(), L"w", stdout);
     setvbuf(stderr, nullptr, _IONBF, 0);
 
+    /* Game folder: root.txt (e.g. a USB drive), else game files uploaded to
+     * LocalState, else game files inside the app's own install folder (an
+     * Xbox loose-folder install: Dev Mode caps LocalState at a few GB, the
+     * install folder is not; tools/uwp/make-xbox-loose.ps1), else LocalState.
+     * Every root is treated as read-only: saves, settings and caches go to
+     * LocalState\NFL2K5-PC whichever one is picked. */
     std::wstring root = read_line_file(local, L"root.txt");
-    if (root.empty()) root = local;
+    const char *why = "LocalState\\root.txt";
+    auto has_game = [](const std::wstring &dir) {
+        return GetFileAttributesW((dir + L"\\original\\default.xbe").c_str()) != INVALID_FILE_ATTRIBUTES;
+    };
+    if (root.empty() && has_game(local)) {
+        root = local;
+        why = "game files in LocalState\\original";
+    }
+    if (root.empty() && install_dir && *install_dir && has_game(install_dir)) {
+        root = install_dir;
+        why = "game files in the app's install folder (loose-folder install)";
+    }
+    if (root.empty()) {
+        root = local;
+        why = "no game files found; LocalState (the game will report missing files)";
+    }
     s_root = utf8(root);
     _putenv_s("NFL2K5_ROOT", s_root.c_str());
     if (!getenv("RECOMP_RENDERER")) _putenv_s("RECOMP_RENDERER", "d3d12");   /* gx on SDL_GPU D3D12 */
@@ -371,6 +392,7 @@ static void game_start(const char *prop, void *window, const wchar_t *local_dir,
     _putenv_s("NFL2K5_INSTALL_DIR", utf8(install_dir).c_str());
     _wputenv_s(L"NFL2K5_UWP_LOCALSTATE", local_dir);   /* SHGetFolderPathW shim */
     fprintf(stderr, "[UWP] NFL2K5 UWP build; install %s\n", utf8(install_dir).c_str());
+    fprintf(stderr, "[UWP] game folder %s (%s)\n", s_root.c_str(), why);
 
     /* SDL reads this when its D3D12 backend makes the swap chain. */
     SDL_SetPointerProperty(SDL_GetGlobalProperties(), prop, window);
