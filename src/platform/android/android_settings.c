@@ -176,8 +176,9 @@ void nfl2k5_android_pick_songs(void)
 /* ---- heat control -----------------------------------------------------------
  * A hot phone slows its own processor down hard; stepping the game's quality
  * down first keeps it smooth. Android's thermal status (Android 11+, through
- * libandroid) or else the battery temperature: warm = 1x internal resolution,
- * hot = also 30 FPS. A step back up waits for a minute below the line. */
+ * libandroid) or else the battery temperature: warm = half the internal
+ * resolution ceiling (the automatic resolution works under it), hot = 1x and
+ * 30 FPS. A step back up waits for a minute below the line. */
 typedef void *(*AcquireFn)(void);
 typedef int (*StatusFn)(void *);
 
