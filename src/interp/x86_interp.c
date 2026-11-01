@@ -672,12 +672,25 @@ typedef struct DInsn {
     uint8_t opsize16, rep, seg_fs, sse, sub;
     uint8_t hook;                 /* a native hook may be registered at va */
     uint32_t disp, imm;
-    uint64_t b0, b1, m0, m1;      /* the bytes and their masks */
 } DInsn;
 
-#define DC_BITS 12
-#define DCACHE_SIZE (1u << DC_BITS)
-static XBOX_THREAD_LOCAL DInsn *t_dcache;
+#define DC_BITS 10
+/* Decoded straight-line blocks: up to BLK_MAX instructions that run without a
+ * control transfer, ending at the first jump/call/return or generic
+ * instruction (included as the last entry) or before an instruction with a
+ * native hook. A block is used only while guest memory holds exactly the
+ * bytes it was decoded from (one memcmp per block run), and stops early when
+ * one of its own instructions stores into its bytes. */
+#define BLK_MAX 24
+#define BLK_BYTES 256
+typedef struct Block {
+    uint32_t va;                 /* 0 = empty */
+    uint16_t n, nbytes;
+    DInsn ins[BLK_MAX];
+    uint8_t bytes[BLK_BYTES];
+} Block;
+#define DCACHE_SIZE (1u << DC_BITS)          /* blocks per thread */
+static XBOX_THREAD_LOCAL Block *t_dcache;
 static XBOX_THREAD_LOCAL long t_dcache_hook_gen;   /* s_hook_gen the cache was decoded under */
 
 /* Record a control transfer in the fault trail. */
@@ -703,11 +716,6 @@ static inline uint64_t rd64u(uint32_t a) { uint64_t v; memcpy(&v, (const void *)
 
 static inline uint64_t rd64m(uintptr_t mb, uint32_t a) { uint64_t v; memcpy(&v, (const void *)(mb + a), 8); return v; }
 
-static inline int dc_valid(uintptr_t mb, const DInsn *d)
-{
-    if ((rd64m(mb, d->va) & d->m0) != d->b0) return 0;
-    return d->len <= 8 || (rd64m(mb, d->va + 8) & d->m1) == d->b1;
-}
 
 static inline uint32_t d_ea(const Cpu *c, const DInsn *d)
 {
@@ -723,12 +731,14 @@ static inline uint32_t d_getrm(uintptr_t mb, Cpu *c, const DInsn *d, int sz)
     return sz == 4 ? FM32(a) : sz == 2 ? FM16(a) : FM8(a);
 }
 
-static inline void d_setrm(uintptr_t mb, Cpu *c, const DInsn *d, int sz, uint32_t v)
+/* Returns the address written, or 0xFFFFFF00 for a register (far from any code). */
+static inline uint32_t d_setrm(uintptr_t mb, Cpu *c, const DInsn *d, int sz, uint32_t v)
 {
     uint32_t a;
-    if (d->mod == 3) { setreg(c, sz, d->rm, v); return; }
+    if (d->mod == 3) { setreg(c, sz, d->rm, v); return 0xFFFFFF00u; }
     a = d_ea(c, d);
     if (sz == 4) FM32(a) = v; else if (sz == 2) FM16(a) = (uint16_t)v; else FM8(a) = (uint8_t)v;
+    return a;
 }
 
 /* ModRM operand bytes at p: fills mod/reg/rm and the address parts.
@@ -897,10 +907,54 @@ static int dc_decode(DInsn *d, uint32_t va)
     }
     if (d->len > 16) { d->kind = DK_GENERIC; d->len = (uint8_t)(n + 1); }
     if (d->len > 16) return 0;
-    d->m0 = d->len >= 8 ? ~0ull : ((1ull << (8 * d->len)) - 1);
-    d->m1 = d->len <= 8 ? 0 : d->len >= 16 ? ~0ull : ((1ull << (8 * (d->len - 8))) - 1);
-    d->b0 = rd64u(va) & d->m0;
-    d->b1 = d->len > 8 ? rd64u(va + 8) & d->m1 : 0;
+    return 1;
+}
+
+/* Nonzero when guest code differs from a block's saved bytes (inline: the CRT
+ * memcmp call cost more than the compare for these few dozen bytes). */
+static inline int blk_differ(const uint8_t *g, const uint8_t *sv, unsigned n)
+{
+    uint64_t x, y;
+    unsigned i = 0;
+    if (n >= 8) {
+        for (; i + 8 <= n; i += 8) {
+            memcpy(&x, g + i, 8); memcpy(&y, sv + i, 8);
+            if (x != y) return 1;
+        }
+        if (i < n) { memcpy(&x, g + n - 8, 8); memcpy(&y, sv + n - 8, 8); return x != y; }
+        return 0;
+    }
+    for (; i < n; i++) if (g[i] != sv[i]) return 1;
+    return 0;
+}
+
+static int dk_ends_block(int kind)
+{
+    return kind == DK_GENERIC || kind == DK_JCC || kind == DK_JMP_SHORT || kind == DK_JMP_NEAR ||
+           kind == DK_CALL || kind == DK_RET || kind == DK_FF_CALL || kind == DK_FF_JMP;
+}
+
+/* Decode the block starting at pc into b. Returns 0 when not even its first
+ * instruction can be cached. */
+static int bc_build(uintptr_t mb, Block *b, uint32_t pc)
+{
+    uint32_t p = pc;
+    unsigned n = 0;
+    b->va = 0;
+    while (n < BLK_MAX) {
+        DInsn *d = &b->ins[n];
+        if (p - pc + 16 > BLK_BYTES) break;
+        if (!dc_decode(d, p)) break;
+        if (n && d->hook) break;              /* a hooked instruction starts its own block */
+        n++;
+        p += d->len;
+        if (dk_ends_block(d->kind)) break;
+    }
+    if (!n) return 0;
+    b->n = (uint16_t)n;
+    b->nbytes = (uint16_t)(p - pc);
+    memcpy(b->bytes, (const void *)(mb + pc), b->nbytes);
+    b->va = pc;
     return 1;
 }
 
@@ -942,7 +996,8 @@ static uint64_t s_exe_lo, s_exe_hi;
 typedef struct { uint64_t rip; uint32_t n; uint32_t pad; } SampEnt;
 static SampEnt s_samp[SAMP_N];      /* game thread: RIP */
 static SampEnt s_samp_w[SAMP_N];    /* game thread outside the exe: first exe frames (chain hash) */
-static uint64_t s_samp_wchain[SAMP_N][4];
+#define SAMP_CHAIN 8
+static uint64_t s_samp_wchain[SAMP_N][SAMP_CHAIN];
 static uint32_t s_samp_total, s_samp_out;
 #define SAMP_T 64
 static struct { DWORD tid; uint32_t n, in_exe; SampEnt top[256]; } s_thr[SAMP_T];
@@ -1012,9 +1067,11 @@ static void samp_dump(void)
     qsort(tmp, SAMP_N, sizeof tmp[0], cmp_samp);
     for (i = 0; i < 25 && tmp[i].n; i++) {
         uint64_t *ch = s_samp_wchain[tmp[i].pad];
-        fprintf(stderr, "[ISAMP] outside-exe %5.2f%% from %s < %s < %s\n", 100.0 * tmp[i].n / s_samp_total,
-                samp_name(ch[0], nb, sizeof nb, &disp), ch[1] ? samp_name(ch[1], nb2, sizeof nb2, &disp) : "-",
-                ch[2] ? samp_name(ch[2], nb3, sizeof nb3, &disp) : "-");
+        fprintf(stderr, "[ISAMP] outside-exe %5.2f%% from %s", 100.0 * tmp[i].n / s_samp_total,
+                samp_name(ch[0], nb, sizeof nb, &disp));
+        for (j = 1; j < SAMP_CHAIN && ch[j]; j++) fprintf(stderr, " < %s", samp_name(ch[j], nb2, sizeof nb2, &disp));
+        fprintf(stderr, "\n");
+        (void)nb3;
     }
     /* threads */
     for (i = 0; i < SAMP_T; i++) {
@@ -1056,7 +1113,7 @@ static int samp_unwind(CONTEXT *ctx, uint64_t *out, int max)
 {
     int n = 0;
     __try {
-        for (int d = 0; d < 24 && n < max; d++) {
+        for (int d = 0; d < 48 && n < max; d++) {
             DWORD64 ib = 0, est = 0;
             PVOID hd = NULL;
             uint64_t rip = ctx->Rip;
@@ -1103,7 +1160,7 @@ static DWORD WINAPI samp_main(void *arg)
             memset(&ctx, 0, sizeof ctx);
             ctx.ContextFlags = game ? CONTEXT_FULL : CONTEXT_CONTROL;
             if (GetThreadContext(h, &ctx)) {
-                uint64_t rip = ctx.Rip, chain[4] = { 0, 0, 0, 0 };
+                uint64_t rip = ctx.Rip, chain[SAMP_CHAIN] = { 0 };
                 int in_exe = samp_in_exe(rip);
                 if (game) {
                     SampEnt *e = samp_slot(s_samp, SAMP_N, rip);
@@ -1111,8 +1168,9 @@ static DWORD WINAPI samp_main(void *arg)
                     s_samp_total++;
                     if (!in_exe) {
                         s_samp_out++;
-                        if (samp_unwind(&ctx, chain, 3) > 0) {
-                            uint64_t key = chain[0] * 31 + chain[1] * 7 + chain[2];
+                        if (samp_unwind(&ctx, chain, SAMP_CHAIN) > 0) {
+                            uint64_t key = 0;
+                            for (int q = 0; q < SAMP_CHAIN; q++) key = key * 31 + chain[q];
                             e = samp_slot(s_samp_w, SAMP_N, key ? key : 1);
                             if (e) { e->n++; memcpy(s_samp_wchain[e - s_samp_w], chain, sizeof chain); }
                         }
@@ -1194,7 +1252,7 @@ static void interp_execute(Cpu *c, uint32_t va)
 {
     uint32_t esp0;
     int fast;
-    DInsn *dcache;
+    Block *dcache;
     const uintptr_t mb = (uintptr_t)g_xbox_mem_offset;
     memset(c, 0, sizeof *c);
     c->r[EAX] = g_eax; c->r[ECX] = g_ecx; c->r[EDX] = g_edx; c->r[EBX] = g_ebx;
@@ -1223,13 +1281,13 @@ static void interp_execute(Cpu *c, uint32_t va)
     if (s_interp_log) { fprintf(stderr, "[INTERP] enter %08X esp %08X ret %08X\n", va, esp0, rd32(esp0)); }
 
     if (s_fast > 0 && !t_dcache) {
-        t_dcache = (DInsn *)calloc(DCACHE_SIZE, sizeof(DInsn));
+        t_dcache = (Block *)calloc(DCACHE_SIZE, sizeof(Block));
         t_ncache = (NCache *)calloc(NC_SIZE, sizeof(NCache));
     }
     fast = s_fast > 0 && t_dcache;
     dcache = t_dcache;
     if (fast && t_dcache_hook_gen != s_hook_gen) {
-        memset(dcache, 0, DCACHE_SIZE * sizeof(DInsn));
+        memset(dcache, 0, DCACHE_SIZE * sizeof(Block));
         t_dcache_hook_gen = s_hook_gen;
     }
     t_cur = c;   /* nested interpreter calls restore it when they return */
@@ -1247,25 +1305,39 @@ static void interp_execute(Cpu *c, uint32_t va)
             if (s_prof) { prof_insn(c->start); c->icount++; }
         }
         if (fast) {
-            DInsn *d = &dcache[dc_index(pc)];
-            if (d->va != pc || !dc_valid(mb, d)) {
-                if (!dc_decode(d, pc)) { d->va = 0; goto check_hooks; }
+            Block *blk = &dcache[dc_index(pc)];
+            uint32_t blo, blen;
+            int smc = 0;
+            unsigned bi;
+            if (blk->va != pc || blk_differ((const uint8_t *)(mb + pc), blk->bytes, blk->nbytes)) {
+                if (!bc_build(mb, blk, pc)) goto check_hooks;
             }
-            if (d->hook) {
+            if (blk->ins[0].hook) {
                 uint32_t to = run_hooks(c, prev);
                 if (to) { c->eip = to; continue; }
-                if (!dc_valid(mb, d)) { d->va = 0; goto hooks_done; }
+                if (blk_differ((const uint8_t *)(mb + pc), blk->bytes, blk->nbytes)) { blk->va = 0; goto hooks_done; }
             }
-            /* Control transfers record themselves in the trail below (taken
-             * branches, calls, returns); generic instructions check here. */
-            if (d->kind != DK_GENERIC) {
+            if (pc - prev - 1 >= 15u) TRAIL(prev, pc);
+            blo = pc; blen = blk->nbytes;
+/* a store at a that may touch the block's own bytes: finish the block after this instruction */
+#define SMC(a) (smc |= (uint32_t)((uint32_t)(a) - (blo - 8u)) < blen + 8u)
+            for (bi = 0;; bi++) {
+                const DInsn *d = &blk->ins[bi];
                 int sz = d->sz;
+                c->start = d->va;
+                if (d->kind == DK_GENERIC) {      /* always the last entry */
+                    c->opsize16 = d->opsize16; c->rep = d->rep; c->seg_fs = d->seg_fs; c->sse_prefix = d->sse;
+                    op = d->op;
+                    c->eip = d->va + d->plen + 1;
+                    goto decoded;
+                }
+                pc = d->va;
                 c->eip = pc + d->len;
                 switch (d->kind) {
-                case DK_MOV_RM_R: d_setrm(mb, c, d, sz, getreg(c, sz, d->reg)); break;
+                case DK_MOV_RM_R: SMC(d_setrm(mb, c, d, sz, getreg(c, sz, d->reg))); break;
                 case DK_MOV_R_RM: setreg(c, sz, d->reg, d_getrm(mb, c, d, sz)); break;
                 case DK_MOV_R_I: setreg(c, sz, d->reg, d->imm); break;
-                case DK_MOV_RM_I: d_setrm(mb, c, d, sz, d->imm); break;
+                case DK_MOV_RM_I: SMC(d_setrm(mb, c, d, sz, d->imm)); break;
                 case DK_LEA: c->r[d->reg] = d->disp + c->r[d->base] + (c->r[d->index] << d->scale); break;
                 case DK_ALU_RM_R: case DK_ALU_RM_I: {
                     uint32_t b = d->kind == DK_ALU_RM_I ? d->imm : getreg(c, sz, d->reg), r;
@@ -1275,7 +1347,7 @@ static void interp_execute(Cpu *c, uint32_t va)
                     } else {
                         uint32_t a = d_ea(c, d);
                         r = alu(c, d->sub, sz, sz == 4 ? FM32(a) : FM8(a), b);
-                        if (d->sub != 7) { if (sz == 4) FM32(a) = r; else FM8(a) = (uint8_t)r; }
+                        if (d->sub != 7) { if (sz == 4) FM32(a) = r; else FM8(a) = (uint8_t)r; SMC(a); }
                     }
                     break;
                 }
@@ -1292,9 +1364,9 @@ static void interp_execute(Cpu *c, uint32_t va)
                 case DK_TEST_RM_R: alu(c, 4, sz, d_getrm(mb, c, d, sz), getreg(c, sz, d->reg)); break;
                 case DK_TEST_A_I: alu(c, 4, sz, c->r[EAX], d->imm); break;
                 case DK_TEST_RM_I: alu(c, 4, sz, d_getrm(mb, c, d, sz), d->imm); break;
-                case DK_PUSH_R: push32(c, c->r[d->reg]); break;
+                case DK_PUSH_R: push32(c, c->r[d->reg]); SMC(c->r[ESP]); break;
                 case DK_POP_R: { uint32_t v = pop32(c); c->r[d->reg] = v; break; }
-                case DK_PUSH_I: push32(c, d->imm); break;
+                case DK_PUSH_I: push32(c, d->imm); SMC(c->r[ESP]); break;
                 case DK_INC_R: { int saved = c->cf; c->r[d->reg] = alu(c, 0, 4, c->r[d->reg], 1); c->cf = saved; break; }
                 case DK_DEC_R: { int saved = c->cf; c->r[d->reg] = alu(c, 5, 4, c->r[d->reg], 1); c->cf = saved; break; }
                 case DK_INCDEC_RM: {
@@ -1304,6 +1376,7 @@ static void interp_execute(Cpu *c, uint32_t va)
                         uint32_t a = d_ea(c, d);
                         uint32_t r = alu(c, d->reg ? 5 : 0, sz, sz == 4 ? FM32(a) : FM8(a), 1);
                         if (sz == 4) FM32(a) = r; else FM8(a) = (uint8_t)r;
+                        SMC(a);
                     }
                     c->cf = saved;
                     break;
@@ -1314,7 +1387,7 @@ static void interp_execute(Cpu *c, uint32_t va)
                 case DK_CALL: target = d->imm; TRAIL(pc, target); goto do_call;
                 case DK_FF_CALL: target = d_getrm(mb, c, d, 4); TRAIL(pc, target); goto do_call;
                 case DK_FF_JMP: target = d_getrm(mb, c, d, 4); TRAIL(pc, target); goto do_jmp;
-                case DK_FF_PUSH: push32(c, d_getrm(mb, c, d, 4)); break;
+                case DK_FF_PUSH: push32(c, d_getrm(mb, c, d, 4)); SMC(c->r[ESP]); break;
                 case DK_RET: {
                     uint32_t at = c->r[ESP];
                     uint32_t ret = pop32(c);
@@ -1327,7 +1400,7 @@ static void interp_execute(Cpu *c, uint32_t va)
                     c->eip = ret;
                     TRAIL(pc, ret);
                     if (t_dcache_hook_gen != s_hook_gen) {   /* hooks added while this frame ran */
-                        memset(dcache, 0, DCACHE_SIZE * sizeof(DInsn));
+                        memset(dcache, 0, DCACHE_SIZE * sizeof(Block));
                         t_dcache_hook_gen = s_hook_gen;
                     }
                     break;
@@ -1338,7 +1411,7 @@ static void interp_execute(Cpu *c, uint32_t va)
                     c->r[d->reg] = sz == 1 ? (uint32_t)(int32_t)(int8_t)v : (uint32_t)(int32_t)(int16_t)v;
                     break;
                 }
-                case DK_SETCC: d_setrm(mb, c, d, 1, (uint32_t)cond(c, d->sub)); break;
+                case DK_SETCC: SMC(d_setrm(mb, c, d, 1, (uint32_t)cond(c, d->sub))); break;
                 case DK_SHIFT: {
                     unsigned n = d->imm == 0x100 ? (c->r[ECX] & 0xFF) : d->imm;
                     mat(c);
@@ -1347,6 +1420,7 @@ static void interp_execute(Cpu *c, uint32_t va)
                         uint32_t a = d_ea(c, d);
                         uint32_t r = shift(c, d->sub, sz, sz == 4 ? FM32(a) : FM8(a), n);
                         if (sz == 4) FM32(a) = r; else FM8(a) = (uint8_t)r;
+                        SMC(a);
                     }
                     break;
                 }
@@ -1355,17 +1429,17 @@ static void interp_execute(Cpu *c, uint32_t va)
                         uint32_t a = d_ea(c, d);
                         int r = d->reg;
                         switch (d->op) {
-                        case 0xD8: if (r != 2 && r != 3) { *st(0) = farith(r, *st(0), (double)FMF(a)); continue; } break;
-                        case 0xDC: if (r != 2 && r != 3) { *st(0) = farith(r, *st(0), FMD(a)); continue; } break;
+                        case 0xD8: if (r != 2 && r != 3) { *st(0) = farith(r, *st(0), (double)FMF(a)); goto x87_done; } break;
+                        case 0xDC: if (r != 2 && r != 3) { *st(0) = farith(r, *st(0), FMD(a)); goto x87_done; } break;
                         case 0xD9:
-                            if (r == 0) { fpush((double)FMF(a)); continue; }
-                            if (r == 2) { FMF(a) = (float)*st(0); continue; }
-                            if (r == 3) { FMF(a) = (float)*st(0); fpop(); continue; }
+                            if (r == 0) { fpush((double)FMF(a)); goto x87_done; }
+                            if (r == 2) { FMF(a) = (float)*st(0); SMC(a); goto x87_done; }
+                            if (r == 3) { FMF(a) = (float)*st(0); fpop(); SMC(a); goto x87_done; }
                             break;
                         case 0xDD:
-                            if (r == 0) { fpush(FMD(a)); continue; }
-                            if (r == 2) { FMD(a) = *st(0); continue; }
-                            if (r == 3) { FMD(a) = *st(0); fpop(); continue; }
+                            if (r == 0) { fpush(FMD(a)); goto x87_done; }
+                            if (r == 2) { FMD(a) = *st(0); SMC(a); goto x87_done; }
+                            if (r == 3) { FMD(a) = *st(0); fpop(); SMC(a); goto x87_done; }
                             break;
                         }
                     }
@@ -1374,17 +1448,15 @@ static void interp_execute(Cpu *c, uint32_t va)
                     c->mod = d->mod; c->reg = d->reg; c->rm = d->rm;
                     if (d->mod != 3) c->ea = d_ea(c, d);
                     if (!interp_x87_body(c, d->op)) { fatal(c, "unknown x87 opcode"); goto out; }
+                    if (d->mod != 3) SMC(c->ea);
+                x87_done:
                     break;
                 case DK_NOP: break;
                 }
-                continue;
+                if (bi + 1 >= blk->n || smc) break;
             }
-            /* generic: the prefixes come from the cache */
-            if (pc - prev - 1 >= 15u) TRAIL(prev, pc);
-            c->opsize16 = d->opsize16; c->rep = d->rep; c->seg_fs = d->seg_fs; c->sse_prefix = d->sse;
-            op = d->op;
-            c->eip = c->start + d->plen + 1;
-            goto decoded;
+#undef SMC
+            continue;
         }
     check_hooks:
         {
@@ -1827,7 +1899,7 @@ static void interp_execute(Cpu *c, uint32_t va)
     do_call: {
             uint32_t ret = c->eip;
             if (fast && t_dcache_hook_gen != s_hook_gen) {   /* hooks added while this frame ran */
-                memset(dcache, 0, DCACHE_SIZE * sizeof(DInsn));
+                memset(dcache, 0, DCACHE_SIZE * sizeof(Block));
                 t_dcache_hook_gen = s_hook_gen;
             }
             recomp_func_t fn = native_for_cached(target);

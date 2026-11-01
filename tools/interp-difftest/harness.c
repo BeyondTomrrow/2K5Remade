@@ -157,6 +157,7 @@ static int gen_modrm(uint8_t *p, int allow_reg)
     p[0] = (uint8_t)((mod << 6) | (reg << 3) | rm);
     if (mod != 3 && rm == 4) {
         int sc = rnd() & 3, idx = rnd() & 7, base = rnd() & 7;
+        if (base == 4) base = 3;   /* no esp base: a store could rewrite a return address and loop forever */
         if (rnd() & 1) idx = 4;              /* no index often */
         if (idx != 4 && sc > 0 && (rnd() & 1)) sc = 0;
         if (base == 5 && mod == 0) { p[1] = (uint8_t)((sc << 6) | (idx << 3) | base); *(uint32_t *)(p + 2) = 0x100000u + (rnd() & 0xFFC); n = 6; }
@@ -290,6 +291,31 @@ int main(int argc, char **argv)
             if (!same(&a, &b)) { printf("hooks: mismatch run %d (eax %08X vs %08X)\n", k, a.r[0], b.r[0]); ok = 0; }
         }
         printf("hooks test %s (eax %08X)\n", ok ? "passed" : "FAILED", b.r[0]);
+        return !ok;
+    }
+    if (argc > 1 && !strcmp(argv[1], "smc")) {
+        /* mov byte [imm of the next instruction], 5; mov eax, 1 (becomes 5);
+         * inc eax; then the same through a register store; pushfd/pop; ret */
+        uint8_t code[64];
+        size_t n = 0;
+        State a, b;
+        int ok = 1;
+        code[n++] = 0xC6; code[n++] = 0x05; *(uint32_t *)(code + n) = CODE + 8; n += 4; code[n++] = 0x05;   /* 0..6 */
+        code[n++] = 0xB8; *(uint32_t *)(code + n) = 1; n += 4;                                            /* 7..11 */
+        code[n++] = 0x40;                                                                                 /* 12 */
+        code[n++] = 0xB9; *(uint32_t *)(code + n) = CODE + 24; n += 4;                                   /* 13..17 mov ecx, &imm */
+        code[n++] = 0xC7; code[n++] = 0x01; *(uint32_t *)(code + n) = 0x77; n += 4;                     /* 18..23 mov [ecx], 0x77 */
+        code[n++] = 0xBA; *(uint32_t *)(code + n) = 2; n += 4;                                            /* 24..28: wrong: imm at 25 */
+        code[n++] = 0x9C; code[n++] = 0x8F; code[n++] = 0x05; *(uint32_t *)(code + n) = OUT_VA; n += 4;
+        code[n++] = 0xC3;
+        *(uint32_t *)(code + 14) = CODE + 25;                                                             /* point at mov edx's imm */
+        randomize();
+        for (int k = 0; k < 3; k++) {
+            setup(code, n); orig_recomp_interp_call(CODE); capture(&a);
+            setup(code, n); recomp_interp_call(CODE); capture(&b);
+            if (!same(&a, &b)) { printf("smc: mismatch run %d (eax %08X/%08X edx %08X/%08X)\n", k, a.r[0], b.r[0], a.r[2], b.r[2]); ok = 0; }
+        }
+        printf("smc test %s (eax %08X edx %08X)\n", ok ? "passed" : "FAILED", b.r[0], b.r[2]);
         return !ok;
     }
     if (argc > 1 && !strcmp(argv[1], "bench")) {
