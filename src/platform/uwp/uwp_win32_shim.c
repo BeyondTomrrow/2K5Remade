@@ -186,3 +186,8 @@ void *__imp_waveOutPrepareHeader = (void *)shim_mm_nodriver;
 void *__imp_waveOutUnprepareHeader = (void *)shim_mm_nodriver;
 void *__imp_waveOutWrite = (void *)shim_mm_nodriver;
 void *__imp_waveOutReset = (void *)shim_mm_nodriver;
+
+/* ---- GPU frame timers from the desktop's patched SDL (config/sdl3-local-pc-perf.patch),
+ * which the UWP SDL does not have: report "unavailable" (gx_sdl.c falls back). ---- */
+int SDL_GetGPUFrameTimeVulkan(void *device, double *last_ms, double *avg_ms) { (void)device; (void)last_ms; (void)avg_ms; return 0; }
+int SDL_GetGPUFrameTimeD3D12(void *device, double *last_ms, double *avg_ms) { (void)device; (void)last_ms; (void)avg_ms; return 0; }

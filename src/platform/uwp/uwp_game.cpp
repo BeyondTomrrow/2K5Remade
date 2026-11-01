@@ -368,10 +368,6 @@ static void game_start(const char *prop, void *window, const wchar_t *local_dir,
         log_backtrace();
         TerminateProcess(GetCurrentProcess(), 0xC0000417);
     });
-    /* The fourth boot movie is never decoded here (grey, then black, for good;
-     * cause not found yet, 2026-10-31): skip the intro unless env.txt says
-     * NFL2K5_SKIP_INTRO=0. */
-    if (!getenv("NFL2K5_SKIP_INTRO")) _putenv_s("NFL2K5_SKIP_INTRO", "1");
     _putenv_s("NFL2K5_INSTALL_DIR", utf8(install_dir).c_str());
     _wputenv_s(L"NFL2K5_UWP_LOCALSTATE", local_dir);   /* SHGetFolderPathW shim */
     fprintf(stderr, "[UWP] NFL2K5 UWP build; install %s\n", utf8(install_dir).c_str());
