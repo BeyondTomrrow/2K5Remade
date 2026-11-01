@@ -1611,6 +1611,10 @@ int main(int argc, char **argv)
 
     printf("ESPN NFL 2K5 Native Recompilation\n");
     printf("[BOOT] Mounted game disc root: %s\n", game_dir);
+    {   /* the data folder as one compressed .xbpak (Xbox installs, tools/xbpack) */
+        extern int xbox_pack_load(const char *game_dir);
+        xbox_pack_load(game_dir);
+    }
     {   /* warm the file cache with the packed game data (kernel_file.c) */
         extern void xbox_PrefetchGameData(const char *root);
         xbox_PrefetchGameData(game_dir);

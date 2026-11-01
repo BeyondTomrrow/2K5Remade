@@ -32,6 +32,11 @@ extern "C" const char *xbox_user_dir(void);   /* per-user folder (kernel_path.c)
 extern "C" void xbox_overlay_attach(HANDLE h, const WCHAR *path);
 extern "C" void xbox_overlay_detach(HANDLE h);
 extern "C" int xbox_overlay_read(HANDLE h, void *buf, ULONG len, const LARGE_INTEGER *off, ULONG *got);
+/* the data folder packed into one .xbpak (kernel_pack.c) */
+extern "C" int xbox_pack_active(void);
+extern "C" HANDLE xbox_pack_open(const WCHAR *win_path);
+extern "C" void xbox_pack_close(HANDLE h);
+extern "C" int xbox_pack_read(HANDLE h, void *buf, ULONG len, const LARGE_INTEGER *off, ULONG *got);
 
 /* The decoded portraits' folder: the per-user cache, or cache/portraits
  * beside the game in the portable layout. */
@@ -63,6 +68,7 @@ struct ArchiveVolume {
     ~ArchiveVolume() {
         if (handle != INVALID_HANDLE_VALUE) {
             if (overlay) xbox_overlay_detach(handle);
+            xbox_pack_close(handle);
             CloseHandle(handle);
         }
     }
@@ -84,6 +90,7 @@ std::string pack_dir()
     for (const char *d : dirs)
         if (GetFileAttributesA((std::string(d) + "/3").c_str()) != INVALID_FILE_ATTRIBUTES)
             return d;
+    if (xbox_pack_active()) return "original/vc_53450030";   /* read from the .xbpak */
     return "";
 }
 
@@ -96,6 +103,11 @@ bool read_volume(unsigned ordinal, uint64_t offset, void *out, size_t n)
         for (char &c : path) if (c == '/') c = '\\';
         volume.handle = CreateFileA(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
                                    nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (volume.handle == INVALID_HANDLE_VALUE) {
+            WCHAR wide[MAX_PATH];
+            if (MultiByteToWideChar(CP_UTF8, 0, path.c_str(), -1, wide, MAX_PATH))
+                volume.handle = xbox_pack_open(wide);
+        }
         if (volume.handle == INVALID_HANDLE_VALUE) return false;
         if (!g_flat_pack) {
             WCHAR wide[MAX_PATH];
@@ -107,6 +119,7 @@ bool read_volume(unsigned ordinal, uint64_t offset, void *out, size_t n)
     LARGE_INTEGER position; position.QuadPart = (LONGLONG)offset;
     ULONG got = 0;
     if (volume.overlay && xbox_overlay_read(volume.handle, out, (ULONG)n, &position, &got)) return got == n;
+    if (xbox_pack_read(volume.handle, out, (ULONG)n, &position, &got)) return got == n;
     DWORD read = 0;
     return SetFilePointerEx(volume.handle, position, nullptr, FILE_BEGIN) &&
            ReadFile(volume.handle, out, (DWORD)n, &read, nullptr) && read == n;

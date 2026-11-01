@@ -2,9 +2,22 @@ NFL2K5 on Xbox (Dev Mode) - install with the game inside the app
 =================================================================
 
 Why: Dev Mode limits an app's own storage (LocalState) to a few GB. The game
-files are about 6 GB, so uploading them there stops with "out of storage".
-Installed this way the game lives in the app's install folder instead, which
-has no such limit. Saves and settings still go to the app's storage (small).
+files are about 6 GB, so uploading them there stops with "out of storage"
+(one console stopped after about 3.3 GB). Installed this way the game lives
+in the app's install folder instead. Saves and settings still go to the
+app's storage (small).
+
+Smaller: make-xbox-loose.cmd packs the game's data folder (5.8 GB) into one
+compressed file, original\vc_53450030.xbpak, before anything is sent:
+  - without the movies (default): 2.94 GB. The intro movies and the Crib's
+    TV videos are cut to a blink; everything else is byte-for-byte the
+    original (the tool unpacks the whole pack and compares it with your
+    files before using it).
+  - everything (make-xbox-loose.ps1 -Pack -Drop none): 3.81 GB, lossless.
+  - no pack (make-xbox-loose.ps1 without -Pack): the plain 5.8 GB folder.
+The pack is the smallest way to send the game and also fits where the
+uploads stopped, so it can go into LocalState too (see "Without a loose
+install" below).
 
 You need: the Xbox in Dev Mode with Dev Home open, a Windows PC on the same
 network, and your own extracted copy of the game (a folder holding
@@ -18,8 +31,8 @@ original\default.xbe and original\vc_53450030\). No USB drive needed.
 2. On the PC: build the Xbox folder
    Double-click tools\uwp\make-xbox-loose.cmd
    (or drag your game folder - the one holding "original" - onto it).
-   It makes dist\xbox-loose\NFL2K5 (about 6.2 GB). Your game files are not
-   changed: on the same drive they are linked, not copied.
+   It makes dist\xbox-loose\NFL2K5 (about 3 GB with the pack; packing takes
+   about 6 minutes). Your game files are only read, never changed.
 
 3. On the PC: send it to the Xbox
    Double-click tools\uwp\deploy-xbox-loose.cmd
@@ -58,5 +71,13 @@ If something goes wrong
     b. Device Portal > Apps manager > "Register from Network Share", enter
        \\<pc-name>\NFL2K5 and your PC username/password when asked.
     c. Set App type: Game (step 4) and start it.
+
+Without a loose install (the .msix from Device Portal > Apps > Add)
+------------------------------------------------------------------
+Device Portal > File explorer > LocalAppData > NFL2K5.Recompiled_... >
+LocalState: make a folder "original" and upload default.xbe, update.xbe,
+dashupdate.xbe and vc_53450030.xbpak (from dist\xbox-loose\NFL2K5\original)
+into it, about 2.9 GB in all. Not tested on a console yet: if this upload
+also stops with "out of storage", use the loose install above.
 
 Nothing here changes any Xbox or PC setting besides installing the app.

@@ -221,6 +221,34 @@ compile a snapshot instead: `-DNFL2K5_UWP_INTERP_SRC=<file>` (cache variable).
   uninstall prompt, an upload cut off mid-file, resume, registration).
   Not verified: a real console (endpoint behaviour, size limits of
   DevelopmentFiles/loose installs, the SMB share).
+- **Smaller: the data pack (2026-11-01).** `tools\xbpack\xbpack.exe` (built
+  by `tools\xbpack\build-xbpack.ps1`, vendored zstd 1.5.6 in
+  `external\zstd`) turns `original\vc_53450030` into one
+  `original\vc_53450030.xbpak` (format: `external\xboxrecomp\src\kernel\xbpak_format.h`;
+  reader: `kernel_pack.c`, hooked into `kernel_file.c` opens/reads/sizes,
+  `kernel_overlay.c` for mod packs, `portraits.cpp`). The data repeats at
+  MB distances (256 KB blocks: 77% of bank 1; 16 MB: 29%), so compressible
+  16 MB regions are one zstd-19 block and the rest (audio, read at random in
+  play) raw or 256 KB blocks. Sizes for banks 0..F (5.80 GB; pack G is the
+  custom-teams pack the game rewrites at boot and is left out): lossless
+  `--drop none` 3.81 GB; `--drop movies` 2.94 GB (the 30 MPEG program
+  streams, 988 MB: boot intro, the Crib TV videos, three more, cut to their
+  first ~64 KB plus an end code, so the player stops at once); `movies,crib`
+  2.93 GB (the Crib's own assets are only 12 MB, so the Crib stays).
+  `--keep-for <mod pack>` keeps the small retail runs a pack's overlay copies
+  out of movie data (SOFTDRINK v0.7: 5,627 runs, 110 KB; without them it
+  crashed at kickoff); `make-xbox-loose.ps1 -Pack` passes every installed
+  pack. The tool decompresses the whole pack and compares every kept byte
+  with the originals before renaming it into place. Game side: 256 MB block
+  cache (`NFL2K5_XBPAK_CACHE_MB`), `NFL2K5_XBPAK_LOG=1` logs each unpacked
+  block, `NFL2K5_NO_XBPAK=1` ignores packs. PC numbers (one game: boot,
+  Quick Game, 2.5 min of play): 47 16 MB unpacks, 3.1 s in all, 30-110 ms
+  each, mostly at scene loads; 256 KB unpacks ~1 ms. Verified on PC: retail
+  boot (stub intro), menus, Crib, Quick Game to kickoff and play; SOFTDRINK
+  v0.7 to kickoff and play; the installed UWP app (0.2.26.0) with the pack
+  in `LocalState\original`. Not verified: a console (Jaguar unpack speed is
+  roughly 3x slower, so scene loads take longer), every movie site (the
+  three unnamed MPEGs, 92-257 MB, were not reached).
 - **Without the installer:** Developer Mode on (Settings → System → For
   developers), then `Add-AppxPackage -Register build-uwp\layout\AppxManifest.xml`.
   Unsigned packages are refused ("an unsigned package cannot include

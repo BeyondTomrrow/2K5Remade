@@ -8,6 +8,8 @@
 /dependencies/
 /external/*
 !/external/xboxrecomp
+# zstd 1.5.6 (BSD, facebook/zstd lib/ sources): .xbpak data packs (tools/xbpack, kernel_pack.c)
+!/external/zstd
 cmmake-build-debug
 *.xbe
 *.iso

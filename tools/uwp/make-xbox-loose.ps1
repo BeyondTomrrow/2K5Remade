@@ -19,6 +19,15 @@
     Never takes original\disc or original\CACHE (test copies, not game data).
     -IncludeSoftdrink adds mods\packs\SOFTDRINK*; -IncludeMusic adds Music.
 
+    -Pack: instead of the 5.8 GB vc_53450030 folder, one compressed
+    original\vc_53450030.xbpak made by tools\xbpack\xbpack.exe (built by
+    tools\xbpack\build-xbpack.ps1). Without the movies (default, -Drop movies)
+    it is about 2.9 GB; -Drop none keeps everything (about 3.8 GB, lossless).
+    The tool decompresses the whole pack and compares it with your files
+    before it is used. It keeps the few retail bytes installed mod packs
+    (SOFTDRINK) reuse from the movies. -PackFile uses a pack you already made
+    instead of making one (about 6 minutes).
+
     On the same drive files are hard-linked (no 6 GB copy; the originals are
     only ever read). Otherwise robocopy /XJ copies them. Junctions are never
     followed. No game files are part of the GitHub release: every player runs
@@ -34,7 +43,10 @@ param(
     [string]$Layout,
     [switch]$IncludeSoftdrink,
     [switch]$IncludeMusic,
-    [switch]$Copy          # always copy instead of hard-linking
+    [switch]$Copy,         # always copy instead of hard-linking
+    [switch]$Pack,         # the data folder as one compressed .xbpak
+    [ValidateSet('movies', 'none')][string]$Drop = 'movies',
+    [string]$PackFile      # use this .xbpak instead of making one
 )
 $ErrorActionPreference = 'Stop'
 $Root = (Resolve-Path "$PSScriptRoot\..\..").Path
@@ -108,7 +120,30 @@ foreach ($f in 'default.xbe', 'update.xbe', 'dashupdate.xbe') {
     if (Test-Path "$GameRoot\original\$f") { Add-File "$GameRoot\original\$f" "$Out\original\$f" }
     elseif ($f -eq 'default.xbe') { Fail "original\default.xbe missing" }
 }
-Add-Dir "$GameRoot\original\vc_53450030" "$Out\original\vc_53450030"
+if ($PackFile) { $Pack = $true }
+if ($Pack) {
+    $pak = "$Out\original\vc_53450030.xbpak"
+    if ($PackFile) {
+        Write-Host "Data pack from $PackFile"
+        Add-File (Resolve-Path $PackFile).Path $pak
+    } else {
+        $xbpack = "$Root\tools\xbpack\xbpack.exe"
+        if (-not (Test-Path $xbpack)) { Fail "$xbpack missing: run tools\xbpack\build-xbpack.ps1 first." }
+        $packArgs = @("$GameRoot\original", $pak, '--drop', $Drop)
+        # Every installed mod pack, included or not: each keeps the few
+        # retail bytes it reuses from the movies (~110 KB for SOFTDRINK), so
+        # it still works if it is copied over later.
+        foreach ($p in (Get-ChildItem "$GameRoot\mods\packs" -Directory -ErrorAction SilentlyContinue)) {
+            if (Test-Path "$($p.FullName)\overlay.bin") { $packArgs += @('--keep-for', $p.FullName) }
+        }
+        Write-Host "Packing the data folder (drop: $Drop); this takes a few minutes"
+        & $xbpack @packArgs
+        if ($LASTEXITCODE -ne 0 -or -not (Test-Path $pak)) { Fail "xbpack failed; no pack was made" }
+        $script:copies++
+    }
+} else {
+    Add-Dir "$GameRoot\original\vc_53450030" "$Out\original\vc_53450030"
+}
 
 Write-Host "Presentations, teams and support folders"
 Add-Dir "$GameRoot\mods\presentations" "$Out\mods\presentations"
@@ -124,10 +159,15 @@ if ($IncludeSoftdrink) {
 if ($IncludeMusic) { Add-Dir "$GameRoot\Music" "$Out\Music" }
 
 # Checks: the game data is complete and nothing from disc\ or CACHE\ came along.
-$srcVc = Get-ChildItem "$GameRoot\original\vc_53450030" -File -Force | Where-Object { -not ($_.Attributes -band [IO.FileAttributes]::ReparsePoint) }
-foreach ($f in $srcVc) {
-    $o = Get-Item -LiteralPath "$Out\original\vc_53450030\$($f.Name)" -ErrorAction SilentlyContinue
-    if (-not $o -or $o.Length -ne $f.Length) { Fail "original\vc_53450030\$($f.Name) did not come across whole" }
+if ($Pack) {
+    & "$Root\tools\xbpack\xbpack.exe" --info "$Out\original\vc_53450030.xbpak" | Select-Object -First 1
+    if ($LASTEXITCODE -ne 0) { Fail "original\vc_53450030.xbpak is not a readable data pack" }
+} else {
+    $srcVc = Get-ChildItem "$GameRoot\original\vc_53450030" -File -Force | Where-Object { -not ($_.Attributes -band [IO.FileAttributes]::ReparsePoint) }
+    foreach ($f in $srcVc) {
+        $o = Get-Item -LiteralPath "$Out\original\vc_53450030\$($f.Name)" -ErrorAction SilentlyContinue
+        if (-not $o -or $o.Length -ne $f.Length) { Fail "original\vc_53450030\$($f.Name) did not come across whole" }
+    }
 }
 if ((Test-Path "$Out\original\disc") -or (Test-Path "$Out\original\CACHE")) { Fail "disc\ or CACHE\ ended up in the loose folder" }
 
