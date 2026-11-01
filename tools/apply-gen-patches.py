@@ -182,6 +182,20 @@ PATCHES = [
     }
 #endif
 """),
+    # Boot intro movies (2026-10-31): while the intro loop plays a movie, the
+    # bridge scheduler pulse must not run the title frontend callbacks on the
+    # scheduler thread. One of them presents a frame (sub_00028F40 ->
+    # sub_00028DE0) while the movie thread runs its own frame loop; the second
+    # D3D user then spins in BlockOnFence (sub_004262F0) for a push-buffer
+    # position that is never kicked, holding the guest lock, and the movie
+    # stops (first or fourth movie, every renderer, timing dependent).
+    # kernel_bridge.c checks g_xbox_boot_movie_active.
+    ("BOOT_MOVIE_BEGIN", "sub_000748A0", "PUSH32(esp, 0x00074BD3u); RECOMP_ABI_CALL(0x00178150u, sub_00178150); /* call 0x00178150 */", "before", """\
+    { extern volatile long g_xbox_boot_movie_active; g_xbox_boot_movie_active = 1; }
+"""),
+    ("BOOT_MOVIE_END", "sub_000748A0", "loc_00074BD3: ;", "after", """\
+    { extern volatile long g_xbox_boot_movie_active; g_xbox_boot_movie_active = 0; }
+"""),
     ("SKIP_INTRO", "sub_00178150", "loc_00178150: ;", "after", """\
     /* Runtime option NFL2K5_SKIP_INTRO=1 (2026-09-23): sub_00178150 plays one
      * intro movie (espn_videogames, vc, espn_game_sound, intro -- the table at

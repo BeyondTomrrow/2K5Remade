@@ -118,15 +118,19 @@ void nfl2k5_moment_audio_service(void)
     uint32_t mode, idx, base, count, rec;
     char title[128], path[MAX_PATH];
     int i;
-    static int s_first = 1;
+    static int s_first = 1, s_debug = -1;
     if (!s_armed) return;
+    /* getenv scans the whole environment: this runs on every XInputGetState
+     * (several a frame, more while the game waits), so it is read once.
+     * It was ~8% of the game thread's time (2026-10-31 profile). */
+    if (s_debug < 0) s_debug = getenv("NFL2K5_MOMENT_DEBUG") != NULL;
     if (s_first) { s_first = 0; mlog("[MOMENT-AUDIO] service running\n"); }
     mode  = MEM32(MODE);
     idx   = MEM32(SEL_IDX);
     base  = MEM32(TBL_BASE);
     count = MEM32(TBL_CNT);
 
-    if (getenv("NFL2K5_MOMENT_DEBUG")) {
+    if (s_debug) {
         static DWORD hb; DWORD t = GetTickCount();
         if (t - hb > 2000u) { hb = t;
             mlog("[MOMENT-AUDIO] hb mode=%u base=%08X cnt=%u idx=%u\n", mode, base, count, idx); }
@@ -148,7 +152,7 @@ void nfl2k5_moment_audio_service(void)
 
     rec = base + idx * REC_SIZE;
     read_title_upper(MEM32(rec + 0x00u), title, sizeof title);
-    if (getenv("NFL2K5_MOMENT_DEBUG"))
+    if (s_debug)
         mlog("[MOMENT-AUDIO] settled idx=%u rec=%08X \"%s\"\n", idx, rec, title);
     for (i = 0; i < (int)(sizeof k_moments / sizeof k_moments[0]); i++) {
         if (title[0] && strstr(title, k_moments[i].match) &&

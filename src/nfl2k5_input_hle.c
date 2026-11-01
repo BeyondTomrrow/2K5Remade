@@ -366,11 +366,20 @@ static void put_gamepad(uint32_t va, const XBOX_GAMEPAD *g)
 
 static unsigned s_reported_ports;
 
+/* NFL2K5_LEGACY_INPUT, read once (getenv on every device poll was ~8% of
+ * the game thread, 2026-10-31). */
+static int legacy_input(void)
+{
+    static int v = -1;
+    if (v < 0) v = getenv("NFL2K5_LEGACY_INPUT") != NULL;
+    return v;
+}
+
 int nfl2k5_hle_XGetDevices(void)
 {
     if (!input_hle_on() || MEM32(g_esp + 4u) != NFL2K5_XPP_GAMEPAD_TYPE)
         return 0;
-    g_eax = getenv("NFL2K5_LEGACY_INPUT") ? 1u : nfl2k5_controls_ports();
+    g_eax = legacy_input() ? 1u : nfl2k5_controls_ports();
     s_reported_ports = g_eax;
     g_esp += 8u;
     return 1;
@@ -384,7 +393,7 @@ int nfl2k5_hle_XGetDeviceChanges(void)
         return 0;
     ins_va = MEM32(g_esp + 8u);
     rem_va = MEM32(g_esp + 12u);
-    if (getenv("NFL2K5_LEGACY_INPUT")) {
+    if (legacy_input()) {
         MEM32(ins_va) = SDL_CompareAndSwapAtomicInt(&reported, 0, 1) ? 1u : 0u;
         MEM32(rem_va) = 0u;
     } else {

@@ -283,7 +283,16 @@ static void read_sdl_pad(int slot, RawPad *s)
     SDL_Gamepad *pad;
     memset(s, 0, sizeof *s);
 
-    SDL_UpdateGamepads();
+    /* SDL_UpdateGamepads polls HIDAPI for device changes, which peeks the
+     * window message queue: called for every port on every XInputGetState /
+     * XGetDeviceChanges it was ~25% of the game thread (2026-10-31 profile).
+     * Pads are sampled at most every 2 ms, still far above the 60 Hz the
+     * game reads them at. */
+    {
+        static Uint64 last;
+        Uint64 now = SDL_GetTicksNS();
+        if (now - last >= 2000000u) { last = now; SDL_UpdateGamepads(); }
+    }
     SDL_LockMutex(s_lock);
     pad = (slot >= 0 && slot < 4) ? s_pads[slot] : NULL;
     if (!pad || !SDL_GamepadConnected(pad)) {
