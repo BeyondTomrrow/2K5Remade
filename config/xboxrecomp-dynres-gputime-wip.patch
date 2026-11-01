@@ -1,5 +1,5 @@
 diff --git a/src/kernel/gx/gx_sdl.c b/src/kernel/gx/gx_sdl.c
-index b656795..49949ce 100644
+index e6fb1d0..63f0aa7 100644
 --- a/src/kernel/gx/gx_sdl.c
 +++ b/src/kernel/gx/gx_sdl.c
 @@ -342,6 +342,13 @@ static int gx_sdl_init(int backend)
@@ -86,10 +86,10 @@ index 50b1898..8509372 100644
          perf_percentiles(600, &s_perf.low1, &s_perf.low01, &worst);
          s_perf.ft_max = worst;
 diff --git a/src/kernel/nv2a_gpu_present.inc.c b/src/kernel/nv2a_gpu_present.inc.c
-index ef43ca8..053a3cb 100644
+index 8390be6..9b71f64 100644
 --- a/src/kernel/nv2a_gpu_present.inc.c
 +++ b/src/kernel/nv2a_gpu_present.inc.c
-@@ -2021,6 +2021,8 @@ static int pr_present(uint32_t guest)
+@@ -2034,6 +2034,8 @@ static int pr_present(uint32_t guest)
   * second to the next, and every step rebuilds the render targets, so going
   * up waits for four quiet readings in a row and for 10 s after a step down,
   * doubled (to 2 min) each time a step up had to be taken back. */
@@ -98,7 +98,7 @@ index ef43ca8..053a3cb 100644
  static uint32_t pr_dynres_scale(void)
  {
      static uint32_t cur;
-@@ -2032,6 +2034,17 @@ static uint32_t pr_dynres_scale(void)
+@@ -2045,6 +2047,20 @@ static uint32_t pr_dynres_scale(void)
      uint32_t top = learned;                         /* auto: as high as holds the cap */
      LARGE_INTEGER now;
      float util = s_gpuctr.util, f = s_perf.freq.QuadPart ? (float)s_perf.freq.QuadPart : 1.0f;
@@ -111,12 +111,15 @@ index ef43ca8..053a3cb 100644
 +     * GPU time. */
 +    double acq = g_gx_sg ? gxs_swapchain_wait_ms() : -1.0;
 +    double gms = g_gx_sg ? gxs_gpu_frame_ms() : -1.0;
-+    int sg_measured = acq >= 0.0 && gms >= 0.0;
++    static int old_rule = -1;   /* NFL2K5_DYNRES_UTIL=1: the busy-share rule on every renderer (A/B) */
++    int sg_measured;
++    if (old_rule < 0) old_rule = getenv("NFL2K5_DYNRES_UTIL") != NULL;
++    sg_measured = !old_rule && acq >= 0.0 && gms >= 0.0;
 +    float present_wait = sg_measured ? (float)acq : s_last_present_ms;
      if (!cur) cur = (uint32_t)s_vs.scale;           /* start from the chosen scale */
      /* Fast path, every frame: Present blocking means the GPU is behind. The
       * busy share is only read once a second, so a step from a light scene
-@@ -2039,9 +2052,9 @@ static uint32_t pr_dynres_scale(void)
+@@ -2052,9 +2068,9 @@ static uint32_t pr_dynres_scale(void)
       * came down (the demo's commonest hitch, 2026-10-30). 20 such frames in
       * a row -- a third of a second -- step down at once. With VSync on,
       * Present waits for the display anyway: only long waits count there. */
@@ -128,7 +131,7 @@ index ef43ca8..053a3cb 100644
      } else {
          waits = 0;
          wait_sum = 0.0f;
-@@ -2052,7 +2065,9 @@ static uint32_t pr_dynres_scale(void)
+@@ -2065,7 +2081,9 @@ static uint32_t pr_dynres_scale(void)
       * fell from 9x to 3x that way): the GPU must also read busy, and this
       * path goes no lower than half the chosen scale. */
      if ((waits >= 20 || (waits >= 6 && wait_sum / (float)waits > 12.0f)) && cur > 1
@@ -139,7 +142,7 @@ index ef43ca8..053a3cb 100644
          /* Each change rebuilds the render targets (a 20-60 ms hitch): one
           * step to the size the wait says fits -- cost goes with the pixel
           * count -- not 4/5 at a time (16x went 12x then 9x, two hitches). */
-@@ -2081,6 +2096,14 @@ static uint32_t pr_dynres_scale(void)
+@@ -2094,6 +2112,14 @@ static uint32_t pr_dynres_scale(void)
          return cur;
      }
      if (s_gpuctr.state != 1 || !s_perf.freq.QuadPart || s_perf.pub_t0.QuadPart == seen) return cur;
