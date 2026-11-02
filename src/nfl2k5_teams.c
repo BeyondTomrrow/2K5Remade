@@ -1136,6 +1136,18 @@ void nfl2k5_teams_fsm_pop(uint32_t fsm, uint32_t top)
     fprintf(stderr, "[TEAMS] stage test: both slots released at the Main Menu\n");
 }
 
+/* Quick Game's random away team (sub_002C20F0, gen patch QG_FIXED_AWAY): with
+ * NFL2K5_QG_AWAY=<n> the "random" value is n, then n+1, ... when the game draws
+ * again because it hit the home team. For repeatable performance runs. */
+int nfl2k5_qg_fixed_away(uint32_t *rand_value)
+{
+    static int s_tries;
+    const char *v = getenv("NFL2K5_QG_AWAY");
+    if (!v || !*v) return 0;
+    *rand_value = (uint32_t)atoi(v) + (uint32_t)s_tries++;
+    return 1;
+}
+
 /* One Team Select step. random: the Random Team spin (resident list only).
  * Returns 1 with g_eax set when it handled the step, 0 for the retail one. */
 int nfl2k5_ts_step(int side, int dir, int random)

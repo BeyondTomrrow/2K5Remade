@@ -963,6 +963,11 @@ PATCHES = [
     ("TEAM_SELECT_AWAY_RANDOM", "sub_002C1B10", "PUSH32(esp, 0x002C1B57u); RECOMP_ABI_CALL(0x002C1910u, sub_002C1910); /* call 0x002C1910 */", "before", """\
     { extern int nfl2k5_ts_step(int, int, int); int _ts; RECOMP_REGS_OUT(); _ts = nfl2k5_ts_step(1, 1, 1); RECOMP_REGS_IN(); if (_ts) goto loc_002C1B57; }
 """),
+    # Quick Game's away team is a random pick (sub_002C20F0); NFL2K5_QG_AWAY=<n> makes
+    # it fixed, so scripted performance runs play the same matchup (src/nfl2k5_teams.c).
+    ("QG_FIXED_AWAY", "sub_002C20F0", "loc_002C2142: ;", "after", """\
+    { extern int nfl2k5_qg_fixed_away(uint32_t *); nfl2k5_qg_fixed_away(&eax); }
+"""),
     # Asset file names: log them, and serve added teams' files (src/nfl2k5_team_files.c).
     ("ASSET_NAME_HOOK", "sub_00049090", "loc_00049090: ;", "after", """\
     { extern uint32_t nfl2k5_asset_name(uint32_t); ecx = nfl2k5_asset_name(ecx); }

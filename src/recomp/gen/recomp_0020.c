@@ -80454,6 +80454,8 @@ loc_002C213A: ;
     PUSH32(esp, 0x002C2142u); RECOMP_ABI_CALL(0x00048BC0u, sub_00048BC0); /* call 0x00048BC0 */
 
 loc_002C2142: ;
+    /* NFL2K5-GENPATCH:QG_FIXED_AWAY */
+    { extern int nfl2k5_qg_fixed_away(uint32_t *); nfl2k5_qg_fixed_away(&eax); }
     edx = 0; /* xor self */
     _fa = (uint32_t)(edx) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* xor result */
     edi++;
