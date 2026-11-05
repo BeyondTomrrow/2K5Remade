@@ -1079,9 +1079,23 @@ static void music_guest_call(void (*fn)(void), uint32_t ecx)
 
 extern "C" void nfl2k5_music_frame_service(void)
 {
-    if (SDL_SetAtomicInt(&g_skip_request, 0)) {   /* Next song: an R3 press and release */
-        nfl2k5_local_music_buttons(0, 1);
-        nfl2k5_local_music_buttons(0, 0);
+    if (SDL_SetAtomicInt(&g_skip_request, 0)) {
+        uint32_t entry = g32(0xC3CBFCu);
+        if (SDL_GetAtomicInt(&g_cur_id) >= 0 && entry && entry != 0xC3CBE8u) {
+            /* a playlist song: straight to the next entry */
+            uint32_t next = g32(entry + 0x10u);
+            uint32_t keep_eax = g_eax, keep_ebx = g_ebx, keep_esi = g_esi, keep_ecx = g_ecx, keep_edx = g_edx;
+            if (next == 0xC3CBE8u) next = g32(0xC3CBF8u);
+            g32(0xC3CBFCu) = next;
+            fprintf(stderr, "[MUSIC] F1 Music Player: next entry %08X\n", next);
+            music_guest_call(sub_0027FEC0, 0);
+            music_guest_call(sub_002804C0, g32(0xAC9ED0u));  /* the UserList row, by its name */
+            music_guest_call(sub_00280450, 0);
+            g_eax = keep_eax; g_ebx = keep_ebx; g_esi = keep_esi; g_ecx = keep_ecx; g_edx = keep_edx;
+        } else {                                     /* the game's own music: an R3 press and release */
+            nfl2k5_local_music_buttons(0, 1);
+            nfl2k5_local_music_buttons(0, 0);
+        }
     }
     int request = SDL_SetAtomicInt(&g_pick_request, 0);
     if (!request) return;
