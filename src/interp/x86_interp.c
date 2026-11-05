@@ -393,10 +393,27 @@ int recomp_interp_dirty(uint32_t va)
     return (g_interp_dirty_bits[va >> 3] >> (va & 7)) & 1;
 }
 
+/* Native versions of a known pack's hottest functions (tools/gen-pack-natives.py,
+ * interp_setup.c): filled at the first interpreted call, each entry only if the
+ * guest bytes are the ones it was generated from. */
+#define PN_MAX 16
+int nfl2k5_pack_natives_init(uint32_t *va, void (**fn)(void), int max);
+static uint32_t s_pn_va[PN_MAX];
+static recomp_func_t s_pn_fn[PN_MAX];
+static int s_npn, s_pn_check;
+
+static inline recomp_func_t pn_lookup(uint32_t va)
+{
+    for (int i = 0; i < s_npn; i++)
+        if (s_pn_va[i] == va) return s_pn_fn[i];
+    return NULL;
+}
+
 /* The native function for `va`, or NULL when it must be interpreted. */
 static recomp_func_t native_for(uint32_t va)
 {
-    recomp_func_t fn;
+    recomp_func_t fn = pn_lookup(va);
+    if (fn) return fn;
     if (va >= 0xFE000000u) {
         /* the kernel thunk bridge, else the menu functions served from C (Video Settings,
          * the Main Menu's Exit prompt: 0xFEC0.., 0xFED0.., 0xFEE0..; NATIVE-MENU 2.2) */
@@ -980,6 +997,90 @@ static recomp_func_t native_for_cached(uint32_t va)
     return fn;
 }
 
+/* ---- NFL2K5_PACK_NATIVE_CHECK=1: native pack functions against the interpreter ----
+ * Runs the interpreter from the entry, keeps the result, rolls registers and
+ * memory back, runs the native version and compares: registers, x87 state, the
+ * frame's locals and the output buffer the bone functions fill ([ebp+8]). */
+void recomp_interp_call(uint32_t va);
+extern ptrdiff_t xbox_GetMemoryOffset(void);
+static XBOX_THREAD_LOCAL int t_pn_nested;
+
+typedef struct {
+    uint32_t r[9];
+    double fp[8];
+    int top, cmp;
+    uint16_t cc, cw;
+} PnState;
+
+static void pn_save(PnState *p)
+{
+    p->r[0] = g_eax; p->r[1] = g_ecx; p->r[2] = g_edx; p->r[3] = g_ebx; p->r[4] = g_esp;
+    p->r[5] = g_ebp; p->r[6] = g_esi; p->r[7] = g_edi; p->r[8] = g_seh_ebp;
+    memcpy(p->fp, g_fp_stack, sizeof p->fp);
+    p->top = g_fp_top; p->cmp = g_fp_cmp; p->cc = g_fp_cc; p->cw = g_fp_control_word;
+}
+
+static void pn_load(const PnState *p)
+{
+    g_eax = p->r[0]; g_ecx = p->r[1]; g_edx = p->r[2]; g_ebx = p->r[3]; g_esp = p->r[4];
+    g_ebp = p->r[5]; g_esi = p->r[6]; g_edi = p->r[7]; g_seh_ebp = p->r[8];
+    memcpy(g_fp_stack, p->fp, sizeof p->fp);
+    g_fp_top = p->top; g_fp_cmp = p->cmp; g_fp_cc = p->cc; g_fp_control_word = p->cw;
+}
+
+static void pn_check_run(uint32_t va, recomp_func_t fn)
+{
+    enum { OUTB = 0x2000, FRAME = 0x400 };
+    static uint8_t out0[OUTB], out1[OUTB], fr0[FRAME], fr1[FRAME];
+    static volatile LONG runs, bad;
+    PnState in, a, b;
+    uint32_t ebp = g_ebp, buf = MEM32(ebp + 8u), lo = g_esp - 0x74u;
+    uint32_t flen = ebp + 0x20u - lo, k;
+    const uint8_t *mem = (const uint8_t *)xbox_GetMemoryOffset();
+    if (t_pn_nested || flen > FRAME) { fn(); return; }
+    t_pn_nested = 1;
+    pn_save(&in);
+    memcpy(out0, mem + buf, OUTB); memcpy(fr0, mem + lo, flen);
+    recomp_interp_call(va);
+    pn_save(&a);
+    memcpy(out1, mem + buf, OUTB); memcpy(fr1, mem + lo, flen);
+    memcpy((void *)(mem + buf), out0, OUTB); memcpy((void *)(mem + lo), fr0, flen);
+    pn_load(&in);
+    fn();
+    pn_save(&b);
+    t_pn_nested = 0;
+    /* g_ebp/g_seh_ebp (r[5], r[8]) are not compared: converted code keeps ebp in
+     * a local and leaves the globals as its callees did, retail included; the
+     * interpreter writes its own ebp there. No caller reads them after a return. */
+    {
+        int diff = 0;
+        for (k = 0; k < 8; k++)
+            if (k != 5 && k != 8 && a.r[k] != b.r[k]) diff |= 1;
+        if (a.top != b.top || a.cc != b.cc || a.cw != b.cw) diff |= 8;
+        for (k = 0; k < 8; k++)
+            if (memcmp(&a.fp[k], &b.fp[k], 8) && (a.fp[k] == a.fp[k] || b.fp[k] == b.fp[k])) diff |= 16;
+        if (memcmp(out1, mem + buf, OUTB)) diff |= 2;
+        if (memcmp(fr1, mem + lo, flen)) diff |= 4;
+        if (diff && InterlockedIncrement(&bad) <= 20) {
+            fprintf(stderr, "[PACKNATIVE] %08X differs (mask %d): eax %08X/%08X ecx %08X/%08X edx %08X/%08X ebx %08X/%08X esp %08X/%08X esi %08X/%08X edi %08X/%08X ebp %08X/%08X top %d/%d cc %X/%X\n",
+                    va, diff, a.r[0], b.r[0], a.r[1], b.r[1], a.r[2], b.r[2], a.r[3], b.r[3], a.r[4], b.r[4],
+                    a.r[6], b.r[6], a.r[7], b.r[7], a.r[5], b.r[5], a.top, b.top, a.cc, b.cc);
+            for (k = 0; k < OUTB; k++)
+                if (out1[k] != mem[buf + k]) { fprintf(stderr, "[PACKNATIVE]   output +%X: %02X/%02X\n", k, out1[k], mem[buf + k]); break; }
+            for (k = 0; k < flen; k++)
+                if (fr1[k] != mem[lo + k]) { fprintf(stderr, "[PACKNATIVE]   frame +%X: %02X/%02X\n", k, fr1[k], mem[lo + k]); break; }
+        }
+        if (InterlockedIncrement(&runs) % 20000 == 0)
+            fprintf(stderr, "[PACKNATIVE] %ld checks, %ld differ\n", (long)runs, (long)bad);
+    }
+}
+
+static inline void call_native(recomp_func_t fn, uint32_t target)
+{
+    if (s_pn_check && pn_lookup(target) == fn) pn_check_run(target, fn);
+    else fn();
+}
+
 /* ---- host sampling profiler (NFL2K5_INTERP_SAMPLE=<hex VA>, Windows, diagnostics) --
  * Every 2 ms every thread of the process is suspended and its RIP read. The
  * thread that first entered the interpreter at that VA (the game thread) also
@@ -1248,6 +1349,17 @@ static LONG WINAPI interp_fault_report(EXCEPTION_POINTERS *ep)
 }
 #endif
 
+/* The interpreter frame entered last on any thread (guest threads run one at a
+ * time), for the guest lock's stall report: diagnostics, may be stale. */
+static Cpu *volatile s_any_cpu;
+static void interp_stall_report(void)
+{
+    Cpu *c = s_any_cpu;
+    if (c)
+        fprintf(stderr, "[INTERP] last frame: at %08X eax %08X ecx %08X edx %08X ebx %08X esp %08X ebp %08X esi %08X edi %08X\n",
+                c->start, c->r[0], c->r[1], c->r[2], c->r[3], c->r[4], c->r[5], c->r[6], c->r[7]);
+}
+
 static void interp_execute(Cpu *c, uint32_t va)
 {
     uint32_t esp0;
@@ -1291,6 +1403,7 @@ static void interp_execute(Cpu *c, uint32_t va)
         t_dcache_hook_gen = s_hook_gen;
     }
     t_cur = c;   /* nested interpreter calls restore it when they return */
+    s_any_cpu = c;
     for (;;) {
         uint8_t op;
         int size;
@@ -1907,7 +2020,7 @@ static void interp_execute(Cpu *c, uint32_t va)
             if (fn) {
                 int64_t t0 = s_prof ? prof_now() : 0;
                 sync_out(c);
-                fn();
+                call_native(fn, target);
                 sync_in(c);
                 if (s_prof) { int64_t d = prof_now() - t0; c->native_ticks += d; prof_native(target, d); }
                 if (c->r[ESP] > esp0) {           /* the callee returned past our frame */
@@ -1930,7 +2043,7 @@ static void interp_execute(Cpu *c, uint32_t va)
                 uint32_t ret = rd32(at);
                 int64_t t0 = s_prof ? prof_now() : 0;
                 sync_out(c);
-                fn();
+                call_native(fn, target);
                 sync_in(c);
                 if (s_prof) { int64_t d = prof_now() - t0; c->native_ticks += d; prof_native(target, d); }
                 if (at >= esp0 || c->r[ESP] > esp0) { sync_out(c); return; }
@@ -1961,6 +2074,7 @@ void recomp_interp_call(uint32_t va)
         QueryPerformanceFrequency(&f);
         s_prof_freq = f.QuadPart;
         s_prof_last = prof_now();
+        { extern void (*g_ggl_stall_report)(void); g_ggl_stall_report = interp_stall_report; }
         {
             const char *fv = getenv("NFL2K5_INTERP_FAST");
             s_fast = !(fv && fv[0] == '0');
@@ -1968,6 +2082,13 @@ void recomp_interp_call(uint32_t va)
             if (fv && *fv) s_fast_kinds = strtoull(fv, NULL, 16);
             fv = getenv("NFL2K5_INTERP_NCACHE");
             s_ncache = !(fv && fv[0] == '0');
+        }
+        {
+            const char *pv = getenv("NFL2K5_PACK_NATIVE");
+            if (!(pv && pv[0] == '0')) {
+                s_pn_check = getenv("NFL2K5_PACK_NATIVE_CHECK") != NULL;
+                s_npn = nfl2k5_pack_natives_init(s_pn_va, s_pn_fn, PN_MAX);
+            }
         }
         s_prof = getenv("NFL2K5_INTERP_PROF") != NULL;
         {
@@ -1980,6 +2101,10 @@ void recomp_interp_call(uint32_t va)
             }
         }
         s_slow = s_prof || s_tr_on;
+    }
+    if (s_npn && !t_pn_nested) {          /* a native version of a function a pack changed */
+        recomp_func_t pn = pn_lookup(va);
+        if (pn) { call_native(pn, va); return; }
     }
     if (s_prof) { t0 = prof_now(); ret = rd32(g_esp); t_prof_depth++; }
     samp_maybe_start(va);

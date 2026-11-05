@@ -456,6 +456,18 @@ int nfl2k5_hle_XInputGetCapabilities(void)
     return 1;
 }
 
+/* A guest loop that only polls the controller makes no kernel call, so the
+ * guest lock is never offered and the timer thread cannot deliver the vblank
+ * or DPC the loop is waiting for (on the console the interrupt preempts it).
+ * NFL2K5_NO_INPUT_PREEMPT=1 for comparison. */
+static void input_preempt_point(void)
+{
+    extern void xbox_ggl_preempt_point(unsigned int);
+    static int off = -1;
+    if (off < 0) off = getenv("NFL2K5_NO_INPUT_PREEMPT") != NULL;
+    if (!off) xbox_ggl_preempt_point(MEM32(g_esp));
+}
+
 int nfl2k5_hle_XInputGetState(void)
 {
     extern void nfl2k5_live_qb_guest_tick(void);
@@ -465,6 +477,7 @@ int nfl2k5_hle_XInputGetState(void)
     uint32_t state;
     if (!is_our_handle(MEM32(g_esp + 4u)))
         return 0;
+    input_preempt_point();
     nfl2k5_live_qb_guest_tick();
     if (host_pad_mode() != 2)
         nfl2k5_controls_rumble_tick();          /* keeps a running rumble alive (src/nfl2k5_controls.c) */

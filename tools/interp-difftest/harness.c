@@ -32,6 +32,8 @@ RECOMP_TLS uint32_t g_seh_ebp;
 RECOMP_TLS RecompXmm g_xmm0, g_xmm1, g_xmm2, g_xmm3, g_xmm4, g_xmm5, g_xmm6, g_xmm7;
 ptrdiff_t g_xbox_mem_offset;
 ptrdiff_t xbox_GetMemoryOffset(void) { return g_xbox_mem_offset; }
+void (*g_ggl_stall_report)(void);
+int nfl2k5_pack_natives_init(uint32_t *va, void (**fn)(void), int max) { (void)va; (void)fn; (void)max; return 0; }
 recomp_func_t recomp_lookup(uint32_t va) { (void)va; return NULL; }
 recomp_func_t recomp_lookup_kernel(uint32_t va) { (void)va; return NULL; }
 recomp_func_t recomp_lookup_manual(uint32_t va) { (void)va; return NULL; }

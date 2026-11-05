@@ -201,3 +201,27 @@ uint32_t nfl2k5_interp_mark_va(uint32_t va)
         return found;
     }
 }
+
+/* Native versions of a known pack's hottest changed functions. Last in this
+ * file: the generated code's header defines the register names as macros. */
+#include "pack_native_gen.inc.c"
+
+/* Fills va/fn with the entries whose guarded guest bytes match the bytes they
+ * were generated from (FNV-1a, tools/gen-pack-natives.py). Returns how many. */
+int nfl2k5_pack_natives_init(uint32_t *va, void (**fn)(void), int max)
+{
+    const uint8_t *mem = (const uint8_t *)xbox_GetMemoryOffset();
+    int n = 0;
+    for (unsigned i = 0; i < sizeof s_pack_native_table / sizeof s_pack_native_table[0] && n < max; i++) {
+        uint32_t h = 2166136261u;
+        for (int g = 0; g < s_pack_native_table[i].nguard; g++)
+            for (uint32_t a = s_pack_native_table[i].guard[g][0]; a < s_pack_native_table[i].guard[g][1]; a++)
+                h = (h ^ mem[a]) * 16777619u;
+        if (h != s_pack_native_table[i].hash) continue;
+        va[n] = s_pack_native_table[i].va;
+        fn[n] = s_pack_native_table[i].fn;
+        n++;
+    }
+    if (n) fprintf(stderr, "[INTERP] %d native pack function(s) in use\n", n);
+    return n;
+}
