@@ -603,9 +603,26 @@ void nfl2k5_diag_popup(uint32_t obj, int what)
  * slots at the Main Menu, and feature modules (My NFL Eras) clean up. */
 void nfl2k5_diag_fsm(uint32_t obj, uint32_t desc, int push)
 {
-    (void)desc;
     const uint8_t *m = (const uint8_t *)xbox_GetMemoryOffset();
     uint32_t idx = *(const uint32_t *)(m + obj + 0x100u);
+    static int log = -1;
+    if (log < 0) log = getenv("NFL2K5_FSM_LOG") && *getenv("NFL2K5_FSM_LOG") != '0';
+    if (log) {
+        /* NFL2K5_FSM_LOG=1: every screen pushed/popped, with its title */
+        uint32_t d = push ? desc : (idx < 0x20u ? *(const uint32_t *)(m + obj + idx * 8u) : 0);
+        char title[64] = "";
+        if (d >= 0x10000u && d < 0x04000000u) {
+            uint32_t t = *(const uint32_t *)(m + d), i;
+            for (i = 0; t >= 0x10000u && t < 0x04000000u && i + 1 < sizeof title; i++) {
+                uint16_t c = *(const uint16_t *)(m + t + i * 2u);
+                if (!c) break;
+                title[i] = c < 0x80 ? (char)c : '?';
+                title[i + 1] = 0;
+            }
+        }
+        fprintf(stderr, "[FSM] %s fsm %08X depth %u desc %08X \"%s\"\n", push ? "push" : "pop ",
+                (unsigned)obj, (unsigned)idx, (unsigned)d, title);
+    }
     if (!push && idx < 0x20u) {
         uint32_t top = *(const uint32_t *)(m + obj + idx * 8u);
         nfl2k5_teams_fsm_pop(obj, top);

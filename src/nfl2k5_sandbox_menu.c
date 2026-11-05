@@ -234,6 +234,8 @@ void nfl2k5_sandbox_menu_service(void)
 {
     SbRegs regs;
     uint32_t count,top;
+    extern void nfl2k5_vip_jukebox_service(void);
+    nfl2k5_vip_jukebox_service();   /* Features > VIP > Jukebox (src/nfl2k5_exit_menu.c) */
     if(s_servicing || !s_open || (!s_quit_pending && !s_reopen_pending)) return;
     s_servicing=1;
     regs_save(&regs);

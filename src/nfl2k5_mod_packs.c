@@ -51,6 +51,12 @@ static void mp_read_json_name(const char *path, char *out, size_t cap)
     if (n >= cap) n = cap - 1;
     memcpy(out, p, n);
     out[n] = 0;
+    /* "SOFTDRINK 2K28 v0.7 v0.7" (installed packs get the version added twice) */
+    q = strrchr(out, ' ');
+    if (q && q > out) {
+        size_t w = strlen(q);
+        if ((size_t)(q - out) >= w && !strncmp(q - w, q, w)) *q = 0;
+    }
 }
 
 #ifdef NFL2K5_UWP
@@ -129,6 +135,8 @@ static int mp_same_path(const char *a, const char *b)
 #ifdef _WIN32
 static void mp_retail_exe(char *out, size_t cap)
 {
+    /* every pack runs on the main executable: the one that is running */
+    if (mp_current_exe(out, (size_t)cap)) return;
     snprintf(out, cap, "%s\\NFL2K5.exe", s_root);
     if (!mp_file_exists(out))
         snprintf(out, cap, "%s\\build\\Release\\NFL2K5.exe", s_root);
@@ -535,6 +543,11 @@ const char *nfl2k5_modpacks_name(int row)
     int f = mp_feature_row(row);
     if (f >= 0) return k_features[f].label;
     return row >= 0 && row < s_pack_count ? s_packs[row].name : "Mod Pack";
+}
+/* 1: list row `row` is an XBE pack (switching it restarts the game), not a feature pack */
+int nfl2k5_modpacks_is_pack(int row)
+{
+    return row >= 0 && row < s_pack_count;
 }
 int nfl2k5_modpacks_get(int row)
 {

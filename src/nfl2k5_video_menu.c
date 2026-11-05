@@ -131,8 +131,20 @@ extern int nfl2k5_modpacks_get(int row);
 extern void nfl2k5_modpacks_set(int row, int on);
 static int mods_toggle(int r) { (void)r; return 1; }
 static int mods_values(int r) { (void)r; return 2; }
+extern int nfl2k5_modpacks_is_pack(int row);
+extern int nfl2k5_exit_menu_confirm_pack(int on, const char *name, uint32_t screen);
+static uint32_t s_mods_header;
 static int mods_get(int r) { return nfl2k5_modpacks_get(r); }
-static void mods_set(int r, int v) { nfl2k5_modpacks_set(r, v != 0); }
+static void mods_set(int r, int v)
+{
+#if !defined(__ANDROID__) && !defined(NFL2K5_UWP)
+    /* switching a pack restarts the game: ask first (nfl2k5_exit_menu.c) */
+    if (nfl2k5_modpacks_is_pack(r) && (nfl2k5_modpacks_get(r) != 0) != (v != 0) &&
+        nfl2k5_exit_menu_confirm_pack(v != 0, nfl2k5_modpacks_name(r), s_mods_header) == 0)
+        return;
+#endif
+    nfl2k5_modpacks_set(r, v != 0);
+}
 static void mods_name(int r, int v, char *b, size_t n)
 {
     (void)r;
@@ -603,7 +615,7 @@ void nfl2k5_video_menu_install(void)
     /* Build this even when no packs are currently installed.  The main-menu
      * entry should always be present so players can find it, and a pack that
      * is discovered on the next launch will populate this same screen. */
-    if (!getenv("NFL2K5_NO_MODPACK_MENU")) mods = vm_build_screen(2);
+    if (!getenv("NFL2K5_NO_MODPACK_MENU")) s_mods_header = mods = vm_build_screen(2);
     if (!video || !pres) { fprintf(stderr, "[VIDEOMENU] build failed\n"); return; }
     for (k = 0; k < sizeof k_options_headers / sizeof k_options_headers[0]; k++) {
         int n = vm_add_link(k_options_headers[k], video, vm_wstr("Video Settings"));
