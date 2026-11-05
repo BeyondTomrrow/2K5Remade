@@ -1833,6 +1833,7 @@ int main(int argc, char **argv)
     nfl2k5_texture_packs_init();
     nfl2k5_controller_art_init();
     nfl2k5_save_library_menu_init();
+    { extern void nfl2k5_music_player_init(void); nfl2k5_music_player_init(); }   /* F1 > Music Player */
     xbox_kernel_bridge_init();
 
     if (!validate_only && getenv("RECOMP_AC97_READY")) {

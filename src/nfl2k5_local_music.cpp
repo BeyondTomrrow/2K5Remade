@@ -597,11 +597,14 @@ static bool show_now_playing(uint32_t id)
     return banner_show(u"Now Playing", sub);
 }
 
+extern "C" void xbox_MenuInvalidate(void);
+
 extern "C" void nfl2k5_local_music_opening(uint32_t song_id, uint32_t player)
 {
     g_player = player;
     SDL_SetAtomicInt(&g_cur_id, (int)song_id);
     show_now_playing(song_id);
+    xbox_MenuInvalidate();             /* F1 > Music Player: Now playing */
 }
 
 extern "C" void nfl2k5_local_music_closed(void)
@@ -687,6 +690,8 @@ extern "C" int nfl2k5_retail_music_take_next(void)
     fprintf(stderr, "[MUSIC] R3: the retail player advances (stop + next on the guest thread)\n");
     return 1;
 }
+
+static SDL_AtomicInt g_skip_request;   /* F1 > Music Player: Next Song, an R3 press */
 
 extern "C" void nfl2k5_local_music_buttons(int l3, int r3)
 {
@@ -797,9 +802,13 @@ static bool guest_wide_eq(uint32_t va, const char16_t *s)
  * retail sub_00280450 plays a bank there instead of the playlist. A playlist is
  * selected when the game holds a current entry in its list (0xC3CBFC, list head
  * 0xC3CBE8). */
+static uint32_t g_pick_nodes;          /* F1 > Music Player: guest playlist entries, kMaxPick of them */
+static constexpr uint32_t kPickNode = 0x18u, kMaxPick = 504u;
+
 static bool pack_playlist_selected(void)
 {
     uint32_t cur = g32(0xC3CBFCu);
+    if (g_pick_nodes && cur >= g_pick_nodes && cur < g_pick_nodes + kPickNode * kMaxPick) return true;
     if (g32(0xC3CBF8u) == 0xC3CBE8u || !cur || cur == 0xC3CBE8u || cur >= 0x08000000u) return false;
     /* Its current entry must be playable: albums 0..0x11 are the game's own banks,
      * 0x12+ the custom soundtracks (retail 0x0028013A checks the same against the
@@ -1012,4 +1021,205 @@ static uint32_t ih_retail_music_next(void)
 static void nfl2k5_retail_next_interp_hook(void)
 {
     recomp_interp_add_hook(0x00280620u, 0, ih_retail_music_next);
+}
+
+/* ── F1 > Music Player ─────────────────────────────────────────────────────
+ * Works without the Crib, so also under a pack that took the Jukebox away.
+ * Sources: the game's own music, the VIP's Jukebox playlist, each Music folder.
+ * A folder plays through entries of the game's playlist form {album, track, ..,
+ * next at +0x10} kept here, looped; the VIP's own list is never touched, the
+ * game's "current entry" 0xC3CBFC just points into them. The choice is carried
+ * out on the guest thread by nfl2k5_music_frame_service (front-end frames). */
+extern "C" void sub_0027F550(void);
+extern "C" void sub_0027FEC0(void);
+extern "C" void sub_002804C0(void);
+extern "C" void sub_00280450(void);
+extern "C" void xbox_MenuAddPage(const void *page);
+
+static SDL_AtomicInt g_pick_request;   /* 0 none, else 1 + source */
+static SDL_AtomicInt g_pick_song;      /* 0 all songs, else 1 + song */
+static int g_ui_source, g_ui_song;
+static uint32_t g_keep_menus, g_keep_loading;
+static bool g_keep_valid;
+
+static std::vector<size_t> music_folders(void)
+{
+    std::vector<size_t> out;
+    if (SDL_GetAtomicInt(&g_music_ready) == 0) return out;
+    for (size_t a = 0; a < g_albums.size() && out.size() < 100; a++)
+        for (const Song &s : g_albums[a].songs)
+            if (s.ready) { out.push_back(a); break; }
+    return out;
+}
+
+static std::vector<size_t> folder_songs(size_t a)
+{
+    std::vector<size_t> out;
+    for (size_t k = 0; k < g_albums[a].songs.size() && out.size() < kMaxPick; k++)
+        if (g_albums[a].songs[k].ready) out.push_back(k);
+    return out;
+}
+
+static void text_of(const std::u16string &s, char *out, size_t n)
+{
+    size_t i = 0;
+    if (n > 49) n = 49;                /* the row's value column */
+    for (; i < s.size() && i + 1 < n; i++) out[i] = s[i] < 0x80 ? (char)s[i] : '?';
+    out[i] = 0;
+    if (i < s.size() && i > 3) strcpy(out + i - 3, "...");
+}
+
+static void music_guest_call(void (*fn)(void), uint32_t ecx)
+{
+    g_ecx = ecx;
+    g_esp -= 4;
+    g32(g_esp) = 0xFEC0F000u;          /* any return address: fn returns to here in C */
+    fn();
+}
+
+extern "C" void nfl2k5_music_frame_service(void)
+{
+    if (SDL_SetAtomicInt(&g_skip_request, 0)) {   /* Next song: an R3 press and release */
+        nfl2k5_local_music_buttons(0, 1);
+        nfl2k5_local_music_buttons(0, 0);
+    }
+    int request = SDL_SetAtomicInt(&g_pick_request, 0);
+    if (!request) return;
+    int source = request - 1, song = SDL_GetAtomicInt(&g_pick_song);
+    uint32_t first = g32(0xC3CBF8u), cur = 0, row = 1;
+    uint32_t keep_eax = g_eax, keep_ebx = g_ebx, keep_esi = g_esi, keep_ecx = g_ecx, keep_edx = g_edx;
+    if (!g_keep_valid) {
+        g_keep_menus = g32(0xB9E298u);
+        g_keep_loading = g32(0xB9E29Cu);
+        g_keep_valid = true;
+    }
+    if (source == 0) {
+        cur = first != 0xC3CBE8u ? first : 0;
+        row = 0;
+        g32(0xB9E298u) = g_keep_menus;
+        g32(0xB9E29Cu) = g_keep_loading;
+    } else if (source == 1) {
+        if (first == 0xC3CBE8u || !first) {
+            banner_show(u"Music Player", u"The Jukebox playlist is empty");
+            return;
+        }
+        cur = first;
+    } else {
+        std::vector<size_t> folders = music_folders();
+        if ((size_t)(source - 2) >= folders.size()) return;
+        std::vector<size_t> songs = folder_songs(folders[(size_t)(source - 2)]);
+        if (songs.empty()) return;
+        if (!g_pick_nodes) g_pick_nodes = xbox_HeapAlloc(kPickNode * kMaxPick, 16);
+        if (!g_pick_nodes) return;
+        for (size_t i = 0; i < songs.size(); i++) {
+            uint32_t node = g_pick_nodes + (uint32_t)i * kPickNode;
+            for (uint32_t o = 0; o < kPickNode; o += 4) g32(node + o) = 0;
+            g32(node + 0x00) = 0x12u + (uint32_t)(source - 2);   /* the ST.DB's numbering */
+            g32(node + 0x04) = (uint32_t)i;
+            g_edx = (uint32_t)i;                             /* +8: the name check 0x27FF90 compares */
+            music_guest_call(sub_0027F550, g32(node + 0x00));
+            g32(node + 0x08) = g_eax;
+            g32(node + 0x10) = g_pick_nodes + (uint32_t)((i + 1) % songs.size()) * kPickNode;
+        }
+        cur = g_pick_nodes + (uint32_t)(song > 0 && (size_t)(song - 1) < songs.size() ? song - 1 : 0) * kPickNode;
+    }
+    if (row) { g32(0xB9E298u) = 1; g32(0xB9E29Cu) = 1; }     /* Crib Music: Crib/Menus for now */
+    if (cur) g32(0xC3CBFCu) = cur;
+    fprintf(stderr, "[MUSIC] F1 Music Player: source %d song %d, entry %08X, row %u\n", source, song, cur, row);
+    music_guest_call(sub_0027FEC0, 0);                       /* stop what plays */
+    music_guest_call(sub_002804C0, g32(0xAC9EC0u + row * 0x10u));   /* that row, by its name */
+    music_guest_call(sub_00280450, 0);                       /* start it, if that did not */
+    g_eax = keep_eax; g_ebx = keep_ebx; g_esi = keep_esi; g_ecx = keep_ecx; g_edx = keep_edx;
+}
+
+static void now_playing_text(char *out, size_t n)
+{
+    int cur = SDL_GetAtomicInt(&g_cur_id);
+    RetailBank bank = RETAIL_NONE;
+    uint32_t mode = 0, index = 0;
+    size_t a = (size_t)cur >> 16, k = (size_t)cur & 0xFFFF;
+    if (cur >= 0 && SDL_GetAtomicInt(&g_music_ready) && a < g_albums.size() && k < g_albums[a].songs.size()) {
+        const Song &s = g_albums[a].songs[k];
+        std::u16string line = s.title;
+        const std::u16string &by = s.artist.empty() ? g_albums[a].name : s.artist;
+        if (!by.empty()) line += u" - " + by;
+        text_of(line, out, n);
+    } else if (retail_current(bank, mode, index)) {
+        if (bank == RETAIL_CRIB) snprintf(out, n, "%s - %s", g_crib_tracks[index].title, g_crib_tracks[index].artist);
+        else snprintf(out, n, "Original Menu Music %02u", index + 1);
+    } else {
+        snprintf(out, n, "Nothing");
+    }
+}
+
+enum { MP_NOW, MP_NEXT, MP_SOURCE, MP_SONG, MP_PLAY, MP_ROWS };
+
+static void mp_label(int row, char *name, char *val, size_t n)
+{
+    std::vector<size_t> folders = music_folders();
+    val[0] = 0;
+    if (g_ui_source >= (int)folders.size() + 2) g_ui_source = 0;
+    switch (row) {
+    case MP_NOW: strcpy(name, "Now playing"); now_playing_text(val, n); break;
+    case MP_NEXT: strcpy(name, "Next song"); break;
+    case MP_SOURCE:
+        strcpy(name, "Playlist");
+        if (g_ui_source == 0) snprintf(val, n, "Game music");
+        else if (g_ui_source == 1) snprintf(val, n, "Jukebox playlist");
+        else text_of(g_albums[folders[(size_t)(g_ui_source - 2)]].name, val, n);
+        break;
+    case MP_SONG:
+        strcpy(name, "Song");
+        if (g_ui_source < 2 || g_ui_song == 0) snprintf(val, n, "All songs");
+        else {
+            size_t a = folders[(size_t)(g_ui_source - 2)];
+            std::vector<size_t> songs = folder_songs(a);
+            if ((size_t)(g_ui_song - 1) < songs.size()) text_of(g_albums[a].songs[songs[(size_t)(g_ui_song - 1)]].title, val, n);
+        }
+        break;
+    case MP_PLAY: strcpy(name, "Play"); break;
+    default: name[0] = 0; break;
+    }
+}
+
+static void mp_change(int row, int dir)
+{
+    std::vector<size_t> folders = music_folders();
+    if (row == MP_SOURCE) {
+        int count = (int)folders.size() + 2;
+        g_ui_source = (g_ui_source + count + dir) % count;
+        g_ui_song = 0;
+    } else if (row == MP_SONG && g_ui_source >= 2 && (size_t)(g_ui_source - 2) < folders.size()) {
+        int count = (int)folder_songs(folders[(size_t)(g_ui_source - 2)]).size() + 1;
+        g_ui_song = (g_ui_song + count + dir) % count;
+    }
+    xbox_MenuInvalidate();
+}
+
+static void mp_activate(int row)
+{
+    if (row < 0) return;
+    if (row == MP_NEXT) SDL_SetAtomicInt(&g_skip_request, 1);
+    else if (row == MP_PLAY) {
+        SDL_SetAtomicInt(&g_pick_song, g_ui_song);
+        SDL_SetAtomicInt(&g_pick_request, g_ui_source + 1);
+    } else mp_change(row, 1);
+    xbox_MenuInvalidate();
+}
+
+static int mp_count(void) { return MP_ROWS; }
+
+/* xbox_MenuAddPage's XboxMenuPage (nv2a_gpu_present.inc.c) */
+static const struct {
+    const char *title;
+    int (*count)(void);
+    void (*label)(int row, char *name, char *val, size_t n);
+    void (*change)(int row, int dir);
+    void (*activate)(int row);
+    int (*busy)(void);
+} k_music_page = { "MUSIC PLAYER", mp_count, mp_label, mp_change, mp_activate, nullptr };
+
+extern "C" void nfl2k5_music_player_init(void)
+{
+    xbox_MenuAddPage(&k_music_page);
 }
