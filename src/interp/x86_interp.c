@@ -1209,6 +1209,43 @@ static void samp_dump(void)
 
 static int samp_in_exe(uint64_t rip) { return rip >= s_exe_lo && rip < s_exe_hi; }
 
+/* Long frames: the game loop enters 0x74790 once a frame, so a gap there means
+ * the game thread is stuck in something. The last samples of the game thread
+ * are kept; when a frame passes 120 ms they are printed by stack depth. */
+#define BURST_RING 256
+static volatile LONG s_frame_ticks;
+static uint64_t s_burst[BURST_RING][SAMP_CHAIN];
+static unsigned s_burst_pos;
+
+static void burst_dump(DWORD ms)
+{
+    char nb[128];
+    DWORD64 disp;
+    unsigned n = s_burst_pos < BURST_RING ? s_burst_pos : BURST_RING;
+    fprintf(stderr, "[IBURST] frame stuck %lu ms, %u samples\n", (unsigned long)ms, n);
+    for (int depth = 0; depth < SAMP_CHAIN; depth += 1) {
+        static struct { char name[64]; unsigned c; } h[BURST_RING];
+        unsigned nh = 0;
+        for (unsigned i = 0; i < n; i++) {
+            unsigned k;
+            if (!s_burst[i][depth]) continue;
+            samp_name(s_burst[i][depth], nb, sizeof nb, &disp);
+            for (k = 0; k < nh; k++) if (!strncmp(h[k].name, nb, 63)) break;
+            if (k == nh) { snprintf(h[nh].name, 64, "%s", nb); h[nh].c = 0; nh++; }
+            h[k].c++;
+        }
+        fprintf(stderr, "[IBURST]  d%d:", depth);
+        for (unsigned r = 0; r < 5 && r < nh; r++) {
+            unsigned m = r;
+            for (unsigned k = r + 1; k < nh; k++) if (h[k].c > h[m].c) m = k;
+            if (m != r) { char t[64]; unsigned c = h[r].c; memcpy(t, h[r].name, 64); memcpy(h[r].name, h[m].name, 64); h[r].c = h[m].c; memcpy(h[m].name, t, 64); h[m].c = c; }
+            fprintf(stderr, " %s(%u)", h[r].name, h[r].c);
+        }
+        fprintf(stderr, "\n");
+    }
+    fflush(stderr);
+}
+
 /* First exe frames of a suspended thread's stack. */
 static int samp_unwind(CONTEXT *ctx, uint64_t *out, int max)
 {
@@ -1229,15 +1266,46 @@ static int samp_unwind(CONTEXT *ctx, uint64_t *out, int max)
     return n;
 }
 
+/* During a long frame: where every other thread with exe frames on its stack is. */
+static void burst_threads(const DWORD *tids, unsigned ntid)
+{
+    static uint64_t ch[256][SAMP_CHAIN];
+    static uint64_t tip[256];
+    char nb[128];
+    DWORD64 disp;
+    unsigned t;
+    for (t = 0; t < ntid && t < 256; t++) {
+        HANDLE h = OpenThread(THREAD_SUSPEND_RESUME | THREAD_GET_CONTEXT | THREAD_QUERY_INFORMATION, FALSE, tids[t]);
+        CONTEXT ctx;
+        memset(ch[t], 0, sizeof ch[t]); tip[t] = 0;
+        if (!h || tids[t] == s_samp_tid) { if (h) CloseHandle(h); continue; }
+        if (SuspendThread(h) != (DWORD)-1) {
+            memset(&ctx, 0, sizeof ctx);
+            ctx.ContextFlags = CONTEXT_FULL;
+            if (GetThreadContext(h, &ctx)) { tip[t] = ctx.Rip; samp_unwind(&ctx, ch[t], SAMP_CHAIN); }
+            ResumeThread(h);
+        }
+        CloseHandle(h);
+    }
+    for (t = 0; t < ntid && t < 256; t++) {
+        if (!ch[t][0]) continue;
+        fprintf(stderr, "[IBURST] t%lu %s:", (unsigned long)tids[t], samp_name(tip[t], nb, sizeof nb, &disp));
+        for (int k = 0; k < SAMP_CHAIN && ch[t][k]; k++) fprintf(stderr, " %s", samp_name(ch[t][k], nb, sizeof nb, &disp));
+        fprintf(stderr, "\n");
+    }
+    fflush(stderr);
+}
+
 static DWORD WINAPI samp_main(void *arg)
 {
     DWORD last = GetTickCount(), pid = GetCurrentProcessId();
     static DWORD tids[256];
     unsigned ntid = 0, tick = 0;
+    int burst_only = getenv("NFL2K5_INTERP_BURST") != NULL;   /* the game thread only, every ms */
     (void)arg;
     timeBeginPeriod(1);
     for (;;) {
-        Sleep(2);
+        Sleep(burst_only ? 1 : 2);
         if ((tick++ & 255) == 0) {           /* refresh the thread list */
             HANDLE sn = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
             THREADENTRY32 te;
@@ -1253,6 +1321,7 @@ static DWORD WINAPI samp_main(void *arg)
             }
         }
         for (unsigned t = 0; t < ntid; t++) {
+            if (burst_only && tids[t] != s_samp_tid) continue;
             HANDLE h = OpenThread(THREAD_SUSPEND_RESUME | THREAD_GET_CONTEXT | THREAD_QUERY_INFORMATION, FALSE, tids[t]);
             CONTEXT ctx;
             int game = tids[t] == s_samp_tid;
@@ -1267,9 +1336,11 @@ static DWORD WINAPI samp_main(void *arg)
                     SampEnt *e = samp_slot(s_samp, SAMP_N, rip);
                     if (e) e->n++;
                     s_samp_total++;
+                    samp_unwind(&ctx, chain, SAMP_CHAIN);
+                    memcpy(s_burst[s_burst_pos++ % BURST_RING], chain, sizeof chain);
                     if (!in_exe) {
                         s_samp_out++;
-                        if (samp_unwind(&ctx, chain, SAMP_CHAIN) > 0) {
+                        if (chain[0]) {
                             uint64_t key = 0;
                             for (int q = 0; q < SAMP_CHAIN; q++) key = key * 31 + chain[q];
                             e = samp_slot(s_samp_w, SAMP_N, key ? key : 1);
@@ -1290,6 +1361,18 @@ static DWORD WINAPI samp_main(void *arg)
             }
             ResumeThread(h);
             CloseHandle(h);
+        }
+        {
+            static LONG seen;
+            static DWORD seen_at, dumped_at;
+            DWORD now = GetTickCount();
+            LONG f = s_frame_ticks;
+            if (f != seen) { seen = f; seen_at = now; s_burst_pos = 0; }
+            else if (f && now - seen_at >= 150 && now - seen_at < 2000 && now - dumped_at > 1000) {
+                burst_threads(tids, ntid);
+                burst_dump(now - seen_at);
+                dumped_at = now;
+            }
         }
         if (GetTickCount() - last > 20000) { samp_dump(); last = GetTickCount(); }
     }
@@ -2108,6 +2191,9 @@ void recomp_interp_call(uint32_t va)
     }
     if (s_prof) { t0 = prof_now(); ret = rd32(g_esp); t_prof_depth++; }
     samp_maybe_start(va);
+#ifdef _WIN32
+    if (va == 0x00074790u) s_frame_ticks++;
+#endif
 #ifdef _MSC_VER
     __try {
         interp_execute(&cpu, va);
