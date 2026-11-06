@@ -1083,11 +1083,20 @@ static void music_guest_call(void (*fn)(void), uint32_t ecx)
 
 extern "C" void nfl2k5_music_frame_service(void)
 {
-    /* In a match there is no menu music to replace, and stopping the player
-     * there starts nothing: a pick waits for the menus, Next song is dropped. */
+    /* In a match, the attract demo or the title there is no menu music to
+     * replace, and starting a song there is lost or starts nothing: a pick
+     * waits for the menus, Next song is dropped. The Main Menu stays on the
+     * screen stack through a match; the match's own screen 0x4E7EC0 sits above
+     * it until the End Of Game menu is left. The title and demo have no Main
+     * Menu yet. */
     uint32_t fsm_depth = g32(0x00A84B18u + 0x100u);
-    bool at_main_menu = fsm_depth < 0x20u && g32(0x00A84B18u + fsm_depth * 8u) == 0x00515660u;
-    if (nfl2k5_in_match() && !at_main_menu) {        /* in_match stays set 30 s after a game */
+    bool under_main_menu = false, match_screen = false;
+    for (uint32_t i = 0; i <= fsm_depth && i < 0x20u; i++) {
+        uint32_t screen = g32(0x00A84B18u + i * 8u);
+        if (screen == 0x00515660u) under_main_menu = true;
+        if (screen == 0x004E7EC0u) match_screen = true;
+    }
+    if (!under_main_menu || match_screen) {
         if (SDL_SetAtomicInt(&g_skip_request, 0))
             xbox_PresentToast("MUSIC PLAYER", "Next song works in the menus", "", 3000);
         if (SDL_GetAtomicInt(&g_pick_request) && !g_pick_told) {
