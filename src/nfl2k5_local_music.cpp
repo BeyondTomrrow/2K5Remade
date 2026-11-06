@@ -762,7 +762,7 @@ extern "C" void nfl2k5_local_music_buttons(int l3, int r3)
 
 
 /* ── SOFTDRINK: the player's playlist wins over the pack's menu shuffle ────
- * SOFTDRINK 2K28 (v0.6 and v0.6.1, the same bytes) replaces the game's menu
+ * SOFTDRINK 2K28 (since v0.6; addresses below are v0.7's) replaces the game's menu
  * music with a shuffle of the retail femusic + cribmusic banks, and on the way
  * shuts out the player's own Jukebox playlist everywhere: its data makes the
  * UserList row (retail: the playlist) a cribmusic bank row, its music-mode switch
@@ -788,6 +788,10 @@ extern "C" LOCALMUSIC_TLS uint32_t g_eax, g_ecx, g_edx, g_ebx, g_esp, g_esi;
 extern "C" char *xbox_user_path(const char *rel, char *out, size_t n);
 
 static int g_pack_shuffle_first;
+
+/* The pack's shuffle state. Its code and data move between releases (v0.8 moved
+ * the code 0x160 bytes on), so nfl2k5_pack_music_hooks reads these from the code. */
+static uint32_t g_pk_enabled, g_pk_busy0, g_pk_busy1, g_pk_playing, g_pk_playing1;
 
 static bool guest_wide_eq(uint32_t va, const char16_t *s)
 {
@@ -833,7 +837,7 @@ static void pack_music_log(const char *what, uint32_t mode)
                     "player %08X/%08X, state %u/%u, pack %u/%u)\n",
             what, mode, g32(0xC3CC08u), g32(0xAC9ED8u), g32(0xC3CBFCu),
             g32(0xB9E298u), g32(0xB9E29Cu), g32(0xB9E2A4u), g32(0xC3CC10u), g32(0xC3CC14u),
-            g32(0xC3AC90u), g32(0xC5D3A4u), g32(0x014F24C4u), g32(0x014F24E4u));
+            g32(0xC3AC90u), g32(0xC5D3A4u), g32(g_pk_enabled), g32(g_pk_playing));
 }
 
 /* 0x00280507, the end of the retail context switch reached from the two hooks
@@ -862,7 +866,7 @@ static uint32_t ih_pack_music_shuffle(void)
 {
     if (getenv("NFL2K5_PACK_MUSIC_LOG")) pack_music_log("trace: pack shuffle start", 0);
     if (g_pack_shuffle_first || g32(0xC3CC08u) != 1u || g32(0xAC9ED8u) != 0 || !pack_playlist_selected() ||
-        !g32(0x014F24C4u) || g32(0x014F24C8u) || g32(0x014F24CCu) || g32(0x014F24E4u) || g32(0x014F24E8u) ||
+        !g32(g_pk_enabled) || g32(g_pk_busy0) || g32(g_pk_busy1) || g32(g_pk_playing) || g32(g_pk_playing1) ||
         !g32(0xC3CC10u))
         return 0;
     pack_music_log("resume: the player's playlist instead of the pack's shuffle (0x27FF90)", 1);
@@ -939,25 +943,59 @@ static uint32_t ih_pack_music_mode(void)
     return g32(0x000F65B4u + mode * 4u);              /* jmp [esi*4 + 0xF65B4] */
 }
 
+/* Where a 5-byte jmp / call at `va` goes, or 0 if there is none. */
+static uint32_t pack_branch(const uint8_t *m, uint32_t va, uint8_t op)
+{
+    int32_t rel;
+    if (m[va] != op) return 0;
+    memcpy(&rel, m + va + 1, 4);
+    return va + 5u + (uint32_t)rel;
+}
+
+/* The address in a `cmp dword ptr [addr], 0` at `va`, or 0 if it is not one. */
+static uint32_t pack_cmp_addr(const uint8_t *m, uint32_t va)
+{
+    uint32_t a;
+    if (m[va] != 0x83 || m[va + 1] != 0x3D || m[va + 6] != 0) return 0;
+    memcpy(&a, m + va + 2, 4);
+    return a;
+}
+
 static void nfl2k5_pack_music_hooks(void)
 {
-    static const uint8_t jmp_sig[5] = { 0xE9, 0x3B, 0xF8, 0x25, 0x01 };   /* 0x2804C0: jmp 0x014DFD00 */
-    static const uint8_t ctx_sig[16] = { 0x85, 0xC9, 0x74, 0x22, 0x56, 0x89, 0xCE, 0xBA,
-                                         0xC0, 0xC0, 0xE6, 0x00, 0xE8, 0xDF, 0x0F, 0xB5 };
+    /* Pack code is found through the retail sites it hooks, and checked by what it
+     * does, so a release that only moves the code keeps these working. */
+    static const uint8_t ctx_sig[12] = { 0x85, 0xC9, 0x74, 0x22, 0x56, 0x89, 0xCE, 0xBA, 0xC0, 0xC0, 0xE6, 0x00 };
     static const uint8_t retail_tail[8] = { 0x56, 0x57, 0x33, 0xFF, 0xBE, 0xC0, 0x9E, 0xAC };   /* 0x2804C7 */
-    static const uint8_t mode_sig[5] = { 0xE9, 0x5C, 0x98, 0x3E, 0x01 };   /* 0xF6510: jmp 0x014DFD71 */
-    static const uint8_t mode_ctx_sig[8] = { 0x83, 0xF9, 0x04, 0x77, 0x6E, 0x56, 0x89, 0xCE };
-    static const uint8_t next_sig[5] = { 0xE9, 0x2D, 0x0E, 0x26, 0x01 };   /* 0x27F040: jmp 0x014DFE72 */
-    static const uint8_t next_ctx_sig[8] = { 0xE8, 0xD9, 0xF9, 0xFF, 0xFF, 0x83, 0x3D, 0xE4 };
-    static const uint8_t end_ctx_sig[7] = { 0x83, 0x3D, 0xE4, 0x24, 0x4F, 0x01, 0x00 };   /* cmp [0x14F24E4], 0 */
+    static const uint8_t mode_ctx_sig[5] = { 0x83, 0xF9, 0x04, 0x77, 0x6E };
     uint8_t *m = guest();
-    if (!m || memcmp(m + 0x2804C0u, jmp_sig, 5) || memcmp(m + 0x014DFD00u, ctx_sig, 16) ||
-        memcmp(m + 0x2804C7u, retail_tail, 8) || memcmp(m + 0x000F6510u, mode_sig, 5) ||
-        memcmp(m + 0x014DFD71u, mode_ctx_sig, 8) || m[0x000F651Au] != 0x33 || g32(0x000F65C4u) != 0x000F6578u ||
-        memcmp(m + 0x0027F040u, next_sig, 5) || memcmp(m + 0x014DFE72u, next_ctx_sig, 8) ||
-        g32(0x0027F045u) != 0x8B04E0C1u || g32(0x0028016Eu) != 0x014DFBF6u ||
-        memcmp(m + 0x014DFBF6u, end_ctx_sig, 7))
+    if (!m) return;
+    uint32_t ctx = pack_branch(m, 0x2804C0u, 0xE9);    /* the pack's "set music context" */
+    uint32_t modesw = pack_branch(m, 0x000F6510u, 0xE9);   /* its music mode switch */
+    uint32_t next = pack_branch(m, 0x0027F040u, 0xE9); /* its "next song" */
+    uint32_t end = g32(0x0028016Eu);                   /* its song-finished callback */
+    auto in_pack = [](uint32_t va) { return va >= 0x01400000u && va < 0x01600000u; };
+    if (!in_pack(ctx) || !in_pack(modesw) || !in_pack(next) || !in_pack(end) ||
+        memcmp(m + ctx, ctx_sig, 12) || pack_branch(m, ctx + 12u, 0xE8) != 0x00030CF0u ||
+        memcmp(m + 0x2804C7u, retail_tail, 8) || memcmp(m + modesw, mode_ctx_sig, 5) ||
+        m[0x000F651Au] != 0x33 || g32(0x000F65C4u) != 0x000F6578u || g32(0x0027F045u) != 0x8B04E0C1u)
         return;                                       /* not SOFTDRINK's music code */
+    uint32_t helper = pack_branch(m, next, 0xE8);
+    g_pk_playing = pack_cmp_addr(m, next + 5u);
+    g_pk_enabled = pack_cmp_addr(m, next + 18u);
+    if (!in_pack(helper) || !in_pack(g_pk_playing) || !in_pack(g_pk_enabled) || pack_cmp_addr(m, end) != g_pk_playing)
+        return;
+    /* "Start my shuffle": call helper, then the five checks of the state it reads. */
+    uint32_t shuffle = 0;
+    for (uint32_t va = next; va > next - 0x1000u && !shuffle; va--)
+        if (pack_branch(m, va, 0xE8) == helper && pack_cmp_addr(m, va + 5u) == g_pk_enabled &&
+            m[va + 12u] == 0x0F && m[va + 13u] == 0x84 && pack_cmp_addr(m, va + 44u) == g_pk_playing)
+            shuffle = va;
+    if (!shuffle) return;
+    g_pk_busy0 = pack_cmp_addr(m, shuffle + 18u);
+    g_pk_busy1 = pack_cmp_addr(m, shuffle + 31u);
+    g_pk_playing1 = pack_cmp_addr(m, shuffle + 57u);
+    if (!in_pack(g_pk_busy0) || !in_pack(g_pk_busy1) || !in_pack(g_pk_playing1)) return;
     g_pack_shuffle_first = 0;
     char ip[1024], line[160];
     FILE *f = fopen(xbox_user_path("nfl2k5_game.ini", ip, sizeof ip), "r");
@@ -975,15 +1013,24 @@ static void nfl2k5_pack_music_hooks(void)
         fclose(f);
     }
     if (const char *e = getenv("NFL2K5_PACK_SHUFFLE_FIRST")) g_pack_shuffle_first = atoi(e) != 0;
-    recomp_interp_add_hook(0x014DFD00u, 0, ih_pack_music_context);
-    recomp_interp_add_hook(0x014DFD71u, 0, ih_pack_music_mode);
+    recomp_interp_add_hook(ctx, 0, ih_pack_music_context);
+    recomp_interp_add_hook(modesw, 0, ih_pack_music_mode);
     recomp_interp_add_hook(0x00280507u, 0x00280506u, ih_pack_music_start);
-    recomp_interp_add_hook(0x014DF9C5u, 0, ih_pack_music_shuffle);
-    recomp_interp_add_hook(0x014DFE72u, 0, ih_pack_music_advance);
-    recomp_interp_add_hook(0x014DFBF6u, 0, ih_pack_music_song_end);
+    recomp_interp_add_hook(shuffle, 0, ih_pack_music_shuffle);
+    recomp_interp_add_hook(next, 0, ih_pack_music_advance);
+    recomp_interp_add_hook(end, 0, ih_pack_music_song_end);
     if (getenv("NFL2K5_PACK_MUSIC_LOG")) {           /* diagnostics: the pack's own music entry points */
-        recomp_interp_add_hook(0x014DFCE4u, 0, ih_pack_music_trace_play);
-        recomp_interp_add_hook(0x014DFC41u, 0, ih_pack_music_trace_stop);
+        /* `end` stops the song through the pack's stop routine; its playlist
+         * start calls that first too (push ecx; call stop). */
+        uint32_t stop = pack_branch(m, end + 22u, 0xE8);
+        if (in_pack(stop)) {
+            recomp_interp_add_hook(stop, 0, ih_pack_music_trace_stop);
+            for (uint32_t va = stop; va < stop + 0x200u; va++)
+                if (m[va] == 0x51 && pack_branch(m, va + 1u, 0xE8) == stop) {
+                    recomp_interp_add_hook(va, 0, ih_pack_music_trace_play);
+                    break;
+                }
+        }
     }
     fprintf(stderr, "[MUSIC] SOFTDRINK menu music: %s (nfl2k5_game.ini pack_shuffle_first = %d)\n",
             g_pack_shuffle_first ? "the pack's shuffle has priority" : "the player's Jukebox playlist wins",
