@@ -216,6 +216,23 @@ static void phone_name(int r, int v, char *b, size_t n) { nfl2k5_phone_value_nam
 static const char *s_phone_labels[VM_MAX_ROWS];
 #endif
 
+/* NFL2K5_MENU_MUSIC_ROWS: Android; a Linux test build can define it too */
+#if defined(__ANDROID__) && !defined(NFL2K5_MENU_MUSIC_ROWS)
+#define NFL2K5_MENU_MUSIC_ROWS 1
+#endif
+#ifdef NFL2K5_MENU_MUSIC_ROWS
+/* ---- Music Player rows (src/nfl2k5_local_music.cpp): F1 > Music Player, for
+ * a device with no F1 menu ---- */
+extern int nfl2k5_music_rows(void);
+extern const char *nfl2k5_music_row_label(int r);
+extern int nfl2k5_music_row_toggle(int r);
+extern int nfl2k5_music_row_values(int r);
+extern int nfl2k5_music_row_get(int r);
+extern void nfl2k5_music_row_set(int r, int v);
+extern void nfl2k5_music_row_name(int r, int v, char *b, size_t n);
+static const char *s_music_labels[VM_MAX_ROWS];
+#endif
+
 /* ---- Controls rows (src/nfl2k5_controls.c): vibration, dead zones, prompts,
  * button remapping ---- */
 extern int nfl2k5_ctlmenu_rows(void);
@@ -307,11 +324,16 @@ static VmScreen s_screens[] = {
 #ifdef __ANDROID__
     { "Phone Settings", 0, s_phone_labels, nfl2k5_phone_toggle, nfl2k5_phone_values, nfl2k5_phone_get, nfl2k5_phone_set, phone_name },
 #endif
+#ifdef NFL2K5_MENU_MUSIC_ROWS
+    /* keep next to last: VM_MUSIC */
+    { "Music Player", 0, s_music_labels, nfl2k5_music_row_toggle, nfl2k5_music_row_values, nfl2k5_music_row_get, nfl2k5_music_row_set, nfl2k5_music_row_name },
+#endif
     /* keep last: VM_CONTROLS */
     { "Controls", 0, s_ctl_labels, nfl2k5_ctlmenu_toggle, nfl2k5_ctlmenu_values, nfl2k5_ctlmenu_get, nfl2k5_ctlmenu_set, ctl_name },
 };
 #define VM_SCREENS ((int)(sizeof s_screens / sizeof s_screens[0]))
 #define VM_CONTROLS (VM_SCREENS - 1)
+#define VM_MUSIC (VM_SCREENS - 2)
 
 /* One function for every row slot: the lookup remembers which address the
  * game is calling. Plain `ret`, results in eax. Value strings are written
@@ -640,6 +662,18 @@ void nfl2k5_video_menu_install(void)
         phone = vm_build_screen(5);
         for (k = 0; phone && k < sizeof k_options_headers / sizeof k_options_headers[0]; k++)
             vm_add_link(k_options_headers[k], phone, vm_wstr("Phone Settings"));
+    }
+#endif
+#ifdef NFL2K5_MENU_MUSIC_ROWS
+    {   /* the F1 page's Music Player: a phone has no F1 menu */
+        uint32_t music;
+        s_screens[VM_MUSIC].rows = nfl2k5_music_rows();
+        for (i = 0; i < s_screens[VM_MUSIC].rows && i < VM_MAX_ROWS; i++)
+            s_music_labels[i] = nfl2k5_music_row_label(i);
+        music = vm_build_screen(VM_MUSIC);
+        for (k = 0; music && k < sizeof k_options_headers / sizeof k_options_headers[0]; k++)
+            vm_add_link(k_options_headers[k], music, vm_wstr("Music Player"));
+        fprintf(stderr, "[VIDEOMENU] Music Player %08X: %d rows\n", (unsigned)music, s_screens[VM_MUSIC].rows);
     }
 #endif
     /* "Presentation" right under VIP on the pre-game screen. */

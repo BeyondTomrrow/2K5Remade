@@ -261,8 +261,14 @@ int nfl2k5_exit_menu_confirm_pack(int on, const char *name, uint32_t screen)
                 (unsigned)depth, (unsigned)(depth < 0x20u ? MEM32(FRONTEND_FSM + depth * 8u) : 0));
         return -1;
     }
+#if defined(__ANDROID__) || defined(NFL2K5_UWP)
+    /* An app cannot start a second copy of itself (nfl2k5_modpacks_set) */
+    snprintf(text, sizeof text, "%s will be %s the next time you open the game. Continue?",
+             name && *name ? name : "The mod pack", on ? "applied" : "turned off");
+#else
     snprintf(text, sizeof text, "%s will be %s. The game will close and restart now. Continue?",
              name && *name ? name : "The mod pack", on ? "applied" : "turned off");
+#endif
     for (i = 0; i + 1 < XM_TEXT_CHARS && text[i]; i++) MEM16(s_pack_text + i * 2u) = (uint16_t)(unsigned char)text[i];
     MEM16(s_pack_text + i * 2u) = 0;
     fprintf(stderr, "[EXITMENU] mod pack prompt: \"%s\"\n", text);

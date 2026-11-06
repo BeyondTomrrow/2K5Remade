@@ -10,6 +10,8 @@ first use): fine for sideloading, not for a store.
 """
 import argparse
 import glob
+import hashlib
+import json
 import os
 import shutil
 import subprocess
@@ -28,6 +30,8 @@ ap.add_argument("--jdk", default=glob.glob("C:/Android/jdk-17*")[0] if glob.glob
 ap.add_argument("--sdl", default="C:/Android/src/SDL")
 ap.add_argument("--platform", default="android-36")
 ap.add_argument("--build-tools", default="35.0.0")
+ap.add_argument("--version-name", help="versionName shown by Android (default: the manifest's)")
+ap.add_argument("--version-code", type=int, help="versionCode (default: the manifest's)")
 a = ap.parse_args()
 
 bt = os.path.join(a.sdk, "build-tools", a.build_tools)
@@ -53,8 +57,13 @@ for d in ("res", "gen", "classes", "dex"):
 run(os.path.join(bt, "aapt2" + exe), "compile", "--dir", os.path.join(app, "res"),
     "-o", os.path.join(work, "res", "res.zip"))
 base = os.path.join(work, "base.apk")
+version = []
+if a.version_name:
+    version += ["--version-name", a.version_name]
+if a.version_code:
+    version += ["--version-code", str(a.version_code)]
 run(os.path.join(bt, "aapt2" + exe), "link", "-I", android_jar, "--manifest", os.path.join(app, "AndroidManifest.xml"),
-    "--java", os.path.join(work, "gen"), "--min-sdk-version", "28", "--target-sdk-version", "35",
+    "--java", os.path.join(work, "gen"), "--min-sdk-version", "28", "--target-sdk-version", "35", *version,
     "-o", base, os.path.join(work, "res", "res.zip"))
 
 # 2. Java: SDL's activity glue, ours, and R
@@ -86,6 +95,15 @@ with zipfile.ZipFile(unsigned, "a", zipfile.ZIP_DEFLATED) as z:
     for name, path in libs.items():
         print(f"  lib/{a.abi}/{name}: {os.path.getsize(path) / 1e6:.1f} MB")
         z.write(path, f"lib/{a.abi}/{name}")
+    # what this build is, for the first lines of nfl2k5.log (src/main.c)
+    def commit(path):
+        return subprocess.run(["git", "-C", path, "rev-parse", "--short", "HEAD"], capture_output=True,
+                              text=True).stdout.strip()
+    z.writestr("assets/build-info.json", json.dumps({
+        "apk": os.path.basename(a.out), "version": a.version_name or "",
+        "commit": commit(ROOT), "xboxrecomp": commit(os.path.join(ROOT, "external", "xboxrecomp")),
+        "libmain_sha256": hashlib.sha256(open(libs["libmain.so"], "rb").read()).hexdigest()[:16],
+    }, separators=(",", ":")))
     # broadcast presentation packages (mods/presentations), unpacked into the
     # game folder on first start (src/main.c android_unpack_presentations);
     # the same file types the PC installer ships

@@ -1294,3 +1294,48 @@ extern "C" void nfl2k5_music_player_init(void)
 {
     xbox_MenuAddPage(&k_music_page);
 }
+
+/* The same page as rows of the game's own menus (Options > Music Player,
+ * src/nfl2k5_video_menu.c), where there is no F1 menu to show it. */
+static int mp_values(int row)
+{
+    std::vector<size_t> folders = music_folders();
+    if (row == MP_SOURCE) return (int)folders.size() + 2;
+    if (row == MP_SONG && g_ui_source >= 2 && (size_t)(g_ui_source - 2) < folders.size())
+        return (int)folder_songs(folders[(size_t)(g_ui_source - 2)]).size() + 1;
+    if (row == MP_NEXT || row == MP_PLAY) return 2;     /* an action: any change fires it */
+    return 1;
+}
+
+extern "C" int nfl2k5_music_rows(void) { return MP_ROWS; }
+extern "C" const char *nfl2k5_music_row_label(int row)
+{
+    static const char *const k_names[MP_ROWS] = { "Now Playing", "Next Song", "Playlist", "Song", "Play" };
+    return row >= 0 && row < MP_ROWS ? k_names[row] : "";
+}
+extern "C" int nfl2k5_music_row_toggle(int row) { (void)row; return 0; }
+extern "C" int nfl2k5_music_row_values(int row) { return mp_values(row); }
+extern "C" int nfl2k5_music_row_get(int row)
+{
+    return row == MP_SOURCE ? g_ui_source : row == MP_SONG ? g_ui_song : 0;
+}
+extern "C" void nfl2k5_music_row_set(int row, int value)
+{
+    if (row == MP_SOURCE) { g_ui_source = value; g_ui_song = 0; }
+    else if (row == MP_SONG) g_ui_song = value;
+    else if (row == MP_NEXT || row == MP_PLAY) mp_activate(row);
+}
+extern "C" void nfl2k5_music_row_name(int row, int value, char *out, size_t n)
+{
+    char name[32];
+    int source = g_ui_source, song = g_ui_song;
+    out[0] = 0;
+    if (row == MP_NEXT) { snprintf(out, n, "Skip"); return; }
+    if (row == MP_PLAY) { snprintf(out, n, "Start"); return; }
+    /* mp_label names the current choice; the menu also asks for every value */
+    if (row == MP_SOURCE) g_ui_source = value;
+    else if (row == MP_SONG) g_ui_song = value;
+    mp_label(row, name, out, n);
+    g_ui_source = source;
+    g_ui_song = song;
+}
