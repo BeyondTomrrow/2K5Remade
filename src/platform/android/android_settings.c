@@ -182,10 +182,16 @@ void nfl2k5_android_pick_songs(void)
 typedef void *(*AcquireFn)(void);
 typedef int (*StatusFn)(void *);
 
+/* From the sticky battery intent (src/main.c): the sysfs file reads as nothing
+ * on an S22+, which also left Heat Control's temperature limits dead. */
+extern int nfl2k5_battery_temp10(void);
 static int battery_tenths_c(void)
 {
-    FILE *f = fopen("/sys/class/power_supply/battery/temp", "r");
-    int t = 0;
+    int t = nfl2k5_battery_temp10();
+    FILE *f;
+    if (t > 0) return t;
+    f = fopen("/sys/class/power_supply/battery/temp", "r");
+    t = 0;
     if (!f) return 0;
     if (fscanf(f, "%d", &t) != 1) t = 0;
     fclose(f);
@@ -200,22 +206,20 @@ static int heat_thread(void *arg)
     Uint64 cool_since = 0;
     int level = 0;
     unsigned reports = 0;
+    unsigned long peak[8] = { 0 };
     (void)arg;
     if (acquire && status) mgr = acquire();
     for (;;) {
         int st = mgr ? status(mgr) : -1, t = battery_tenths_c(), want = 0;
         if (reports++ % 3 == 0) {
-            /* every 30 s, Heat Control on or off: tells heat from a heavy scene in a log */
-            char line[160];
-            int o = snprintf(line, sizeof line, "[HEAT] thermal status %d, battery %.1f C, current MHz:", st, t / 10.0);
+            /* every 30 s, Heat Control on or off: tells heat from a heavy scene
+             * in a log. The highest speed seen since the last line: one reading
+             * can be the governor resting, not throttling. */
+            char line[176];
+            int o = snprintf(line, sizeof line, "[HEAT] thermal status %d, battery %.1f C, highest MHz in 30 s:", st, t / 10.0);
             for (int c = 0; c < 8 && o < (int)sizeof line - 12; c++) {
-                char path[80];
-                unsigned long khz = 0;
-                FILE *f;
-                snprintf(path, sizeof path, "/sys/devices/system/cpu/cpu%d/cpufreq/scaling_cur_freq", c);
-                if (!(f = fopen(path, "r"))) continue;
-                if (fscanf(f, "%lu", &khz) == 1) o += snprintf(line + o, sizeof line - o, " %lu", khz / 1000);
-                fclose(f);
+                if (peak[c]) o += snprintf(line + o, sizeof line - o, " %lu", peak[c] / 1000);
+                peak[c] = 0;
             }
             fprintf(stderr, "%s%c", line, 10);
         }
@@ -239,7 +243,18 @@ static int heat_thread(void *arg)
             g_xbox_heat_level = level;
             if (g_xbox_fps_limit_changed) g_xbox_fps_limit_changed();
         }
-        SDL_Delay(10000);
+        for (int i = 0; i < 5; i++) {
+            for (int c = 0; c < 8; c++) {
+                char path[80];
+                unsigned long khz = 0;
+                FILE *f;
+                snprintf(path, sizeof path, "/sys/devices/system/cpu/cpu%d/cpufreq/scaling_cur_freq", c);
+                if (!(f = fopen(path, "r"))) continue;
+                if (fscanf(f, "%lu", &khz) == 1 && khz > peak[c]) peak[c] = khz;
+                fclose(f);
+            }
+            SDL_Delay(2000);
+        }
     }
     return 0;
 }
@@ -280,6 +295,7 @@ void nfl2k5_phone_set(int r, int v)
     case PS_SIZE: s_set.touch_size = v; nfl2k5_touch_pad_changed(); break;
     case PS_OPACITY: s_set.touch_opacity = v; nfl2k5_touch_pad_changed(); break;
     case PS_BATTERY: s_set.battery_saver = v != 0; g_xbox_battery_saver = s_set.battery_saver;
+                    fprintf(stderr, "[ANDROID] Battery Saver %s\n", v ? "on" : "off");
                     if (g_xbox_fps_limit_changed) g_xbox_fps_limit_changed();
                     break;
     case PS_PAUSE: s_set.pause_bg = v != 0; break;
@@ -317,6 +333,8 @@ void nfl2k5_android_settings_init(void)
     };
     load();
     g_xbox_battery_saver = s_set.battery_saver;
+    fprintf(stderr, "[ANDROID] Phone Settings: Battery Saver %s, Heat Control %s\n",
+            s_set.battery_saver ? "on" : "off", s_set.heat ? "on" : "off");
     s_pause_lock = SDL_CreateMutex();
     s_pause_cond = SDL_CreateCondition();
     SDL_AddEventWatch(on_app_event, NULL);

@@ -988,6 +988,14 @@ static int ps_read_int(const char *path, long *v)
 
 /* level, scale, temperature and status from the sticky battery intent, and
  * the current (uA) and remaining charge (uAh) from BatteryManager */
+static int ps_battery_jni(int *pct, int *temp10, int *charging, long *ua, long *uah);
+int nfl2k5_battery_temp10(void)     /* tenths of a degree C, 0 if unknown (android_settings.c) */
+{
+    int pct = 0, temp10 = 0, charging = 0;
+    long ua = 0, uah = 0;
+    return ps_battery_jni(&pct, &temp10, &charging, &ua, &uah) ? temp10 : 0;
+}
+
 static int ps_battery_jni(int *pct, int *temp10, int *charging, long *ua, long *uah)
 {
     char name[17] = { 0 };
