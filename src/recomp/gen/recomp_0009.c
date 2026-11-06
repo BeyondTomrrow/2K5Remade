@@ -96579,6 +96579,8 @@ void sub_00140140(void)
     RECOMP_INTERP_GATE(0x00140140u);
 
 loc_00140140: ;
+    /* NFL2K5-GENPATCH:MUSIC_NO_VIP */
+    if (!MEM32(0xE5FE60u)) { eax = 0; esp += 4; return; }
     PUSH32(esp, 0x00140145u); RECOMP_ABI_CALL(0x00191D20u, sub_00191D20); /* call 0x00191D20 */
 
 loc_00140145: ;

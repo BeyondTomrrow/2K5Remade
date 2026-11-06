@@ -784,6 +784,10 @@ PATCHES = [
     # R3 for original-disc music is consumed on the retail player's own guest
     # frame. Stop its active stream, then use the game's real advance routine;
     # this selects a new index and lets the normal state-2 dispatcher start it.
+    # F1 > Music Player with no VIP loaded: the game only reaches its playlist code
+    # with a VIP, so this per-VIP flag read indexed from a null VIP and crashed.
+    ("MUSIC_NO_VIP", "sub_00140140", "loc_00140140: ;", "after", """    if (!MEM32(0xE5FE60u)) { eax = 0; esp += 4; return; }
+"""),
     ("LOCALMUSIC_RETAIL_NEXT", "sub_00280620", "loc_00280620: ;", "after", """    { extern int nfl2k5_retail_music_take_next(void); if (nfl2k5_retail_music_take_next()) {
         uint32_t keep_eax = eax, keep_ecx = ecx, keep_edx = edx;
         PUSH32(esp, 0x00280620u); RECOMP_ABI_CALL(0x0027FEC0u, sub_0027FEC0);

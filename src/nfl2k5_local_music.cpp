@@ -1030,6 +1030,7 @@ static void nfl2k5_retail_next_interp_hook(void)
  * next at +0x10} kept here, looped; the VIP's own list is never touched, the
  * game's "current entry" 0xC3CBFC just points into them. The choice is carried
  * out on the guest thread by nfl2k5_music_frame_service (front-end frames). */
+extern "C" void sub_000CF0F0(void);
 extern "C" void sub_0027F550(void);
 extern "C" void sub_0027FEC0(void);
 extern "C" void sub_002804C0(void);
@@ -1039,6 +1040,7 @@ extern "C" void xbox_MenuAddPage(const void *page);
 static SDL_AtomicInt g_pick_request;   /* 0 none, else 1 + source */
 static SDL_AtomicInt g_pick_song;      /* 0 all songs, else 1 + song */
 static int g_ui_source, g_ui_song;
+static int g_pick_row = -1, g_pick_wait;
 static uint32_t g_keep_menus, g_keep_loading;
 static bool g_keep_valid;
 
@@ -1079,6 +1081,22 @@ static void music_guest_call(void (*fn)(void), uint32_t ecx)
 
 extern "C" void nfl2k5_music_frame_service(void)
 {
+    if (g_pick_row >= 0) {
+        /* the bank player takes a moment to stop, and 0x280450 starts nothing
+         * while it is busy (sub_000CF0F0) */
+        uint32_t keep_eax = g_eax, keep_ebx = g_ebx, keep_esi = g_esi, keep_ecx = g_ecx, keep_edx = g_edx;
+        g_edx = 0;
+        music_guest_call(sub_000CF0F0, 0xC3CC10u);
+        if (!g_eax || ++g_pick_wait > 240) {
+            uint32_t row = (uint32_t)g_pick_row;
+            g_pick_row = -1;
+            music_guest_call(sub_002804C0, g32(0xAC9EC0u + row * 0x10u));   /* that row, by its name */
+            if (!g32(0xC5D3A4u)) music_guest_call(sub_00280450, 0);  /* start it, if that did not */
+            fprintf(stderr, "[MUSIC] F1 Music Player: row %u started after %d frames (player %u)\n",
+                    row, g_pick_wait, g32(0xC5D3A4u));
+        }
+        g_eax = keep_eax; g_ebx = keep_ebx; g_esi = keep_esi; g_ecx = keep_ecx; g_edx = keep_edx;
+    }
     if (SDL_SetAtomicInt(&g_skip_request, 0)) {
         uint32_t entry = g32(0xC3CBFCu);
         if (SDL_GetAtomicInt(&g_cur_id) >= 0 && entry && entry != 0xC3CBE8u) {
@@ -1090,7 +1108,7 @@ extern "C" void nfl2k5_music_frame_service(void)
             fprintf(stderr, "[MUSIC] F1 Music Player: next entry %08X\n", next);
             music_guest_call(sub_0027FEC0, 0);
             music_guest_call(sub_002804C0, g32(0xAC9ED0u));  /* the UserList row, by its name */
-            music_guest_call(sub_00280450, 0);
+            if (!g32(0xC5D3A4u)) music_guest_call(sub_00280450, 0);   /* the row did not start it */
             g_eax = keep_eax; g_ebx = keep_ebx; g_esi = keep_esi; g_ecx = keep_ecx; g_edx = keep_edx;
         } else {                                     /* the game's own music: an R3 press and release */
             nfl2k5_local_music_buttons(0, 1);
@@ -1107,13 +1125,14 @@ extern "C" void nfl2k5_music_frame_service(void)
         g_keep_loading = g32(0xB9E29Cu);
         g_keep_valid = true;
     }
+    bool no_list = first < 0x00F80000u;                      /* head or the unset list: entries are on the heap */
     if (source == 0) {
-        cur = first != 0xC3CBE8u ? first : 0;
+        cur = no_list ? 0 : first;
         row = 0;
         g32(0xB9E298u) = g_keep_menus;
         g32(0xB9E29Cu) = g_keep_loading;
     } else if (source == 1) {
-        if (first == 0xC3CBE8u || !first) {
+        if (no_list) {
             banner_show(u"Music Player", u"The Jukebox playlist is empty");
             return;
         }
@@ -1141,8 +1160,8 @@ extern "C" void nfl2k5_music_frame_service(void)
     if (cur) g32(0xC3CBFCu) = cur;
     fprintf(stderr, "[MUSIC] F1 Music Player: source %d song %d, entry %08X, row %u\n", source, song, cur, row);
     music_guest_call(sub_0027FEC0, 0);                       /* stop what plays */
-    music_guest_call(sub_002804C0, g32(0xAC9EC0u + row * 0x10u));   /* that row, by its name */
-    music_guest_call(sub_00280450, 0);                       /* start it, if that did not */
+    g_pick_row = (int)row;                                   /* and start when the player has let go */
+    g_pick_wait = 0;
     g_eax = keep_eax; g_ebx = keep_ebx; g_esi = keep_esi; g_ecx = keep_ecx; g_edx = keep_edx;
 }
 
