@@ -22,9 +22,10 @@ WHAT YOU NEED
 
 DISC FILES
 ----------
-Copy these from your extracted disc into the `original` folder:
+Copy your whole extracted disc into the `original` folder:
 
     original/default.xbe
+    original/update.xbe, original/dashupdate.xbe    (mod packs need these)
     original/vc_53450030/0 ... F       (16 files, about 5.8 GB)
 
 Names are not case-sensitive (VC_53450030 works too). The disc must be the USA
