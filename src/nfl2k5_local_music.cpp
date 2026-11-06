@@ -1096,6 +1096,15 @@ extern "C" void nfl2k5_music_frame_service(void)
         if (screen == 0x00515660u) under_main_menu = true;
         if (screen == 0x004E7EC0u) match_screen = true;
     }
+    /* A mod pack's interpreter pushes screens past the [FSM] push log. */
+    static const bool log_top = getenv("NFL2K5_FSM_LOG") != nullptr;
+    static uint32_t last_top = 0;
+    uint32_t top_screen = fsm_depth < 0x20u ? g32(0x00A84B18u + fsm_depth * 8u) : 0u;
+    if (log_top && top_screen != last_top) {
+        last_top = top_screen;
+        fprintf(stderr, "[FSM] top depth %u desc %08X\n", fsm_depth, top_screen);
+        fflush(stderr);
+    }
     if (!under_main_menu || match_screen) {
         if (SDL_SetAtomicInt(&g_skip_request, 0))
             xbox_PresentToast("MUSIC PLAYER", "Next song works in the menus", "", 3000);
