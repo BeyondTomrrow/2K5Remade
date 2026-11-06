@@ -37,6 +37,7 @@
 #include "recomp_icall_feedback.h"
 #include "nfl2k5_presentation.h"
 #include "nfl2k5_widescreen_patch.h"
+#include "platform/android/xbe_identify.h"
 #if defined(__ANDROID__)
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>      /* main() is SDL_main: SDLActivity calls it */
@@ -1712,6 +1713,18 @@ int main(int argc, char **argv)
         printf("[BOOT] Pack executable %s\n", digest_hex);
     } else if (strcmp(digest_hex, expected_sha) != 0) {
         fprintf(stderr, "[BOOT] XBE hash mismatch. Expected %s, got %s.\n", expected_sha, digest_hex);
+#if defined(_WIN32)
+        /* Setup extracts whatever image it is given: this used to just close. */
+        MessageBoxA(NULL, nfl2k5_xbe_is_modded(data, (size_t)length)
+            ? "The game folder holds a modded copy of ESPN NFL 2K5 (a SOFTDRINK or 2K5 Mod Studio disc). "
+              "NFL 2K5 cannot start from a modded disc: it needs the original one, and it applies the mod itself.\n\n"
+              "1. Run Setup again with your original USA Xbox disc image, the dump you made the modded disc from.\n"
+              "2. To play the mod, put its .2k5patch file in mods\\patches. The game installs it, then turn it on "
+              "under Extras > Mods."
+            : "The game folder holds a different version of ESPN NFL 2K5 (its default.xbe does not match). "
+              "NFL 2K5 needs the original USA Xbox disc. Run Setup again with that disc image.",
+            "NFL 2K5", MB_OK | MB_ICONERROR);
+#endif
         free(data);
         return 2;
     }
@@ -1767,22 +1780,32 @@ int main(int argc, char **argv)
     /* SOFTDRINK v0.6 and later releases (v0.6.1, v0.7, ...) keep the same
      * dispatcher detour and save-all wrappers: recognise them by their code,
      * not by one release's executable hash (only v0.6's was listed, so
-     * v0.6.1 and v0.7 ran without these). */
+     * v0.6.1 and v0.7 ran without these). v0.8 moved the wrappers, so they are
+     * found through the retail jumps into them. */
     static const uint8_t k_sd_dispatch[16] = { 0x8b,0x87,0x00,0x01,0x00,0x00,0x8b,0x2c,0xc7,0x85,0xed,0x89,0x54,0x24,0x08,0x75 };
     static const uint8_t k_sd_saveall[16] = { 0x9c,0x60,0xe8,0x8b,0xfa,0xff,0xff,0x85,0xc0,0x0f,0x84,0x22,0x00,0x00,0x00,0xf6 };
     const uint8_t *sd_guest = (const uint8_t *)(uintptr_t)xbox_GetMemoryOffset();
+    uint32_t sd_saveall = 0x014DE0BEu, sd_clear = 0x014E35C3u;
+    if (sd_guest[0x000B9B9Au] == 0xE9 && sd_guest[0x000B6FB3u] == 0xE9) {
+        int32_t rel;
+        memcpy(&rel, sd_guest + 0x000B9B9Bu, 4);
+        sd_saveall = 0x000B9B9Fu + (uint32_t)rel;
+        memcpy(&rel, sd_guest + 0x000B6FB4u, 4);
+        sd_clear = 0x000B6FB8u + (uint32_t)rel;
+    }
     if (!strcmp(digest_hex, "f67e6fc1cb76c9ea1f1ad504e4a6491ff126483d66a9da8ddb92950bbaf740ba") ||
         (g_interp_pack && !memcmp(sd_guest + 0x0006E4E5u, k_sd_dispatch, 16) &&
-         !memcmp(sd_guest + 0x014DE0BEu, k_sd_saveall, 16))) {
+         sd_saveall >= 0x01400000u && sd_saveall < 0x01600000u &&
+         !memcmp(sd_guest + sd_saveall, k_sd_saveall, 16))) {
         printf("[BOOT] SOFTDRINK v0.6 dispatcher compatibility: %u function\n",
                nfl2k5_interp_force(0x0006E4E5u, 0x0006E5F5u));
         /* These save-all detours branch after POPFD. The native lift only
          * restores DF and emits an unresolved, always-false conditional.
          * Interpret the wrapper and the copied continuation together so
          * the original comparisons survive the mod's temporary work. */
-        unsigned flag_paths = nfl2k5_interp_force(0x014DE0BEu, 0x014DE142u);
+        unsigned flag_paths = nfl2k5_interp_force(sd_saveall, sd_saveall + 0x84u);
         flag_paths += nfl2k5_interp_force(0x000B6F30u, 0x000B7044u);
-        flag_paths += nfl2k5_interp_force(0x014E35C3u, 0x014E3613u);
+        flag_paths += nfl2k5_interp_force(sd_clear, sd_clear + 0x50u);
         flag_paths += nfl2k5_interp_force(0x000A27F0u, 0x000A2835u);
         printf("[BOOT] SOFTDRINK v0.6 saved-flags compatibility: %u functions\n", flag_paths);
     }
