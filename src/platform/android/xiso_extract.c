@@ -19,6 +19,7 @@
 #include <sys/statvfs.h>
 #include <unistd.h>
 #include <openssl/sha.h>
+#include "xbe_identify.h"
 
 #define XISO_SECTOR 2048ull
 static const char k_magic[] = "MICROSOFT*XBOX*MEDIA";
@@ -220,6 +221,7 @@ void nfl2k5_android_notice(const char *title, const char *msg)
 
 static char s_ps2_iso[256];            /* a PlayStation 2 image seen while looking */
 static char s_wrong_iso[256];          /* an Xbox image of another version of the game */
+static char s_modded_iso[256];         /* a Mod Studio disc (SOFTDRINK): the USA game, patched */
 
 /* The executables the recompiled code was made from (src/main.c): the
  * retail USA default.xbe, and the same with the built-in widescreen patch. */
@@ -251,12 +253,26 @@ int nfl2k5_android_xbe_file_ok(const char *path)
     return ok;
 }
 
-/* The image's default.xbe (in its root directory) is one of them. */
-static int xiso_xbe_ok(Xiso *x)
+/* 1: the file at `path` is a modded copy of the USA executable. */
+static int xbe_file_modded(const char *path)
+{
+    FILE *f = fopen(path, "rb");
+    uint8_t head[4096];
+    size_t n;
+    if (!f) return 0;
+    n = fread(head, 1, sizeof head, f);       /* the headers come first */
+    fclose(f);
+    return nfl2k5_xbe_is_modded(head, n);
+}
+
+enum { XBE_OTHER = 0, XBE_RETAIL = 1, XBE_MODDED = 2 };
+
+/* What the image's default.xbe (in its root directory) is. */
+static int xiso_xbe_kind(Xiso *x)
 {
     uint32_t rs, rz, off = 0;
     uint8_t *d;
-    int ok = 0, guard = 0;
+    int ok = XBE_OTHER, guard = 0;
     if (!xiso_root(x, &rs, &rz) || !(d = xiso_read_dir(x, rs, rz))) return 0;
     while (off + 14 <= rz && guard++ < 4096) {
         uint16_t left, right;
@@ -274,7 +290,7 @@ static int xiso_xbe_ok(Xiso *x)
             if (buf && fseeko(x->f, (off_t)(x->base + start * XISO_SECTOR), SEEK_SET) == 0 &&
                     fread(buf, 1, fsize, x->f) == fsize) {
                 SHA256(buf, fsize, dg);
-                ok = xbe_digest_ok(dg);
+                ok = xbe_digest_ok(dg) ? XBE_RETAIL : nfl2k5_xbe_is_modded(buf, fsize) ? XBE_MODDED : XBE_OTHER;
             }
             free(buf);
             break;
@@ -320,13 +336,15 @@ static int find_iso(char *best, size_t n)
                 if (f) fclose(f);
                 continue;
             }
-            if (!xiso_xbe_ok(&x)) {          /* another version: the code would not match it */
-                fclose(x.f);
-                snprintf(s_wrong_iso, sizeof s_wrong_iso, "%s", e->d_name);
-                fprintf(stderr, "[ISO] %s: not the retail USA disc, skipped\n", p);
+            k = xiso_xbe_kind(&x);
+            fclose(x.f);
+            if (k != XBE_RETAIL) {           /* the code would not match it */
+                if (k == XBE_MODDED) snprintf(s_modded_iso, sizeof s_modded_iso, "%s", e->d_name);
+                else snprintf(s_wrong_iso, sizeof s_wrong_iso, "%s", e->d_name);
+                fprintf(stderr, "[ISO] %s: not the retail USA disc (%s), skipped\n", p,
+                        k == XBE_MODDED ? "modded" : "another version");
                 continue;
             }
-            fclose(x.f);
             for (k = 0; e->d_name[k] && k < 255; k++) up[k] = (char)toupper((unsigned char)e->d_name[k]);
             up[k] = 0;
             if (strstr(up, "2K5")) s += 2;
@@ -362,6 +380,25 @@ int nfl2k5_android_unpack_iso(const char *root)
     uint32_t rs, rz;
     struct statvfs vf;
     if (!find_iso(iso, sizeof iso)) {
+        /* Unpacked by hand counts too: main.c passed over it for its hash. */
+        snprintf(part, sizeof part, "%s/original/default.xbe", root);
+        if (!s_modded_iso[0] && xbe_file_modded(part))
+            snprintf(s_modded_iso, sizeof s_modded_iso, "The default.xbe in NFL2K5/original");
+        if (s_modded_iso[0]) {
+            /* Not a pack we can run alone: the converted code is matched against
+             * the retail executable to find what a mod changed, and a patched
+             * disc has no retail executable left to compare with. */
+            snprintf(msg, sizeof msg,
+                     "%s is a modded copy of ESPN NFL 2K5 (a SOFTDRINK or 2K5 Mod Studio disc). "
+                     "NFL 2K5 cannot start from a modded disc: it needs the original one, and it "
+                     "applies the mod itself.\n\n"
+                     "1. Put your original USA Xbox disc image in Download. That is the dump you made "
+                     "the modded disc from. Then open NFL 2K5 again.\n"
+                     "2. To play the mod, also put its .2k5patch file in Download. The game installs "
+                     "it, then turn it on under Extras > Mods.", s_modded_iso);
+            nfl2k5_android_notice("NFL 2K5: modded disc image", msg);
+            return -1;
+        }
         if (s_wrong_iso[0]) {
             snprintf(msg, sizeof msg,
                      "%s is a different version of ESPN NFL 2K5 (its default.xbe does not match). "
