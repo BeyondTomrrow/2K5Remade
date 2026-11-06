@@ -103,6 +103,8 @@ void pointer_tick(const std::string &state, ULONGLONG now)
     /* Capture ownership immediately, even while waiting for held buttons to
      * release: the same click must not leak through as native gamepad A. */
     s_pointer_active = true;
+    static bool told_mouse = false;
+    if (!told_mouse) { told_mouse = true; fprintf(stderr, "[SANDBOX] mouse pointer engaged\n"); }
     unsigned buttons = (GetAsyncKeyState(VK_LBUTTON) & 0x8000 ? 1u : 0u) |
                        (GetAsyncKeyState(VK_RBUTTON) & 0x8000 ? 2u : 0u) |
                        (GetAsyncKeyState(VK_MBUTTON) & 0x8000 ? 4u : 0u);
@@ -130,6 +132,7 @@ void pointer_tick(const std::string &state, ULONGLONG now)
         gen, ++s_pointer_sequence, inside ? "true" : "false", inside ? (int)x : -1, inside ? (int)y : -1,
         inside ? pressed : 0u, inside ? (buttons & 7u) : 0u, twice ? "true" : "false");
     s_host->post_event(event);
+    if (inside && pressed) fprintf(stderr, "[SANDBOX] mouse press %u at %d,%d\n", pressed, (int)x, (int)y);
     s_pointer_post = now;
     s_pointer_x = inside ? (int)x : -1;
     s_pointer_y = inside ? (int)y : -1;
