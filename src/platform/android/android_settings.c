@@ -199,10 +199,26 @@ static int heat_thread(void *arg)
     StatusFn status = lib ? (StatusFn)dlsym(lib, "AThermal_getCurrentThermalStatus") : NULL;
     Uint64 cool_since = 0;
     int level = 0;
+    unsigned reports = 0;
     (void)arg;
     if (acquire && status) mgr = acquire();
     for (;;) {
         int st = mgr ? status(mgr) : -1, t = battery_tenths_c(), want = 0;
+        if (reports++ % 3 == 0) {
+            /* every 30 s, Heat Control on or off: tells heat from a heavy scene in a log */
+            char line[160];
+            int o = snprintf(line, sizeof line, "[HEAT] thermal status %d, battery %.1f C, current MHz:", st, t / 10.0);
+            for (int c = 0; c < 8 && o < (int)sizeof line - 12; c++) {
+                char path[80];
+                unsigned long khz = 0;
+                FILE *f;
+                snprintf(path, sizeof path, "/sys/devices/system/cpu/cpu%d/cpufreq/scaling_cur_freq", c);
+                if (!(f = fopen(path, "r"))) continue;
+                if (fscanf(f, "%lu", &khz) == 1) o += snprintf(line + o, sizeof line - o, " %lu", khz / 1000);
+                fclose(f);
+            }
+            fprintf(stderr, "%s%c", line, 10);
+        }
         /* ATHERMAL_STATUS_MODERATE 2, SEVERE 3 */
         if (st >= 3 || t >= 460) want = 2;
         else if (st == 2 || t >= 420) want = 1;
