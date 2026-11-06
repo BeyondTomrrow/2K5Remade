@@ -32,6 +32,16 @@ list(PREPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../android/cmake")
 set(SDL3_DIR "${CMAKE_CURRENT_SOURCE_DIR}/cmake/sdl3" CACHE PATH "" FORCE)
 set(glslang_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../android/cmake/glslang" CACHE PATH "" FORCE)
 
+# Untracked inputs. Without analysis/ the build still succeeds with an empty
+# function list, and every mod pack then runs retail code and crashes; without
+# the register-locals copy the game silently builds the slower generated code.
+if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../analysis/disasm/functions.json")
+  message(FATAL_ERROR "analysis/disasm/functions.json is missing: mod packs would crash. Copy analysis/ into this tree.")
+endif()
+if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../build/gen-locals/recomp_0000.c")
+  message(FATAL_ERROR "build/gen-locals is missing: run python tools/gen-reg-locals.py first.")
+endif()
+
 set(XBOXRECOMP_GX_PORTABLE ON CACHE BOOL "" FORCE)
 set(NFL2K5_BUILD_GAME ON CACHE BOOL "" FORCE)
 add_subdirectory(.. nfl2k5)

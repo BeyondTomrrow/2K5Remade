@@ -36,6 +36,11 @@ def info(name, size, mode):
     return t
 
 
+def rd_all(p):
+    with open(p, "rb") as f:
+        return f.read()
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--binary", required=True)
@@ -45,6 +50,13 @@ def main():
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
     top = "NFL2K5-linux-x86_64-" + a.version
+
+    # An empty interpreter function list still links; packs then crash at run time.
+    if a.binary and b"converted functions differ" not in rd_all(a.binary):
+        sys.exit("binary has no interpreter")
+    ranges = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(a.binary))), "generated", "nfl2k5_func_ranges.c")
+    if not os.path.exists(ranges) or "g_nfl2k5_func_range_count = 0;" in open(ranges).read():
+        sys.exit("refusing to pack: %s is missing or empty, mod packs would crash" % ranges)
 
     files = []  # (archive path, bytes, mode)
 
