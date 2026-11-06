@@ -1,7 +1,9 @@
 ESPN NFL 2K5 - native Linux build (x86-64)
 ==========================================
 
-@STATUS@
+EXPERIMENTAL BUILD. It has only been run in a software-rendered virtual machine,
+never on real Linux hardware or a real GPU. Its speed is unknown. Please report
+what you find, with logs/session.log.
 
 This archive holds the game program only. It contains no game data. You need
 your own legally dumped Xbox copy of ESPN NFL 2K5.

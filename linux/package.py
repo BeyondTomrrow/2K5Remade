@@ -69,7 +69,7 @@ def main():
     # the working tree may hold CRLF on Windows; /bin/sh needs LF
     files.append(("nfl2k5.sh", rd(os.path.join(ROOT, "linux/dist/nfl2k5.sh")).replace(b"\r\n", b"\n"), 0o755))
     for src, dst in TEXT:
-        files.append((dst, rd(os.path.join(ROOT, src)), 0o644))
+        files.append((dst, rd(os.path.join(ROOT, src)).replace(b"\r\n", b"\n"), 0o644))
     for tree, exts in TREES:
         for d, _, names in os.walk(os.path.join(ROOT, tree)):
             for n in sorted(names):

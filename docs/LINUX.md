@@ -1,4 +1,4 @@
-# Native Linux build
+# Native Linux build (experimental)
 
 The release is an x86-64 archive, `NFL2K5-linux-x86_64-<version>.tar.gz`, with
 its own `README.txt` for players. This page is about how the port stands and
@@ -19,7 +19,33 @@ how it is built. `linux/README.md` has the release build steps.
   caches are in `~/.local/share/NFL2K5-PC`, or in the game folder when
   `portable.txt` is there.
 
-@VERIFIED@
+## What has been tested
+
+Only in a QEMU TCG (no hardware acceleration) x86-64 VM on Ubuntu 22.04, with
+Xvfb, openbox and Mesa lavapipe. That is about 0.1-1 frame a second, so nothing
+here says anything about speed.
+
+Seen working, on the real Vulkan path: legal screen, boot intro, title, Main
+Menu, VIP creation, saving and reloading after a restart, Quick Game team
+select, a CPU vs CPU match through pregame, coin toss, kickoff and return to the
+first down (a test build skipped most draws between screenshots to get that far
+in the VM; retail and SOFTDRINK both reached the coin toss in full); F1 menu
+pages and keys; Exit (menu and window close); `.2k5patch` install in the game
+(SOFTDRINK v0.7, output identical to the PC install); playing with the pack
+(`1127 of 33530 converted functions differ`, disc overlay active); pack switch
+prompt and restart; Music folder conversion through ffmpeg, non-ASCII file name
+included; pad unplug and replug through a uinput device; game audio reaching
+SDL (disk driver, menus and in a match).
+
+Also seen: the release archive, unpacked fresh with an empty home folder, boots
+to the title on Wayland (weston's headless backend), and with no Vulkan driver
+it shows an error box instead of a black window.
+
+Not tested: any real GPU or driver, real speed, real pads and rumble, PipeWire,
+PulseAudio or ALSA output, a real Wayland desktop, Steam Deck, any distribution
+but Ubuntu 22.04. One open question: after the kickoff a close-up showed a player
+on a flat olive background. That frame came from the draw-skipping test build,
+so it may be an artifact of the test; compare it with the PC build.
 
 ## Not on Linux
 
