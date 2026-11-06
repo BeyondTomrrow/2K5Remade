@@ -3153,3 +3153,80 @@ void nfl2k5_scorebug_interp_hooks(void)
     recomp_interp_add_hook(0x001BD2F6u, 0, ih_popup_dynamic_alpha);
 }
 
+
+/* Boot movie flashes (gen patches MOVIE_HOLD_RESET / MOVIE_HOLD_FRAME,
+ * sub_00178150). The title decodes each picture into one 640x480 A8R8G8B8
+ * texture, and while the decoder runs behind real time about two of every three
+ * pictures arrive as a single flat colour (black, grey 868686, ...), on every
+ * renderer: the frame-by-frame capture matched the guest memory exactly. The
+ * movie flashed between pictures and flat frames. So a flat picture is replaced
+ * by the last real one, in the texture itself, for up to MOVIE_HOLD_MAX calls in
+ * a row (longer is a real black in the movie), and before the first real
+ * picture it is black rather than grey. NFL2K5_MOVIE_NO_HOLD=1 turns this off,
+ * NFL2K5_MOVIE_PROBE=1 logs each picture. */
+#define MOVIE_HOLD_MAX 24
+static uint32_t s_movie_last_tex;
+static uint8_t *s_movie_frame;
+static size_t s_movie_frame_bytes;
+static int s_movie_have_frame, s_movie_flat_run;
+
+void nfl2k5_movie_frame_reset(void)
+{
+    s_movie_last_tex = 0;
+    s_movie_have_frame = 0;
+    s_movie_flat_run = 0;
+}
+
+static int movie_tex_unfilled(uint32_t tex)
+{
+    static int probe = -1;
+    static unsigned n;
+    uint32_t data = MEM32(tex + 4) & 0x03FFFFFFu, size = MEM32(tex + 0x10);
+    uint32_t w = size >> 16, h = size & 0xFFFFu, y, x, nz = 0, cnt = 0, first = 0, odd = 0, sum = 0, same;
+    if (w == 0 || h == 0 || w > 2048 || h > 2048) return 0;
+    for (y = 8; y < h; y += h / 24) {
+        for (x = 8; x < w; x += w / 24) {
+            uint32_t v = MEM32(0x80000000u + data + (y * w + x) * 4u) & 0xFFFFFFu;
+            if (!cnt) first = v;
+            /* flat pictures carry dark noise and a few stray marks */
+            if (abs((int)(v & 255u) - (int)(first & 255u)) > 10 || abs((int)((v >> 8) & 255u) - (int)((first >> 8) & 255u)) > 10
+                    || abs((int)(v >> 16) - (int)(first >> 16)) > 10) odd++;
+            if (v) nz++;
+            sum += (v & 255u) + ((v >> 8) & 255u) + (v >> 16);
+            cnt++;
+        }
+    }
+    same = odd * 32u < cnt || sum < cnt * 9u;   /* or next to black all over */
+    if (probe < 0) probe = getenv("NFL2K5_MOVIE_PROBE") != NULL;
+    if (probe) fprintf(stderr, "[MOVIEP] %u tex %08X nz %u/%u same %d first %06X\n", n++, tex, nz, cnt, same, first);
+    return same;
+}
+
+uint32_t nfl2k5_movie_frame_hold(uint32_t tex)
+{
+    static int off = -1;
+    if (off < 0) off = getenv("NFL2K5_MOVIE_NO_HOLD") != NULL;
+    if (off) return tex;
+    if (tex) s_movie_last_tex = tex; else tex = s_movie_last_tex;
+    if (tex && ((MEM32(tex + 0xC) >> 8) & 0xFFu) == 0x12u) {       /* LIN_A8R8G8B8 */
+        uint32_t size = MEM32(tex + 0x10), data = MEM32(tex + 4) & 0x03FFFFFFu;
+        size_t bytes = (size_t)(size >> 16) * (size & 0xFFFFu) * 4u;
+        uint8_t *pixels = (uint8_t *)XBOX_PTR(0x80000000u + data);
+        if (bytes && bytes <= (8u << 20) && data + bytes <= 0x04000000u) {
+            if (!movie_tex_unfilled(tex)) {
+                if (s_movie_frame_bytes < bytes) {
+                    free(s_movie_frame);
+                    s_movie_frame = (uint8_t *)malloc(bytes);
+                    s_movie_frame_bytes = s_movie_frame ? bytes : 0;
+                }
+                if (s_movie_frame) { memcpy(s_movie_frame, pixels, bytes); s_movie_have_frame = 1; }
+                s_movie_flat_run = 0;
+            } else if (!s_movie_have_frame) {
+                memset(pixels, 0, bytes);
+            } else if (s_movie_flat_run++ < MOVIE_HOLD_MAX) {
+                memcpy(pixels, s_movie_frame, bytes);
+            }
+        }
+    }
+    return tex;
+}

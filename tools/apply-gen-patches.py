@@ -196,6 +196,17 @@ PATCHES = [
     ("BOOT_MOVIE_END", "sub_000748A0", "loc_00074BD3: ;", "after", """\
     { extern volatile long g_xbox_boot_movie_active; g_xbox_boot_movie_active = 0; }
 """),
+    # The movie loop draws its quad black whenever the player has no frame
+    # ready ([player+0xA4] is 0, sub_003CC0D0 returns 0): a black flash on each
+    # decoder under-run, every renderer. nfl2k5_movie_frame_hold (recomp_manual.c)
+    # keeps the last real frame on screen instead, and treats a texture that is
+    # all one value (the decoder's unfilled grey) as no frame yet.
+    ("MOVIE_HOLD_RESET", "sub_00178150", "loc_00178150: ;", "after", """\
+    { extern void nfl2k5_movie_frame_reset(void); nfl2k5_movie_frame_reset(); }
+"""),
+    ("MOVIE_HOLD_FRAME", "sub_00178150", "loc_00178582: ;", "after", """\
+    { extern uint32_t nfl2k5_movie_frame_hold(uint32_t); eax = nfl2k5_movie_frame_hold(eax); }
+"""),
     ("SKIP_INTRO", "sub_00178150", "loc_00178150: ;", "after", """\
     /* Runtime option NFL2K5_SKIP_INTRO=1 (2026-09-23): sub_00178150 plays one
      * intro movie (espn_videogames, vc, espn_game_sound, intro -- the table at

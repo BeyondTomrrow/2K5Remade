@@ -38798,9 +38798,13 @@ loc_00074BC0: ;
     PUSH32(esp, edx);
     g_ebp = ebp; /* frame stays current across calls */
     g_seh_ebp = ebp;
+    /* NFL2K5-GENPATCH:BOOT_MOVIE_BEGIN */
+    { extern volatile long g_xbox_boot_movie_active; g_xbox_boot_movie_active = 1; }
     PUSH32(esp, 0x00074BD3u); RECOMP_ABI_CALL(0x00178150u, sub_00178150); /* call 0x00178150 */
 
 loc_00074BD3: ;
+    /* NFL2K5-GENPATCH:BOOT_MOVIE_END */
+    { extern volatile long g_xbox_boot_movie_active; g_xbox_boot_movie_active = 0; }
     _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(2) & 0xFFFFFFFFu;
     _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp eax, 2 (32-bit) */
     _cf = (int)(_fa < _fb);

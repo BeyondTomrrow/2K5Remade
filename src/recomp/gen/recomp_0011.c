@@ -85486,6 +85486,8 @@ void sub_00178150(void)
     #define fp_st1() fp_st(1)
 
 loc_00178150: ;
+    /* NFL2K5-GENPATCH:MOVIE_HOLD_RESET */
+    { extern void nfl2k5_movie_frame_reset(void); nfl2k5_movie_frame_reset(); }
     /* NFL2K5-GENPATCH:SKIP_INTRO */
     /* Runtime option NFL2K5_SKIP_INTRO=1 (2026-09-23): sub_00178150 plays one
      * intro movie (espn_videogames, vc, espn_game_sound, intro -- the table at
@@ -86025,6 +86027,8 @@ loc_00178563: ;
     PUSH32(esp, 0x00178582u); RECOMP_ABI_CALL(0x003CC0D0u, sub_003CC0D0); /* call 0x003CC0D0 */
 
 loc_00178582: ;
+    /* NFL2K5-GENPATCH:MOVIE_HOLD_FRAME */
+    { extern uint32_t nfl2k5_movie_frame_hold(uint32_t); eax = nfl2k5_movie_frame_hold(eax); }
     PUSH32(esp, ebx);
     edx = esp + 0x164;
     PUSH32(esp, edx);
