@@ -62,6 +62,8 @@ if a.version_name:
     version += ["--version-name", a.version_name]
 if a.version_code:
     version += ["--version-code", str(a.version_code)]
+if version:
+    version.append("--replace-version")   # the manifest has its own
 run(os.path.join(bt, "aapt2" + exe), "link", "-I", android_jar, "--manifest", os.path.join(app, "AndroidManifest.xml"),
     "--java", os.path.join(work, "gen"), "--min-sdk-version", "28", "--target-sdk-version", "35", *version,
     "-o", base, os.path.join(work, "res", "res.zip"))
