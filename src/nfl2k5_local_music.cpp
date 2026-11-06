@@ -1041,6 +1041,8 @@ static SDL_AtomicInt g_pick_request;   /* 0 none, else 1 + source */
 static SDL_AtomicInt g_pick_song;      /* 0 all songs, else 1 + song */
 static int g_ui_source, g_ui_song;
 static int g_pick_row = -1, g_pick_wait;
+static bool g_pick_told;
+extern "C" void xbox_PresentToast(const char *header, const char *line1, const char *line2, unsigned ms);
 static uint32_t g_keep_menus, g_keep_loading;
 static bool g_keep_valid;
 
@@ -1081,6 +1083,18 @@ static void music_guest_call(void (*fn)(void), uint32_t ecx)
 
 extern "C" void nfl2k5_music_frame_service(void)
 {
+    /* In a match there is no menu music to replace, and stopping the player
+     * there starts nothing: a pick waits for the menus, Next song is dropped. */
+    if (nfl2k5_in_match()) {
+        if (SDL_SetAtomicInt(&g_skip_request, 0))
+            xbox_PresentToast("MUSIC PLAYER", "Next song works in the menus", "", 3000);
+        if (SDL_GetAtomicInt(&g_pick_request) && !g_pick_told) {
+            g_pick_told = true;
+            xbox_PresentToast("MUSIC PLAYER", "Your pick plays back in the menus", "", 3000);
+        }
+        return;
+    }
+    g_pick_told = false;
     if (g_pick_row >= 0) {
         /* the bank player takes a moment to stop, and 0x280450 starts nothing
          * while it is busy (sub_000CF0F0) */

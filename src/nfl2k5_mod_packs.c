@@ -160,6 +160,11 @@ static int mp_launch(const char *exe)
     memset(&si, 0, sizeof(si));
     memset(&pi, 0, sizeof(pi));
     si.cb = sizeof(si);
+    /* this run's own pack choice must not reach the new game: it reads
+     * active-pack.ini. (NFL2K5_PACK left SOFTDRINK's overlay on after turning
+     * the pack off; NFL2K5_RETAIL would keep --retail after turning one on.) */
+    SetEnvironmentVariableA("NFL2K5_PACK", NULL);
+    SetEnvironmentVariableA("NFL2K5_RETAIL", NULL);
     snprintf(cmd, sizeof(cmd), "\"%s\" --run", exe);
     snprintf(work, sizeof(work), "%s", exe);
     slash = strrchr(work, '\\');
