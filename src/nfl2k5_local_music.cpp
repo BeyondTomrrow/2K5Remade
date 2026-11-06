@@ -1040,7 +1040,7 @@ extern "C" void xbox_MenuAddPage(const void *page);
 static SDL_AtomicInt g_pick_request;   /* 0 none, else 1 + source */
 static SDL_AtomicInt g_pick_song;      /* 0 all songs, else 1 + song */
 static int g_ui_source, g_ui_song;
-static int g_pick_row = -1, g_pick_wait;
+static int g_pick_row = -1, g_pick_wait, g_pick_hold;
 static bool g_pick_told;
 extern "C" void xbox_PresentToast(const char *header, const char *line1, const char *line2, unsigned ms);
 static uint32_t g_keep_menus, g_keep_loading;
@@ -1085,7 +1085,9 @@ extern "C" void nfl2k5_music_frame_service(void)
 {
     /* In a match there is no menu music to replace, and stopping the player
      * there starts nothing: a pick waits for the menus, Next song is dropped. */
-    if (nfl2k5_in_match()) {
+    uint32_t fsm_depth = g32(0x00A84B18u + 0x100u);
+    bool at_main_menu = fsm_depth < 0x20u && g32(0x00A84B18u + fsm_depth * 8u) == 0x00515660u;
+    if (nfl2k5_in_match() && !at_main_menu) {        /* in_match stays set 30 s after a game */
         if (SDL_SetAtomicInt(&g_skip_request, 0))
             xbox_PresentToast("MUSIC PLAYER", "Next song works in the menus", "", 3000);
         if (SDL_GetAtomicInt(&g_pick_request) && !g_pick_told) {
@@ -1095,7 +1097,9 @@ extern "C" void nfl2k5_music_frame_service(void)
         return;
     }
     g_pick_told = false;
-    if (g_pick_row >= 0) {
+    if (g_pick_row >= 0 && g_pick_hold > 0) {
+        g_pick_hold--;                                       /* a custom song's stream closes first */
+    } else if (g_pick_row >= 0) {
         /* the bank player takes a moment to stop, and 0x280450 starts nothing
          * while it is busy (sub_000CF0F0) */
         uint32_t keep_eax = g_eax, keep_ebx = g_ebx, keep_esi = g_esi, keep_ecx = g_ecx, keep_edx = g_edx;
@@ -1104,6 +1108,7 @@ extern "C" void nfl2k5_music_frame_service(void)
         if (!g_eax || ++g_pick_wait > 240) {
             uint32_t row = (uint32_t)g_pick_row;
             g_pick_row = -1;
+            g32(0xC3CC08u) = row ^ 1u;                       /* as a change of row: that path starts it, pack or not */
             music_guest_call(sub_002804C0, g32(0xAC9EC0u + row * 0x10u));   /* that row, by its name */
             if (!g32(0xC5D3A4u)) music_guest_call(sub_00280450, 0);  /* start it, if that did not */
             fprintf(stderr, "[MUSIC] F1 Music Player: row %u started after %d frames (player %u)\n",
@@ -1121,8 +1126,9 @@ extern "C" void nfl2k5_music_frame_service(void)
             g32(0xC3CBFCu) = next;
             fprintf(stderr, "[MUSIC] F1 Music Player: next entry %08X\n", next);
             music_guest_call(sub_0027FEC0, 0);
-            music_guest_call(sub_002804C0, g32(0xAC9ED0u));  /* the UserList row, by its name */
-            if (!g32(0xC5D3A4u)) music_guest_call(sub_00280450, 0);   /* the row did not start it */
+            g_pick_row = 1;                                  /* and on, as a pick does */
+            g_pick_wait = 0;
+            g_pick_hold = 45;
             g_eax = keep_eax; g_ebx = keep_ebx; g_esi = keep_esi; g_ecx = keep_ecx; g_edx = keep_edx;
         } else {                                     /* the game's own music: an R3 press and release */
             nfl2k5_local_music_buttons(0, 1);
