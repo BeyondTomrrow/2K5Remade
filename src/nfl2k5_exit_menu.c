@@ -208,11 +208,13 @@ void nfl2k5_vip_jukebox_service(void)
                     if (MEM32(list + k * 4u) == CRIB_JUKEBOX) { found = h; break; }
             }
             fprintf(stderr, "[JUKEBOX] Crib ready (state 3): jukebox at hotspot %u item %u\n", (unsigned)found, (unsigned)k);
-            s_jukebox = 2;
-            if (found) {
-                MEM32(CRIB_HOTSPOT) = found;
-                MEM32(CRIB_ITEM_INDEX) = k;
+            if (!found) {                             /* no jukebox here: the player is in the Crib, as usual */
+                s_jukebox = 0;
+                goto done;
             }
+            s_jukebox = 2;
+            MEM32(CRIB_HOTSPOT) = found;
+            MEM32(CRIB_ITEM_INDEX) = k;
             MEM32(CRIB_ITEM) = CRIB_JUKEBOX;
             PUSH32(g_esp, 4u);
             g_eax = FRONTEND_FSM;
@@ -237,6 +239,7 @@ void nfl2k5_vip_jukebox_service(void)
             sub_00270B20();                           /* the Crib menu's Exit (asks to save) */
         }
     }
+done:
     g_eax = save_eax; g_ecx = save_ecx; g_edx = save_edx; g_ebx = save_ebx;
     g_esi = save_esi; g_edi = save_edi; g_ebp = save_ebp;
 }
@@ -319,10 +322,9 @@ void nfl2k5_exit_menu_install(void)
     if (!MEM32(link + 0x04)) { fprintf(stderr, "[EXITMENU] no guest memory\n"); return; }
     s_confirm = header;
     MEM32(MAIN_MENU + 0x10) = copy;
-    /* Features > VIP > Jukebox: a type-9 row after Manage, if the Crib (or a
-     * pack's renamed Crib) and the retail VIP menu are where they should be */
-    s_crib_action = xm_action(MAIN_MENU, "The Crib");
-    if (!s_crib_action) s_crib_action = xm_action(MAIN_MENU, "Trophy Room");
+    /* Features > VIP > Jukebox: a type-9 row after Manage, if the Crib and the
+     * retail VIP menu are where they should be */
+    s_crib_action = xm_action(MAIN_MENU, "The Crib");   /* SOFTDRINK's Trophy Room has no jukebox */
     if (s_crib_action && xm_wstr_is(MEM32(VIP_MENU), "VIP") && xm_link(VIP_MENU, "Manage", &vn) && vn >= 1 && vn < 31) {
         uint32_t vold = MEM32(VIP_MENU + 0x10), vcopy = xm_alloc(XM_ROW * (uint32_t)(vn + 2)), jr;
         if (vcopy) {

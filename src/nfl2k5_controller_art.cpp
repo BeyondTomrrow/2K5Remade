@@ -419,7 +419,8 @@ const uint32_t *override(uint32_t fmt, uint32_t w, uint32_t h, uint32_t content,
                 g_small_hash = dh;
                 if (g_log) fprintf(stderr, "[ART] header sheet hash %08X\n", dh);
             }
-            if (dh == g_small_hash) r = small_sheet(orig, style, ow, oh);
+            /* the same sheet comes with more than one palette: every one of them */
+            if (dh == g_small_hash || looks_like_small_sheet(orig)) r = small_sheet(orig, style, ow, oh);
         }
         if (g_log && !r) fprintf(stderr, "[ART] %ux%u paletted texture hash %08X (not replaced)\n", w, h, dh);
     }

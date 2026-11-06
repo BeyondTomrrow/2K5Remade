@@ -4,6 +4,7 @@
 #include "presentation/presentation_host.h"
 #include "nfl2k5_json.h"
 #include <windows.h>
+#include <SDL3/SDL.h>
 #include <atomic>
 #include <cmath>
 #include <cstdlib>
@@ -77,9 +78,16 @@ unsigned pointer_button_edges(unsigned buttons)
     return pressed;
 }
 
+/* xbox_FramebufferWindowHwnd is an SDL_Window in the SDL3 build, not an HWND. */
+static HWND game_hwnd(void)
+{
+    SDL_Window *w = (SDL_Window *)xbox_FramebufferWindowHwnd();
+    return w ? (HWND)SDL_GetPointerProperty(SDL_GetWindowProperties(w), SDL_PROP_WINDOW_WIN32_HWND_POINTER, nullptr) : nullptr;
+}
+
 void pointer_tick(const std::string &state, ULONGLONG now)
 {
-    HWND window = (HWND)xbox_FramebufferWindowHwnd();
+    HWND window = game_hwnd();
     unsigned gen = 0;
     POINT p;
     bool eligible = s_host && nfl2k5_sandbox_active() && (nfl2k5_sandbox_ui_open() || nfl2k5_sandbox_ui_draw()) &&
@@ -208,7 +216,7 @@ extern "C" void nfl2k5_sandbox_ui_viewport(float x, float y, float width, float 
 
 extern "C" int nfl2k5_sandbox_ui_pointer_active(void)
 {
-    HWND window = (HWND)xbox_FramebufferWindowHwnd();
+    HWND window = game_hwnd();
     return s_pointer_active.load() && nfl2k5_sandbox_active() && (nfl2k5_sandbox_ui_open() || nfl2k5_sandbox_ui_draw()) &&
         window && GetForegroundWindow() == window ? 1 : 0;
 }
