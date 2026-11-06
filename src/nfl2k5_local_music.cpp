@@ -1145,7 +1145,7 @@ extern "C" void nfl2k5_music_frame_service(void)
         g_keep_loading = g32(0xB9E29Cu);
         g_keep_valid = true;
     }
-    bool no_list = first < 0x00F80000u;                      /* head or the unset list: entries are on the heap */
+    bool no_list = !first || first == 0xC3CBE8u || !g32(0xC3CC04u);   /* 0xC3CC04: entries in the list */
     if (source == 0) {
         cur = no_list ? 0 : first;
         row = 0;
