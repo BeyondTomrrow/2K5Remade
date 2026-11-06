@@ -25,7 +25,7 @@ TEXT = [  # source (repository relative) -> path in the archive
     ("docs/third-party/nfl2k5tool-NOTICE.txt", "docs/third-party/nfl2k5tool-NOTICE.txt"),
     ("docs/LINUX.md", "docs/LINUX.md"),
 ]
-EMPTY_DIRS = ["original", "mods/packs", "mods/patches"]
+EMPTY_DIRS = ["original", "original/CACHE", "mods/packs", "mods/patches"]
 TREES = [("assets/controls", (".png", ".json"))]
 FORBIDDEN = ("eras", "oldschool", "old-school", ".xbe", ".iso", "vc_53450030", ".2k5patch", ".sav")
 
@@ -64,6 +64,10 @@ def main():
                 if n.lower().endswith(exts):
                     p = os.path.join(d, n)
                     files.append((os.path.relpath(p, ROOT).replace("\\", "/"), rd(p), 0o644))
+    miniz = os.path.join(ROOT, "external/xemu-src/util/miniz/miniz.c")
+    if os.path.exists(miniz):
+        text = rd(miniz)
+        files.append(("docs/third-party/miniz-LICENSE.txt", text[:text.index(b"*/") + 2], 0o644))
     for spec in a.license:
         src, name = spec.split("=", 1)
         files.append(("docs/third-party/" + name, rd(src), 0o644))

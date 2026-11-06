@@ -1,77 +1,67 @@
-# Native Linux build (experimental)
+# Native Linux build
 
-The game builds and links natively on Linux with GCC and SDL3. It has not
-been played end to end yet; expect the same rough edges as early Windows
-builds, plus the Linux gaps listed below.
+The release is an x86-64 archive, `NFL2K5-linux-x86_64-<version>.tar.gz`, with
+its own `README.txt` for players. This page is about how the port stands and
+how it is built. `linux/README.md` has the release build steps.
 
-## Build
+## What the release is
 
-Arch / CachyOS:
+- Full renderer: the same gx layer as Windows and Android, on SDL_GPU with
+  Vulkan. Shaders are compiled at run time by glslang. No OpenGL or Direct3D.
+- SDL3 ships in `lib/` (RUNPATH `$ORIGIN/lib`). libstdc++ and libgcc are linked
+  statically and OpenSSL is replaced by `android/openssl_shim`, so the program
+  needs only glibc 2.35 or newer, plus the system's Vulkan loader and whatever
+  video and audio stack SDL finds at run time.
+- `nfl2k5.sh` starts the game and keeps `logs/session.log`. Running `./NFL2K5`
+  directly also works: it raises its own stack limit to 16 MB and restarts
+  itself, since the Windows build links that size and Linux defaults to 8 MB.
+- Saves are in `saves/` in the game folder, as on Windows. Settings, logs and
+  caches are in `~/.local/share/NFL2K5-PC`, or in the game folder when
+  `portable.txt` is there.
 
-    sudo pacman -S --needed base-devel git cmake ninja python sdl3 openssl libepoxy
-    git clone --recursive https://github.com/BeyondTomrrow/2K5Remade.git
-    cd 2K5Remade
+@VERIFIED@
 
-miniz comes from xemu's source tree (external/ is gitignored):
+## Not on Linux
 
-    mkdir -p external/xemu-src/util/miniz
-    for f in miniz.c miniz.h; do
-      curl -fL -o external/xemu-src/util/miniz/$f \
-        https://raw.githubusercontent.com/xemu-project/xemu/master/util/miniz/$f
-    done
+- Broadcast presentation packages (FOX/CBS/NBC scorebugs, player cards,
+  broadcast music). The renderer is Direct2D/Media Foundation/XAudio2 with an
+  HTML host; `src/platform/posix/presentation_stub.cpp` and the stub
+  `PresentationHost` keep the original ESPN presentation. The stub also means
+  moment audio clips stay silent.
+- Sandbox: its only UI is HTML (`src/nfl2k5_sandbox_ui.cpp`, same host). The
+  archive leaves out `mods/sandbox`, so the Game Modes row does not appear.
+- Tools that are Windows programs: Team Builder, `nfl2k5-save-converter`, the
+  disc-image half of the mod pack installer. `.2k5patch` files install in the
+  game itself.
+- FSR 3 and frame generation (Direct3D 12 only), HDR output (written for the
+  Windows path, never run on Linux); the F1 and in-game video menus leave those
+  rows out on Linux and the Graphics API row with them.
+- DDS replacement textures (PNG, JPEG, BMP and TGA work).
+- Interpreter fault report on crash (Windows VEH diagnostic). The general crash
+  report does work and goes to the session log.
+- Music folder conversion runs an `ffmpeg` program from PATH (wmav2 encoder)
+  instead of Media Foundation. Android links FFmpeg in; the Linux release does
+  not.
 
-Then:
+## Building from source without the release wrapper
+
+The plain configuration below builds the older software path, not the release:
+it draws 2D on the GPU at most and leaves 3D to the software rasterizer. For
+anything but porting work, use `linux/README.md`.
 
     cmake -B build-linux-game -G Ninja -DCMAKE_BUILD_TYPE=Release -DNFL2K5_BUILD_GAME=ON
     cmake --build build-linux-game
+    tools/run-linux.sh
 
-The generated code is about 220 MB of C; expect several minutes. The game
-target builds at -O2 by default (`NFL2K5_LINUX_OPT`; 0 for debugging, 1 if
-an -O2 build misbehaves). The largest generated files need about 2 GB of RAM
-each to compile, so if a parallel build runs out of memory, limit the jobs:
-`cmake --build build-linux-game -j6`.
+It needs SDL3, OpenSSL, libepoxy and glslang from the distribution, and miniz
+from xemu's source tree in `external/xemu-src/util/miniz` (`external/` is
+gitignored). The generated code is about 220 MB of C; the largest files need
+about 2 GB of RAM each to compile, so limit the jobs on a small machine. The
+game target builds at -O2 (`NFL2K5_LINUX_OPT`; 0 for debugging).
 
 The four `NFL2K5_FORCE_UNBLOCK_*` options that `tools/build.ps1` enables for
 Windows (AUDIO_LOCK, 33660_DRAIN, NETPOLL, STATE9_READY) default to ON on Linux.
-Without them the game sits on a black screen (the main thread waits forever
-in XNetStartup's network poll). A build directory configured before they
-defaulted on keeps them OFF in its cache; reconfigure it with
-
-    cmake -B build-linux-game -DNFL2K5_FORCE_UNBLOCK_AUDIO_LOCK=ON \
-      -DNFL2K5_FORCE_UNBLOCK_33660_DRAIN=ON -DNFL2K5_FORCE_UNBLOCK_NETPOLL=ON \
-      -DNFL2K5_FORCE_UNBLOCK_STATE9_READY=ON
-
-## Hardware rendering (in progress)
-
-`RECOMP_SDLGPU=1 tools/run-linux.sh` turns on the SDL3 GPU renderer
-(Vulkan). It currently draws the 2D layers (menus, HUD, text) and leaves 3D
-to the software rasterizer; design and status in
-`external/xboxrecomp/docs/sdl-gpu-renderer.md`. Building it needs
-`glslang` (`sudo pacman -S glslang`); without it the build still works and
-the renderer reports itself unavailable.
-
-## Game files
-
-Put your extracted disc in `original/` (it must contain `default.xbe` and
-`vc_53450030`). Same layout as the Windows build.
-
-## Run
-
-    tools/run-linux.sh
-
-Logs go to the terminal. `SDL_VIDEO_DRIVER=wayland` or `=x11` forces a
-video backend if the default misbehaves.
-
-## Not on Linux yet
-
-- Broadcast presentation packages (FOX/CBS/NBC scorebugs, player cards,
-  broadcast music). The renderer is Direct2D/Media Foundation/XAudio2;
-  Linux keeps the original ESPN presentation. `src/platform/posix/presentation_stub.cpp`
-- Mod pack disc overlays (`xboxrecomp/src/kernel/kernel_overlay.c`)
-- DDS replacement textures (PNG/JPEG/BMP/TGA work)
-- Interpreter fault report on crash (Windows VEH diagnostic)
-- `analysis/` is not needed to build; without it the mod-pack
-  interpreter ranges are empty, which retail does not use
+Without them the game sits on a black screen.
 
 ## How the port is structured
 
@@ -80,6 +70,7 @@ video backend if the default misbehaves.
 - `src/platform/posix/win32_game_compat.*` adds the Win32 calls the game
   uses that xboxrecomp does not (directory search, attributes, copy/move,
   secure CRT, a few intrinsics). Paths are accepted with backslashes and
-  converted, so game code builds paths the same way on both platforms.
+  converted, so game code builds paths the same way on both platforms; `fopen`
+  is wrapped for the same reason.
 - Windows-specific code paths are `#ifdef _WIN32`; Windows builds are
   unchanged.

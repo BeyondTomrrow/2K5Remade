@@ -39,7 +39,7 @@ INSTALL AND RUN
     (copy your disc files into original/)
     ./nfl2k5.sh
 
-Keep the folder writable: added teams and mod packs are stored in it.
+Keep the folder writable: saves and mod packs are stored in it.
 
     ./nfl2k5.sh --retail     the clean game, whatever mod pack is selected
 
@@ -48,12 +48,16 @@ F1 opens the settings menu (video, system, Music Player).
 
 WHERE THINGS GO
 ---------------
-    Saves, settings, logs, shader cache:  ~/.local/share/NFL2K5-PC/
-        saves/, nfl2k5_video.ini, controls.ini, cache/
-        logs/session.log (this run), logs/session.prev.log (the run before)
+    In the game folder:
+        saves/                 your saved games and rosters
+        mods/, Music/          mod packs, your own songs
+    In ~/.local/share/NFL2K5-PC/:
+        nfl2k5_video.ini, nfl2k5_game.ini, controls.ini    settings
+        cache/                 shader cache
+        logs/session.log       this run; logs/session.prev.log is the run before
 
-Create an empty file named portable.txt next to the program to keep all of this
-in the game folder instead.
+Create an empty file named portable.txt next to the program to keep settings,
+logs and cache in the game folder too.
 
 If something goes wrong, logs/session.log is what to send with a bug report.
 A crash writes a report into it.
@@ -89,12 +93,26 @@ Patched disc images (.iso) cannot be installed on Linux; use the .2k5patch.
 
 STEAM DECK
 ----------
-@DECK@
+Not tested on a Steam Deck yet; nobody has run this build on one. It should
+work as a non-Steam game: add nfl2k5.sh in desktop mode, keep the archive on
+the internal drive or an ext4 card, and give the F1 key a button through Steam
+Input (the settings menu has no controller shortcut). The Deck's Vulkan driver
+and Steam Input's virtual pad are what the game expects, but expect to tune
+the scale and frame limit in F1 yourself.
 
 
 NOT ON LINUX
 ------------
-@MISSING@
+- Broadcast presentation packages (FOX, CBS, NBC scorebugs, player cards,
+  broadcast music). The game keeps its original ESPN presentation.
+- Sandbox. Its panel is an HTML page, and Linux has no HTML host yet, so the
+  Sandbox pack is not part of this archive.
+- Added teams and the Team Builder, the PS2/Xbox save converter, and installing
+  mod packs from patched disc images. Those tools are Windows programs.
+- FSR 3 upscaling and frame generation, HDR output, and the Direct3D choices in
+  the Graphics API row.
+- DDS replacement textures (PNG, JPEG and BMP work).
+- SOFTDRINK moment audio clips (they use the presentation's sound player).
 
 
 THIRD-PARTY SOFTWARE
