@@ -251,7 +251,7 @@ static const char *const k_labels[PS_COUNT] = { "Touch Controls", "Touch Button 
                                                 "Pause When Leaving", "Add Songs" };
 int nfl2k5_phone_rows(void) { return PS_COUNT; }
 const char *nfl2k5_phone_label(int r) { return r >= 0 && r < PS_COUNT ? k_labels[r] : ""; }
-int nfl2k5_phone_toggle(int r) { return r == PS_BATTERY || r == PS_PAUSE || r == PS_HEAT; }
+int nfl2k5_phone_toggle(int r) { return r == PS_PAUSE; }
 int nfl2k5_phone_values(int r)
 {
     switch (r) {
@@ -301,6 +301,9 @@ void nfl2k5_phone_value_name(int r, int v, char *b, size_t n)
     case PS_OPACITY: snprintf(b, n, "%s", opacity[(unsigned)v % 4u]); break;
     case PS_SONGS: snprintf(b, n, "%s", "Choose from phone"); break;
     case PS_EDIT: snprintf(b, n, "%s", "Move and resize"); break;
+    /* the two settings allowed to change the picture say so */
+    case PS_BATTERY: snprintf(b, n, "%s", v ? "On: 1x resolution, 30 FPS" : "Off"); break;
+    case PS_HEAT: snprintf(b, n, "%s", v ? "On: may lower resolution when hot" : "Off"); break;
     default: snprintf(b, n, "%s", v ? "On" : "Off"); break;
     }
 }
