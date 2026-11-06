@@ -32,6 +32,10 @@ int strcat_s(char *dst, size_t size, const char *src);
 #define _fseeki64 fseeko
 #define _ftelli64 ftello
 int fopen_s(FILE **f, const char *name, const char *mode);
+/* The game names host files with backslashes ("logs\x.txt", "mods\features.ini"),
+ * which on Linux would be one odd file name in the working directory. */
+FILE *nfl2k5_fopen(const char *name, const char *mode);
+#define fopen nfl2k5_fopen
 struct tm;
 int localtime_s(struct tm *out, const time_t *t);
 int _vsnprintf_s(char *buf, size_t size, size_t count, const char *fmt, va_list ap);

@@ -503,7 +503,7 @@ int nfl2k5_hle_XInputGetState(void)
         }
     }
     host_gamepad(&g);
-#if defined(_WIN32)
+#if !defined(__ANDROID__)
     {   /* Coach Mode: per-frame play-call hand-off, sideline camera and the
          * fast-forward toggle. Reads the pad only; never consumes input. A
          * no-op unless NFL2K5_COACH_MODE is on (src/nfl2k5_coach_mode.c). */
