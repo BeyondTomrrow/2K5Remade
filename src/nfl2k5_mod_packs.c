@@ -51,12 +51,13 @@ static void mp_read_json_name(const char *path, char *out, size_t cap)
     if (n >= cap) n = cap - 1;
     memcpy(out, p, n);
     out[n] = 0;
+    /* A name too wide for its column blanks the whole Mod Packs list, so keep it
+     * short: "SOFTDRINK 2K28 v0.9 64 MB (experimental) v0.9" -> "... v0.9 64 MB". */
+    p = strstr(out, " (");
+    if (p && (q = strchr(p, ')')) != NULL) memmove(p, q + 1, strlen(q + 1) + 1);
     /* "SOFTDRINK 2K28 v0.7 v0.7" (installed packs get the version added twice) */
     q = strrchr(out, ' ');
-    if (q && q > out) {
-        size_t w = strlen(q);
-        if ((size_t)(q - out) >= w && !strncmp(q - w, q, w)) *q = 0;
-    }
+    if (q && q > out && strstr(out, q) < q) *q = 0;
 }
 
 #ifdef NFL2K5_UWP
@@ -377,7 +378,10 @@ static void mp_install_one(const char *dir, const char *name)
         mp_read_active(active, sizeof active);
         mp_pack_stem(active, a_stem, sizeof a_stem);
         mp_pack_stem(folder, n_stem, sizeof n_stem);
-        if ((!active[0] || !_stricmp(a_stem, n_stem)) && !getenv("NFL2K5_NO_PACK_AUTOSELECT") && mp_write_active(folder)) {
+        /* An experimental cut of a release (SOFTDRINK's 64 MB one gives up most of
+         * the pack) is the player's choice: Extras > Mods, not this. */
+        if ((!active[0] || !_stricmp(a_stem, n_stem)) && !getenv("NFL2K5_NO_PACK_AUTOSELECT") &&
+                !strstr(folder, "experimental") && mp_write_active(folder)) {
             fprintf(stderr, "[MODPACK] %s is now the selected pack (was '%s')\n", folder, active);
             xbox_PresentToast("MOD PACKS", "Installed and selected:", folder,
                               20000);
