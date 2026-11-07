@@ -60,7 +60,6 @@ extern uint32_t xbox_HeapAlloc(uint32_t size, uint32_t alignment);
 #define SD_ACT_PRACTICE 0x014E9452u        /* row 2: Practice */
 #define SD_PLAYER     0x014F30B0u          /* the pack's pointer to MyPlayer's record */
 #define CRIB_DESC     0x00524FA0u          /* template: events-only handler 0xF3DA0 */
-#define ESPN_COM      0x00525664u
 #define PAD_WORDS     0x00B37A78u          /* sub_00070A10: port * 0x244 */
 #define BTN_A         0x00000100u          /* sub_00277570 */
 #define BTN_B         0x00000220u
@@ -73,22 +72,22 @@ extern uint32_t xbox_HeapAlloc(uint32_t size, uint32_t alignment);
 enum { HS_DOOR, HS_MIRROR, HS_COMPUTER, HS_MENU, HOTS };
 enum { SCR_HUB, SCR_DOOR, SCR_PC, SCREENS };
 static const char *const k_hot_name[HOTS] = { "Front Door", "Mirror", "Computer", "Career Menu" };
-static const char *const k_hot_what[HOTS] = { "Game day or practice", "Change your look", "Stats, schedule, ESPN.com", "The full MyCareer list" };
+static const char *const k_hot_what[HOTS] = { "Game day or practice", "Change your look", "Stats and schedule", "The full MyCareer list" };
 /* list rows: label, the pack's action; link = a screen pushed over the room */
 static const struct { const char *label; uint32_t action, link; } k_rows[SCREENS][4] = {
     { { 0 } },
     { { "Play Next Game", SD_ACT_NEXT, 0 }, { "Practice", SD_ACT_PRACTICE, 0 }, { 0 } },
-    { { "My Stats", SD_ACT_PLAYER, 0 }, { "Schedule", SD_ACT_SCHED, 0 }, { "ESPN.com", 0, ESPN_COM }, { 0 } },
+    { { "My Stats", SD_ACT_PLAYER, 0 }, { "Schedule", SD_ACT_SCHED, 0 }, { 0 } },
 };
 
 typedef struct { float eye[3], at[3], fov, mark[3]; } Stop;
 /* Room space is the Crib's (cm, y up). mark = where the cursor scene floats. A choice
  * dollies part of the way towards `at`. */
 static Stop s_stop[HOTS] = {
-    { {  260.0f, 150.0f,  -950.0f }, {  260.0f,  90.0f,   327.0f }, 58.0f, {    0.0f, 300.0f,  320.0f } },
-    { { -400.0f, 170.0f,  -300.0f }, {-1500.0f, 300.0f, -1400.0f }, 60.0f, {-1200.0f, 300.0f, -1100.0f } },
-    { { 1500.0f, 150.0f,  -700.0f }, { 2500.0f, 100.0f, -1300.0f }, 58.0f, { 2500.0f, 250.0f, -1400.0f } },
-    { { 2000.0f, 150.0f, -2200.0f }, { 3000.0f, 100.0f, -2500.0f }, 60.0f, { 3060.0f, 220.0f, -2500.0f } },
+    { { 2100.0f, 150.0f, -1750.0f }, {  200.0f, 100.0f, -2150.0f }, 58.0f, {  500.0f, 240.0f, -2100.0f } },   /* the hallway out */
+    { { 1500.0f, 130.0f, -1900.0f }, {  910.0f,  40.0f, -2225.0f }, 50.0f, {  910.0f, 235.0f, -2225.0f } },   /* the mirror (a silvered standee) */
+    { { 2100.0f, 150.0f, -1750.0f }, { 2520.0f, 130.0f, -1410.0f }, 58.0f, { 2500.0f, 395.0f, -1410.0f } },   /* the wall screens by the bar */
+    { { 2100.0f, 150.0f, -1750.0f }, { 3510.0f,  30.0f, -1890.0f }, 58.0f, { 3510.0f, 200.0f, -1890.0f } },   /* the fireplace */
 };
 
 static struct {
@@ -178,20 +177,20 @@ static void wtoa(uint32_t w, char *out, size_t n)
 
 /* ---- the room ------------------------------------------------------------- */
 
-/* The first home: the Crib's collectibles out, and the surfaces its streaming item cache
+/* The first home, one corner of the Crib (fireplace and bar side): the Crib's collectibles out, and the surfaces its streaming item cache
  * (crib_16k/32k/64k.iff, sub_000441B0) would dress pointed at textures embedded in the room.
  * This table is the tier: another home is another list. */
 static const char k_hide_default[] =
     "poster_p01,poster_p02,poster_p03,poster_p04,poster_p05,poster_p06,poster_p07,poster_p08,poster_p09,"
     "poster_p10,poster_p11,poster_p12,poster_p13,banner_v_p01,banner_v_p02,banner_v_p03,banner_v_p04,"
-    "banner_h_p01,banner_h_p02,banner_h_p03,standee_p01,standee_p02,standee_p03,standee_p04,license_01,"
+    "banner_h_p01,banner_h_p02,banner_h_p03,standee_p01,standee_p03,standee_p04,license_01,"
     "sign_interstate_01,sign_parking_01,sign_parking_02,sign_parking_03,sign_street_01,pennant_p01,"
     "pennant_p02,pennant_p03,pennant_p04,wall_art_player_p01,wall_art_player_p02,bobblestands,bobblelogos";
 static const char k_swap_default[] =
     "floor_wood_01=wood_cherry,floor_wood_02=wood_cherry,floor_wood_03=wood_cherry,floor_wood_04=wood_cherry,"
     "floor_tile_01=concrete_m_01,floor_carpet_01=concrete_m_01,floor_carpet_02=concrete_m_01,"
     "floor_carpet_03=concrete_m_01,floor_carpet_04=concrete_m_01,rug_m_01=wood_cherry,rug_m_02=wood_cherry,"
-    "rug_m_03=wood_cherry,rug_m_04=wood_cherry,trim_dark=wood_cherry";
+    "rug_m_03=wood_cherry,rug_m_04=wood_cherry,trim_dark=wood_cherry,standee_02=chrome";
 
 static uint32_t find_mat(const char *name)
 {
@@ -465,10 +464,11 @@ static void ev_draw(void)
         gcall(sub_0002AC80, ui, 0);
         rect(0.0f, 392.0f, 640.0f, 60.0f, 0xA0000000u);
         gcall(sub_0002AC80, s_h.camsave, 0);
-        text(s_h.title, 0, 48.0f, 36.0f, 0xFFFFFFFFu);
-        text(s_h.w_name[s_h.hot], 0, 48.0f, 398.0f, 0xFFFFD040u);
-        text(s_h.w_what[s_h.hot], 0, 48.0f, 422.0f, 0xFFFFFFFFu);
-        text(s_h.hot == HS_MENU ? s_h.w_prompt_menu : s_h.w_prompt, 0, 340.0f, 410.0f, 0xFFFFFFFFu);
+        /* x is the text's centre */
+        text(s_h.title, 0, 70.0f, 36.0f, 0xFFFFFFFFu);
+        text(s_h.w_name[s_h.hot], 0, 160.0f, 398.0f, 0xFFFFD040u);
+        text(s_h.w_what[s_h.hot], 0, 160.0f, 422.0f, 0xFFFFFFFFu);
+        text(s_h.hot == HS_MENU ? s_h.w_prompt_menu : s_h.w_prompt, 0, 470.0f, 410.0f, 0xFFFFFFFFu);
     } else gcall(sub_0002AC80, s_h.camsave, 0);
 }
 
