@@ -92,6 +92,12 @@ int main(int argc, char **argv)
     CHECK(!strcmp(name, "Turnip \"Test\" Vulkan 1.3.2"));
     nfl2k5_gpu_row_name(0, 0, name, sizeof name);
     CHECK(!strcmp(name, "System Driver"));
+    /* every value stays narrow enough for the screen to draw it */
+    for (int r = 0; r < GD_ROWS; r++) {
+        char v[200];
+        nfl2k5_gpu_row_name(r, 1, v, sizeof v);
+        CHECK(strlen(v) <= GD_VALUE_CHARS);
+    }
 
     /* the same driver again replaces it */
     CHECK(nfl2k5_gpu_driver_install(tmp, "t.zip", msg, sizeof msg) == 1);
@@ -161,12 +167,12 @@ int main(int argc, char **argv)
         CHECK(s_selected[0] == 0);
         CHECK(strstr(s_toast, "did not finish") != NULL);
         nfl2k5_gpu_row_name(4, 0, name, sizeof name);
-        CHECK(strstr(name, "did not finish") != NULL);
+        CHECK(strstr(name, "Last driver failed") != NULL);
         /* and stays on the System Driver, with the reason still in the menu */
         boot();
         CHECK(s_open_calls == 1 && s_selected[0] == 0);
         nfl2k5_gpu_row_name(4, 0, name, sizeof name);
-        CHECK(strstr(name, "did not finish") != NULL);
+        CHECK(strstr(name, "Last driver failed") != NULL);
 
         /* presented: it keeps its place across starts */
         nfl2k5_gpu_row_set(0, t + 1);

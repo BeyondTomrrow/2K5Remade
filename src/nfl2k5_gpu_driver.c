@@ -699,6 +699,15 @@ void nfl2k5_gpu_row_set(int r, int v)
     }
 }
 
+/* A value wider than about 30 characters makes the screen fall back to a
+ * sideways scroll bar and draw no values at all (seen with a 45-character note):
+ * the whole reason goes in the toast and the log instead. */
+#define GD_VALUE_CHARS 30
+static void gd_clip(char *b)
+{
+    if (strlen(b) > GD_VALUE_CHARS) strcpy(b + GD_VALUE_CHARS - 3, "...");
+}
+
 void nfl2k5_gpu_row_name(int r, int v, char *b, size_t n)
 {
     int adreno = nfl2k5_gpu_driver_is_adreno();
@@ -712,13 +721,14 @@ void nfl2k5_gpu_row_name(int r, int v, char *b, size_t n)
     case GD_ROW_ADD: snprintf(b, n, "%s", adreno ? "Choose .zip or .so" : "Not available"); break;
     case GD_ROW_REMOVE:
         if (!adreno || !s_selected[0]) snprintf(b, n, "Pick a driver above first");
-        else snprintf(b, n, "%s", s_remove_armed ? "Press again to delete it" : "Delete the one above");
+        else snprintf(b, n, "%s", s_remove_armed ? "Press again to delete" : "Delete the one above");
         break;
     case GD_ROW_NOTE:
-        if (!adreno) snprintf(b, n, "Needs an Adreno GPU: this phone has none");
-        else if (s_note[0]) snprintf(b, n, "%s", s_note);
-        else snprintf(b, n, "Changes apply the next time you open the game");
+        if (!adreno) snprintf(b, n, "Needs an Adreno GPU");
+        else if (s_note[0]) snprintf(b, n, "Last driver failed: see log");
+        else snprintf(b, n, "Applies at the next start");
         break;
     default: break;
     }
+    gd_clip(b);
 }

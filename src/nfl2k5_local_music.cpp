@@ -1338,4 +1338,6 @@ extern "C" void nfl2k5_music_row_name(int row, int value, char *out, size_t n)
     mp_label(row, name, out, n);
     g_ui_source = source;
     g_ui_song = song;
+    /* wider than this and the screen draws a sideways scroll bar and no values */
+    if (strlen(out) > 30 && n > 30) strcpy(out + 27, "...");
 }

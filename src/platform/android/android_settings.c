@@ -349,7 +349,7 @@ void nfl2k5_phone_value_name(int r, int v, char *b, size_t n)
     case PS_EDIT: snprintf(b, n, "%s", "Move and resize"); break;
     /* the two settings allowed to change the picture say so */
     case PS_BATTERY: snprintf(b, n, "%s", v ? "On: 1x resolution, 30 FPS" : "Off"); break;
-    case PS_HEAT: snprintf(b, n, "%s", v ? "On: may lower resolution when hot" : "Off"); break;
+    case PS_HEAT: snprintf(b, n, "%s", v ? "On: can lower resolution" : "Off"); break;
     default: snprintf(b, n, "%s", v ? "On" : "Off"); break;
     }
 }
