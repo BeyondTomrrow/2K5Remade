@@ -84,6 +84,7 @@ extern uint32_t xbox_HeapAlloc(uint32_t size, uint32_t alignment);
 #define ACT_BUY       2u
 #define ACT_AGENT     3u
 #define ACT_COACH     4u
+#define ACT_SHOP      5u
 
 enum { HS_DOOR, HS_MIRROR, HS_COMPUTER, HS_PHONE, HS_MENU, HOTS };
 enum { SCR_HUB, SCR_DOOR, SCR_PC, SCR_PHONE, SCR_CALL, SCREENS };
@@ -96,7 +97,8 @@ static const char *const k_hot_what[HOTS] = { "Game day or practice", "Change yo
 static const struct { const char *label; uint32_t action, link; } k_rows[SCREENS][5] = {
     { { 0 } },
     { { "Play Next Game", SD_ACT_NEXT, 0 }, { "Practice", SD_ACT_PRACTICE, 0 }, { 0 } },
-    { { "My Stats", SD_ACT_PLAYER, 0 }, { "Schedule", SD_ACT_SCHED, 0 }, { "Bank", ACT_INFO, 0 }, { "Buy", ACT_BUY, 0 }, { 0 } },
+    { { "My Stats", SD_ACT_PLAYER, 0 }, { "Schedule", SD_ACT_SCHED, 0 }, { "Bank", ACT_INFO, 0 }, { "Buy", ACT_BUY, 0 },
+      { "Furniture Shop", ACT_SHOP, 0 } },
     { { "Call My Agent", ACT_AGENT, 0 }, { "Call The Coach", ACT_COACH, 0 }, { 0 } },
     { { 0 } },
 };
@@ -193,6 +195,10 @@ static struct {
     int host;                      /* NFL2K5_MC_HOME_ROOM=host: the host-drawn room */
     float host_ar;
     int y_was, free_target;
+    uint32_t slot3, w_ctx3, w_file3;   /* the Crib's 64k texture cache (posters, banners, pennants, rugs) */
+    int cache_loaded;
+    int shop, shop_cat, shop_pick, shop_top;     /* the furniture shop over the room */
+    char shop_msg[96];
     uint32_t trig_tex;
     uint32_t wstr[16];             /* scratch UTF-16 buffers for drawn text */
 } s_h;
@@ -531,7 +537,7 @@ static void crib_data_dump(void)
             FILE *f;
             if (!fopen_s(&f, path, "wb") && f) {
                 uint32_t k;
-                for (k = 0; k < 65536u; k += 4) { uint32_t v = MEM32(p + k); fwrite(&v, 4, 1, f); }
+                for (k = 0; k < 196608u; k += 4) { uint32_t v = MEM32(p + k); fwrite(&v, 4, 1, f); }
                 fclose(f);
                 fprintf(stderr, "[MCCRIB] wrote 64 KB from %08X to %s\n", p, path);
             }
@@ -580,10 +586,60 @@ static void crib_only(int on)
     }
 }
 
+/* NFL2K5_MC_HOME_FURNPROBE (research): load crib_<kind>.iff files under contexts of our own and
+ * log which scene names they answer to, with each scene's node names. */
+static void furn_probe(void)
+{
+    static const char *const files[] = { "couch", "coffee_table", "end_table", "sofa_chair", "recliner", "console_table",
+                                         "credenza", "bar_stool", "bar_light", "ceiling_fan", "wall_clock", "theater_seating", "av" };
+    static const char *const pats[] = { "%s", "%s_p01", "%s_01", "%s_1", "%s_p1", "%s_lo", "%s_hi", "%s_p01_lo", "room", "scene", "%s_m", "%s_00", "%s_p00" };
+    static int done;
+    uint32_t slot, ctx, file, heap, w = s_h.wstr[15];
+    size_t f, k;
+    if (done++ || !getenv("NFL2K5_MC_HOME_FURNPROBE")) return;
+    for (f = 0; f < sizeof files / sizeof files[0]; f++) {
+        char b[64];
+        slot = h_alloc(0x40, 16);
+        snprintf(b, sizeof b, "MCF%u", (unsigned)f); ctx = h_wstr(b);
+        snprintf(b, sizeof b, "crib_%s.iff", files[f]); file = h_wstr(b);
+        PUSH32(g_esp, 0); PUSH32(g_esp, 0);
+        heap = gcall(sub_00038FB0, 0, 0);
+        PUSH32(g_esp, heap);
+        PUSH32(g_esp, slot);
+        gcall(sub_00043F50, ctx, file);
+        gcall(sub_000432D0, 0, 0);
+        for (k = 0; k < sizeof pats / sizeof pats[0]; k++) {
+            char nm[64];
+            uint32_t sc, t;
+            snprintf(nm, sizeof nm, pats[k], files[f]);
+            h_put(w, nm);
+            sc = lookup(ctx, FOURCC_SCNE, w);
+            t = lookup(ctx, FOURCC_TXTR, w);
+            if (sc || t) {
+                fprintf(stderr, "[MCFURN] %s: %s scene %08X texture %08X", b, nm, sc, t);
+                if (sc) {
+                    uint32_t n = MEM32(sc + 0x24), a = MEM32(sc + 0x28), i, j;
+                    fprintf(stderr, " nodes %u:", n);
+                    for (i = 0; i < n && i < 40; i++) {
+                        uint32_t wn = MEM32(a + i * 0x60u);
+                        char nn[40];
+                        for (j = 0; j < 39 && wn >= 0x10000u && wn < 0xF0000000u && MEM16(wn + j * 2u); j++) nn[j] = (char)MEM16(wn + j * 2u);
+                        nn[j] = 0;
+                        fprintf(stderr, " %s", nn);
+                    }
+                }
+                fprintf(stderr, "\n");
+            }
+        }
+        fprintf(stderr, "[MCFURN] %s: probed\n", b);
+    }
+}
+
 static void room_log(void)
 {
     room_node_dump();
     crib_data_dump();
+    furn_probe();
     MH_LOG("room %08X: %u nodes, %u materials, sky %08X, cursor %08X, phone %08X, tier %d\n", s_h.room,
            MEM32(s_h.room + 0x24), MEM32(s_h.room + 0x1C), s_h.sky, s_h.cursor, s_h.phone, s_c.tier);
 }
@@ -605,6 +661,14 @@ static int room_load(void)
         PUSH32(g_esp, heap);
         PUSH32(g_esp, s_h.slot2);
         gcall(sub_00043F50, s_h.w_ctx2, s_h.w_file2);
+    }
+    if (s_h.host && !getenv("NFL2K5_MC_HOME_NO_CACHE")) {
+        PUSH32(g_esp, 0); PUSH32(g_esp, 0);
+        heap = gcall(sub_00038FB0, 0, 0);
+        PUSH32(g_esp, heap);
+        PUSH32(g_esp, s_h.slot3);
+        gcall(sub_00043F50, s_h.w_ctx3, s_h.w_file3);
+        s_h.cache_loaded = 1;
     }
     gcall(sub_000432D0, 0, 0);
     s_h.room = lookup(s_h.w_ctx, FOURCC_SCNE, s_h.w_room);
@@ -641,6 +705,7 @@ static void room_unload(void)
 {
     if (!s_h.loaded) return;
     if (s_h.slim) gcall(sub_000432F0, s_h.w_ctx2, 0);
+    if (s_h.cache_loaded) { gcall(sub_000432F0, s_h.w_ctx3, 0); s_h.cache_loaded = 0; }
     gcall(sub_000432F0, s_h.w_ctx, 0);
     s_h.loaded = 0;
     s_h.room = s_h.sky = s_h.cursor = s_h.phone = 0;
@@ -697,6 +762,9 @@ static int room_add(float x0, float y0, float z0, float x1, float y1, float z1, 
  * the model's footprint centred on (x, z), turned by yaw degrees, its lowest point at y. */
 extern int mc_model_load(const char *gltf_path, int *ids, int max, float bounds[6]);
 extern void mc_model_textures(const char *dir);
+extern int mc_window_view(const char *hdr_path, float wx, float z0, float z1, float y0, float y1, float turn, float exposure);
+static char s_models_dir[MAX_PATH];
+static int s_view_mesh = -1;
 typedef struct { char name[40]; float x, z, yaw, y, size, height, sc, scy; int ids[12], nid; float b[6]; } RoomModel;
 static RoomModel s_models[24];
 static int s_nmodels;
@@ -782,6 +850,7 @@ static void models_load(void)
                 s_models[i].y = y;
             }
     }
+    snprintf(s_models_dir, sizeof s_models_dir, "%s", dir);
     fprintf(stderr, "[MCHOME] host room: %d CC0 models from %s\n", s_nmodels, dir);
 }
 
@@ -790,6 +859,11 @@ static void models_place(void)
 {
     int i, k;
     s_room.nmesh = 0;
+    if (s_view_mesh >= 0) {                       /* the window view, as registered (world space) */
+        XboxHostMeshInst *in = &s_room.mesh[s_room.nmesh++];
+        memset(in, 0, sizeof *in);
+        in->mesh = s_view_mesh; in->m[0] = in->m[5] = in->m[10] = in->m[15] = 1.0f;
+    }
     s_room.room[0] = 0.0f; s_room.room[1] = 0.0f; s_room.room[2] = 7.0f; s_room.room[3] = 9.0f; s_room.ceiling = 2.8f;
     s_room.nshadow = 0;
     for (i = 0; i < s_nmodels && s_room.nshadow < XBOX_HOSTSCENE_SHADOWS; i++) {
@@ -846,7 +920,15 @@ static void room_build_apartment(void)
     /* window wall (x = 7): wall below and above a long window onto the evening sky */
     room_add(7, 0, 0, 7.1f, 0.9f, 9, 0xD9D4CA, HS_MAT_MATTE);
     room_add(7, 2.4f, 0, 7.1f, 2.8f, 9, 0xD9D4CA, HS_MAT_MATTE);
-    room_add(7.08f, 0.9f, 0, 7.12f, 2.4f, 9, 0x6E8FC0, HS_MAT_EMISSIVE);
+    {   /* the view: a CC0 skyline HDRI (NFL2K5_MC_HOME_VIEW or models\\views\\apartment.hdr), else plain sky */
+        char vp[MAX_PATH + 32];
+        int view;
+        if (getenv("NFL2K5_MC_HOME_VIEW")) snprintf(vp, sizeof vp, "%s", getenv("NFL2K5_MC_HOME_VIEW"));
+        else snprintf(vp, sizeof vp, "%s\\views\\apartment.hdr", s_models_dir);
+        view = mc_window_view(vp, 7.1f, 0.0f, 9.0f, 0.9f, 2.4f, getenv("NFL2K5_MC_HOME_VIEW_TURN") ? (float)atof(getenv("NFL2K5_MC_HOME_VIEW_TURN")) : 0.25f, 1.6f);
+        if (view >= 0) s_view_mesh = view;
+        else room_add(7.08f, 0.9f, 0, 7.12f, 2.4f, 9, 0x6E8FC0, HS_MAT_EMISSIVE);
+    }
     room_add(7.0f, 0.9f, 2.95f, 7.05f, 2.4f, 3.05f, 0x2B2B2B, HS_MAT_MATTE);
     room_add(7.0f, 0.9f, 5.95f, 7.05f, 2.4f, 6.05f, 0x2B2B2B, HS_MAT_MATTE);
     {   /* frames: a sill, a head, jambs and slim mullions between the big panes */
@@ -966,10 +1048,17 @@ static void rect_tex(float x, float y, float w, float h, uint32_t tex, uint32_t 
  * only that node, give it a matrix that turns it about its centre and puts it on our slot
  * (metres x 100; the Crib's floor is y 0 as ours), draw the scene with our camera, and put
  * everything back. Nothing is extracted or stored. */
-typedef struct { char node[32]; float x, z, yaw, dy; } RoomItem;   /* dy: metres up or down */
+typedef struct { char node[32]; float x, z, yaw, dy, fx, fz; char look[48]; } RoomItem;   /* dy: metres up or down; fx, fz: the node's pivot fix */
 static RoomItem s_items[24];
 static int s_nitems = -1;
 
+static void money(long long v, char *b, size_t n);
+static void text_s(int slot, const char *s, float x, float y, uint32_t argb);
+static float model_top(const char *name);
+static long long ini_get(const char *k, long long d);
+static void career_save(void);
+static int s_items_dirty;
+static void items_from_places(void);
 static const char k_items_default[] =
     /* the apartment's Crib pieces (items.ini, apartment tier): a palm by the door, a standee
      * by the TV wall, a game ball on the side table, wall art beside the door, two sconces */
@@ -985,7 +1074,10 @@ static void items_parse(const char *p)
         char b[96];
         snprintf(b, sizeof b, "%.*s", (int)l, p);
         memset(&it, 0, sizeof it);
-        if (sscanf(b, "%31s %f %f %f %f", it.node, &it.x, &it.z, &it.yaw, &it.dy) >= 4) s_items[s_nitems++] = it;
+        if (sscanf(b, "%31s %f %f %f %f %f %f %47s", it.node, &it.x, &it.z, &it.yaw, &it.dy, &it.fx, &it.fz, it.look) >= 4) {
+            if (!strchr(it.look, '=')) it.look[0] = 0;
+            s_items[s_nitems++] = it;
+        }
         p += l + (p[l] == ';');
     }
 }
@@ -1009,7 +1101,240 @@ static void items_poll(void)
             }
         }
         if (s_nitems < 0) items_parse(k_items_default);
-    } else if (s_nitems < 0) items_parse(e ? e : k_items_default);
+    } else if (e) { if (s_nitems < 0) items_parse(e); }
+    else if (s_items_dirty) items_from_places();
+}
+
+
+/* ---- the furniture shop ------------------------------------------------------------------
+ * data/mycareer-home/items.ini (NFL2K5_MC_HOME_ITEMS_INI to point elsewhere): one line an item,
+ * "id = Name | tier | price | slot | source | price from". The shop sells what the home's tier
+ * allows (tiers stack) and what this build can draw: Crib nodes (crib.iff:<node>, a #lookN
+ * picks the Crib texture-cache look). Each room has fixed slots of each kind; a purchase goes
+ * in the first free one, or replaces the oldest. Placements live in careers.ini (place_<slot>). */
+enum { SL_WALL, SL_CORNER, SL_TABLE, SL_KINDS };
+static const char *const k_slot_kind[SL_KINDS] = { "Wall", "Corner", "Table Top" };
+typedef struct { char id[40], name[48], node[32], look[48]; int tier, kind; long long price; } ShopItem;
+static ShopItem s_shop[160];
+static int s_nshop = -1;
+
+/* the apartment's slots: where, which way the item faces (degrees; 0 = towards +z), how high */
+typedef struct { const char *key; int kind; float x, z, face, dy; } Slot;
+static const Slot k_slots[] = {
+    { "W1", SL_WALL, 1.5f, 0.06f, 0.0f, 0.0f },   { "W2", SL_WALL, 5.5f, 0.06f, 0.0f, 0.0f },
+    { "W3", SL_WALL, 0.06f, 7.0f, 90.0f, 0.0f },  { "W4", SL_WALL, 4.4f, 8.94f, 180.0f, 0.0f },
+    { "C1", SL_CORNER, 6.45f, 0.7f, 0.0f, 0.0f }, { "C2", SL_CORNER, 0.6f, 6.2f, 90.0f, 0.0f },
+    { "C3", SL_CORNER, 4.6f, 8.45f, 180.0f, 0.0f },
+    { "T1", SL_TABLE, 3.6f, 6.0f, 0.0f, -1.0f },  { "T2", SL_TABLE, 5.4f, 8.5f, 180.0f, -2.0f },
+};
+#define SLOTS ((int)(sizeof k_slots / sizeof k_slots[0]))
+static char s_place[SLOTS][40];
+static int s_place_loaded = -1;
+static int s_items_dirty = 1;
+
+/* which way each Crib node faces in the Crib (degrees, as Slot.face), so a slot can turn it */
+static float node_face(const char *node)
+{
+    static const struct { const char *prefix; float face; } k[] = {
+        { "poster_", 0.0f }, { "banner_", 0.0f }, { "pennant_", 0.0f }, { "wall_art", 0.0f },
+        { "sconce_", 0.0f }, { "standee_", 0.0f }, { "jukebox", 0.0f },
+    };
+    size_t i;
+    for (i = 0; i < sizeof k / sizeof k[0]; i++) if (!strncmp(node, k[i].prefix, strlen(k[i].prefix))) return k[i].face;
+    return 0.0f;
+}
+
+static void shop_trim(char *t)
+{
+    size_t n = strlen(t);
+    while (n && (t[n - 1] == ' ' || t[n - 1] == '\r' || t[n - 1] == '\n' || t[n - 1] == '\t')) t[--n] = 0;
+    while (*t == ' ' || *t == '\t') memmove(t, t + 1, strlen(t));
+}
+
+static void shop_load(void)
+{
+    char path[MAX_PATH], line[512];
+    FILE *f = NULL;
+    s_nshop = 0;
+    if (getenv("NFL2K5_MC_HOME_ITEMS_INI")) snprintf(path, sizeof path, "%s", getenv("NFL2K5_MC_HOME_ITEMS_INI"));
+    else {
+        DWORD n = GetEnvironmentVariableA("NFL2K5_ROOT", path, sizeof path);
+        if (!n || n >= sizeof path) { GetModuleFileNameA(NULL, path, sizeof path); { char *b = strrchr(path, '\\'); if (b) *b = 0; } }
+        snprintf(path + strlen(path), sizeof path - strlen(path), "\\data\\mycareer-home\\items.ini");
+    }
+    if (fopen_s(&f, path, "r") || !f) { fprintf(stderr, "[MCHOME] shop: no %s\n", path); return; }
+    while (fgets(line, sizeof line, f) && s_nshop < (int)(sizeof s_shop / sizeof s_shop[0])) {
+        char *eq = strchr(line, '='), *fld[6], *q;
+        ShopItem *it = &s_shop[s_nshop];
+        int nf = 0, look = -1;
+        if (line[0] == ';' || line[0] == '[' || !eq) continue;
+        *eq = 0;
+        memset(it, 0, sizeof *it);
+        snprintf(it->id, sizeof it->id, "%s", line); shop_trim(it->id);
+        for (q = eq + 1; nf < 6 && q; nf++) { fld[nf] = q; q = strchr(q, '|'); if (q) *q++ = 0; }
+        if (nf < 5) continue;
+        { int k; for (k = 0; k < nf; k++) shop_trim(fld[k]); }
+        snprintf(it->name, sizeof it->name, "%s", fld[0]);
+        it->tier = !strcmp(fld[1], "mansion") ? 2 : !strcmp(fld[1], "house") ? 1 : 0;
+        it->price = _strtoi64(fld[2], NULL, 10);
+        if (!strcmp(fld[3], "wall")) it->kind = SL_WALL;
+        else if (!strcmp(fld[3], "floor_corner")) it->kind = SL_CORNER;
+        else if (!strcmp(fld[3], "table_top")) it->kind = SL_TABLE;
+        else continue;                                       /* other slot kinds: the house and mansion */
+        if (strncmp(fld[4], "crib.iff:", 9)) continue;       /* Crib furniture files: not drawn yet */
+        snprintf(it->node, sizeof it->node, "%s", fld[4] + 9);
+        if ((q = strchr(it->node, '+')) != NULL) *q = 0;
+        if ((q = strchr(it->node, '#')) != NULL) {
+            if (!strncmp(q, "#look", 5)) look = atoi(q + 5);
+            *q = 0;
+        }
+        if (strchr(it->node, ':')) continue;
+        if (look >= 0) {                                      /* the Crib's cache look on the node's material */
+            const char *texbase = !strncmp(it->node, "poster_", 7) ? "poster" : !strncmp(it->node, "pennant_", 8) ? "pennant"
+                                : !strncmp(it->node, "banner_", 7) ? "banner" : !strncmp(it->node, "standee_", 8) ? "standee"
+                                : !strncmp(it->node, "wall_art_player", 15) ? "painting" : NULL;
+            char mat[40];
+            const char *pp = strstr(it->node, "_p");
+            if (!texbase || !pp) continue;
+            snprintf(mat, sizeof mat, "%.*s_%s", (int)(pp - it->node), it->node, pp + 2);   /* poster_p01 -> poster_01 */
+            snprintf(it->look, sizeof it->look, "%s=%s_%02d", mat, texbase, look);
+        }
+        s_nshop++;
+    }
+    fclose(f);
+    fprintf(stderr, "[MCHOME] shop: %d items the apartment can show, from %s\n", s_nshop, path);
+}
+
+static const ShopItem *shop_find(const char *id)
+{
+    int i;
+    for (i = 0; i < s_nshop; i++) if (!strcmp(s_shop[i].id, id)) return &s_shop[i];
+    return NULL;
+}
+
+static void place_load(void)
+{
+    int i;
+    char k[32];
+    if (!s_c.valid) return;
+    for (i = 0; i < SLOTS; i++) {
+        snprintf(k, sizeof k, "place_%s", k_slots[i].key);
+        GetPrivateProfileStringA(s_c.key, k, "", s_place[i], sizeof s_place[i], s_ini);
+    }
+    if (!ini_get("furnished", 0)) {               /* a first home comes with a few Crib pieces */
+        static const char *const starter[][2] = { { "C1", "palm_plant" } };   /* more once each node is sized */
+        int j;
+        for (j = 0; j < 1; j++)
+            for (i = 0; i < SLOTS; i++)
+                if (!strcmp(k_slots[i].key, starter[j][0]) && !s_place[i][0]) {
+                    snprintf(s_place[i], sizeof s_place[i], "%s", starter[j][1]);
+                    snprintf(k, sizeof k, "place_%s", k_slots[i].key);
+                    WritePrivateProfileStringA(s_c.key, k, s_place[i], s_ini);
+                }
+        WritePrivateProfileStringA(s_c.key, "furnished", "1", s_ini);
+    }
+    s_place_loaded = 1;
+    s_items_dirty = 1;
+}
+
+/* The room's Crib items from the placements. */
+static void items_from_places(void)
+{
+    int i;
+    if (s_nshop < 0) shop_load();
+    if (s_place_loaded < 0) place_load();
+    s_nitems = 0;
+    for (i = 0; i < SLOTS && s_nitems < (int)(sizeof s_items / sizeof s_items[0]); i++) {
+        const ShopItem *si = s_place[i][0] ? shop_find(s_place[i]) : NULL;
+        RoomItem *it = &s_items[s_nitems];
+        if (!si) continue;
+        memset(it, 0, sizeof *it);
+        snprintf(it->node, sizeof it->node, "%s", si->node);
+        it->x = k_slots[i].x; it->z = k_slots[i].z;
+        it->yaw = k_slots[i].face - node_face(si->node);
+        it->dy = k_slots[i].dy < 0.0f ? (k_slots[i].dy < -1.5f ? model_top("metal_office_desk") : model_top("side_table_01")) : k_slots[i].dy;
+        snprintf(it->look, sizeof it->look, "%s", si->look);
+        s_nitems++;
+    }
+    s_items_dirty = 0;
+}
+
+/* The shop's list for the current kind: what the tier allows, cheapest first. */
+static int shop_list(int out[], int max)
+{
+    int i, n = 0;
+    for (i = 0; i < s_nshop && n < max; i++)
+        if (s_shop[i].kind == s_h.shop_cat && s_shop[i].tier <= (s_c.tier > 2 ? 2 : s_c.tier)) out[n++] = i;
+    return n;
+}
+
+static void shop_buy(const ShopItem *si)
+{
+    int i, slot = -1;
+    char m[32], k[32];
+    if (s_c.bank < si->price) {
+        money(si->price - s_c.bank, m, sizeof m);
+        snprintf(s_h.shop_msg, sizeof s_h.shop_msg, "Need %s more", m);
+        sound(SND_CURSOR);
+        return;
+    }
+    for (i = 0; i < SLOTS && slot < 0; i++) if (k_slots[i].kind == si->kind && !s_place[i][0]) slot = i;
+    if (slot < 0) {                                /* all full: replace the first of the kind */
+        for (i = 0; i < SLOTS && slot < 0; i++) if (k_slots[i].kind == si->kind) slot = i;
+    }
+    if (slot < 0) return;
+    s_c.bank -= si->price;
+    snprintf(s_place[slot], sizeof s_place[slot], "%s", si->id);
+    snprintf(k, sizeof k, "place_%s", k_slots[slot].key);
+    WritePrivateProfileStringA(s_c.key, k, si->id, s_ini);
+    career_save();
+    s_items_dirty = 1;
+    money(si->price, m, sizeof m);
+    snprintf(s_h.shop_msg, sizeof s_h.shop_msg, "Bought %s (%s) - it's in the room", si->name, m);
+    fprintf(stderr, "[MCHOME] shop: bought %s for $%lld into %s; bank $%lld\n", si->id, si->price, k_slots[slot].key, s_c.bank);
+    sound(SND_SELECT);
+}
+
+/* The shop's input, in the room: up/down picks, left/right changes the kind, A buys, B closes. */
+static void shop_frame(uint32_t edge)
+{
+    int list[160], n;
+    if (s_nshop < 0) shop_load();
+    n = shop_list(list, 160);
+    if (edge & (BTN_LEFT | BTN_RIGHT)) {
+        s_h.shop_cat = (s_h.shop_cat + ((edge & BTN_RIGHT) ? 1 : SL_KINDS - 1)) % SL_KINDS;
+        s_h.shop_pick = s_h.shop_top = 0; s_h.shop_msg[0] = 0;
+        sound(SND_CURSOR);
+        return;
+    }
+    if (n && (edge & BTN_DOWN)) { s_h.shop_pick = (s_h.shop_pick + 1) % n; s_h.shop_msg[0] = 0; sound(SND_CURSOR); }
+    if (n && (edge & BTN_UP)) { s_h.shop_pick = (s_h.shop_pick + n - 1) % n; s_h.shop_msg[0] = 0; sound(SND_CURSOR); }
+    if (s_h.shop_pick < s_h.shop_top) s_h.shop_top = s_h.shop_pick;
+    if (s_h.shop_pick >= s_h.shop_top + 8) s_h.shop_top = s_h.shop_pick - 7;
+    if (n && (edge & BTN_A)) shop_buy(&s_shop[list[s_h.shop_pick]]);
+    if (edge & BTN_B) { s_h.shop = 0; sound(SND_SELECT); }
+}
+
+static void shop_draw(void)
+{
+    int list[160], n, i;
+    char b[STR_CHARS], m[32];
+    n = shop_list(list, 160);
+    money(s_c.bank, m, sizeof m);
+    snprintf(b, sizeof b, "FURNITURE SHOP   %s   Bank %s", k_slot_kind[s_h.shop_cat], m);
+    text_s(0, b, 320.0f, 64.0f, 0xFFFFD040u);
+    text_s(1, "|DPADLEFT| |DPADRIGHT| Kind      |CROSS| Buy      |CIRCLE| Back", 320.0f, 380.0f, 0xFFC0C0C0u);
+    for (i = 0; i < 8 && s_h.shop_top + i < n; i++) {
+        const ShopItem *si = &s_shop[list[s_h.shop_top + i]];
+        int own = 0, k;
+        for (k = 0; k < SLOTS; k++) if (!strcmp(s_place[k], si->id)) own = 1;
+        money(si->price, m, sizeof m);
+        snprintf(b, sizeof b, "%s%s   %s", si->name, own ? "  (in your home)" : "", m);
+        text_s(2 + i, b, 320.0f, 110.0f + 30.0f * (float)i,
+               s_h.shop_top + i == s_h.shop_pick ? 0xFFFFFFFFu : 0xFF909090u);
+    }
+    if (!n) text_s(2, "Nothing of this kind for this home yet", 320.0f, 140.0f, 0xFF909090u);
+    if (s_h.shop_msg[0]) text_s(10, s_h.shop_msg, 320.0f, 350.0f, 0xFF80FF80u);
 }
 
 static void host_draw_items(void)
@@ -1060,25 +1385,59 @@ static void host_draw_items(void)
     for (it = 0; it < s_nitems; it++) {
         for (i = 0; i < n; i++) {
             uint32_t nd = a + i * 0x60u, sub = MEM32(nd + 8u), m = nd + 0x20u;
-            uint32_t keep[12], q;
-            float c, sn;
+            float cx, cy, cz, c, sn, e[2][3];
+            int q;
             if (!weq(MEM32(nd), s_items[it].node) || sub < 0x10000u || sub >= 0xF0000000u) continue;
-            /* The node's data starts with its placement: position (x, y, z) then a 3 x 3 turn.
-             * Its geometry is relative to that, and the engine culls by it too, so moving and
-             * turning that (the node matrix stays identity) puts the item on the slot. */
-            for (q = 0; q < 12; q++) keep[q] = MEM32(sub + q * 4u);
+            (void)m;
+            /* The Crib draws each node only when the camera stands where the Crib's own rooms can
+             * see it, so instead of moving the item into our room, our camera goes into the Crib:
+             * the item stays where it is, and the camera is put where it would be if the item stood
+             * on its slot (the inverse of: turn by yaw about the node's placement, then move it
+             * to the slot). Same picture, same depth, and the Crib's culling is satisfied. */
+            cx = MEMF(sub + 0u) + s_items[it].fx * 100.0f; cy = MEMF(sub + 4u); cz = MEMF(sub + 8u) + s_items[it].fz * 100.0f;
             c = cosf(s_items[it].yaw * 3.14159265f / 180.0f); sn = sinf(s_items[it].yaw * 3.14159265f / 180.0f);
-            MEMF(sub + 0u) = s_items[it].x * 100.0f;
-            MEMF(sub + 4u) = MEMF(sub + 4u) + s_items[it].dy * 100.0f;
-            MEMF(sub + 8u) = s_items[it].z * 100.0f;
-            MEMF(sub + 0x0Cu) = c;  MEMF(sub + 0x10u) = 0; MEMF(sub + 0x14u) = -sn;
-            MEMF(sub + 0x18u) = 0;  MEMF(sub + 0x1Cu) = 1; MEMF(sub + 0x20u) = 0;
-            MEMF(sub + 0x24u) = sn; MEMF(sub + 0x28u) = 0; MEMF(sub + 0x2Cu) = c;
-            for (q = 0; q < 16; q++) MEMF(m + q * 4u) = (q % 5) == 0 ? 1.0f : 0.0f;
-            MEM32(nd + 0x0Cu) = save_flags[i] & ~0x10u;
-            gcall(sub_0002DE60, s_h.room, 0);
-            MEM32(nd + 0x0Cu) = save_flags[i] | 0x10u;
-            for (q = 0; q < 12; q++) MEM32(sub + q * 4u) = keep[q];
+            for (q = 0; q < 2; q++) {
+                float rx = s_h.cur[q * 3 + 0] * 100.0f - s_items[it].x * 100.0f;
+                float ry = s_h.cur[q * 3 + 1] * 100.0f - s_items[it].dy * 100.0f;
+                float rz = s_h.cur[q * 3 + 2] * 100.0f - s_items[it].z * 100.0f;
+                /* room = R(crib - centre) + slot with R the row-vector turn [c 0 -s; 0 1 0; s 0 c]:
+                 * crib = R^T(room - slot) + centre */
+                e[q][0] = rx * c - rz * sn + cx;
+                e[q][1] = ry;
+                e[q][2] = rx * sn + rz * c + cz;
+                (void)cy;
+            }
+            for (q = 0; q < 3; q++) { MEMF(s_h.eye + q * 4u) = e[0][q]; MEMF(s_h.at + q * 4u) = e[1][q]; }
+            PUSH32(g_esp, s_h.at);
+            gcall(sub_0002BDF0, s_h.camobj, s_h.eye);
+            gcall(sub_0002B860, s_h.camobj, (uint32_t)(int)(s_h.cur[6] * 182.04445f));
+            gcall(sub_0002AC80, s_h.camobj, 0);
+            {   /* "material=texture": a Crib texture-cache look for this draw (posters and the like) */
+                uint32_t mat = 0, tex = 0, keep_tex = 0, keep_fl = 0;
+                if (s_items[it].look[0] && s_h.cache_loaded) {
+                    char mname[48], *eq;
+                    uint32_t w = s_h.wstr[15];
+                    snprintf(mname, sizeof mname, "%s", s_items[it].look);
+                    eq = strchr(mname, '=');
+                    *eq = 0;
+                    mat = find_mat(mname);
+                    h_put(w, eq + 1);
+                    tex = lookup(s_h.w_ctx3, FOURCC_TXTR, w);
+                    if (!tex) tex = lookup(s_h.w_ctx, FOURCC_TXTR, w);
+                    if (mat && tex) {
+                        keep_tex = MEM32(mat + 0x30u); keep_fl = MEM32(mat + 0x08u);
+                        MEM32(mat + 0x30u) = tex; MEM32(mat + 0x08u) &= ~1u;
+                    } else {
+                        static int told;
+                        if (told++ < 20) fprintf(stderr, "[MCHOME] look %s: material %08X texture %08X\n", s_items[it].look, mat, tex);
+                        mat = 0;
+                    }
+                }
+                MEM32(nd + 0x0Cu) = save_flags[i] & ~0x10u;
+                gcall(sub_0002DE60, s_h.room, 0);
+                MEM32(nd + 0x0Cu) = save_flags[i] | 0x10u;
+                if (mat) { MEM32(mat + 0x30u) = keep_tex; MEM32(mat + 0x08u) = keep_fl; }
+            }
         }
     }
     for (i = 0; i < n; i++) {
@@ -1341,6 +1700,7 @@ static void hub_frame(uint32_t fsm)
 {
     uint32_t edge;
     int h = s_h.hot;
+    if (s_h.shop) { camera_step(fsm, 0.0f); shop_frame(pad_edges()); return; }
     if (s_h.host && s_h.leaving) { camera_step(fsm, 0.0f); return; }
     if (s_h.host && !s_h.leaving) {
         int f;
@@ -1507,6 +1867,7 @@ static void ev_draw(void)
         uint32_t ui = gcall(sub_00069180, 0, 0);
         gcall(sub_0002AC80, ui, 0);
         if (s_h.top == SCR_HUB) rect(0.0f, 392.0f, 640.0f, 60.0f, 0xA0000000u);
+        if (s_h.top == SCR_HUB && s_h.shop) rect(40.0f, 40.0f, 560.0f, 360.0f, 0xC8101014u);
         if (s_h.top == SCR_CALL) {
             rect(0.0f, 0.0f, 640.0f, 480.0f, 0xB0000000u);
             rect(40.0f, 96.0f, 232.0f, 232.0f, 0xFF26254Au);
@@ -1519,6 +1880,7 @@ static void ev_draw(void)
         }
         gcall(sub_0002AC80, s_h.camsave, 0);
     }
+    if (s_h.top == SCR_HUB && s_h.shop) { shop_draw(); return; }
     if (s_h.top == SCR_HUB) {
         char b[STR_CHARS];
         hub_title(b, sizeof b);
@@ -1785,6 +2147,11 @@ static void mh_fn(void)
             MH_LOG("row %s\n", k_rows[scr][row].label);
             if (act == ACT_INFO) sound(SND_CURSOR);
             else if (act == ACT_BUY) buy();
+            else if (act == ACT_SHOP) {
+                sound(SND_SELECT);
+                s_h.shop = 1; s_h.shop_cat = 0; s_h.shop_pick = s_h.shop_top = 0; s_h.shop_msg[0] = 0;
+                gcall(sub_0006E400, fsm, 0);          /* back to the room, the shop over it */
+            }
             else if (act == ACT_AGENT || act == ACT_COACH) { sound(SND_SELECT); call_open(fsm, act == ACT_COACH); }
             else { sound(SND_SELECT); leave(act); }
         }
@@ -1911,6 +2278,9 @@ void nfl2k5_mc_home_install(void)
     s_h.w_phone_icon = h_wstr("celebrity_phone_icon");
     s_h.w_reflection = h_wstr("reflection");
     s_h.w_ctx2 = h_wstr("MCHOMEFR");
+    s_h.slot3 = h_alloc(0x40, 16);
+    s_h.w_ctx3 = h_wstr("MCHOME64");
+    s_h.w_file3 = h_wstr("crib_64k.iff");
     s_h.w_file2 = h_wstr("fr.iff");
     s_h.w_layout = h_wstr("front_office");
     s_h.title = h_buf("Home");

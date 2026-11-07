@@ -19,6 +19,7 @@
 #define STB_IMAGE_IMPLEMENTATION
 #define STBI_ONLY_JPEG
 #define STBI_ONLY_PNG
+#define STBI_ONLY_HDR
 #define STBI_NO_STDIO_FALLBACK
 #include "third_party/stb/stb_image.h"
 
@@ -139,6 +140,42 @@ static int detail_texture(int hint, const unsigned char tint[4], uint32_t **out,
     }
     *w = cache[slot].w; *h = cache[slot].h;
     return 1;
+}
+
+/* The view out of the windows: an equirectangular .hdr (a Poly Haven CC0 HDRI the player puts
+ * beside the game), tone-mapped to 8 bits, on a quad over the window wall (x = wx, z0..z1,
+ * y0..y1), turned by turn (0..1 of a full circle). Returns the mesh id or -1. */
+int mc_window_view(const char *hdr_path, float wx, float z0, float z1, float y0, float y1, float turn, float exposure)
+{
+    int w, h, n, id;
+    size_t i, count;
+    float *px = stbi_loadf(hdr_path, &w, &h, &n, 3);
+    uint32_t *rgba;
+    float quad[6][8], tri[6][2] = { { z0, y0 }, { z1, y0 }, { z1, y1 }, { z0, y0 }, { z1, y1 }, { z0, y1 } };
+    if (!px) { fprintf(stderr, "[MCMODEL] window view %s: %s" "\n", hdr_path, stbi_failure_reason()); return -1; }
+    count = (size_t)w * (size_t)h;
+    rgba = (uint32_t *)malloc(count * 4);
+    if (!rgba) { stbi_image_free(px); return -1; }
+    for (i = 0; i < count; i++) {
+        unsigned char *c = (unsigned char *)&rgba[i];
+        int k;
+        for (k = 0; k < 3; k++) {
+            float v = 1.0f - expf(-px[i * 3 + k] * exposure);              /* exposure, soft shoulder */
+            c[k] = (unsigned char)(255.0f * powf(v < 0.0f ? 0.0f : v, 1.0f / 2.2f) + 0.5f);
+        }
+        c[3] = 255;
+    }
+    stbi_image_free(px);
+    for (i = 0; i < 6; i++) {
+        float *o = quad[i];
+        o[0] = wx; o[1] = tri[i][1]; o[2] = tri[i][0];
+        o[3] = -1.0f; o[4] = 0.0f; o[5] = 0.0f;
+        o[6] = turn; o[7] = 0.0f;
+    }
+    id = xbox_HostMeshAdd(&quad[0][0], 6, rgba, w, h, HS_MAT_EMISSIVE | HS_MESH_PANORAMA);
+    free(rgba);
+    fprintf(stderr, "[MCMODEL] window view %s: %dx%d, mesh %d" "\n", hdr_path, w, h, id);
+    return id;
 }
 
 /* Registers the model's primitives as host meshes; returns how many ids it wrote. The model's
