@@ -6779,6 +6779,10 @@ static int in_match(void)
      * they fill the picture instead of sitting in a middle strip. */
     GameState g;
     if (rd32(0x00B38C30u) != 0 || native_pause_active()) return 0;
+    /* read_state stays true after an attract demo cut short at the title: every menu then
+     * sat in the 1/F middle strip until the next real match ended. The match screen must be on top. */
+    uint32_t idx = rd32(0x00A84B18u + 0x100u);
+    if (idx < 0x20u && rd32(0x00A84B18u + idx * 8u) != 0x004E7EC0u) return 0;
     return read_state(g) ? 1 : 0;
 }
 
