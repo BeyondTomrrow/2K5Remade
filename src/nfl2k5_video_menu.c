@@ -214,7 +214,6 @@ extern void nfl2k5_phone_set(int r, int v);
 extern void nfl2k5_phone_value_name(int r, int v, char *b, size_t n);
 static void phone_name(int r, int v, char *b, size_t n) { nfl2k5_phone_value_name(r, v, b, n); }
 static const char *s_phone_labels[VM_MAX_ROWS];
-static uint32_t s_phone_header;
 #endif
 
 /* NFL2K5_MENU_MUSIC_ROWS: Android; a Linux test build can define it too */
@@ -682,7 +681,6 @@ void nfl2k5_video_menu_install(void)
         for (i = 0; i < s_screens[5].rows && i < VM_MAX_ROWS; i++)
             s_phone_labels[i] = nfl2k5_phone_label(i);
         phone = vm_build_screen(5);
-        s_phone_header = phone;
         for (k = 0; phone && k < sizeof k_options_headers / sizeof k_options_headers[0]; k++)
             vm_add_link(k_options_headers[k], phone, vm_wstr("Phone Settings"));
     }
@@ -698,19 +696,17 @@ void nfl2k5_video_menu_install(void)
             vm_add_link(k_options_headers[k], music, vm_wstr("Music Player"));
         fprintf(stderr, "[VIDEOMENU] Music Player %08X: %d rows\n", (unsigned)music, s_screens[VM_MUSIC].rows);
 #ifdef NFL2K5_MENU_GPU_ROWS
-        {   /* a link at the end of Phone Settings (of Music Player on a Linux test build) */
+        {   /* A link in Options, like the screens around it. Never a link inside a
+             * screen of value rows: the game calls every row's value functions there,
+             * a link row has none, and Phone Settings crashed on opening (test31). */
             uint32_t gpu;
             s_screens[VM_GPU].rows = nfl2k5_gpu_rows();
             for (i = 0; i < s_screens[VM_GPU].rows && i < VM_MAX_ROWS; i++)
                 s_gpu_labels[i] = nfl2k5_gpu_row_label(i);
             gpu = vm_build_screen(VM_GPU);
-#ifdef __ANDROID__
-            uint32_t host = s_phone_header;
-#else
-            uint32_t host = music;
-#endif
-            fprintf(stderr, "[VIDEOMENU] GPU Driver %08X: link row %d\n", (unsigned)gpu,
-                    gpu && host ? vm_add_link(host, gpu, vm_wstr("GPU Driver")) : 0);
+            for (k = 0; gpu && k < sizeof k_options_headers / sizeof k_options_headers[0]; k++)
+                vm_add_link(k_options_headers[k], gpu, vm_wstr("GPU Driver"));
+            fprintf(stderr, "[VIDEOMENU] GPU Driver %08X: %d rows\n", (unsigned)gpu, s_screens[VM_GPU].rows);
         }
 #endif
     }

@@ -1,4 +1,4 @@
-/* Custom Vulkan drivers on Android (Options > Phone Settings > GPU Driver).
+/* Custom Vulkan drivers on Android (Options > GPU Driver).
  *
  * A player can install an Adreno driver (Mesa Turnip or a Qualcomm build) in the
  * zip form emulators use: meta.json + .so, or a bare .so. Android's linker
@@ -621,12 +621,21 @@ static void gd_toast(const char *a, const char *b)
     xbox_PresentToast("GPU DRIVER", a, b, 6000);
 }
 
-/* ---- Options > Phone Settings > GPU Driver (src/nfl2k5_video_menu.c) --------
+/* ---- Options > GPU Driver (src/nfl2k5_video_menu.c) -------------------------
  * Row 0 is the list: System Driver, then each installed driver. */
 enum { GD_ROW_CHOICE, GD_ROW_NOW, GD_ROW_ADD, GD_ROW_REMOVE, GD_ROW_NOTE, GD_ROWS };
 static const char *const k_gd_labels[GD_ROWS] = { "GPU Driver", "In Use Now", "Add Driver", "Remove Driver", "Note" };
 
-int nfl2k5_gpu_rows(void) { return GD_ROWS; }
+int nfl2k5_gpu_rows(void)
+{
+    /* the screen is built once at start; on a phone boot has run by now */
+    if (!s_count) {
+        gd_scan();
+        gd_read_line("selected", s_selected, sizeof s_selected);
+    }
+    fprintf(stderr, "[GPU-DRIVER] menu: %d installed, next start %s\n", s_count, s_selected[0] ? s_selected : "System Driver");
+    return GD_ROWS;
+}
 const char *nfl2k5_gpu_row_label(int r) { return r >= 0 && r < GD_ROWS ? k_gd_labels[r] : ""; }
 int nfl2k5_gpu_row_toggle(int r) { (void)r; return 0; }
 
