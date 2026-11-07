@@ -45,8 +45,29 @@ set(glslang_DIR "${CMAKE_CURRENT_SOURCE_DIR}/cmake/glslang" CACHE PATH "" FORCE)
 # bionic has pthreads in libc: "pthread" in link lists resolves to nothing
 add_library(pthread INTERFACE)
 
+# A clean checkout builds without these and only warns: mod packs then run the
+# retail code (test25-29), and the game the slower generated code.
+if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../analysis/disasm/functions.json")
+  message(FATAL_ERROR "analysis/disasm/functions.json is missing: mod packs would run the wrong code. Copy analysis/ into this tree.")
+endif()
+if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../build/gen-locals/recomp_0000.c")
+  message(FATAL_ERROR "build/gen-locals is missing: run python tools/gen-reg-locals.py first.")
+endif()
+
 set(NFL2K5_BUILD_GAME ON CACHE BOOL "" FORCE)
 add_subdirectory(.. nfl2k5)
+
+# ---- Custom GPU drivers (src/nfl2k5_gpu_driver.c) -----------------------------
+target_sources(NFL2K5 PRIVATE ../src/nfl2k5_gpu_driver.c)
+if(ANDROID AND ANDROID_ABI STREQUAL "arm64-v8a")
+  # libadrenotools (BSD-2-Clause, third_party/libadrenotools/VENDORED.txt). Its
+  # two hook libraries are loaded by name from nativeLibraryDir, so they ship
+  # in the APK next to libmain.so.
+  add_subdirectory(third_party/libadrenotools adrenotools EXCLUDE_FROM_ALL)
+  target_link_libraries(NFL2K5 PRIVATE adrenotools)
+  target_compile_definitions(NFL2K5 PRIVATE NFL2K5_HAVE_ADRENOTOOLS)
+  add_dependencies(NFL2K5 main_hook hook_impl)
+endif()
 
 # ---- FFmpeg (static, audio only): Music folder songs -> WMA in process ------
 # (src/nfl2k5_wma_encode.cpp; desktop builds run the ffmpeg program instead).

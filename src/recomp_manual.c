@@ -3235,13 +3235,38 @@ void nfl2k5_scorebug_interp_hooks(void)
  * picture it is black rather than grey. NFL2K5_MOVIE_NO_HOLD=1 turns this off,
  * NFL2K5_MOVIE_PROBE=1 logs each picture. */
 #define MOVIE_HOLD_MAX 24
+#define MOVIE_GREY_HOLD_MAX 600     /* the decoder's unfilled grey is never picture: ~10 s, a stuck decoder */
 static uint32_t s_movie_last_tex;
 static uint8_t *s_movie_frame;
 static size_t s_movie_frame_bytes;
 static int s_movie_have_frame, s_movie_flat_run;
 
+/* Per movie, for a player's log (the flash is a repeat report and a phone is
+ * the only place it can be seen): what the decoder delivered and what the hold
+ * did with it. */
+static struct {
+    unsigned calls, null_tex, real, flat, grey, partial, held, early_black, expired, runs, longest;
+    DWORD t0;
+    unsigned movie;
+    char last_map[32];
+} s_mv;
+
+static void movie_report(const char *why)
+{
+    double s = s_mv.t0 ? (double)(GetTickCount() - s_mv.t0) / 1000.0 : 0.0;
+    if (!s_mv.calls) return;
+    fprintf(stderr, "[MOVIE-STATS] %s movie %u: %u calls in %.1f s (%.1f real pictures/s): real %u, flat %u (grey %u), "
+            "partial %u, no picture %u; held %u, black before first %u, hold expired %u; flat runs %u, longest %u\n",
+            why, s_mv.movie, s_mv.calls, s, s > 0.0 ? s_mv.real / s : 0.0, s_mv.real, s_mv.flat, s_mv.grey,
+            s_mv.partial, s_mv.null_tex, s_mv.held, s_mv.early_black, s_mv.expired, s_mv.runs, s_mv.longest);
+}
+
 void nfl2k5_movie_frame_reset(void)
 {
+    unsigned movie = s_mv.movie;
+    movie_report("end of");
+    memset(&s_mv, 0, sizeof s_mv);
+    s_mv.movie = movie + 1;
     s_movie_last_tex = 0;
     s_movie_have_frame = 0;
     s_movie_flat_run = 0;
@@ -3253,10 +3278,17 @@ static int movie_tex_unfilled(uint32_t tex)
     static unsigned n;
     uint32_t data = MEM32(tex + 4) & 0x03FFFFFFu, size = MEM32(tex + 0x10);
     uint32_t w = size >> 16, h = size & 0xFFFFu, y, x, nz = 0, cnt = 0, first = 0, odd = 0, sum = 0, same;
+    uint32_t greys = 0, band = 0, grey_bands = 0;
+    char map[32];
     if (w == 0 || h == 0 || w > 2048 || h > 2048) return 0;
     for (y = 8; y < h; y += h / 24) {
+        uint32_t band_grey = 0, band_n = 0, band_black = 0;
         for (x = 8; x < w; x += w / 24) {
             uint32_t v = MEM32(0x80000000u + data + (y * w + x) * 4u) & 0xFFFFFFu;
+            int b = (int)(v & 255u), g = (int)((v >> 8) & 255u), r = (int)(v >> 16);
+            band_n++;
+            if (abs(b - 0x86) <= 10 && abs(g - 0x86) <= 10 && abs(r - 0x86) <= 10) band_grey++;
+            if (b + g + r < 24) band_black++;
             if (!cnt) first = v;
             /* flat pictures carry dark noise and a few stray marks */
             if (abs((int)(v & 255u) - (int)(first & 255u)) > 10 || abs((int)((v >> 8) & 255u) - (int)((first >> 8) & 255u)) > 10
@@ -3265,11 +3297,24 @@ static int movie_tex_unfilled(uint32_t tex)
             sum += (v & 255u) + ((v >> 8) & 255u) + (v >> 16);
             cnt++;
         }
+        greys += band_grey;
+        if (band_n && band_grey == band_n) grey_bands++;
+        if (band < sizeof map - 1)
+            map[band++] = band_n && band_grey == band_n ? 'g' : band_n && band_black == band_n ? 'k' : '.';
     }
+    map[band] = 0;
     same = odd * 32u < cnt || sum < cnt * 9u;   /* or next to black all over */
     if (probe < 0) probe = getenv("NFL2K5_MOVIE_PROBE") != NULL;
-    if (probe) fprintf(stderr, "[MOVIEP] %u tex %08X nz %u/%u same %d first %06X\n", n++, tex, nz, cnt, same, first);
-    return same;
+    if (probe) fprintf(stderr, "[MOVIEP] %u tex %08X nz %u/%u same %d first %06X bands %s\n", n++, tex, nz, cnt, same, first, map);
+    /* 1 a flat picture, 2 the decoder's unfilled grey, 3 grey still showing in
+     * whole bands: a picture being written, or a decoder that stopped part way */
+    if (same) return cnt && greys * 10u >= cnt * 9u ? 2 : 1;
+    if (grey_bands) {
+        static int told;
+        if (told++ < 12) fprintf(stderr, "[MOVIE-STATS] partial picture, bands %s\n", map);
+        return 3;
+    }
+    return 0;
 }
 
 uint32_t nfl2k5_movie_frame_hold(uint32_t tex)
@@ -3277,13 +3322,18 @@ uint32_t nfl2k5_movie_frame_hold(uint32_t tex)
     static int off = -1;
     if (off < 0) off = getenv("NFL2K5_MOVIE_NO_HOLD") != NULL;
     if (off) return tex;
-    if (tex) s_movie_last_tex = tex; else tex = s_movie_last_tex;
+    if (!s_mv.t0) s_mv.t0 = GetTickCount();
+    if (++s_mv.calls % 600u == 0) movie_report("during");
+    if (tex) s_movie_last_tex = tex; else { tex = s_movie_last_tex; s_mv.null_tex++; }
     if (tex && ((MEM32(tex + 0xC) >> 8) & 0xFFu) == 0x12u) {       /* LIN_A8R8G8B8 */
         uint32_t size = MEM32(tex + 0x10), data = MEM32(tex + 4) & 0x03FFFFFFu;
         size_t bytes = (size_t)(size >> 16) * (size & 0xFFFFu) * 4u;
         uint8_t *pixels = (uint8_t *)XBOX_PTR(0x80000000u + data);
         if (bytes && bytes <= (8u << 20) && data + bytes <= 0x04000000u) {
-            if (!movie_tex_unfilled(tex)) {
+            int kind = movie_tex_unfilled(tex);
+            if (!kind) {
+                if (s_movie_flat_run) s_mv.runs++;
+                s_mv.real++;
                 if (s_movie_frame_bytes < bytes) {
                     free(s_movie_frame);
                     s_movie_frame = (uint8_t *)malloc(bytes);
@@ -3291,10 +3341,19 @@ uint32_t nfl2k5_movie_frame_hold(uint32_t tex)
                 }
                 if (s_movie_frame) { memcpy(s_movie_frame, pixels, bytes); s_movie_have_frame = 1; }
                 s_movie_flat_run = 0;
-            } else if (!s_movie_have_frame) {
-                memset(pixels, 0, bytes);
-            } else if (s_movie_flat_run++ < MOVIE_HOLD_MAX) {
-                memcpy(pixels, s_movie_frame, bytes);
+            } else {
+                if (kind == 3) s_mv.partial++; else s_mv.flat++;
+                if (kind == 2) s_mv.grey++;
+                if ((unsigned)s_movie_flat_run + 1u > s_mv.longest) s_mv.longest = (unsigned)s_movie_flat_run + 1u;
+                if (!s_movie_have_frame) {
+                    memset(pixels, 0, bytes);
+                    s_mv.early_black++;
+                } else if (s_movie_flat_run++ < (kind == 1 ? MOVIE_HOLD_MAX : MOVIE_GREY_HOLD_MAX)) {
+                    memcpy(pixels, s_movie_frame, bytes);
+                    s_mv.held++;
+                } else {
+                    s_mv.expired++;
+                }
             }
         }
     }
