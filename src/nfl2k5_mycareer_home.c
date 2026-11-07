@@ -588,6 +588,57 @@ static void crib_only(int on)
 
 /* NFL2K5_MC_HOME_FURNPROBE (research): load crib_<kind>.iff files under contexts of our own and
  * log which scene names they answer to, with each scene's node names. */
+/* Research: a context's chunks ([0xB09578] lists contexts: +0 next, +8 name; +0x10 its file:
+ * +0x1A4 count, +0x1AC entries of 0x20 -- +4 name hash, +0xC fourcc, +0x14 the resource). */
+static void ctx_list(uint32_t wname, const char *label)
+{
+    uint32_t c = MEM32(0x00B09578u), file, n, arr, i;
+    char fc[5];
+    for (; c >= 0x10000u && c < 0xF0000000u; c = MEM32(c)) {
+        uint32_t w = MEM32(c + 8u), k;
+        int same = 1;
+        for (k = 0; k < 16; k++) {
+            uint16_t a = MEM16(w + k * 2u), b = MEM16(wname + k * 2u);
+            if (a != b) { same = 0; break; }
+            if (!a) break;
+        }
+        if (!same) continue;
+        file = MEM32(c + 0x10u);
+        if (file < 0x10000u || file >= 0xF0000000u) { fprintf(stderr, "[MCCTX] %s: no file\n", label); return; }
+        n = MEM32(file + 0x1A4u); arr = MEM32(file + 0x1ACu);
+        fprintf(stderr, "[MCCTX] %s: %u chunks\n", label, n);
+        for (i = 0; i < n && i < 400; i++) {
+            uint32_t e = arr + i * 0x20u, cc = MEM32(e + 0xCu), res = MEM32(e + 0x14u), q;
+            memcpy(fc, &cc, 4); fc[4] = 0;
+            for (q = 0; q < 4; q++) if (fc[q] < 32 || fc[q] > 126) fc[q] = '?';
+            fprintf(stderr, "[MCCTX] %s %3u %s hash %08X res %08X", label, i, fc, MEM32(e + 4u), res);
+            if (cc == FOURCC_SCNE && res >= 0x10000u && res < 0xF0000000u) {
+                uint32_t nn = MEM32(res + 0x24), na = MEM32(res + 0x28), j, t;
+                fprintf(stderr, " nodes %u:", nn);
+                for (j = 0; j < nn && j < 24; j++) {
+                    uint32_t wn = MEM32(na + j * 0x60u);
+                    char nm[40];
+                    for (t = 0; t < 39 && wn >= 0x10000u && wn < 0xF0000000u && MEM16(wn + t * 2u); t++) nm[t] = (char)MEM16(wn + t * 2u);
+                    nm[t] = 0;
+                    fprintf(stderr, " %s", nm);
+                }
+            } else if (res >= 0x10000u && res < 0xF0000000u) {
+                /* a name nearby: the first printable UTF-16 run in the resource's first 0x100 bytes */
+                char nm[40];
+                uint32_t o, t;
+                for (o = 0; o < 0x100u; o += 2) {
+                    for (t = 0; t < 39; t++) { uint16_t ch = MEM16(res + o + t * 2u); if (ch < 32 || ch > 126) break; nm[t] = (char)ch; }
+                    nm[t] = 0;
+                    if (t >= 4) { fprintf(stderr, " name@%X %s", o, nm); break; }
+                }
+            }
+            fprintf(stderr, "\n");
+        }
+        return;
+    }
+    fprintf(stderr, "[MCCTX] %s: context not found\n", label);
+}
+
 static void furn_probe(void)
 {
     static const char *const files[] = { "couch", "coffee_table", "end_table", "sofa_chair", "recliner", "console_table",
@@ -597,6 +648,7 @@ static void furn_probe(void)
     uint32_t slot, ctx, file, heap, w = s_h.wstr[15];
     size_t f, k;
     if (done++ || !getenv("NFL2K5_MC_HOME_FURNPROBE")) return;
+    if (s_h.cache_loaded) ctx_list(s_h.w_ctx3, "crib_64k.iff");
     for (f = 0; f < sizeof files / sizeof files[0]; f++) {
         char b[64];
         slot = h_alloc(0x40, 16);
@@ -632,6 +684,7 @@ static void furn_probe(void)
             }
         }
         fprintf(stderr, "[MCFURN] %s: probed\n", b);
+        ctx_list(ctx, b);
     }
 }
 
@@ -663,11 +716,11 @@ static int room_load(void)
         gcall(sub_00043F50, s_h.w_ctx2, s_h.w_file2);
     }
     if (s_h.host && !getenv("NFL2K5_MC_HOME_NO_CACHE")) {
-        PUSH32(g_esp, 0); PUSH32(g_esp, 0);
+        PUSH32(g_esp, 0); PUSH32(g_esp, 4);         /* the Crib's table: crib_64k.iff, a cache of 4 */
         heap = gcall(sub_00038FB0, 0, 0);
         PUSH32(g_esp, heap);
         PUSH32(g_esp, s_h.slot3);
-        gcall(sub_00043F50, s_h.w_ctx3, s_h.w_file3);
+        gcall(sub_000441B0, s_h.w_ctx3, s_h.w_file3);
         s_h.cache_loaded = 1;
     }
     gcall(sub_000432D0, 0, 0);
@@ -1048,7 +1101,7 @@ static void rect_tex(float x, float y, float w, float h, uint32_t tex, uint32_t 
  * only that node, give it a matrix that turns it about its centre and puts it on our slot
  * (metres x 100; the Crib's floor is y 0 as ours), draw the scene with our camera, and put
  * everything back. Nothing is extracted or stored. */
-typedef struct { char node[32]; float x, z, yaw, dy, fx, fz; char look[48]; } RoomItem;   /* dy: metres up or down; fx, fz: the node's pivot fix */
+typedef struct { char node[32]; float x, z, yaw, dy, fx, fz, scale; char look[48]; } RoomItem;   /* dy: metres up or down; fx, fz: the node's pivot fix */
 static RoomItem s_items[24];
 static int s_nitems = -1;
 
@@ -1074,9 +1127,23 @@ static void items_parse(const char *p)
         char b[96];
         snprintf(b, sizeof b, "%.*s", (int)l, p);
         memset(&it, 0, sizeof it);
-        if (sscanf(b, "%31s %f %f %f %f %f %f %47s", it.node, &it.x, &it.z, &it.yaw, &it.dy, &it.fx, &it.fz, it.look) >= 4) {
-            if (!strchr(it.look, '=')) it.look[0] = 0;
-            s_items[s_nitems++] = it;
+        {   /* "node x z yaw [dy fx fz scale] [material=texture]" */
+            char *tok, *ctx = NULL;
+            float v[7] = { 0, 0, 0, 0, 0, 0, 1 };
+            int nv = 0;
+            tok = strtok_s(b, " \t\r\n", &ctx);
+            if (tok) {
+                snprintf(it.node, sizeof it.node, "%s", tok);
+                while ((tok = strtok_s(NULL, " \t\r\n", &ctx)) != NULL) {
+                    if (strchr(tok, '=')) snprintf(it.look, sizeof it.look, "%s", tok);
+                    else if (nv < 7) v[nv++] = (float)atof(tok);
+                }
+                if (nv >= 3) {
+                    it.x = v[0]; it.z = v[1]; it.yaw = v[2]; it.dy = v[3]; it.fx = v[4]; it.fz = v[5];
+                    it.scale = v[6] > 0.0f ? v[6] : 1.0f;
+                    s_items[s_nitems++] = it;
+                }
+            }
         }
         p += l + (p[l] == ';');
     }
@@ -1388,7 +1455,14 @@ static void host_draw_items(void)
             float cx, cy, cz, c, sn, e[2][3];
             int q;
             if (!weq(MEM32(nd), s_items[it].node) || sub < 0x10000u || sub >= 0xF0000000u) continue;
-            (void)m;
+            {   /* scale about the placement: the node matrix (the camera move keeps the turn and the slot) */
+                float sc = s_items[it].scale > 0.0f ? s_items[it].scale : 1.0f;
+                for (q = 0; q < 16; q++) MEMF(m + (uint32_t)q * 4u) = 0.0f;
+                MEMF(m + 0x00u) = sc; MEMF(m + 0x14u) = sc; MEMF(m + 0x28u) = sc; MEMF(m + 0x3Cu) = 1.0f;
+                MEMF(m + 0x30u) = MEMF(sub + 0u) * (1.0f - sc);
+                MEMF(m + 0x34u) = MEMF(sub + 4u) * (1.0f - sc);
+                MEMF(m + 0x38u) = MEMF(sub + 8u) * (1.0f - sc);
+            }
             /* The Crib draws each node only when the camera stands where the Crib's own rooms can
              * see it, so instead of moving the item into our room, our camera goes into the Crib:
              * the item stays where it is, and the camera is put where it would be if the item stood
