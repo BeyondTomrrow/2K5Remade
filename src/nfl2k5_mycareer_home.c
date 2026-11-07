@@ -19,10 +19,13 @@
  *  - Nothing of the pack is reimplemented: a choice glides to its object, pops back to Career
  *    Home and the next Career Home frame tail-jumps into the pack's own row action with
  *    ecx = FSM, the call the list dispatcher makes. Door = 0x014E93D1, the pack's next game.
- *  - The mirror is the game's own edit-mode pages (0x56F410 body, 0x56F230 equipment, or the
- *    real-face pair), cloned only to stop before Position and ratings.
+ *  - The mirror opens a small list: Edit Appearance = the game's own edit-mode pages (0x56F410
+ *    body, 0x56F230 equipment, or the real-face pair), cloned to stop before the ratings;
+ *    Edit Attributes = the game's own Player Attributes page for the MyPlayer's position
+ *    (sub_00344EB0's table), cloned to finish there. Both edit only the MyPlayer's record.
  *  - The phone: calls to the agent and the coach on a call screen drawn like the Crib's
- *    (sub_00274F30: portrait panel, name, wrapped text, choice bar). What was asked is kept
+ *    (sub_00274F30: portrait panel, name, wrapped text, choice bar). The coach's panel shows
+ *    the team's head coach's own portrait (Portrait.iff, the pack's coach table). What was asked is kept
  *    in our own save file (see career_*), never in the pack's.
  *  - Pay and homes: the record's contract value per game week into a bank in our file;
  *    the apartment, the house and the Crib are three framings and looks of the one scene
@@ -82,13 +85,24 @@ extern uint32_t xbox_HeapAlloc(uint32_t size, uint32_t alignment);
 #define ACT_BUY       2u
 #define ACT_AGENT     3u
 #define ACT_COACH     4u
+#define ACT_APPEAR    5u
+#define ACT_ATTR      6u
+#define MH_MIRROR_LOOK  (MH_FN_BASE + 0xC00u)   /* Career Home actions of ours: the mirror's two pages */
+#define MH_MIRROR_ATTR  (MH_FN_BASE + 0xC08u)
+#define ATTR_PAGES    0x00344FE0u          /* sub_00344EB0's jump table: Player Attributes page by position */
+#define ATTR_POSITIONS 17
+#define EDIT_FINISH   0x00346C50u          /* the edit pages' Finish */
+#define PORTRAIT_CTX  0x00E6A3A0u          /* L"PORTRAIT": Portrait.iff, loaded with the frontend (sub_000F62D0) */
+#define FRONTEND_UP   0x00B9E238u          /* 1 while the frontend packages are loaded */
+#define SD_COACHES    0x014E18B0u          /* the pack's 2026 head-coach table: 32 x 0x2C, read by 0x014E15DE */
+#define SD_COACHES_N  32u
 
 enum { HS_DOOR, HS_MIRROR, HS_COMPUTER, HS_PHONE, HS_MENU, HOTS };
-enum { SCR_HUB, SCR_DOOR, SCR_PC, SCR_PHONE, SCR_CALL, SCREENS };
+enum { SCR_HUB, SCR_DOOR, SCR_PC, SCR_PHONE, SCR_MIRROR, SCR_CALL, SCREENS };
 static const char *const k_tier_name[3] = { "Apartment", "House", "The Crib" };
 static const long long k_price[3] = { 0, 250000, 1000000 };
 static const char *const k_hot_name[HOTS] = { "Front Door", "Mirror", "Computer", "Phone", "Career Menu" };
-static const char *const k_hot_what[HOTS] = { "Game day or practice", "Change your look", "Stats, schedule, bank, homes",
+static const char *const k_hot_what[HOTS] = { "Game day or practice", "Your look and your attributes", "Stats, schedule, bank, homes",
                                               "Call your agent or coach", "The full MyCareer list" };
 /* list rows: label, action (the pack's, or one of ours), link = a screen pushed over the room */
 static const struct { const char *label; uint32_t action, link; } k_rows[SCREENS][5] = {
@@ -96,6 +110,7 @@ static const struct { const char *label; uint32_t action, link; } k_rows[SCREENS
     { { "Play Next Game", SD_ACT_NEXT, 0 }, { "Practice", SD_ACT_PRACTICE, 0 }, { 0 } },
     { { "My Stats", SD_ACT_PLAYER, 0 }, { "Schedule", SD_ACT_SCHED, 0 }, { "Bank", ACT_INFO, 0 }, { "Buy", ACT_BUY, 0 }, { 0 } },
     { { "Call My Agent", ACT_AGENT, 0 }, { "Call The Coach", ACT_COACH, 0 }, { 0 } },
+    { { "Edit Appearance", ACT_APPEAR, 0 }, { "Edit Attributes", ACT_ATTR, 0 }, { 0 } },
     { { 0 } },
 };
 #define PC_ROW_BANK 2
@@ -161,6 +176,12 @@ static struct {
     uint32_t rowlab[SCREENS][5];            /* the lists' label buffers */
     uint32_t mirror_body, mirror_equip;     /* our clones, by face route */
     uint32_t mirror_body_real, mirror_equip_real;
+    uint32_t mirror_attr[ATTR_POSITIONS];   /* Player Attributes by position, first and last page */
+    int mirror_mode;                        /* 0 appearance, 1 attributes */
+    uint32_t portrait_rec;                  /* scratch record for sub_000E71E0 (+0x40 = portrait id) */
+    uint32_t w_nophoto;
+    int coach_portrait;                     /* the coach's portrait id, 0 none */
+    char coach_name[48], coach_team[8];
     uint32_t w_cursor, cursor, mtx, w_phone, phone, w_phone_icon, w_reflection;
     uint32_t pad_prev[4];
     int hot, marker3d;
@@ -191,6 +212,9 @@ static struct {
     uint32_t wstr[16];             /* scratch UTF-16 buffers for drawn text */
 } s_h;
 
+static uint32_t s_coach_tex;               /* the coach's portrait (or logo) on the call screen */
+static uint32_t s_coach_logo, s_coach_t0;  /* the team's logo meanwhile; when the call opened */
+static void coach_portrait_poll(void);
 #define MH_LOG(...) do { if (s_h.log) { fprintf(stderr, "[MCHOME] " __VA_ARGS__); fflush(stderr); } } while (0)
 
 /* ---- guest helpers (as src/nfl2k5_eras_office.c) -------------------------- */
@@ -647,7 +671,7 @@ static void hub_frame(uint32_t fsm)
         case HS_DOOR: gcall(sub_0006E390, fsm, s_h.header[SCR_DOOR]); break;
         case HS_COMPUTER: gcall(sub_0006E390, fsm, s_h.header[SCR_PC]); break;
         case HS_PHONE: gcall(sub_0006E390, fsm, s_h.header[SCR_PHONE]); break;
-        case HS_MIRROR: leave(MH_FN_BASE + 0xC00u); break;
+        case HS_MIRROR: gcall(sub_0006E390, fsm, s_h.header[SCR_MIRROR]); break;
         default: s_h.manual = 1; leave(0); break;
         }
         return;
@@ -764,7 +788,10 @@ static void ev_draw(void)
         if (s_h.top == SCR_CALL) {
             rect(0.0f, 0.0f, 640.0f, 480.0f, 0xB0000000u);
             rect(40.0f, 96.0f, 232.0f, 232.0f, 0xFF26254Au);
-            {
+            if (s_h.who == 1) coach_portrait_poll();
+            if (s_h.who == 1 && (s_coach_tex || s_coach_logo))
+                rect_tex(56.0f, 112.0f, 200.0f, 200.0f, s_coach_tex ? s_coach_tex : s_coach_logo, 0xFFFFFFFFu);
+            else {
                 uint32_t icon = lookup(0, FOURCC_TXTR, s_h.w_phone_icon);
                 if (icon) rect_tex(64.0f, 120.0f, 184.0f, 184.0f, icon, 0xFFFFFFFFu);
             }
@@ -786,6 +813,132 @@ static void ev_draw(void)
     } else if (s_h.top == SCR_CALL) call_draw();
 }
 
+/* ---- the coach on the phone ------------------------------------------------------
+ * The MyPlayer's team is the roster team holding his record (sub_000C4060, as the edit
+ * pages' create does); its head coach is the team's coach record (+0x14C: first and last
+ * name at +0x00 / +0x04, portrait id at +0x40). SOFTDRINK keeps its 2026 coaches in its own
+ * table (SD_COACHES: team index +0x08, team ident +0x0A, portrait +0x0C, alternative +0x0E,
+ * L"TEAM Lastname" +0x10) and picks the portrait from it in 0x014E15DE; we read it the same
+ * way, so the coach follows the pack's data. The portrait is the game's own TXTR "%04d" in
+ * Portrait.iff (ctx L"PORTRAIT", sub_000E71E0), the one Coach Match Up shows. No portrait:
+ * the team's logo from logos.iff, else the phone icon. */
+
+static uint32_t res_ptr(uint32_t field)
+{
+    uint32_t p = MEM32(field);
+    if (!p) return 0;
+    if ((p >= 0x10000u && p < 0x04000000u) || (p >= 0x80000000u && p < 0x88000000u)) return p;
+    p += field;
+    return p >= 0x10000u && p < 0x04000000u ? p : 0;
+}
+
+static uint32_t find_tex(uint32_t ctx, const char *name)
+{
+    uint32_t w = s_h.wstr[15];
+    h_put(w, name);
+    PUSH32(g_esp, w);
+    if (!gcall(sub_00042FF0, ctx, FOURCC_TXTR)) return 0;
+    return lookup(ctx, FOURCC_TXTR, w);
+}
+
+static uint32_t my_team(uint32_t rec, int *index)
+{
+    uint32_t r = MEM32(0x00B72918u), n, tbl, i;
+    if (r < 0x10000u || r >= 0x04000000u) return 0;
+    n = MEM32(r + 0x18u); tbl = MEM32(r + 0x1Cu);
+    if (n > 0x80u || tbl < 0x10000u) return 0;
+    for (i = 0; i < n; i++) {
+        uint32_t slot = tbl + i * 0x1F4u;
+        if (gcall(sub_000C4060, slot, rec)) { *index = (int)i; return slot; }
+    }
+    return 0;
+}
+
+static void coach_resolve(void)
+{
+    uint32_t rec = MEM32(SD_PLAYER), slot, coach, k;
+    int index = -1, pid = 0;
+    char first[32] = "", last[32] = "", code[8] = "", packname[32] = "";
+    const char *how = "none";
+    s_coach_tex = 0;
+    s_h.coach_team[0] = 0;
+    s_h.coach_portrait = 0;
+    s_h.coach_name[0] = 0;
+    if (rec < 0x10000u || rec >= 0xF0000000u) return;
+    slot = my_team(rec, &index);
+    {   /* tests only: NFL2K5_MC_HOME_TEAM=<roster team index> shows that team's coach */
+        const char *t = getenv("NFL2K5_MC_HOME_TEAM");
+        uint32_t r = MEM32(0x00B72918u);
+        if (t && *t && r >= 0x10000u && r < 0x04000000u && (uint32_t)atoi(t) < MEM32(r + 0x18u)) {
+            index = atoi(t);
+            slot = MEM32(r + 0x1Cu) + (uint32_t)index * 0x1F4u;
+        }
+    }
+    if (!slot) { fprintf(stderr, "[MCHOME] coach: the MyPlayer is on no roster team\n"); return; }
+    wtoa(res_ptr(slot + 0x10Cu), code, sizeof code);
+    snprintf(s_h.coach_team, sizeof s_h.coach_team, "%s", code);
+    coach = res_ptr(slot + 0x14Cu);
+    if (coach) {
+        rec_name(coach, 0x00, first, sizeof first);
+        rec_name(coach, 0x04, last, sizeof last);
+        pid = MEM16(coach + 0x40u);
+        how = "coach record";
+    }
+    for (k = 0; k < SD_COACHES_N; k++) {
+        uint32_t e = SD_COACHES + k * 0x2Cu;
+        uint16_t c0 = MEM16(e + 0x10u);
+        if (c0 < 'A' || c0 > 'Z') break;                         /* not the table this expects */
+        if (MEM16(e + 0x08u) != (uint32_t)index || MEM16(e + 0x0Au) != MEM16(slot + 0x118u) || MEM32(slot + 0x128u)) continue;
+        {
+            int tp = MEM16(e + 0x0Cu), alt = MEM16(e + 0x0Eu);
+            if (alt && pid == alt) tp = alt;                      /* as 0x014E15DE */
+            pid = tp;
+        }
+        wtoa(e + 0x10u, packname, sizeof packname);
+        how = "SOFTDRINK coach table";
+        break;
+    }
+    /* the name: the coach record's, unless the pack's table names someone else */
+    if (packname[0]) {
+        const char *sp = strchr(packname, ' ');
+        if (sp && _stricmp(sp + 1, last)) { snprintf(last, sizeof last, "%s", sp + 1); first[0] = 0; }
+    }
+    snprintf(s_h.coach_name, sizeof s_h.coach_name, "%s%s%s", first, first[0] ? " " : "", last);
+    s_h.coach_portrait = pid;
+    s_coach_logo = 0;
+    s_coach_t0 = GetTickCount();
+    coach_portrait_poll();                                        /* asks Portrait.iff / logos.iff to stream them in */
+    fprintf(stderr, "[MCHOME] coach: team %d %s, coach record %08X \"%s\" (pack: \"%s\"), portrait %04d via %s, logo %08X\n",
+            index, code, coach, s_h.coach_name, packname, pid, how, s_coach_logo);
+}
+
+/* Portrait.iff streams: the first ask starts the load and finds nothing, later asks find it
+ * (sub_00042EA0 states 1 / 2). Asked every frame of the call, so the panel shows the photo as
+ * soon as it is in and never holds a pointer the cache may have dropped. */
+static void coach_portrait_poll(void)
+{
+    char b[24];
+    uint32_t t;
+    if (s_h.coach_team[0] && !s_coach_tex) {                     /* L"LOGOS": shown until the portrait is in */
+        snprintf(b, sizeof b, "logo_%s_0", s_h.coach_team);
+        s_coach_logo = find_tex(0x00E6BFB8u, b);
+    }
+    if (!s_h.coach_portrait || getenv("NFL2K5_MC_HOME_NOPORTRAIT")) return;   /* tests: the logo panel */
+    snprintf(b, sizeof b, "%04d", s_h.coach_portrait);
+    t = find_tex(PORTRAIT_CTX, b);
+    if (t && !s_coach_tex)
+        fprintf(stderr, "[MCHOME] coach portrait %s in after %lu ms: texture %08X\n", b, (unsigned long)(GetTickCount() - s_coach_t0), t);
+    s_coach_tex = t;
+}
+
+/* Hook for spoken lines (not built: voices are on hold). Every line the call screen types
+ * comes through here with who (0 agent, 1 coach), a stable key and the text, so a voice
+ * player can be added later without touching the call logic. */
+static void call_line(int who, const char *key, const char *text)
+{
+    MH_LOG("line %s %s: \"%s\"\n", who ? "coach" : "agent", key, text);
+}
+
 /* ---- the phone ----------------------------------------------------------------- */
 
 static const char *const k_agent_opts[] = { "I want to stay here.", "Get me outta here.", "Any trade interest?", "Hang up" };
@@ -797,6 +950,8 @@ static void call_greeting(char *b, size_t n)
     money(s_c.salary, m, sizeof m);
     if (s_h.who == 0)
         snprintf(b, n, "Hey, it's Marcus. You're on %s a year. What do you need?", m);
+    else if (s_h.coach_name[0])
+        snprintf(b, n, "Coach %s here. Make it quick, we've got film to watch.", strrchr(s_h.coach_name, ' ') ? strrchr(s_h.coach_name, ' ') + 1 : s_h.coach_name);
     else
         snprintf(b, n, "Coach here. Make it quick, we've got film to watch.");
 }
@@ -858,6 +1013,7 @@ static void call_open(uint32_t fsm, int who)
     s_h.pick = 0;
     s_h.call_t = 0.0f;
     s_h.nopts = who ? 3 : 4;
+    if (who) coach_resolve();
     gcall(sub_0006E390, fsm, s_h.header[SCR_CALL]);
 }
 
@@ -870,7 +1026,12 @@ static void call_frame(uint32_t fsm)
     edge = pad_edges();
     if (edge & BTN_B) { sound(SND_SELECT); gcall(sub_0006E400, fsm, 0); return; }
     if (s_h.phase == 0) {
-        if (s_h.call_t > 1.4f || (edge & BTN_A)) { s_h.phase = 1; s_h.call_t = 0.0f; }
+        if (s_h.call_t > 1.4f || (edge & BTN_A)) {
+            char g[320];
+            s_h.phase = 1; s_h.call_t = 0.0f;
+            call_greeting(g, sizeof g);
+            call_line(s_h.who, "greeting", g);
+        }
         return;
     }
     if (s_h.phase == 1) {
@@ -880,6 +1041,7 @@ static void call_frame(uint32_t fsm)
             sound(SND_SELECT);
             if (s_h.pick == s_h.nopts - 1) { gcall(sub_0006E400, fsm, 0); return; }
             call_answer(s_h.pick);
+            { char key[16]; snprintf(key, sizeof key, "answer%d", s_h.pick); call_line(s_h.who, key, s_h.reply); }
             s_h.phase = 2;
             s_h.call_t = 0.0f;
         }
@@ -893,10 +1055,11 @@ static void call_frame(uint32_t fsm)
 
 static void call_draw(void)
 {
-    const char *who = s_h.who ? "Head Coach" : "Marcus Hale, Agent";
-    char b[320];
+    char who[64], b[320];
     int i, n;
-    text_s(0, s_h.who ? "COACH" : "AGENT", 156.0f, 70.0f, 0xFFC0C0C0u);
+    if (s_h.who) snprintf(who, sizeof who, "%s%s", s_h.coach_name[0] ? "Coach " : "Head Coach", s_h.coach_name);
+    else snprintf(who, sizeof who, "Marcus Hale, Agent");
+    text_s(0, s_h.who ? "HEAD COACH" : "AGENT", 156.0f, 70.0f, 0xFFC0C0C0u);
     n = (int)(s_h.call_t * 30.0f);                       /* the name types in, as the Crib's does */
     snprintf(b, sizeof b, "%.*s", n < 0 ? 0 : n, who);
     text_s(1, b, 156.0f, 340.0f, 0xFFC0C0C0u);
@@ -989,10 +1152,12 @@ static void mh_event(int scr, int msg, uint32_t fsm)
     }
 }
 
-/* The mirror, from Career Home: sub_00346730's set-up, then our first page. */
-static void mirror_go(uint32_t fsm)
+/* The mirror, from Career Home: sub_00346730's set-up, then our first page: the body page
+ * (Edit Appearance) or the MyPlayer's position's Player Attributes page (Edit Attributes;
+ * the game's own ratings editor, which Edit Player reaches after the equipment page). */
+static void mirror_go(uint32_t fsm, int attrs)
 {
-    uint32_t rec = MEM32(SD_PLAYER), i, real;
+    uint32_t rec = MEM32(SD_PLAYER), i, real, pos;
     if (rec < 0x10000u || rec >= 0xF0000000u) { fprintf(stderr, "[MCHOME] mirror: no MyPlayer record (%08X)\n", rec); return; }
     for (i = 0; i < REC_BYTES; i++) s_h.rec_before[i] = MEM8(rec + i);
     s_h.rec = rec;
@@ -1005,7 +1170,20 @@ static void mirror_go(uint32_t fsm)
     gcall(sub_000F33C0, 0x00CB8BBCu, fsm);
     real = gcall(sub_000912E0, rec, 0);
     MEM32(0x00CB8BA4u) = real ? 1u : 0u;
-    fprintf(stderr, "[MCHOME] mirror: record %08X, %s face\n", rec, real ? "real" : "created");
+    s_h.mirror_mode = attrs;
+    pos = MEM8(rec + 0x35u);
+    if (attrs) {
+        if (pos >= ATTR_POSITIONS || !s_h.mirror_attr[pos]) {
+            fprintf(stderr, "[MCHOME] mirror: no attributes page for position %u\n", pos);
+            s_h.rec = 0;
+            return;
+        }
+        MEM32(0x00CB8830u) = 0;                   /* as sub_00344EB0 does before the attributes page */
+        fprintf(stderr, "[MCHOME] mirror: attributes, record %08X, position %u, page %08X\n", rec, pos, s_h.mirror_attr[pos]);
+        gcall(sub_0006E390, fsm, s_h.mirror_attr[pos]);
+        return;
+    }
+    fprintf(stderr, "[MCHOME] mirror: appearance, record %08X, %s face\n", rec, real ? "real" : "created");
     gcall(sub_0006E390, fsm, real ? s_h.mirror_body_real : s_h.mirror_body);
 }
 
@@ -1024,7 +1202,7 @@ static void mh_fn(void)
     g_esp += 4;                                   /* the return address; every call here is a plain ret */
     esp = g_esp;
     if (off < 0x800u) mh_event((int)(off / 0x100u), (int)((off % 0x100u) / 4u), fsm);
-    else if (off == 0xC00u) mirror_go(fsm);
+    else if (off == 0xC00u || off == 0xC08u) mirror_go(fsm, off == 0xC08u);
     else if (off == 0xC04u) mirror_next(fsm);
     else {
         int scr = (int)((off - 0x800u) / 0x40u), row = (int)(((off - 0x800u) % 0x40u) / 4u);
@@ -1034,6 +1212,7 @@ static void mh_fn(void)
             if (act == ACT_INFO) sound(SND_CURSOR);
             else if (act == ACT_BUY) buy();
             else if (act == ACT_AGENT || act == ACT_COACH) { sound(SND_SELECT); call_open(fsm, act == ACT_COACH); }
+            else if (act == ACT_APPEAR || act == ACT_ATTR) { sound(SND_SELECT); leave(act == ACT_ATTR ? MH_MIRROR_ATTR : MH_MIRROR_LOOK); }
             else { sound(SND_SELECT); leave(act); }
         }
     }
@@ -1065,7 +1244,7 @@ static uint32_t ih_handler(void)
         s_h.action = 0;
         s_h.cool = 600;                           /* room for the pack's fades before anything is pushed */
         fprintf(stderr, "[MCHOME] Career Home row action %08X\n", a);
-        if (a >= 0xFE000000u) { mirror_go(fsm); return SD_HANDLER_RET; }   /* ours: the interpreter cannot continue there */
+        if (a >= 0xFE000000u) { mirror_go(fsm, a == MH_MIRROR_ATTR); return SD_HANDLER_RET; }   /* ours: the interpreter cannot continue there */
         return a;                                  /* tail call: ecx = FSM, returns to the handler's caller */
     }
     if (s_h.rec) {                                /* back from the mirror: what changed in the record */
@@ -1074,7 +1253,8 @@ static uint32_t ih_handler(void)
         for (i = 0; i < REC_BYTES; i++)
             if (MEM8(s_h.rec + i) != s_h.rec_before[i] && n++ < 24)
                 snprintf(b + strlen(b), sizeof b - strlen(b), " +%02X:%02X>%02X", i, s_h.rec_before[i], MEM8(s_h.rec + i));
-        fprintf(stderr, "[MCHOME] mirror done: %u of %u record bytes changed:%s\n", n, REC_BYTES, b);
+        fprintf(stderr, "[MCHOME] mirror (%s) done: %u of %u record bytes changed:%s\n", s_h.mirror_mode ? "attributes" : "appearance",
+                n, REC_BYTES, b);
         s_h.rec = 0;
     }
     if (s_h.cool > 0) { s_h.cool--; return 0; }
@@ -1091,13 +1271,13 @@ static uint32_t ih_handler(void)
 
 /* An edit page with its Start replaced. First page: + the identity page's create, destroy and
  * back records (0x56F5D0, 0x56F618, 0x56F588), Start = next page; last page: Start = Finish. */
-static uint32_t clone_page(uint32_t src, int first)
+static uint32_t clone_page(uint32_t src, int first, uint32_t start_fn)
 {
     uint32_t page = h_alloc(MH_ROW, 4), ev = MEM32(src + 4u), t = h_alloc(8u * 10u, 4), n = 0, k, start;
     for (k = 0; k < 0x2Cu; k += 4) MEM32(page + k) = MEM32(src + k);
     start = h_alloc(0x48u, 4);
     MEM32(start) = 1;
-    MEM32(start + 4u) = first ? MH_FN_BASE + 0xC04u : 0x00346C50u;
+    MEM32(start + 4u) = start_fn;
     for (k = 0; ev && MEM32(ev + k * 8u) && k < 8; k++) {
         if (MEM32(ev + k * 8u) == 11) continue;
         MEM32(t + n * 8u) = MEM32(ev + k * 8u);
@@ -1135,7 +1315,7 @@ void nfl2k5_mc_home_install(void)
     s_h.phone_at[0] = 2560.0f; s_h.phone_at[1] = 8.0f; s_h.phone_at[2] = -1150.0f;
     { const char *p = getenv("NFL2K5_MC_HOME_PHONE_AT"); if (p) sscanf(p, "%f %f %f", &s_h.phone_at[0], &s_h.phone_at[1], &s_h.phone_at[2]); }
     ini_path();
-    s_h.size = 24576u;
+    s_h.size = 32768u;
     s_h.mem = xbox_HeapAlloc(s_h.size, 16);
     if (!s_h.mem) return;
     s_h.camobj = h_alloc(0x2C0, 16);
@@ -1169,7 +1349,7 @@ void nfl2k5_mc_home_install(void)
     for (r = 0; r < 0x2Cu; r += 4) MEM32(s_h.header[SCR_CALL] + r) = MEM32(CRIB_DESC + r);
     /* The lists: the template's list, flags 0x10 (Back pops, no backdrop). */
     for (i = SCR_DOOR; i < SCR_CALL; i++) {
-        static const int title_of[SCREENS] = { 0, HS_DOOR, HS_COMPUTER, HS_PHONE, 0 };
+        static const int title_of[SCREENS] = { 0, HS_DOOR, HS_COMPUTER, HS_PHONE, HS_MIRROR, 0 };
         int n = 0, k;
         uint32_t rows;
         while (n < 5 && k_rows[i][n].label) n++;
@@ -1203,10 +1383,22 @@ void nfl2k5_mc_home_install(void)
     }
     MEM32(s_h.header[SCR_HUB] + 0x00) = s_h.title;
     MEM32(s_h.header[SCR_CALL] + 0x00) = s_h.wstr[13];
-    s_h.mirror_body = clone_page(0x0056F410u, 1);
-    s_h.mirror_equip = clone_page(0x0056F230u, 0);
-    s_h.mirror_body_real = clone_page(0x0056FAA0u, 1);
-    s_h.mirror_equip_real = clone_page(0x0056F8C0u, 0);
+    s_h.mirror_body = clone_page(0x0056F410u, 1, MH_FN_BASE + 0xC04u);
+    s_h.mirror_equip = clone_page(0x0056F230u, 0, EDIT_FINISH);
+    s_h.mirror_body_real = clone_page(0x0056FAA0u, 1, MH_FN_BASE + 0xC04u);
+    s_h.mirror_equip_real = clone_page(0x0056F8C0u, 0, EDIT_FINISH);
+    /* Player Attributes pages: each jump-table case is `mov ecx, esi; mov edx, page; pop esi;
+     * jmp 0x6E390`. One page for the position: first (the identity page's create, destroy and
+     * back records) and last (Start = Finish) at once. */
+    for (i = 0; i < ATTR_POSITIONS; i++) {
+        uint32_t c = MEM32(ATTR_PAGES + 4u * (uint32_t)i), page;
+        if (c < 0x00344EB0u || c > 0x00344FE0u || MEM8(c) != 0x8Bu || MEM8(c + 1u) != 0xCEu || MEM8(c + 2u) != 0xBAu) continue;
+        page = MEM32(c + 3u);
+        if (page < 0x00500000u || page >= 0x00600000u) continue;
+        s_h.mirror_attr[i] = clone_page(page, 1, EDIT_FINISH);
+    }
+    s_h.portrait_rec = h_alloc(0x48u, 4);
+    s_h.w_nophoto = h_wstr("nophoto");
     if (!s_h.mirror_equip_real) { fprintf(stderr, "[MCHOME] off: out of guest memory (%u bytes)\n", s_h.used); return; }
     s_h.on = 1;
     recomp_interp_add_hook(SD_HANDLER, 0, ih_handler);
