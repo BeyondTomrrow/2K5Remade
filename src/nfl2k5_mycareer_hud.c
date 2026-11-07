@@ -46,6 +46,7 @@ extern uint32_t xbox_HeapAlloc(uint32_t size, uint32_t alignment);
 extern int nfl2k5_guest_player_stat_scope(uint32_t player, uint32_t selector, uint32_t scope, double *out);
 extern int nfl2k5_scorebug_native_hidden(void);      /* src/nfl2k5_presentation.cpp */
 extern void nfl2k5_presentation_corner_claim(void);
+extern float nfl2k5_presentation_corner_right(void);
 extern int nfl2k5_guest_team_stat(uint32_t team, uint32_t selector, uint32_t scope, double *out);
 
 #define HUD_FN_BASE   0xFED20000u
@@ -965,9 +966,14 @@ static uint32_t ih_line(void)
     s.margin = s.fullcam ? 27.0f : 12.0f;
     s.shift = 0.0f;
     if (s.fullcam && s.fullsq > 0.3f && s.fullsq < 1.0f) {
-        float edge = 320.0f + 320.0f / s.fullsq;             /* the window's right edge, 720 at 16:9 */
-        s.shift = edge - 632.0f;
-        s.right = edge - s.shift;                            /* drawn here, shown at the edge */
+        /* The picture spans x 320 -/+ 320 / sq (-80..720 at 16:9). The bar's right edge goes where
+         * the presentation's corner bug ends (its page is a 16:9 area inside the picture, so at
+         * 21:9 that is well in from the window edge); without one, 27 units in from the edge. */
+        float half = 320.0f / s.fullsq, frac = nfl2k5_presentation_corner_right(), target;
+        target = frac > 0.3f && frac <= 1.0f ? 320.0f - half + 2.0f * half * frac : 320.0f + half - 27.0f;
+        s.shift = target - 620.0f;
+        s.right = 620.0f;                                    /* drawn here, shown at the target */
+        s.margin = 0.0f;
     } else s.right = 640.0f;
     if (s.fullcam) cam_full_begin();
     if (s.diag) diag_fonts();

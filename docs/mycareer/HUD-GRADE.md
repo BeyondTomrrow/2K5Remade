@@ -11,7 +11,9 @@ play-call screen, for most of the play, in replays and when paused), and the pac
 (that row stays the on/off switch). Our bar replaces that line (hook at 0x014EA522, continue at
 0x014EA57C). It is hidden while Supersim runs, so it never sits on the Supersim panel.
 
-Placement: the top-right corner, its right edge where the network bug's is (64 of 1920 px in).
+Placement: the top-right corner, its right edge where the network bug's is. The page reports
+that edge itself (`NFL2K5_CORNER_RIGHT:<share of page width>`, NBC SNF and CBS), so the bar follows
+the package's CSS: at 21:9 the SNF page keeps its bug in a 16:9 area, well in from the window edge.
 The widescreen patch squeezes every 2D camera to a centred 4:3 viewport (its camera hook at 0x46EE0,
 behind the camera set sub_0002AC80), which clips the HUD to x 0..640, about 130 px (of 1280) short
 of the corner at 16:9. The bar is drawn with its own camera instead: the game's camera set again

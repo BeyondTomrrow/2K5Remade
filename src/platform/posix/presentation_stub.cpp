@@ -41,6 +41,7 @@ void nfl2k5_scorebug_native_place(uint32_t) {}
 int nfl2k5_scorebug_skip_update(void) { return 0; }
 int nfl2k5_scorebug_native_hidden(void) { return 0; }
 void nfl2k5_presentation_corner_claim(void) {}
+float nfl2k5_presentation_corner_right(void) { return 0.0f; }
 void nfl2k5_presentation_popup(const char *) {}
 int nfl2k5_presentation_pregame_metadata_needed(void) { return 0; }
 void nfl2k5_presentation_popup_text(const char *, const char *) {}
