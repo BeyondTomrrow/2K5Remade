@@ -819,7 +819,9 @@ extern int mc_window_view(const char *hdr_path, float wx, float z0, float z1, fl
 static char s_models_dir[MAX_PATH];
 static int s_view_mesh = -1;
 typedef struct { char name[40]; float x, z, yaw, y, size, height, sc, scy; int ids[12], nid; float b[6]; } RoomModel;
-static RoomModel s_models[24];
+static RoomModel s_models[40];
+static char s_shop_models[1024];      /* ";name x z yaw y size height" for each model the shop placed */
+static int s_room_rebuild;
 static int s_nmodels;
 
 static const char k_models_default[] =
@@ -846,7 +848,7 @@ static RoomModel *model_find(const char *name)
 
 static void models_load(void)
 {
-    char dir[MAX_PATH], list[1024];
+    char dir[MAX_PATH], list[2048];
     const char *e = getenv("NFL2K5_MC_HOME_MODELS"), *p;
     s_nmodels = 0;
     if (getenv("NFL2K5_MC_HOME_NO_MODELS")) return;
@@ -856,7 +858,7 @@ static void models_load(void)
         if (!n || n >= sizeof dir) { GetModuleFileNameA(NULL, dir, sizeof dir); { char *b = strrchr(dir, '\\'); if (b) *b = 0; } }
         snprintf(dir + strlen(dir), sizeof dir - strlen(dir), "\\mods\\mycareer-home\\models");
     }
-    snprintf(list, sizeof list, "%s", getenv("NFL2K5_MC_HOME_PLACE") ? getenv("NFL2K5_MC_HOME_PLACE") : k_models_default);
+    snprintf(list, sizeof list, "%s%s", getenv("NFL2K5_MC_HOME_PLACE") ? getenv("NFL2K5_MC_HOME_PLACE") : k_models_default, s_shop_models);
     {   /* ambientCG surfaces for flat-coloured fabric and wood: NFL2K5_MC_HOME_TEXTURES or models\\ambientcg */
         char td[MAX_PATH + 16];
         if (getenv("NFL2K5_MC_HOME_TEXTURES")) snprintf(td, sizeof td, "%s", getenv("NFL2K5_MC_HOME_TEXTURES"));
@@ -881,7 +883,21 @@ static void models_load(void)
             if (kd) snprintf(path, sizeof path, "%s\\%s.glb", kd, m->name + 2);
             else snprintf(path, sizeof path, "%s\\kenney\\%s.glb", dir, m->name + 2);
         } else snprintf(path, sizeof path, "%s\\%s\\%s.gltf", dir, m->name, m->name);
-        m->nid = mc_model_load(path, m->ids, 12, m->b);
+        {   /* loaded once a session: a room rebuild (a purchase) reuses the meshes */
+            static struct { char path[MAX_PATH + 96]; int ids[12], nid; float b[6]; } cache[40];
+            static int ncache;
+            int ci;
+            for (ci = 0; ci < ncache && strcmp(cache[ci].path, path); ci++) ;
+            if (ci < ncache) { memcpy(m->ids, cache[ci].ids, sizeof m->ids); m->nid = cache[ci].nid; memcpy(m->b, cache[ci].b, sizeof m->b); }
+            else {
+                m->nid = mc_model_load(path, m->ids, 12, m->b);
+                if (m->nid && ncache < 40) {
+                    snprintf(cache[ncache].path, sizeof cache[ncache].path, "%s", path);
+                    memcpy(cache[ncache].ids, m->ids, sizeof m->ids); cache[ncache].nid = m->nid; memcpy(cache[ncache].b, m->b, sizeof m->b);
+                    ncache++;
+                }
+            }
+        }
         if (m->nid) s_nmodels++;
     }
     /* sizes, then heights: "y < 0" stands a model on the one under it (the TV on its cabinet) */
@@ -978,7 +994,7 @@ static void room_build_apartment(void)
         int view;
         if (getenv("NFL2K5_MC_HOME_VIEW")) snprintf(vp, sizeof vp, "%s", getenv("NFL2K5_MC_HOME_VIEW"));
         else snprintf(vp, sizeof vp, "%s\\views\\apartment.hdr", s_models_dir);
-        view = mc_window_view(vp, 7.1f, 0.0f, 9.0f, 0.9f, 2.4f, getenv("NFL2K5_MC_HOME_VIEW_TURN") ? (float)atof(getenv("NFL2K5_MC_HOME_VIEW_TURN")) : 0.25f, 1.6f);
+        view = s_view_mesh >= 0 ? s_view_mesh : mc_window_view(vp, 7.1f, 0.0f, 9.0f, 0.9f, 2.4f, getenv("NFL2K5_MC_HOME_VIEW_TURN") ? (float)atof(getenv("NFL2K5_MC_HOME_VIEW_TURN")) : 0.25f, 1.6f);
         if (view >= 0) s_view_mesh = view;
         else room_add(7.08f, 0.9f, 0, 7.12f, 2.4f, 9, 0x6E8FC0, HS_MAT_EMISSIVE);
     }
@@ -1181,7 +1197,7 @@ static void items_poll(void)
  * in the first free one, or replaces the oldest. Placements live in careers.ini (place_<slot>). */
 enum { SL_WALL, SL_CORNER, SL_TABLE, SL_KINDS };
 static const char *const k_slot_kind[SL_KINDS] = { "Wall", "Corner", "Table Top" };
-typedef struct { char id[40], name[48], node[32], look[48]; int tier, kind; long long price; } ShopItem;
+typedef struct { char id[40], name[48], node[32], look[48], model[64]; float msize, mheight; int tier, kind; long long price; } ShopItem;
 static ShopItem s_shop[160];
 static int s_nshop = -1;
 
@@ -1248,6 +1264,17 @@ static void shop_load(void)
         else if (!strcmp(fld[3], "floor_corner")) it->kind = SL_CORNER;
         else if (!strcmp(fld[3], "table_top")) it->kind = SL_TABLE;
         else continue;                                       /* other slot kinds: the house and mansion */
+        if (!strncmp(fld[4], "model:", 6)) {                /* CC0 decor: "model:<name>,<size>,<height>" */
+            char *c1;
+            snprintf(it->model, sizeof it->model, "%s", fld[4] + 6);
+            it->msize = 0.0f; it->mheight = 0.0f;
+            if ((c1 = strchr(it->model, ',')) != NULL) {
+                *c1 = 0;
+                sscanf(c1 + 1, "%f,%f", &it->msize, &it->mheight);
+            }
+            s_nshop++;
+            continue;
+        }
         if (strncmp(fld[4], "crib.iff:", 9)) continue;       /* Crib furniture files: not drawn yet */
         snprintf(it->node, sizeof it->node, "%s", fld[4] + 9);
         if ((q = strchr(it->node, '+')) != NULL) *q = 0;
@@ -1256,6 +1283,8 @@ static void shop_load(void)
             *q = 0;
         }
         if (strchr(it->node, ':')) continue;
+        if (strncmp(it->node, "pennant_", 8) && strncmp(it->node, "jukebox", 7) && strncmp(it->node, "bobblestands", 12)
+            ) continue;                                         /* palm, posters, standees, the game-ball case: not right yet */
         if (look >= 0) {                                      /* the Crib's cache look on the node's material */
             const char *texbase = !strncmp(it->node, "poster_", 7) ? "poster" : !strncmp(it->node, "pennant_", 8) ? "pennant"
                                 : !strncmp(it->node, "banner_", 7) ? "banner" : !strncmp(it->node, "standee_", 8) ? "standee"
@@ -1289,7 +1318,7 @@ static void place_load(void)
         GetPrivateProfileStringA(s_c.key, k, "", s_place[i], sizeof s_place[i], s_ini);
     }
     if (!ini_get("furnished", 0)) {               /* a first home comes with a few Crib pieces */
-        static const char *const starter[][2] = { { "C1", "palm_plant" } };   /* more once each node is sized */
+        static const char *const starter[][2] = { { "C1", "potted_plant" } };
         int j;
         for (j = 0; j < 1; j++)
             for (i = 0; i < SLOTS; i++)
@@ -1311,17 +1340,38 @@ static void items_from_places(void)
     if (s_nshop < 0) shop_load();
     if (s_place_loaded < 0) place_load();
     s_nitems = 0;
+    {
+        char old[1024];
+        snprintf(old, sizeof old, "%s", s_shop_models);
+        s_shop_models[0] = 0;
+        for (i = 0; i < SLOTS; i++) {
+            const ShopItem *si = s_place[i][0] ? shop_find(s_place[i]) : NULL;
+            char b[160];
+            if (!si || !si->model[0]) continue;
+            snprintf(b, sizeof b, ";%s %.2f %.2f %.0f %s %.2f %.2f", si->model, k_slots[i].x, k_slots[i].z, k_slots[i].face,
+                     k_slots[i].dy < 0.0f ? "-1" : "0", si->msize, si->mheight);
+            if (strlen(s_shop_models) + strlen(b) < sizeof s_shop_models) strcat(s_shop_models, b);
+        }
+        if (strcmp(old, s_shop_models)) s_room_rebuild = 1;
+    }
     for (i = 0; i < SLOTS && s_nitems < (int)(sizeof s_items / sizeof s_items[0]); i++) {
         const ShopItem *si = s_place[i][0] ? shop_find(s_place[i]) : NULL;
         RoomItem *it = &s_items[s_nitems];
-        if (!si) continue;
+        if (!si || si->model[0]) continue;
         memset(it, 0, sizeof *it);
         snprintf(it->node, sizeof it->node, "%s", si->node);
         it->x = k_slots[i].x; it->z = k_slots[i].z;
         it->yaw = k_slots[i].face - node_face(si->node);
         it->dy = k_slots[i].dy < 0.0f ? (k_slots[i].dy < -1.5f ? model_top("metal_office_desk") : model_top("side_table_01")) : k_slots[i].dy;
         snprintf(it->look, sizeof it->look, "%s", si->look);
+        if (!strcmp(si->node, "standee_p01")) it->dy -= 4.6f;   /* measured (t52): the Crib hangs it high */
+        it->scale = 1.0f;
         s_nitems++;
+        if (!strcmp(si->node, "bobblestands") && s_nitems < (int)(sizeof s_items / sizeof s_items[0])) {
+            s_items[s_nitems] = *it;                  /* the case's logos are a node of their own */
+            snprintf(s_items[s_nitems].node, sizeof s_items[s_nitems].node, "bobblelogos");
+            s_nitems++;
+        }
     }
     s_items_dirty = 0;
 }
@@ -1404,12 +1454,14 @@ static void shop_draw(void)
     if (s_h.shop_msg[0]) text_s(10, s_h.shop_msg, 320.0f, 350.0f, 0xFF80FF80u);
 }
 
+static void room_build_apartment(void);
 static void host_draw_items(void)
 {
     uint32_t n, a, i, k, save_flags[256], save_m[256][16];
     int it;
     if (!s_h.room || getenv("NFL2K5_MC_HOME_NO_ITEMS")) return;
     items_poll();
+    if (s_room_rebuild) { s_room_rebuild = 0; room_build_apartment(); }
     if (s_nitems <= 0) return;
     n = MEM32(s_h.room + 0x24); a = MEM32(s_h.room + 0x28);
     if (n > 256) n = 256;
