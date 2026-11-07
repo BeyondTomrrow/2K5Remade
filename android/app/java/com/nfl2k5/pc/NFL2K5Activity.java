@@ -79,6 +79,48 @@ public class NFL2K5Activity extends SDLActivity {
         }});
     }
 
+    /* ---- GPU Driver > Add Driver (src/nfl2k5_gpu_driver.c) ----
+     * The file goes to app storage first: a picked document has no path, and a
+     * driver has to sit where the app may execute it. */
+    private static final int PICK_DRIVER = 7102;
+    private static native void nativeDriverPicked(String path, String shown);
+
+    public static void pickDriver() {
+        final NFL2K5Activity a = (NFL2K5Activity) mSingleton;
+        if (a == null) return;
+        a.runOnUiThread(new Runnable() { public void run() {
+            Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+            i.addCategory(Intent.CATEGORY_OPENABLE);
+            i.setType("*/*");
+            try { a.startActivityForResult(i, PICK_DRIVER); } catch (Exception e) { }
+        }});
+    }
+
+    private void driverPicked(final Uri u) {
+        new Thread(new Runnable() { public void run() {
+            String shown = null;
+            try (android.database.Cursor c = getContentResolver().query(u, new String[] {
+                    android.provider.OpenableColumns.DISPLAY_NAME }, null, null, null)) {
+                if (c != null && c.moveToFirst()) shown = c.getString(0);
+            } catch (Exception e) { }
+            if (shown == null) shown = "driver.so";
+            File dir = new File(getFilesDir(), "gpu_drivers");
+            dir.mkdirs();
+            File copy = new File(dir, ".picked");
+            try (java.io.InputStream in = getContentResolver().openInputStream(u);
+                 java.io.OutputStream out = new java.io.FileOutputStream(copy)) {
+                byte[] b = new byte[1 << 16];
+                int r;
+                while ((r = in.read(b)) > 0) out.write(b, 0, r);
+            } catch (Exception e) {
+                copy.delete();
+                return;
+            }
+            nativeDriverPicked(copy.getPath(), shown);
+            copy.delete();
+        }}).start();
+    }
+
     /* ---- Rumble on the phone itself (src/nfl2k5_controls.c phone_rumble) ----
      * Touch play has no controller to rumble: the game's motor speeds pulse
      * the phone's vibrator instead. Called from the game thread with short
@@ -117,6 +159,10 @@ public class NFL2K5Activity extends SDLActivity {
     @Override
     protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);
+        if (request == PICK_DRIVER) {
+            if (result == RESULT_OK && data != null && data.getData() != null) driverPicked(data.getData());
+            return;
+        }
         if (request != PICK_SONGS || result != RESULT_OK || data == null) return;
         final java.util.ArrayList<Uri> uris = new java.util.ArrayList<>();
         if (data.getClipData() != null)

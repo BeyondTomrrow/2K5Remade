@@ -217,3 +217,61 @@ index 53212a2..e088e45 100644
      // FIXME: just move this into this function
      result = (SDL_GPUDevice *)SDL_calloc(1, sizeof(SDL_GPUDevice));
      ASSIGN_DRIVER(VULKAN)
+diff --git a/src/video/android/SDL_androidvulkan.c b/src/video/android/SDL_androidvulkan.c
+index 36c0cf6..9d0aa10 100644
+--- a/src/video/android/SDL_androidvulkan.c
++++ b/src/video/android/SDL_androidvulkan.c
+@@ -36,6 +36,8 @@
+ #include "SDL_androidvulkan.h"
+ 
+ 
++static bool android_loader_is_external = false;
++
+ bool Android_Vulkan_LoadLibrary(SDL_VideoDevice *_this, const char *path)
+ {
+     VkExtensionProperties *extensions = NULL;
+@@ -54,7 +56,21 @@ bool Android_Vulkan_LoadLibrary(SDL_VideoDevice *_this, const char *path)
+     if (!path) {
+         path = "libvulkan.so";
+     }
+-    _this->vulkan_config.loader_handle = SDL_LoadObject(path);
++    // A loader the app opened itself (a custom GPU driver through libadrenotools:
++    // Android's linker namespaces stop a plain dlopen of one). Set with setenv()
++    // as a hex handle. The app owns it: it is never unloaded, because SDL_GPU
++    // probes the device, unloads and loads again, and this handle can't be
++    // opened a second time.
++    {
++        const char *handle = SDL_getenv_unsafe("SDL_ANDROID_VULKAN_HANDLE");
++        if (handle && *handle) {
++            _this->vulkan_config.loader_handle = (void *)(uintptr_t)SDL_strtoull(handle, NULL, 16);
++            path = "app-supplied Vulkan loader";
++            android_loader_is_external = true;
++        } else {
++            _this->vulkan_config.loader_handle = SDL_LoadObject(path);
++        }
++    }
+     if (!_this->vulkan_config.loader_handle) {
+         return false;
+     }
+@@ -97,7 +113,9 @@ bool Android_Vulkan_LoadLibrary(SDL_VideoDevice *_this, const char *path)
+     return true;
+ 
+ fail:
+-    SDL_UnloadObject(_this->vulkan_config.loader_handle);
++    if (!android_loader_is_external) {
++        SDL_UnloadObject(_this->vulkan_config.loader_handle);
++    }
+     _this->vulkan_config.loader_handle = NULL;
+     return false;
+ }
+@@ -105,7 +123,9 @@ fail:
+ void Android_Vulkan_UnloadLibrary(SDL_VideoDevice *_this)
+ {
+     if (_this->vulkan_config.loader_handle) {
+-        SDL_UnloadObject(_this->vulkan_config.loader_handle);
++        if (!android_loader_is_external) {
++            SDL_UnloadObject(_this->vulkan_config.loader_handle);
++        }
+         _this->vulkan_config.loader_handle = NULL;
+     }
+ }

@@ -81,7 +81,10 @@ run(os.path.join(bt, "d8" + bat), "--release", "--min-api", "28", "--lib", andro
 # 3. native libraries
 libs = {}
 for name, pats in (("libmain.so", ["nfl2k5/libmain.so", "**/libmain.so"]),
-                   ("libSDL3.so", ["SDL3/libSDL3.so", "**/libSDL3.so"])):
+                   ("libSDL3.so", ["SDL3/libSDL3.so", "**/libSDL3.so"]),
+                   # libadrenotools' hooks (custom GPU drivers), loaded by name
+                   ("libhook_impl.so", ["**/libhook_impl.so"]),
+                   ("libmain_hook.so", ["**/libmain_hook.so"])):
     for p in pats:
         hit = glob.glob(os.path.join(a.build_dir, p), recursive=True)
         if hit:

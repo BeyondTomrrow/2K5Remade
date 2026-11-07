@@ -173,6 +173,36 @@ void nfl2k5_android_pick_songs(void)
     (*env)->DeleteLocalRef(env, c);
 }
 
+/* ---- GPU Driver > Add Driver (src/nfl2k5_gpu_driver.c) ----
+ * The same picker; NFL2K5Activity copies the choice into app storage and
+ * passes the copy here. */
+extern int nfl2k5_gpu_driver_install(const char *file, const char *shown, char *msg, size_t msg_n);
+extern void xbox_PresentToast(const char *header, const char *line1, const char *line2, unsigned ms);
+static void JNICALL jni_driver_picked(JNIEnv *env, jclass cls, jstring path, jstring shown)
+{
+    const char *p = (*env)->GetStringUTFChars(env, path, NULL);
+    const char *s = (*env)->GetStringUTFChars(env, shown, NULL);
+    char msg[200];
+    int ok;
+    (void)cls;
+    ok = nfl2k5_gpu_driver_install(p, s, msg, sizeof msg);
+    xbox_PresentToast("GPU DRIVER", ok ? "Added:" : "Not added:", msg, 6000);
+    (*env)->ReleaseStringUTFChars(env, path, p);
+    (*env)->ReleaseStringUTFChars(env, shown, s);
+}
+
+void nfl2k5_android_pick_driver(void)
+{
+    JNIEnv *env = jni_env();
+    jclass c;
+    jmethodID m;
+    if (!env || !(c = activity_class(env))) return;
+    m = (*env)->GetStaticMethodID(env, c, "pickDriver", "()V");
+    if (m) (*env)->CallStaticVoidMethod(env, c, m);
+    if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
+    (*env)->DeleteLocalRef(env, c);
+}
+
 /* ---- heat control -----------------------------------------------------------
  * A hot phone slows its own processor down hard; stepping the game's quality
  * down first keeps it smooth. Android's thermal status (Android 11+, through
@@ -330,6 +360,7 @@ void nfl2k5_android_settings_init(void)
     jclass c;
     static const JNINativeMethod natives[] = {
         { (char *)"nativeSongsAdded", (char *)"(I)V", (void *)jni_songs_added },
+        { (char *)"nativeDriverPicked", (char *)"(Ljava/lang/String;Ljava/lang/String;)V", (void *)jni_driver_picked },
     };
     load();
     g_xbox_battery_saver = s_set.battery_saver;
@@ -344,7 +375,7 @@ void nfl2k5_android_settings_init(void)
     }
     env = jni_env();
     if (env && (c = activity_class(env))) {
-        if ((*env)->RegisterNatives(env, c, natives, 1) != 0) (*env)->ExceptionClear(env);
+        if ((*env)->RegisterNatives(env, c, natives, 2) != 0) (*env)->ExceptionClear(env);
         (*env)->DeleteLocalRef(env, c);
     }
 }

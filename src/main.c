@@ -1468,7 +1468,12 @@ int main(int argc, char **argv)
         const char *root = getenv("NFL2K5_ROOT") ? getenv("NFL2K5_ROOT") : "/sdcard/NFL2K5";
         snprintf(cache, sizeof cache, "%s/cache", root);
         mkdir(cache, 0775);
-        snprintf(cache, sizeof cache, "%s/cache/vk_pipelines.bin", root);
+        {   /* a chosen GPU driver, before anything loads Vulkan; its own pipeline cache */
+            extern void nfl2k5_gpu_driver_boot(char *cache, size_t cache_n);
+            char cache_name[128];
+            nfl2k5_gpu_driver_boot(cache_name, sizeof cache_name);
+            snprintf(cache, sizeof cache, "%s/cache/%s", root, cache_name);
+        }
         setenv("SDL_GPU_VULKAN_PIPELINE_CACHE", cache, 0);
         android_unpack_presentations(root);
         snprintf(cache, sizeof cache, "%s/Music", root);   /* Music/<playlist>/<songs>: custom soundtracks */

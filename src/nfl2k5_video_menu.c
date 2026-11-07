@@ -214,12 +214,29 @@ extern void nfl2k5_phone_set(int r, int v);
 extern void nfl2k5_phone_value_name(int r, int v, char *b, size_t n);
 static void phone_name(int r, int v, char *b, size_t n) { nfl2k5_phone_value_name(r, v, b, n); }
 static const char *s_phone_labels[VM_MAX_ROWS];
+static uint32_t s_phone_header;
 #endif
 
 /* NFL2K5_MENU_MUSIC_ROWS: Android; a Linux test build can define it too */
 #if defined(__ANDROID__) && !defined(NFL2K5_MENU_MUSIC_ROWS)
 #define NFL2K5_MENU_MUSIC_ROWS 1
 #endif
+/* NFL2K5_MENU_GPU_ROWS: Android; a Linux test build can define it too */
+#if defined(__ANDROID__) && !defined(NFL2K5_MENU_GPU_ROWS)
+#define NFL2K5_MENU_GPU_ROWS 1
+#endif
+#ifdef NFL2K5_MENU_GPU_ROWS
+/* ---- GPU Driver rows (src/nfl2k5_gpu_driver.c) ---- */
+extern int nfl2k5_gpu_rows(void);
+extern const char *nfl2k5_gpu_row_label(int r);
+extern int nfl2k5_gpu_row_toggle(int r);
+extern int nfl2k5_gpu_row_values(int r);
+extern int nfl2k5_gpu_row_get(int r);
+extern void nfl2k5_gpu_row_set(int r, int v);
+extern void nfl2k5_gpu_row_name(int r, int v, char *b, size_t n);
+static const char *s_gpu_labels[VM_MAX_ROWS];
+#endif
+
 #ifdef NFL2K5_MENU_MUSIC_ROWS
 /* ---- Music Player rows (src/nfl2k5_local_music.cpp): F1 > Music Player, for
  * a device with no F1 menu ---- */
@@ -324,6 +341,10 @@ static VmScreen s_screens[] = {
 #ifdef __ANDROID__
     { "Phone Settings", 0, s_phone_labels, nfl2k5_phone_toggle, nfl2k5_phone_values, nfl2k5_phone_get, nfl2k5_phone_set, phone_name },
 #endif
+#ifdef NFL2K5_MENU_GPU_ROWS
+    /* keep before Music Player: VM_GPU */
+    { "GPU Driver", 0, s_gpu_labels, nfl2k5_gpu_row_toggle, nfl2k5_gpu_row_values, nfl2k5_gpu_row_get, nfl2k5_gpu_row_set, nfl2k5_gpu_row_name },
+#endif
 #ifdef NFL2K5_MENU_MUSIC_ROWS
     /* keep next to last: VM_MUSIC */
     { "Music Player", 0, s_music_labels, nfl2k5_music_row_toggle, nfl2k5_music_row_values, nfl2k5_music_row_get, nfl2k5_music_row_set, nfl2k5_music_row_name },
@@ -334,6 +355,7 @@ static VmScreen s_screens[] = {
 #define VM_SCREENS ((int)(sizeof s_screens / sizeof s_screens[0]))
 #define VM_CONTROLS (VM_SCREENS - 1)
 #define VM_MUSIC (VM_SCREENS - 2)
+#define VM_GPU (VM_SCREENS - 3)
 
 /* One function for every row slot: the lookup remembers which address the
  * game is calling. Plain `ret`, results in eax. Value strings are written
@@ -660,6 +682,7 @@ void nfl2k5_video_menu_install(void)
         for (i = 0; i < s_screens[5].rows && i < VM_MAX_ROWS; i++)
             s_phone_labels[i] = nfl2k5_phone_label(i);
         phone = vm_build_screen(5);
+        s_phone_header = phone;
         for (k = 0; phone && k < sizeof k_options_headers / sizeof k_options_headers[0]; k++)
             vm_add_link(k_options_headers[k], phone, vm_wstr("Phone Settings"));
     }
@@ -674,6 +697,22 @@ void nfl2k5_video_menu_install(void)
         for (k = 0; music && k < sizeof k_options_headers / sizeof k_options_headers[0]; k++)
             vm_add_link(k_options_headers[k], music, vm_wstr("Music Player"));
         fprintf(stderr, "[VIDEOMENU] Music Player %08X: %d rows\n", (unsigned)music, s_screens[VM_MUSIC].rows);
+#ifdef NFL2K5_MENU_GPU_ROWS
+        {   /* a link at the end of Phone Settings (of Music Player on a Linux test build) */
+            uint32_t gpu;
+            s_screens[VM_GPU].rows = nfl2k5_gpu_rows();
+            for (i = 0; i < s_screens[VM_GPU].rows && i < VM_MAX_ROWS; i++)
+                s_gpu_labels[i] = nfl2k5_gpu_row_label(i);
+            gpu = vm_build_screen(VM_GPU);
+#ifdef __ANDROID__
+            uint32_t host = s_phone_header;
+#else
+            uint32_t host = music;
+#endif
+            fprintf(stderr, "[VIDEOMENU] GPU Driver %08X: link row %d\n", (unsigned)gpu,
+                    gpu && host ? vm_add_link(host, gpu, vm_wstr("GPU Driver")) : 0);
+        }
+#endif
     }
 #endif
     /* "Presentation" right under VIP on the pre-game screen. */
