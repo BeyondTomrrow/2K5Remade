@@ -60,10 +60,10 @@ typedef struct { float eye[3], at[3], fov; } Stop;
 /* Room space is the Crib's (cm, y up). The first entry per row is where the cursor
  * looks; arrival dollies a third of the way towards the target. */
 static Stop s_stop[ROWS] = {
-    { {    0.0f, 130.0f,  -620.0f }, {    0.0f, 110.0f,   327.0f }, 55.0f },   /* the front door */
-    { {    0.0f, 130.0f,  -620.0f }, { -900.0f, 130.0f,  -300.0f }, 55.0f },
-    { { 1900.0f, 130.0f, -1000.0f }, { 2500.0f, 150.0f, -1400.0f }, 55.0f },   /* the bar screens */
-    { {    0.0f, 130.0f,  -620.0f }, {  900.0f, 130.0f,  -300.0f }, 55.0f },
+    { {  260.0f, 150.0f,  -950.0f }, {  260.0f,  90.0f,   327.0f }, 58.0f },   /* the front door, clear of the list */
+    { { -400.0f, 170.0f,  -300.0f }, {-1500.0f, 300.0f, -1400.0f }, 60.0f },   /* the staircase */
+    { { 1500.0f, 150.0f,  -700.0f }, { 2500.0f, 100.0f, -1300.0f }, 58.0f },   /* the bar */
+    { { 2000.0f, 150.0f, -2200.0f }, { 3000.0f, 100.0f, -2500.0f }, 60.0f },   /* the fireplace */
 };
 
 static struct {
@@ -84,7 +84,7 @@ static struct {
     int cool;                      /* frames with no re-push after a row's action */
     int manual;                    /* Career Menu: stay on the pack's list */
     int last_row;
-    char hide[256];
+    char hide[1024], swap[1024];
 } s_h;
 
 #define MH_LOG(...) do { if (s_h.log) { fprintf(stderr, "[MCHOME] " __VA_ARGS__); fflush(stderr); } } while (0)
@@ -145,6 +145,52 @@ static void wtoa(uint32_t w, char *out, size_t n)
 }
 
 /* ---- the room ------------------------------------------------------------- */
+
+/* The first home: the Crib's collectibles out, and the surfaces its streaming item cache
+ * (crib_16k/32k/64k.iff, sub_000441B0) would dress pointed at textures embedded in the room.
+ * This table is the tier: another home is another list. */
+static const char k_hide_default[] =
+    "poster_p01,poster_p02,poster_p03,poster_p04,poster_p05,poster_p06,poster_p07,poster_p08,poster_p09,"
+    "poster_p10,poster_p11,poster_p12,poster_p13,banner_v_p01,banner_v_p02,banner_v_p03,banner_v_p04,"
+    "banner_h_p01,banner_h_p02,banner_h_p03,standee_p01,standee_p02,standee_p03,standee_p04,license_01,"
+    "sign_interstate_01,sign_parking_01,sign_parking_02,sign_parking_03,sign_street_01,pennant_p01,"
+    "pennant_p02,pennant_p03,pennant_p04,wall_art_player_p01,wall_art_player_p02,bobblestands,bobblelogos";
+static const char k_swap_default[] =
+    "floor_wood_01=wood_cherry,floor_wood_02=wood_cherry,floor_wood_03=wood_cherry,floor_wood_04=wood_cherry,"
+    "floor_tile_01=concrete_m_01,floor_carpet_01=concrete_m_01,floor_carpet_02=concrete_m_01,"
+    "floor_carpet_03=concrete_m_01,floor_carpet_04=concrete_m_01,rug_m_01=wood_cherry,rug_m_02=wood_cherry,"
+    "rug_m_03=wood_cherry,rug_m_04=wood_cherry,trim_dark=wood_cherry";
+
+static uint32_t find_mat(const char *name)
+{
+    uint32_t n = MEM32(s_h.room + 0x1C), a = MEM32(s_h.room + 0x20), i;
+    for (i = 0; i < n && i < 256; i++)
+        if (weq(MEM32(a + i * 0x80u), name)) return a + i * 0x80u;
+    return 0;
+}
+
+static void room_swap(void)
+{
+    const char *p = s_h.swap;
+    int done = 0, miss = 0;
+    while (*p) {
+        char pair[96], *eq;
+        size_t l = strcspn(p, ",");
+        snprintf(pair, sizeof pair, "%.*s", (int)l, p);
+        if ((eq = strchr(pair, '=')) != NULL) {
+            uint32_t to, from;
+            *eq = 0;
+            to = find_mat(pair); from = find_mat(eq + 1);
+            if (to && from && MEM32(from + 0x30)) {
+                MEM32(to + 0x30) = MEM32(from + 0x30);
+                MEM32(to + 0x08) &= ~1u;
+                done++;
+            } else { miss++; MH_LOG("swap %s <- %s: to %08X from %08X\n", pair, eq + 1, to, from); }
+        }
+        p += l + (p[l] == ',');
+    }
+    MH_LOG("%d material swaps, %d missed\n", done, miss);
+}
 
 static void room_hide(void)
 {
@@ -213,6 +259,7 @@ static int room_load(void)
     }
     MEM32(s_h.room + 8) |= 1u;                    /* as sub_00275xxx does to its room */
     room_hide();
+    room_swap();
     room_log();
     return 0;
 }
@@ -379,7 +426,8 @@ static uint32_t ih_handler(void)
     uint32_t fsm = g_ecx, msg = g_edx, idx = MEM32(fsm + 0x100u), top;
     if (idx > 0x1Fu) return 0;
     top = MEM32(fsm + idx * 8u);
-    if (msg == 5 && top != s_h.header && s_h.cool) s_h.cool = 0;
+    /* Anything covering Career Home (a row's screen, the match): the home comes back after it. */
+    if (msg == 5 && top != s_h.header) { s_h.cool = 0; s_h.manual = 0; }
     if (top != SD_HOME) return 0;
     if (msg != 6) return 0;
     if (s_h.action) {
@@ -422,7 +470,8 @@ void nfl2k5_mc_home_install(void)
         MEM32(SD_ROWS + 0x34u * 3u + 0x28u) != SD_ACT_PLAYER)
         return;                                    /* not SOFTDRINK v0.9 */
     { const char *l = getenv("NFL2K5_MC_HOME_LOG"); s_h.log = l && *l && *l != '0'; }
-    { const char *h = getenv("NFL2K5_MC_HOME_HIDE"); if (h) snprintf(s_h.hide, sizeof s_h.hide, "%s", h); }
+    { const char *h = getenv("NFL2K5_MC_HOME_HIDE"); snprintf(s_h.hide, sizeof s_h.hide, "%s", h ? h : k_hide_default); }
+    { const char *h = getenv("NFL2K5_MC_HOME_SWAP"); snprintf(s_h.swap, sizeof s_h.swap, "%s", h ? h : k_swap_default); }
     { const char *h = getenv("NFL2K5_MC_HOME_CAMFILE"); if (h) snprintf(s_h.camfile, sizeof s_h.camfile, "%s", h); }
     { const char *h = getenv("NFL2K5_MC_HOME_SLIM"); s_h.slim = !(h && *h == '0'); }
     {
