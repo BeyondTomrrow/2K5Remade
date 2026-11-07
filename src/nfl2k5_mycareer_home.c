@@ -971,8 +971,10 @@ static RoomItem s_items[24];
 static int s_nitems = -1;
 
 static const char k_items_default[] =
-    "z_plant_palm 6.45 0.6 0;jukebox 4.5 8.6 180;bobblestands 1.6 0.45 0;bobblelogos 1.6 0.45 0;"
-    "wall_art_generic_p01 5.6 0.08 0;standee_p02 0.6 7.6 90";
+    /* the apartment's Crib pieces (items.ini, apartment tier): a palm by the door, a standee
+     * by the TV wall, a game ball on the side table, wall art beside the door, two sconces */
+    "z_plant_palm 6.45 0.7 0;standee_p02 0.6 6.2 90;game_ball_01 3.6 6.0 0;"
+    "wall_art_generic_p01 1.6 0.06 0;sconce_002 0.05 2.9 90;sconce_003 0.05 5.5 90";
 
 static void items_parse(const char *p)
 {
@@ -1058,23 +1060,25 @@ static void host_draw_items(void)
     for (it = 0; it < s_nitems; it++) {
         for (i = 0; i < n; i++) {
             uint32_t nd = a + i * 0x60u, sub = MEM32(nd + 8u), m = nd + 0x20u;
-            float cx, cz, c, s, tx, tz;
+            uint32_t keep[12], q;
+            float c, sn;
             if (!weq(MEM32(nd), s_items[it].node) || sub < 0x10000u || sub >= 0xF0000000u) continue;
-            cx = MEMF(sub + 0u); cz = MEMF(sub + 8u);
-            c = cosf(s_items[it].yaw * 3.14159265f / 180.0f); s = sinf(s_items[it].yaw * 3.14159265f / 180.0f);
-            /* v' = (v - centre) R + slot, R about y; the row-vector convention of the engine */
-            tx = s_items[it].x * 100.0f - (cx * c + cz * s);
-            tz = s_items[it].z * 100.0f - (-cx * s + cz * c);
-            MEMF(m + 0x00u) = c;  MEMF(m + 0x04u) = 0; MEMF(m + 0x08u) = -s; MEMF(m + 0x0Cu) = 0;
-            MEMF(m + 0x10u) = 0;  MEMF(m + 0x14u) = 1; MEMF(m + 0x18u) = 0;  MEMF(m + 0x1Cu) = 0;
-            MEMF(m + 0x20u) = s;  MEMF(m + 0x24u) = 0; MEMF(m + 0x28u) = c;  MEMF(m + 0x2Cu) = 0;
-            MEMF(m + 0x30u) = tx; MEMF(m + 0x34u) = s_items[it].dy * 100.0f; MEMF(m + 0x38u) = tz; MEMF(m + 0x3Cu) = 1;
-            /* the engine culls by the node's stored centre: it moves with the item for the draw */
-            MEMF(sub + 0u) = s_items[it].x * 100.0f; MEMF(sub + 8u) = s_items[it].z * 100.0f;
+            /* The node's data starts with its placement: position (x, y, z) then a 3 x 3 turn.
+             * Its geometry is relative to that, and the engine culls by it too, so moving and
+             * turning that (the node matrix stays identity) puts the item on the slot. */
+            for (q = 0; q < 12; q++) keep[q] = MEM32(sub + q * 4u);
+            c = cosf(s_items[it].yaw * 3.14159265f / 180.0f); sn = sinf(s_items[it].yaw * 3.14159265f / 180.0f);
+            MEMF(sub + 0u) = s_items[it].x * 100.0f;
+            MEMF(sub + 4u) = MEMF(sub + 4u) + s_items[it].dy * 100.0f;
+            MEMF(sub + 8u) = s_items[it].z * 100.0f;
+            MEMF(sub + 0x0Cu) = c;  MEMF(sub + 0x10u) = 0; MEMF(sub + 0x14u) = -sn;
+            MEMF(sub + 0x18u) = 0;  MEMF(sub + 0x1Cu) = 1; MEMF(sub + 0x20u) = 0;
+            MEMF(sub + 0x24u) = sn; MEMF(sub + 0x28u) = 0; MEMF(sub + 0x2Cu) = c;
+            for (q = 0; q < 16; q++) MEMF(m + q * 4u) = (q % 5) == 0 ? 1.0f : 0.0f;
             MEM32(nd + 0x0Cu) = save_flags[i] & ~0x10u;
             gcall(sub_0002DE60, s_h.room, 0);
             MEM32(nd + 0x0Cu) = save_flags[i] | 0x10u;
-            MEMF(sub + 0u) = cx; MEMF(sub + 8u) = cz;
+            for (q = 0; q < 12; q++) MEM32(sub + q * 4u) = keep[q];
         }
     }
     for (i = 0; i < n; i++) {
