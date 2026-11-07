@@ -77,9 +77,10 @@ typedef struct {
 static struct {
     int on, log, style, diag;
     float ax;                      /* x units per square unit: 1 (the HUD space is shown square) */
-    float left, right, top;        /* the visible HUD edges in use (units); top: below any native top bar */
+    float left, right, top, fullax, fullsq, margin, shift;        /* the visible HUD edges in use (units); top: below any native top bar */
     uint32_t mem, used, size;
-    uint32_t state, vtx, wbuf[32], simbuf, label, camsave;
+    uint32_t state, vtx, wbuf[32], simbuf, label, camsave, camfull;
+    int ws, fullcam, camlog;      /* widescreen patch on; draw with the full-width camera */
     int wnext;
     char ini[300];
     /* the bar */
@@ -408,6 +409,26 @@ static void ini_load(void)
     s.ax = 1.0f;
     s.left = 0.0f;
     s.right = 640.0f;
+    {   /* the widescreen patch (video ini `widescreen = 1`, the default) squeezes the UI to 4:3 */
+        char p[300];
+        FILE *vf;
+        s.ws = 1;
+        snprintf(p, sizeof p, "%s" HUD_SEP "nfl2k5_video.ini", root);
+        vf = fopen(p, "r");
+        if (vf) {
+            char line[128];
+            int w;
+            while (fgets(line, sizeof line, vf)) if (sscanf(line, " widescreen = %d", &w) == 1) s.ws = w != 0;
+            fclose(vf);
+        }
+    }
+    s.fullcam = s.ws;
+    s.fullax = 0.75f;               /* unsqueezed (FULLSQ=1): (4/3) / (16/9) */
+    s.fullsq = 0.8f;                /* measured: the window shows 800 x 450 square units at 16:9 */
+    { const char *a = getenv("NFL2K5_MC_HUD_FULLSQ"); if (a && *a) s.fullsq = (float)atof(a); }
+    s.margin = s.fullcam ? 21.0f : 12.0f;    /* full width: the SNF bug's right edge, 64 of 1920 px in */
+    { const char *a = getenv("NFL2K5_MC_HUD_FULLAX"); if (a && *a) s.fullax = (float)atof(a); }
+    { const char *a = getenv("NFL2K5_MC_HUD_FULLCAM"); if (a && *a) s.fullcam = *a != '0'; }
     { const char *a = getenv("NFL2K5_MC_HUD_RIGHT"); if (a && *a) s.right = (float)atof(a); }
     { const char *a = getenv("NFL2K5_MC_HUD_AX"); if (a && *a) s.ax = (float)atof(a); }
     { const char *a = getenv("NFL2K5_MC_HUD_LEFT"); if (a && *a) s.left = (float)atof(a); }
@@ -772,7 +793,7 @@ static void draw_modern(void)
     float pulse = s.pulse < 0.7f ? 1.0f - s.pulse / 0.7f : 0.0f;
     nw = text_w(F_NAME, wstr(s.name)) + 10.0f + text_w(F_LABEL, wstr(s.pos)) + 14.0f + 40.0f;
     W = (CW > nw ? CW : nw) + R * 0.866f + 12.0f + 10.0f;
-    hx = s.right - 12.0f - W;                                 /* the panel ends at the corner; the badge hangs left */
+    hx = s.right - s.margin - W;                                 /* the panel ends at the corner; the badge hangs left */
     x0 = hx + R * 0.866f + 12.0f;                             /* content */
     /* shadow, panel, top hairline */
     rrect(hx - 2.0f, T + 4.0f, W + 4.0f, H, 9.0f, 0x58000000u, 0x58000000u, 8.0f);
@@ -829,7 +850,7 @@ static void draw_native(void)
     nwid = text_w(F_LABEL, wstr(b)) + text_w(F_LABEL, wstr(s.pos)) + 30.0f;
     W = CW + gw + 2.0f;
     if (W < nwid) { cw[nb - 1] += nwid - W; W = nwid; }
-    L = s.right - 12.0f - W;
+    L = s.right - s.margin - W;
     /* header: the game's crimson bar with a gold rule */
     rect(L + 3.0f, T + 3.0f, W, hh + bh + 1.5f, 0x70000000u);
     rrect(L, T, W, hh, 0, 0xFFD01A24u, 0xFF8E0D14u, 0);
@@ -877,6 +898,54 @@ static void diag_fonts(void)
 
 /* ---- the hooks ----------------------------------------------------------------- */
 
+/* The widescreen patch (src/nfl2k5_widescreen_patch.h, its camera hook at 0x46EE0 behind the
+ * camera set sub_0002AC80) squeezes every 2D camera to a centred 4:3 viewport, so the HUD is
+ * clipped to that area. The camera source the game keeps (sub_0002AD80 copies it) is the
+ * unsqueezed one; set again with the patch's own "leave alone" tag 'NONE' at +0x24C it spans the
+ * whole picture: 640 units across the full width, x units 3/4 as wide as tall at 16:9. */
+#define CAM_TAG 0x24Cu
+static void cam_full_begin(void)
+{
+    uint32_t i;
+    gcall(sub_0002AD80, s.camsave, 0);
+    for (i = 0; i < 0x2B0u; i += 4) MEM32(s.camfull + i) = MEM32(s.camsave + i);
+    MEM32(s.camfull + CAM_TAG) = 0x454E4F4Eu;                 /* 'NONE' */
+    gcall(sub_0002AC80, s.camfull, 0);
+    s.ax = s.fullax;
+    {   /* Square units again, as the patch squeezes 2D cameras, but keeping the full viewport:
+         * x scale and offset about the picture centre (360), then the patch's own follow-up
+         * (combined matrix sub_00031110, apply sub_0002A9E0, the second copy). 640 x 480 units
+         * then show x -80..720 at 16:9: the real corner, with unstretched fonts. */
+        uint32_t cam = 0x00A6AFC0u, esp0;
+        float sq = s.fullsq;
+        if (sq > 0.3f && sq < 1.0f && MEM32(cam + 0x220u) == 0) {
+            MEMF(cam) *= sq;
+            /* + the shift: the game's text is culled outside x 0..640, so the bar is drawn at
+             * x - shift and the camera moves it back out to the corner */
+            MEMF(cam + 0x30u) = MEMF(cam + 0x30u) * sq + 360.0f * (1.0f - sq) + s.shift * MEMF(cam);
+            esp0 = g_esp; PUSH32(g_esp, cam); gcall(sub_00031110, cam + 0xF0u, cam + 0x40u); g_esp = esp0;
+            if (MEM32(0x00A6A9CCu) == 1 && MEM32(0x00A6AA58u) == MEM32(MEM32(0x00A6AA18u) * 4u + 0x00A6AA20u)) {
+                uint32_t k;
+                for (k = 0; k < 0x40u; k += 4) {
+                    MEM32(cam + 0x130u + k) = MEM32(cam + k);
+                    MEM32(cam + 0x170u + k) = MEM32(cam + 0xF0u + k);
+                }
+            }
+            esp0 = g_esp; PUSH32(g_esp, cam); gcall(sub_0002A9E0, cam, 0); g_esp = esp0;
+            s.ax = 1.0f;
+        }
+    }
+    if (s.camlog++ == 0)
+        HLOG("full camera: saved tag %08X vp %08X m00 %.4f m30 %.4f | set tag %08X vp %08X m00 %.4f m30 %.4f\n",
+             MEM32(s.camsave + CAM_TAG), MEM32(s.camsave + 0x200u), MEMF(s.camsave), MEMF(s.camsave + 0x30u),
+             MEM32(0x00A6AFC0u + CAM_TAG), MEM32(0x00A6AFC0u + 0x200u), MEMF(0x00A6AFC0u), MEMF(0x00A6AFC0u + 0x30u));
+}
+static void cam_full_end(void)
+{
+    gcall(sub_0002AC80, s.camsave, 0);
+    s.ax = 1.0f;
+}
+
 static uint32_t ih_line(void)
 {
     uint32_t player = g_esi, eax = g_eax, ebx = g_ebx, ecx = g_ecx, edx = g_edx, edi = g_edi, ebp = g_ebp, esp = g_esp;
@@ -892,8 +961,18 @@ static uint32_t ih_line(void)
      * bug's place and tells the package to clear it; with the native ESPN top bar it sits below. */
     s.top = nfl2k5_scorebug_native_hidden() ? 8.0f : 36.0f;
     nfl2k5_presentation_corner_claim();
+    /* Full width: the right edge where the SNF bug's is, 64 of 1920 px in (27 units at 1.6 px). */
+    s.margin = s.fullcam ? 27.0f : 12.0f;
+    s.shift = 0.0f;
+    if (s.fullcam && s.fullsq > 0.3f && s.fullsq < 1.0f) {
+        float edge = 320.0f + 320.0f / s.fullsq;             /* the window's right edge, 720 at 16:9 */
+        s.shift = edge - 632.0f;
+        s.right = edge - s.shift;                            /* drawn here, shown at the edge */
+    } else s.right = 640.0f;
+    if (s.fullcam) cam_full_begin();
     if (s.diag) diag_fonts();
     if (s.style == 2) draw_modern(); else draw_native();
+    if (s.fullcam) cam_full_end();
     g_eax = eax; g_ebx = ebx; g_ecx = ecx; g_edx = edx; g_esi = player; g_edi = edi; g_ebp = ebp; g_esp = esp;
     return SD_LINE_EXIT;
 }
@@ -1028,6 +1107,7 @@ void nfl2k5_mc_hud_install(void)
     s.vtx = h_alloc(16, 16);
     s.simbuf = h_alloc(0x400, 4);
     s.camsave = h_alloc(0x2C0, 16);
+    s.camfull = h_alloc(0x2C0, 16);
     s.label = h_alloc(96, 4);
     for (i = 0; i < 32; i++) s.wbuf[i] = h_alloc(128, 4);
     if (!s.wbuf[31]) { fprintf(stderr, "[MCHUD] off: out of guest memory\n"); return; }

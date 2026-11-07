@@ -11,15 +11,23 @@ play-call screen, for most of the play, in replays and when paused), and the pac
 (that row stays the on/off switch). Our bar replaces that line (hook at 0x014EA522, continue at
 0x014EA57C). It is hidden while Supersim runs, so it never sits on the Supersim panel.
 
-Placement: the top-right corner, where the network bug sits. Measured in game: the HUD's
-640 x 480 is drawn square (one unit as wide as tall), centred, and clipped to x 0..640 also with
-the widescreen patch, so at 16:9 the bar's right edge is about 130 px (of 1280) short of the
-window edge; at 4:3 it reaches the corner. With an HTML presentation the bar sits at the top
-(y 8) and, every frame it draws, tells the presentation `context.cornerClaimed = true`; the
-package hides its corner bug while that holds and brings it back within about half a second
-after the bar goes (snap, Supersim, replays, menus). With the native ESPN scorebug (top bar, and
-Linux/Android, which keep it) the bar sits below it at y 36. SOFTDRINK's own top-right line is
-the one the bar replaces, so the two never show together.
+Placement: the top-right corner, its right edge where the network bug's is (64 of 1920 px in).
+The widescreen patch squeezes every 2D camera to a centred 4:3 viewport (its camera hook at 0x46EE0,
+behind the camera set sub_0002AC80), which clips the HUD to x 0..640, about 130 px (of 1280) short
+of the corner at 16:9. The bar is drawn with its own camera instead: the game's camera set again
+with the patch's "leave alone" tag ('NONE' at +0x24C) spans the whole picture; its x scale is then
+squeezed by 0.8 about the picture centre, as the patch does, so units stay square (fonts are not
+stretched), and the patch's own follow-up runs (sub_00031110, sub_0002A9E0). The window then shows
+x -80..720 at 16:9. The game's text is culled outside x 0..640, so the bar is drawn 88 units left
+and the camera's offset carries it out to the corner. The scene's camera is put back after. With
+widescreen off (4:3) the normal HUD camera already reaches the corner and is used as before.
+
+With an HTML presentation the bar sits at the top (y 8) and, every frame it draws, tells the
+presentation `context.cornerClaimed = true`; NBC SNF and CBS hide their corner bug while that holds
+and bring it back within about half a second after the bar goes (snap, Supersim, replays, menus).
+FOX (a JSON scorebug package) has no corner bug. With the native ESPN scorebug (top bar, and
+Linux/Android, which keep it) the bar sits below it at y 36. SOFTDRINK's own top-right line is the
+one the bar replaces, so the two never show together.
 
 Look: MyCareer > Settings + Save > Settings > "Stat bar look: 2K5 / Modern" (our row, added to
 the pack's list at run time; the pack's rows and its dispatcher are untouched). Stored in

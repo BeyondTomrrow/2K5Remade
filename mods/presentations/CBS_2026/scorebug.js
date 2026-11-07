@@ -80,7 +80,7 @@
     visible=permitted(s);if(!visible||changed)cancel();
     if(window.CBSStats)CBSStats.updateState(s,prev);
     if(window.CBSMotion&&!periodBoard())CBSMotion.updateState(s,prev);
-    var cx=s.context||{},networkVisible=visible||!!(s.valid===true&&s.away&&s.home&&s.gameStatus!=='inactive'&&cx.replayActive===true&&!cx.paused&&!cx.playSelection);
+    var cx=s.context||{},networkVisible=(visible||!!(s.valid===true&&s.away&&s.home&&s.gameStatus!=='inactive'&&cx.replayActive===true&&!cx.paused&&!cx.playSelection))&&!cx.cornerClaimed;
     bug.classList.toggle('hidden',!visible);bug.classList.toggle('final',s.gameStatus==='final'||!!(window.CBSPeriodBoard&&CBSPeriodBoard.presentation&&CBSPeriodBoard.presentation()&&CBSPeriodBoard.presentation().presentationKind==='final'));bug.setAttribute('aria-hidden',String(!visible));network.classList.toggle('on',networkVisible);network.setAttribute('aria-hidden',String(!networkVisible));
     if(nextKey)key=nextKey;
     if(!s.away||!s.home)return;
