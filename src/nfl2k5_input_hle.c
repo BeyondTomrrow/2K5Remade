@@ -293,6 +293,11 @@ static void audio_report_combo(XBOX_GAMEPAD *g)
     if (held) g->wButtons &= (WORD)~0xA0;
 }
 
+/* Port 0 as the game last saw it (pads, keyboard, scripted presses merged): read by the
+ * MyCareer home's walking, which needs Y and the shoulders that the engine's pad word lacks. */
+static XBOX_GAMEPAD s_last_pad0;
+void nfl2k5_input_last_pad(XBOX_GAMEPAD *g) { *g = s_last_pad0; }
+
 static void host_gamepad_port(int port, XBOX_GAMEPAD *g)
 {
     extern volatile long g_xbox_input_blocked;
@@ -319,6 +324,7 @@ static void host_gamepad_port(int port, XBOX_GAMEPAD *g)
         nfl2k5_local_music_buttons((g->wButtons & 0x40) != 0, (g->wButtons & 0x80) != 0);
     }
     if (SDL_GetTicks() < s_inject_a_until) g->bAnalogButtons[0] = 255;
+    s_last_pad0 = *g;
 }
 
 static void host_gamepad(XBOX_GAMEPAD *g)
@@ -350,6 +356,7 @@ static void host_gamepad(XBOX_GAMEPAD *g)
         nfl2k5_local_music_buttons((g->wButtons & 0x40) != 0, (g->wButtons & 0x80) != 0);
     }
     if (SDL_GetTicks() < s_inject_a_until) g->bAnalogButtons[0] = 255;
+    s_last_pad0 = *g;
 }
 
 static void put_gamepad(uint32_t va, const XBOX_GAMEPAD *g)

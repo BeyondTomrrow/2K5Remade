@@ -41,6 +41,7 @@
 #include "xbox_memory_layout.h"
 #include "recomp_funcs.h"
 #include "interp/x86_interp.h"
+#include "../external/xboxrecomp/src/input/xinput_xbox.h"
 
 extern uint32_t xbox_HeapAlloc(uint32_t size, uint32_t alignment);
 
@@ -74,6 +75,7 @@ extern uint32_t xbox_HeapAlloc(uint32_t size, uint32_t alignment);
 #define BTN_LEFT      0x04000000u
 #define BTN_DOWN      0x02000000u
 #define BTN_UP        0x01000000u
+#define BTN_Y         0x00000800u          /* logged in the host-room tests */
 #define REC_BYTES     0x54u
 #define STR_CHARS     96u
 
@@ -127,7 +129,7 @@ static Stop s_stops[3][HOTS] = {
         { { 2600.0f, 150.0f, -1700.0f }, { 2000.0f, 100.0f, -2600.0f }, 62.0f, { 2000.0f, 250.0f, -2600.0f } },
     },
 };
-#define STOP(h) (s_stops[s_c.tier][h])
+#define STOP(h) (*(s_h.host ? &s_host_stop[h] : &s_stops[s_c.tier][h]))
 
 /* The looks. Collectibles whose textures stream through the Crib's item cache stay hidden
  * (they would draw untextured); the rest is the tier. */
@@ -188,6 +190,10 @@ static struct {
     float call_t;
     char reply[320];
     float proj_scale, proj_xsign, phone_at[3];
+    int host;                      /* NFL2K5_MC_HOME_ROOM=host: the host-drawn room */
+    float host_ar;
+    int y_was, free_target;
+    uint32_t trig_tex;
     uint32_t wstr[16];             /* scratch UTF-16 buffers for drawn text */
 } s_h;
 
@@ -529,6 +535,7 @@ static void room_unload(void)
     gcall(sub_000432F0, s_h.w_ctx, 0);
     s_h.loaded = 0;
     s_h.room = s_h.sky = s_h.cursor = s_h.phone = 0;
+    s_h.trig_tex = 0;
     MH_LOG("unloaded\n");
 }
 
@@ -553,6 +560,170 @@ static void camera_init(void)
     PUSH32(g_esp, s_h.light);
     gcall(sub_0002ABE0, s_h.camobj, 0);
 }
+
+/* ---- the host-drawn home (stage 1: test geometry, boxes only) ------------------------
+ * NFL2K5_MC_HOME_ROOM=host: the room is drawn by the renderer itself (xbox_hostscene.h) at a
+ * marker this screen writes into the guest pushbuffer, under the game's own prompts. The
+ * apartment below is TEST GEOMETRY: coloured boxes with procedural wood, tile and fabric, no
+ * downloaded assets. Metres, y up; the room spans x 0..7, z 0..9. */
+#include "xbox_hostscene.h"
+
+static XboxHostScene s_room;
+static int s_hot_box[HOTS];                   /* the box each hotspot glows */
+
+static int room_add(float x0, float y0, float z0, float x1, float y1, float z1, uint32_t rgb, uint32_t mat)
+{
+    XboxHostBox *b;
+    if (s_room.nbox >= XBOX_HOSTSCENE_BOXES) return -1;
+    b = &s_room.box[s_room.nbox];
+    b->lo[0] = x0; b->lo[1] = y0; b->lo[2] = z0; b->hi[0] = x1; b->hi[1] = y1; b->hi[2] = z1;
+    b->rgb = rgb; b->mat = mat;
+    return s_room.nbox++;
+}
+
+static void room_build_apartment(void)
+{
+    memset(&s_room, 0, sizeof s_room);
+    s_room.highlight = -1;
+    /* shell: floor, ceiling, walls (the front wall has the door gap at x 3.0..4.0) */
+    room_add(0, -0.05f, 0, 7, 0, 9, 0x8A6A4A, HS_MAT_WOOD);
+    room_add(0, 2.8f, 0, 7, 2.85f, 9, 0xE8E6E0, HS_MAT_MATTE);
+    room_add(-0.1f, 0, 0, 0, 2.8f, 9, 0xD9D4CA, HS_MAT_MATTE);
+    room_add(0, 0, 9, 7, 2.8f, 9.1f, 0xD9D4CA, HS_MAT_MATTE);
+    room_add(0, 0, -0.1f, 3.0f, 2.8f, 0, 0xD9D4CA, HS_MAT_MATTE);
+    room_add(4.0f, 0, -0.1f, 7, 2.8f, 0, 0xD9D4CA, HS_MAT_MATTE);
+    room_add(3.0f, 2.2f, -0.1f, 4.0f, 2.8f, 0, 0xD9D4CA, HS_MAT_MATTE);
+    /* window wall (x = 7): wall below and above a long window onto the evening sky */
+    room_add(7, 0, 0, 7.1f, 0.9f, 9, 0xD9D4CA, HS_MAT_MATTE);
+    room_add(7, 2.4f, 0, 7.1f, 2.8f, 9, 0xD9D4CA, HS_MAT_MATTE);
+    room_add(7.08f, 0.9f, 0, 7.12f, 2.4f, 9, 0x6E8FC0, HS_MAT_EMISSIVE);
+    room_add(7.0f, 0.9f, 2.95f, 7.05f, 2.4f, 3.05f, 0x2B2B2B, HS_MAT_MATTE);
+    room_add(7.0f, 0.9f, 5.95f, 7.05f, 2.4f, 6.05f, 0x2B2B2B, HS_MAT_MATTE);
+    /* skirting */
+    room_add(0, 0, 8.98f, 7, 0.1f, 9, 0x3A3A3A, HS_MAT_MATTE);
+    room_add(0, 0, 0, 0.02f, 0.1f, 9, 0x3A3A3A, HS_MAT_MATTE);
+    /* the front door, in its gap */
+    s_hot_box[HS_DOOR] = room_add(3.05f, 0, -0.06f, 3.95f, 2.15f, -0.02f, 0x5A3A24, HS_MAT_WOOD);
+    room_add(3.8f, 1.0f, -0.02f, 3.86f, 1.06f, 0.02f, 0xC8C8C8, HS_MAT_GLASS);
+    /* rug, couch, coffee table */
+    room_add(1.6f, 0, 2.6f, 4.8f, 0.01f, 5.4f, 0x7A6E62, HS_MAT_FABRIC);
+    room_add(1.8f, 0, 5.6f, 4.6f, 0.45f, 6.5f, 0x3C4A5C, HS_MAT_FABRIC);
+    room_add(1.8f, 0.45f, 6.2f, 4.6f, 0.95f, 6.5f, 0x3C4A5C, HS_MAT_FABRIC);
+    room_add(1.6f, 0, 5.6f, 1.8f, 0.65f, 6.5f, 0x34404F, HS_MAT_FABRIC);
+    room_add(4.6f, 0, 5.6f, 4.8f, 0.65f, 6.5f, 0x34404F, HS_MAT_FABRIC);
+    room_add(2.4f, 0, 3.8f, 4.0f, 0.42f, 4.6f, 0x4A3526, HS_MAT_WOOD);
+    /* the TV wall: a low unit and the screen (Career Menu) */
+    room_add(1.9f, 0, 1.0f, 4.5f, 0.45f, 1.4f, 0x2E2A26, HS_MAT_WOOD);
+    s_hot_box[HS_MENU] = room_add(2.3f, 0.75f, 1.12f, 4.1f, 1.75f, 1.16f, 0x1C3550, HS_MAT_SCREEN);
+    room_add(2.25f, 0.7f, 1.16f, 4.15f, 1.8f, 1.2f, 0x111111, HS_MAT_MATTE);
+    /* the side table and the phone */
+    room_add(5.0f, 0, 5.8f, 5.6f, 0.55f, 6.4f, 0x4A3526, HS_MAT_WOOD);
+    s_hot_box[HS_PHONE] = room_add(5.2f, 0.55f, 6.0f, 5.32f, 0.57f, 6.24f, 0x1A1A1A, HS_MAT_GLASS);
+    /* the desk and the laptop (the computer) */
+    room_add(5.2f, 0.72f, 8.2f, 6.8f, 0.76f, 8.9f, 0x5A4030, HS_MAT_WOOD);
+    room_add(5.25f, 0, 8.25f, 5.3f, 0.72f, 8.85f, 0x222222, HS_MAT_MATTE);
+    room_add(6.7f, 0, 8.25f, 6.75f, 0.72f, 8.85f, 0x222222, HS_MAT_MATTE);
+    room_add(5.7f, 0.76f, 8.35f, 6.3f, 0.78f, 8.7f, 0x8C8C90, HS_MAT_GLASS);
+    s_hot_box[HS_COMPUTER] = room_add(5.7f, 0.78f, 8.68f, 6.3f, 1.12f, 8.71f, 0x3A6EA5, HS_MAT_SCREEN);
+    room_add(5.8f, 0, 7.5f, 6.3f, 0.48f, 8.0f, 0x30302E, HS_MAT_FABRIC);
+    /* the mirror by the door, in a black frame */
+    room_add(0.0f, 0.25f, 1.15f, 0.04f, 2.15f, 2.05f, 0x101010, HS_MAT_MATTE);
+    s_hot_box[HS_MIRROR] = room_add(0.04f, 0.3f, 1.2f, 0.06f, 2.1f, 2.0f, 0xD8DCE0, HS_MAT_MIRROR);
+    /* kitchen counter along the back wall */
+    room_add(0.0f, 0, 8.3f, 3.6f, 0.9f, 9.0f, 0xE5E2DC, HS_MAT_MATTE);
+    room_add(0.0f, 0.9f, 8.25f, 3.6f, 0.94f, 9.0f, 0x2F3135, HS_MAT_TILE);
+    room_add(0.0f, 1.5f, 8.65f, 3.6f, 2.2f, 9.0f, 0xE5E2DC, HS_MAT_MATTE);
+    /* ceiling lights */
+    room_add(2.9f, 2.78f, 3.9f, 3.3f, 2.8f, 4.3f, 0xFFF2D8, HS_MAT_EMISSIVE);
+    room_add(5.8f, 2.78f, 8.0f, 6.2f, 2.8f, 8.4f, 0xFFF2D8, HS_MAT_EMISSIVE);
+    room_add(1.6f, 2.78f, 8.4f, 2.0f, 2.8f, 8.8f, 0xFFF2D8, HS_MAT_EMISSIVE);
+    s_room.sky[0] = 0.36f; s_room.sky[1] = 0.38f; s_room.sky[2] = 0.44f;
+    s_room.ground[0] = 0.16f; s_room.ground[1] = 0.13f; s_room.ground[2] = 0.11f;
+    s_room.nlight = 4;
+    { XboxHostLight l = { { 3.1f, 2.6f, 4.1f }, { 1.6f, 1.4f, 1.15f }, 7.0f }; s_room.light[0] = l; }
+    { XboxHostLight l = { { 6.0f, 2.6f, 8.2f }, { 1.1f, 1.0f, 0.85f }, 4.5f }; s_room.light[1] = l; }
+    { XboxHostLight l = { { 6.6f, 1.7f, 4.5f }, { 0.55f, 0.65f, 0.95f }, 7.0f }; s_room.light[2] = l; }
+    { XboxHostLight l = { { 1.8f, 2.6f, 8.6f }, { 0.9f, 0.85f, 0.75f }, 4.0f }; s_room.light[3] = l; }
+    fprintf(stderr, "[MCHOME] host room: test apartment, %d boxes\n", s_room.nbox);
+}
+
+/* Fixed stops for the host room (metres): looking at each hotspot's object. */
+static Stop s_host_stop[HOTS] = {
+    { { 3.5f, 1.6f, 3.4f }, { 3.5f, 1.1f, 0.0f }, 60.0f, { 3.5f, 2.35f, 0.0f } },
+    { { 1.8f, 1.6f, 2.4f }, { 0.05f, 1.2f, 1.6f }, 60.0f, { 0.1f, 2.3f, 1.6f } },
+    { { 5.2f, 1.6f, 6.6f }, { 6.0f, 0.95f, 8.7f }, 55.0f, { 6.0f, 1.35f, 8.7f } },
+    { { 4.3f, 1.5f, 4.6f }, { 5.26f, 0.56f, 6.12f }, 55.0f, { 5.26f, 0.85f, 6.12f } },
+    { { 3.2f, 1.6f, 5.2f }, { 3.2f, 1.2f, 1.14f }, 60.0f, { 3.2f, 2.0f, 1.14f } },
+};
+
+/* The marker: one SET_COLOR_CLEAR_VALUE (count 1, subchannel 0) with the magic value, written
+ * where the engine writes its own clears (sub_000330C0: command buffer [[0xA6AA6C]+0xC]). */
+static int emit_marker(void)
+{
+    /* [0xA6AA6C] heads a chain of command-buffer chunks; the engine writes into the last
+     * one, at its +0x0C (sub_00027CA0, as it clears). */
+    uint32_t head = MEM32(0x00A6AA6Cu), obj, p, n;
+    if (head < 0x10000u || head >= 0xF0000000u) return 0;
+    obj = MEM32(head);
+    if (obj < 0x10000u || obj >= 0xF0000000u) return 0;
+    for (n = 0; n < 64 && MEM32(obj) >= 0x10000u && MEM32(obj) < 0xF0000000u; n++) obj = MEM32(obj);
+    p = MEM32(obj + 0x0Cu);
+    if (p < 0x10000u || p >= 0xF0000000u) return 0;
+    MEM32(p) = 0x00041D90u;
+    MEM32(p + 4u) = XBOX_HOSTSCENE_MAGIC;
+    MEM32(obj + 0x0Cu) = p + 8u;
+    return 1;
+}
+
+static void rect_tex(float x, float y, float w, float h, uint32_t tex, uint32_t argb);
+static void host_draw_scene(void)
+{
+    static int logged;
+    int i;
+    for (i = 0; i < 3; i++) { s_room.eye[i] = s_h.cur[i]; s_room.at[i] = s_h.cur[3 + i]; }
+    s_room.fov_y = s_h.cur[6];
+    s_room.time = s_h.anim;
+    s_room.highlight = s_h.top == SCR_HUB && !s_h.leaving ? s_hot_box[s_h.hot] : -1;
+    xbox_HostSceneSet(&s_room);
+    /* The trigger: a 2 x 2 rect with the first texture of the Crib's sky (the phone's if there
+     * is no sky), which nothing else on these screens draws. The renderer drops that draw and
+     * starts the next frame with the room, under all of the game's own drawing. A TXTR's +4
+     * is its Data, the offset the pushbuffer's SET_TEXTURE_OFFSET carries. */
+    {
+        uint32_t trig = s_h.sky ? s_h.sky : s_h.phone;
+        uint32_t ma = trig && MEM32(trig + 0x1Cu) ? MEM32(trig + 0x20u) : 0;
+        uint32_t tx = ma ? MEM32(ma + 0x30u) : 0, data = tx >= 0x10000u && tx < 0xF0000000u ? MEM32(tx + 4u) : 0;
+        if (data) {
+            xbox_HostSceneTrigger(&data, 1);
+            rect_tex(0.0f, 0.0f, 2.0f, 2.0f, tx, 0xFFFFFFFFu);
+        }
+        if (!logged++) fprintf(stderr, "[MCHOME] host room: trigger = 2D rect, texture %08X, data %08X\n", tx, data);
+    }
+}
+
+/* The host renderer's projection, into the UI's 640 x 480: the surface is 720 x 480 and the
+ * window shows its 640 x 448 action area (the UI's space), so the scene's aspect is the
+ * window's widened by 720/640 and narrowed by 448/480. */
+static int project_host(const float p[3], float *sx, float *sy)
+{
+    float f[3], r[3], u[3], d[3], len, z, t, ar;
+    int i;
+    for (i = 0; i < 3; i++) { f[i] = s_h.cur[3 + i] - s_h.cur[i]; d[i] = p[i] - s_h.cur[i]; }
+    len = sqrtf(f[0] * f[0] + f[1] * f[1] + f[2] * f[2]); if (len <= 0.0f) return 0;
+    for (i = 0; i < 3; i++) f[i] /= len;
+    r[0] = -f[2]; r[1] = 0.0f; r[2] = f[0];
+    len = sqrtf(r[0] * r[0] + r[2] * r[2]); if (len <= 0.0f) return 0;
+    r[0] /= len; r[2] /= len;
+    u[0] = r[1] * f[2] - r[2] * f[1]; u[1] = r[2] * f[0] - r[0] * f[2]; u[2] = r[0] * f[1] - r[1] * f[0];
+    z = d[0] * f[0] + d[1] * f[1] + d[2] * f[2];
+    if (z < 0.1f) return 0;
+    t = 1.0f / tanf(s_h.cur[6] * 0.5f * 3.14159265f / 180.0f);
+    ar = s_h.host_ar;
+    *sx = (((d[0] * r[0] + d[1] * r[1] + d[2] * r[2]) / z) * t / ar * 0.5f + 0.5f) * 720.0f - 40.0f;
+    *sy = (0.5f - ((d[0] * u[0] + d[1] * u[1] + d[2] * u[2]) / z) * t * 0.5f) * 480.0f;
+    return *sx > 20.0f && *sx < 620.0f && *sy > 20.0f && *sy < 380.0f;
+}
+
 
 /* ---- screen events --------------------------------------------------------- */
 
@@ -631,13 +802,135 @@ static uint32_t pad_edges(void)
     return edge;
 }
 
+/* ---- stage 2: walking around the host room ---------------------------------------
+ * Free mode (the default in the host room): left stick or D-pad up/down walks, right stick,
+ * D-pad left/right or the shoulder buttons turn; the player is a 0.3 m circle that slides
+ * along walls and furniture. The object the player faces (within ~25 degrees and 3.5 m)
+ * glows and shows its prompt; A uses it. Y switches to the fixed stops and back. */
+#include "../external/xboxrecomp/src/input/xinput_xbox.h"
+extern void nfl2k5_input_last_pad(XBOX_GAMEPAD *g);
+
+
+static struct { float x, z, yaw; int on, init; } s_free;
+
+/* The boxes the player cannot walk into: anything between ankle and head height that is not
+ * the floor, the ceiling, the rug or a light. */
+static int free_blocked(float x, float z)
+{
+    const float r = 0.3f;
+    int i;
+    if (x < r || x > 7.0f - r || z < r || z > 9.0f - r) return 1;
+    for (i = 0; i < s_room.nbox; i++) {
+        const XboxHostBox *b = &s_room.box[i];
+        if (b->hi[1] < 0.2f || b->lo[1] > 1.8f || b->mat == HS_MAT_EMISSIVE) continue;
+        if (b->hi[0] - b->lo[0] > 6.0f && b->hi[2] - b->lo[2] > 6.0f) continue;       /* floor-sized */
+        if (x + r > b->lo[0] && x - r < b->hi[0] && z + r > b->lo[2] && z - r < b->hi[2]) return 1;
+    }
+    return 0;
+}
+
+static void box_centre(int bi, float c[3])
+{
+    const XboxHostBox *b = &s_room.box[bi];
+    int k;
+    for (k = 0; k < 3; k++) c[k] = (b->lo[k] + b->hi[k]) * 0.5f;
+}
+
+/* The hotspot the player is looking at, or -1. */
+static int free_target(float *cos_out)
+{
+    float fx = sinf(s_free.yaw), fz = cosf(s_free.yaw), best = 0.90f;
+    int h, pick = -1;
+    for (h = 0; h < HOTS; h++) {
+        float c[3], dx, dz, d, cs;
+        if (s_hot_box[h] < 0) continue;
+        box_centre(s_hot_box[h], c);
+        dx = c[0] - s_free.x; dz = c[2] - s_free.z;
+        d = sqrtf(dx * dx + dz * dz);
+        if (d > 3.5f || d < 0.05f) continue;
+        cs = (dx * fx + dz * fz) / d;
+        if (cs > best) { best = cs; pick = h; }
+    }
+    if (cos_out) *cos_out = best;
+    return pick;
+}
+
+/* Returns 1 when it handled the frame (free mode), 0 for the fixed stops. */
+static int free_frame(uint32_t fsm, uint32_t edge)
+{
+    float dt = frame_dt(fsm), mv = 0.0f, turn = 0.0f, nx, nz;
+    XBOX_INPUT_STATE st;
+    int i, y_edge;
+    if (!s_free.init) { s_free.init = 1; s_free.on = 1; s_free.x = 3.5f; s_free.z = 4.2f; s_free.yaw = 3.14159265f; }
+    memset(&st, 0, sizeof st);
+    nfl2k5_input_last_pad(&st.Gamepad);
+    {
+        float ly = st.Gamepad.sThumbLY / 32768.0f, rx = st.Gamepad.sThumbRX / 32768.0f;
+        if (fabsf(ly) > 0.2f) mv += ly;
+        if (fabsf(rx) > 0.2f) turn += rx;
+        y_edge = (edge & BTN_Y) != 0;                                     /* the engine's own Y bit */
+        s_h.y_was = st.Gamepad.bAnalogButtons[3] > 128;
+        if (st.Gamepad.bAnalogButtons[4] > 128) turn += 1.0f;             /* black / RB turns right */
+        if (st.Gamepad.bAnalogButtons[5] > 128) turn -= 1.0f;             /* white / LB turns left */
+    }
+    if (edge & ~(BTN_UP | BTN_DOWN | BTN_LEFT | BTN_RIGHT | BTN_A | BTN_B) && edge) MH_LOG("free: pad edge %08X\n", edge);
+    if (y_edge) {
+        s_free.on = !s_free.on;
+        sound(SND_CURSOR);
+        fprintf(stderr, "[MCHOME] host room: %s\n", s_free.on ? "walking" : "fixed stops");
+        if (!s_free.on) { s_h.hot = HS_DOOR; return 0; }
+    }
+    if (!s_free.on) return 0;
+    /* held D-pad from the merged pad: in t21 the engine word moved the player far less than a hold should */
+    if (st.Gamepad.wButtons & 0x01) mv += 1.0f;
+    if (st.Gamepad.wButtons & 0x02) mv -= 1.0f;
+    if (st.Gamepad.wButtons & 0x08) turn += 1.0f;
+    if (st.Gamepad.wButtons & 0x04) turn -= 1.0f;
+    s_free.yaw += turn * 2.0f * dt;
+    nx = s_free.x + sinf(s_free.yaw) * mv * 2.2f * dt;
+    nz = s_free.z + cosf(s_free.yaw) * mv * 2.2f * dt;
+    if (!free_blocked(nx, s_free.z)) s_free.x = nx;           /* slide along whatever blocks */
+    if (!free_blocked(s_free.x, nz)) s_free.z = nz;
+    s_h.anim += dt;
+    s_h.cur[0] = s_free.x; s_h.cur[1] = 1.6f; s_h.cur[2] = s_free.z;
+    s_h.cur[3] = s_free.x + sinf(s_free.yaw); s_h.cur[4] = 1.5f; s_h.cur[5] = s_free.z + cosf(s_free.yaw);
+    s_h.cur[6] = 62.0f;
+    s_h.cur_set = 1;
+    s_h.free_target = free_target(NULL);
+    if (s_h.free_target >= 0) s_h.hot = s_h.free_target;
+    if ((edge & BTN_A) && s_h.free_target >= 0) {
+        /* glide from where the player stands to the object, then the hotspot's action */
+        float c[3];
+        Stop *st2 = &s_host_stop[s_h.hot];
+        box_centre(s_hot_box[s_h.hot], c);
+        for (i = 0; i < 3; i++) { st2->eye[i] = s_h.cur[i]; st2->at[i] = c[i]; }
+        st2->fov = 62.0f;
+        return -1;                                            /* the caller runs the hotspot */
+    }
+    if (edge & BTN_B) return -2;
+    return 1;
+}
+
+
 static void hub_frame(uint32_t fsm)
 {
     uint32_t edge;
     int h = s_h.hot;
-    if (camera_step(fsm, 0.0f)) return;
-    if (s_h.leaving) return;
-    edge = pad_edges();
+    if (s_h.host && s_h.leaving) { camera_step(fsm, 0.0f); return; }
+    if (s_h.host && !s_h.leaving) {
+        int f;
+        edge = pad_edges();
+        f = free_frame(fsm, edge);
+        if (f == 1) return;
+        if (f == -2) { sound(SND_SELECT); s_h.hot = HS_MENU; s_h.manual = 1; leave(0); return; }
+        h = s_h.hot;                              /* free mode may have moved it */
+        if (f == -1) edge = BTN_A;                /* use the hotspot looked at, as the fixed stops do */
+        else if (camera_step(fsm, 0.0f)) return;
+    } else {
+        if (camera_step(fsm, 0.0f)) return;
+        if (s_h.leaving) return;
+        edge = pad_edges();
+    }
     if (edge & (BTN_RIGHT | BTN_DOWN)) h = (h + 1) % HOTS;
     if (edge & (BTN_LEFT | BTN_UP)) h = (h + HOTS - 1) % HOTS;
     if (h != s_h.hot) { s_h.hot = h; sound(SND_CURSOR); MH_LOG("hotspot %s\n", k_hot_name[h]); return; }
@@ -746,17 +1039,20 @@ static void ev_draw(void)
     int i;
     float sx, sy;
     if (!s_h.shown || !s_h.room || !s_h.cur_set) return;
-    for (i = 0; i < 3; i++) { MEMF(s_h.eye + i * 4u) = s_h.cur[i]; MEMF(s_h.at + i * 4u) = s_h.cur[3 + i]; }
-    MEMF(s_h.eye + 12u) = 1.0f; MEMF(s_h.at + 12u) = 1.0f;
     gcall(sub_0002AD80, s_h.camsave, 0);
-    PUSH32(g_esp, s_h.at);
-    gcall(sub_0002BDF0, s_h.camobj, s_h.eye);
-    gcall(sub_0002B860, s_h.camobj, (uint32_t)(int)(s_h.cur[6] * 182.04445f));
-    gcall(sub_0002AC80, s_h.camobj, 0);
-    if (s_h.sky) gcall(sub_0002DE60, s_h.sky, 0);
-    gcall(sub_0002DE60, s_h.room, 0);
-    if (s_h.phone) draw_scene_at(s_h.phone, s_h.phone_at);
-    if (s_h.top == SCR_HUB && s_h.cursor && !s_h.leaving && s_h.marker3d) draw_scene_at(s_h.cursor, STOP(s_h.hot).mark);
+    if (s_h.host) host_draw_scene();
+    else {
+        for (i = 0; i < 3; i++) { MEMF(s_h.eye + i * 4u) = s_h.cur[i]; MEMF(s_h.at + i * 4u) = s_h.cur[3 + i]; }
+        MEMF(s_h.eye + 12u) = 1.0f; MEMF(s_h.at + 12u) = 1.0f;
+        PUSH32(g_esp, s_h.at);
+        gcall(sub_0002BDF0, s_h.camobj, s_h.eye);
+        gcall(sub_0002B860, s_h.camobj, (uint32_t)(int)(s_h.cur[6] * 182.04445f));
+        gcall(sub_0002AC80, s_h.camobj, 0);
+        if (s_h.sky) gcall(sub_0002DE60, s_h.sky, 0);
+        gcall(sub_0002DE60, s_h.room, 0);
+        if (s_h.phone) draw_scene_at(s_h.phone, s_h.phone_at);
+        if (s_h.top == SCR_HUB && s_h.cursor && !s_h.leaving && s_h.marker3d) draw_scene_at(s_h.cursor, STOP(s_h.hot).mark);
+    }
     {
         uint32_t ui = gcall(sub_00069180, 0, 0);
         gcall(sub_0002AC80, ui, 0);
@@ -781,7 +1077,7 @@ static void ev_draw(void)
         text(s_h.w_name[s_h.hot], 0, 160.0f, 398.0f, 0xFFFFD040u);
         text(s_h.w_what[s_h.hot], 0, 160.0f, 422.0f, 0xFFFFFFFFu);
         text(s_h.hot == HS_MENU ? s_h.w_prompt_menu : s_h.w_prompt, 0, 470.0f, 410.0f, 0xFFFFFFFFu);
-        if (!s_h.leaving && !s_h.marker3d && project(STOP(s_h.hot).mark, &sx, &sy))
+        if (!s_h.leaving && !s_h.marker3d && (s_h.host ? project_host(STOP(s_h.hot).mark, &sx, &sy) : project(STOP(s_h.hot).mark, &sx, &sy)))
             text(s_h.w_glyph, 0, sx, sy - 12.0f + 5.0f * sinf(s_h.anim * 4.0f), 0xFFFFFFFFu);
     } else if (s_h.top == SCR_CALL) call_draw();
 }
@@ -1132,6 +1428,9 @@ void nfl2k5_mc_home_install(void)
     { const char *m = getenv("NFL2K5_MC_HOME_MARKER"); s_h.marker3d = m && !strcmp(m, "3d"); }
     s_h.proj_scale = 320.0f; s_h.proj_xsign = 1.0f;
     { const char *p = getenv("NFL2K5_MC_HOME_PROJ"); if (p) sscanf(p, "%f %f", &s_h.proj_scale, &s_h.proj_xsign); }
+    { const char *h = getenv("NFL2K5_MC_HOME_ROOM"); s_h.host = h && !_stricmp(h, "host"); }
+    s_h.host_ar = 16.0f / 9.0f * (720.0f / 640.0f) * (448.0f / 480.0f);
+    if (s_h.host) room_build_apartment();
     s_h.phone_at[0] = 2560.0f; s_h.phone_at[1] = 8.0f; s_h.phone_at[2] = -1150.0f;
     { const char *p = getenv("NFL2K5_MC_HOME_PHONE_AT"); if (p) sscanf(p, "%f %f %f", &s_h.phone_at[0], &s_h.phone_at[1], &s_h.phone_at[2]); }
     ini_path();
@@ -1154,6 +1453,7 @@ void nfl2k5_mc_home_install(void)
     s_h.w_cursor = h_wstr("cursor");
     s_h.w_phone = h_wstr("phone");
     s_h.w_phone_icon = h_wstr("celebrity_phone_icon");
+    s_h.w_reflection = h_wstr("reflection");
     s_h.w_ctx2 = h_wstr("MCHOMEFR");
     s_h.w_file2 = h_wstr("fr.iff");
     s_h.w_layout = h_wstr("front_office");
