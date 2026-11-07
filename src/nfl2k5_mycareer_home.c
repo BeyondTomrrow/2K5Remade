@@ -581,13 +581,14 @@ static int room_add(float x0, float y0, float z0, float x1, float y1, float z1, 
     return s_room.nbox++;
 }
 
+static int s_ceil[4] = { -1, -1, -1, -1 };
 static void room_build_apartment(void)
 {
     memset(&s_room, 0, sizeof s_room);
     s_room.highlight = -1;
     /* shell: floor, ceiling, walls (the front wall has the door gap at x 3.0..4.0) */
     room_add(0, -0.05f, 0, 7, 0, 9, 0x8A6A4A, HS_MAT_WOOD);
-    room_add(0, 2.8f, 0, 7, 2.85f, 9, 0xE8E6E0, HS_MAT_MATTE);
+    s_ceil[0] = room_add(0, 2.8f, 0, 7, 2.85f, 9, 0xE8E6E0, HS_MAT_MATTE);
     room_add(-0.1f, 0, 0, 0, 2.8f, 9, 0xD9D4CA, HS_MAT_MATTE);
     room_add(0, 0, 9, 7, 2.8f, 9.1f, 0xD9D4CA, HS_MAT_MATTE);
     room_add(0, 0, -0.1f, 3.0f, 2.8f, 0, 0xD9D4CA, HS_MAT_MATTE);
@@ -605,20 +606,20 @@ static void room_build_apartment(void)
     /* the front door, in its gap */
     s_hot_box[HS_DOOR] = room_add(3.05f, 0, -0.06f, 3.95f, 2.15f, -0.02f, 0x5A3A24, HS_MAT_WOOD);
     room_add(3.8f, 1.0f, -0.02f, 3.86f, 1.06f, 0.02f, 0xC8C8C8, HS_MAT_GLASS);
-    /* rug, couch, coffee table */
-    room_add(1.6f, 0, 2.6f, 4.8f, 0.01f, 5.4f, 0x7A6E62, HS_MAT_FABRIC);
-    room_add(1.8f, 0, 5.6f, 4.6f, 0.45f, 6.5f, 0x3C4A5C, HS_MAT_FABRIC);
-    room_add(1.8f, 0.45f, 6.2f, 4.6f, 0.95f, 6.5f, 0x3C4A5C, HS_MAT_FABRIC);
-    room_add(1.6f, 0, 5.6f, 1.8f, 0.65f, 6.5f, 0x34404F, HS_MAT_FABRIC);
-    room_add(4.6f, 0, 5.6f, 4.8f, 0.65f, 6.5f, 0x34404F, HS_MAT_FABRIC);
-    room_add(2.4f, 0, 3.8f, 4.0f, 0.42f, 4.6f, 0x4A3526, HS_MAT_WOOD);
-    /* the TV wall: a low unit and the screen (Career Menu) */
-    room_add(1.9f, 0, 1.0f, 4.5f, 0.45f, 1.4f, 0x2E2A26, HS_MAT_WOOD);
-    s_hot_box[HS_MENU] = room_add(2.3f, 0.75f, 1.12f, 4.1f, 1.75f, 1.16f, 0x1C3550, HS_MAT_SCREEN);
-    room_add(2.25f, 0.7f, 1.16f, 4.15f, 1.8f, 1.2f, 0x111111, HS_MAT_MATTE);
-    /* the side table and the phone */
-    room_add(5.0f, 0, 5.8f, 5.6f, 0.55f, 6.4f, 0x4A3526, HS_MAT_WOOD);
-    s_hot_box[HS_PHONE] = room_add(5.2f, 0.55f, 6.0f, 5.32f, 0.57f, 6.24f, 0x1A1A1A, HS_MAT_GLASS);
+    /* the living area faces the left wall (x = 0): rug, couch (back to the room), coffee table */
+    room_add(0.9f, 0, 2.6f, 3.9f, 0.01f, 5.8f, 0x7A6E62, HS_MAT_FABRIC);
+    room_add(3.1f, 0, 3.0f, 4.0f, 0.45f, 5.4f, 0x3C4A5C, HS_MAT_FABRIC);
+    room_add(3.7f, 0.45f, 3.0f, 4.0f, 0.95f, 5.4f, 0x3C4A5C, HS_MAT_FABRIC);
+    room_add(3.1f, 0, 2.8f, 4.0f, 0.65f, 3.0f, 0x34404F, HS_MAT_FABRIC);
+    room_add(3.1f, 0, 5.4f, 4.0f, 0.65f, 5.6f, 0x34404F, HS_MAT_FABRIC);
+    room_add(1.7f, 0, 3.4f, 2.5f, 0.42f, 5.0f, 0x4A3526, HS_MAT_WOOD);
+    /* the TV wall (x = 0): a low unit and the screen (Career Menu) */
+    room_add(0.0f, 0, 2.9f, 0.4f, 0.45f, 5.5f, 0x2E2A26, HS_MAT_WOOD);
+    s_hot_box[HS_MENU] = room_add(0.12f, 0.75f, 3.3f, 0.16f, 1.75f, 5.1f, 0x1C3550, HS_MAT_SCREEN);
+    room_add(0.08f, 0.7f, 3.25f, 0.12f, 1.8f, 5.15f, 0x111111, HS_MAT_MATTE);
+    /* the side table at the couch's end and the phone */
+    room_add(3.3f, 0, 5.8f, 3.9f, 0.55f, 6.4f, 0x4A3526, HS_MAT_WOOD);
+    s_hot_box[HS_PHONE] = room_add(3.54f, 0.55f, 5.98f, 3.66f, 0.57f, 6.22f, 0x1A1A1A, HS_MAT_GLASS);
     /* the desk and the laptop (the computer) */
     room_add(5.2f, 0.72f, 8.2f, 6.8f, 0.76f, 8.9f, 0x5A4030, HS_MAT_WOOD);
     room_add(5.25f, 0, 8.25f, 5.3f, 0.72f, 8.85f, 0x222222, HS_MAT_MATTE);
@@ -634,13 +635,13 @@ static void room_build_apartment(void)
     room_add(0.0f, 0.9f, 8.25f, 3.6f, 0.94f, 9.0f, 0x2F3135, HS_MAT_TILE);
     room_add(0.0f, 1.5f, 8.65f, 3.6f, 2.2f, 9.0f, 0xE5E2DC, HS_MAT_MATTE);
     /* ceiling lights */
-    room_add(2.9f, 2.78f, 3.9f, 3.3f, 2.8f, 4.3f, 0xFFF2D8, HS_MAT_EMISSIVE);
-    room_add(5.8f, 2.78f, 8.0f, 6.2f, 2.8f, 8.4f, 0xFFF2D8, HS_MAT_EMISSIVE);
-    room_add(1.6f, 2.78f, 8.4f, 2.0f, 2.8f, 8.8f, 0xFFF2D8, HS_MAT_EMISSIVE);
+    s_ceil[1] = room_add(2.0f, 2.78f, 4.0f, 2.4f, 2.8f, 4.4f, 0xFFF2D8, HS_MAT_EMISSIVE);
+    s_ceil[2] = room_add(5.8f, 2.78f, 8.0f, 6.2f, 2.8f, 8.4f, 0xFFF2D8, HS_MAT_EMISSIVE);
+    s_ceil[3] = room_add(1.6f, 2.78f, 8.4f, 2.0f, 2.8f, 8.8f, 0xFFF2D8, HS_MAT_EMISSIVE);
     s_room.sky[0] = 0.36f; s_room.sky[1] = 0.38f; s_room.sky[2] = 0.44f;
     s_room.ground[0] = 0.16f; s_room.ground[1] = 0.13f; s_room.ground[2] = 0.11f;
     s_room.nlight = 4;
-    { XboxHostLight l = { { 3.1f, 2.6f, 4.1f }, { 1.6f, 1.4f, 1.15f }, 7.0f }; s_room.light[0] = l; }
+    { XboxHostLight l = { { 2.2f, 2.6f, 4.2f }, { 1.6f, 1.4f, 1.15f }, 7.0f }; s_room.light[0] = l; }
     { XboxHostLight l = { { 6.0f, 2.6f, 8.2f }, { 1.1f, 1.0f, 0.85f }, 4.5f }; s_room.light[1] = l; }
     { XboxHostLight l = { { 6.6f, 1.7f, 4.5f }, { 0.55f, 0.65f, 0.95f }, 7.0f }; s_room.light[2] = l; }
     { XboxHostLight l = { { 1.8f, 2.6f, 8.6f }, { 0.9f, 0.85f, 0.75f }, 4.0f }; s_room.light[3] = l; }
@@ -649,11 +650,11 @@ static void room_build_apartment(void)
 
 /* Fixed stops for the host room (metres): looking at each hotspot's object. */
 static Stop s_host_stop[HOTS] = {
-    { { 3.5f, 1.6f, 3.4f }, { 3.5f, 1.1f, 0.0f }, 60.0f, { 3.5f, 2.35f, 0.0f } },
+    { { 3.5f, 1.6f, 2.6f }, { 3.5f, 1.1f, 0.0f }, 60.0f, { 3.5f, 2.35f, 0.0f } },
     { { 1.8f, 1.6f, 2.4f }, { 0.05f, 1.2f, 1.6f }, 60.0f, { 0.1f, 2.3f, 1.6f } },
     { { 5.2f, 1.6f, 6.6f }, { 6.0f, 0.95f, 8.7f }, 55.0f, { 6.0f, 1.35f, 8.7f } },
-    { { 4.3f, 1.5f, 4.6f }, { 5.26f, 0.56f, 6.12f }, 55.0f, { 5.26f, 0.85f, 6.12f } },
-    { { 3.2f, 1.6f, 5.2f }, { 3.2f, 1.2f, 1.14f }, 60.0f, { 3.2f, 2.0f, 1.14f } },
+    { { 2.6f, 1.5f, 7.4f }, { 3.6f, 0.56f, 6.1f }, 55.0f, { 3.6f, 0.85f, 6.1f } },
+    { { 4.6f, 1.6f, 4.2f }, { 0.14f, 1.2f, 4.2f }, 60.0f, { 0.14f, 2.0f, 4.2f } },
 };
 
 /* The marker: one SET_COLOR_CLEAR_VALUE (count 1, subchannel 0) with the magic value, written
@@ -684,7 +685,13 @@ static void host_draw_scene(void)
     s_room.fov_y = s_h.cur[6];
     s_room.time = s_h.anim;
     s_room.highlight = s_h.top == SCR_HUB && !s_h.leaving ? s_hot_box[s_h.hot] : -1;
-    xbox_HostSceneSet(&s_room);
+    if (s_h.cur[1] > 2.85f) {                 /* from above: no ceiling */
+        static XboxHostScene top;
+        int c;
+        top = s_room;
+        for (c = 0; c < 4; c++) if (s_ceil[c] >= 0) { int k; for (k = 0; k < 3; k++) top.box[s_ceil[c]].lo[k] = top.box[s_ceil[c]].hi[k] = -100.0f; }
+        xbox_HostSceneSet(&top);
+    } else xbox_HostSceneSet(&s_room);
     /* The trigger: a 2 x 2 rect with the first texture of the Crib's sky (the phone's if there
      * is no sky), which nothing else on these screens draws. The renderer drops that draw and
      * starts the next frame with the room, under all of the game's own drawing. A TXTR's +4
@@ -711,10 +718,10 @@ static int project_host(const float p[3], float *sx, float *sy)
     for (i = 0; i < 3; i++) { f[i] = s_h.cur[3 + i] - s_h.cur[i]; d[i] = p[i] - s_h.cur[i]; }
     len = sqrtf(f[0] * f[0] + f[1] * f[1] + f[2] * f[2]); if (len <= 0.0f) return 0;
     for (i = 0; i < 3; i++) f[i] /= len;
-    r[0] = -f[2]; r[1] = 0.0f; r[2] = f[0];
+    r[0] = f[2]; r[1] = 0.0f; r[2] = -f[0];             /* up x f, as the host renderer */
     len = sqrtf(r[0] * r[0] + r[2] * r[2]); if (len <= 0.0f) return 0;
     r[0] /= len; r[2] /= len;
-    u[0] = r[1] * f[2] - r[2] * f[1]; u[1] = r[2] * f[0] - r[0] * f[2]; u[2] = r[0] * f[1] - r[1] * f[0];
+    u[0] = f[1] * r[2] - f[2] * r[1]; u[1] = f[2] * r[0] - f[0] * r[2]; u[2] = f[0] * r[1] - f[1] * r[0];
     z = d[0] * f[0] + d[1] * f[1] + d[2] * f[2];
     if (z < 0.1f) return 0;
     t = 1.0f / tanf(s_h.cur[6] * 0.5f * 3.14159265f / 180.0f);
@@ -861,7 +868,7 @@ static int free_frame(uint32_t fsm, uint32_t edge)
     float dt = frame_dt(fsm), mv = 0.0f, turn = 0.0f, nx, nz;
     XBOX_INPUT_STATE st;
     int i, y_edge;
-    if (!s_free.init) { s_free.init = 1; s_free.on = 1; s_free.x = 3.5f; s_free.z = 4.2f; s_free.yaw = 3.14159265f; }
+    if (!s_free.init) { s_free.init = 1; s_free.on = 1; s_free.x = 3.5f; s_free.z = 1.0f; s_free.yaw = 0.0f; }
     memset(&st, 0, sizeof st);
     nfl2k5_input_last_pad(&st.Gamepad);
     {
@@ -1079,6 +1086,12 @@ static void ev_draw(void)
         text(s_h.hot == HS_MENU ? s_h.w_prompt_menu : s_h.w_prompt, 0, 470.0f, 410.0f, 0xFFFFFFFFu);
         if (!s_h.leaving && !s_h.marker3d && (s_h.host ? project_host(STOP(s_h.hot).mark, &sx, &sy) : project(STOP(s_h.hot).mark, &sx, &sy)))
             text(s_h.w_glyph, 0, sx, sy - 12.0f + 5.0f * sinf(s_h.anim * 4.0f), 0xFFFFFFFFu);
+        if (s_h.host && getenv("NFL2K5_MC_HOME_TAGS")) {
+            int t;
+            for (t = 0; t < HOTS; t++)
+                if (project_host(STOP(t).mark, &sx, &sy)) text(s_h.w_name[t], 0, sx, sy - 10.0f, 0xFF40E0FFu);
+            text_s(14, "TEST GEOMETRY", 560.0f, 36.0f, 0xFFFF6060u);
+        }
     } else if (s_h.top == SCR_CALL) call_draw();
 }
 
