@@ -349,7 +349,7 @@ static inline void sync_in(Cpu *c)
 
 /* ---- native hooks at guest instructions (x86_interp.h) ------------------------ */
 
-static struct { uint32_t va, from; recomp_interp_hook_t fn; } s_hooks[32];
+static struct { uint32_t va, from; recomp_interp_hook_t fn; } s_hooks[64];
 static int s_nhooks;
 /* One bit per hashed instruction address: clear = no hook there (the loop
  * tests it for every instruction). */
@@ -361,7 +361,10 @@ static inline uint32_t hook_hash(uint32_t va) { return (va ^ (va >> 16)) & 0xFFF
 
 void recomp_interp_add_hook(uint32_t va, uint32_t from, recomp_interp_hook_t fn)
 {
-    if (s_nhooks >= (int)(sizeof s_hooks / sizeof s_hooks[0]) || !fn) return;
+    if (s_nhooks >= (int)(sizeof s_hooks / sizeof s_hooks[0]) || !fn) {
+        fprintf(stderr, "[INTERP] hook at %08X dropped: table full\n", va);
+        return;
+    }
     s_hooks[s_nhooks].va = va;
     s_hooks[s_nhooks].from = from;
     s_hooks[s_nhooks].fn = fn;

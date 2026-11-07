@@ -3131,6 +3131,75 @@ static uint32_t ih_popup_effective_alpha(void)
 static uint32_t ih_popup_dynamic_alpha(void)
 { if (nfl2k5_presentation_pregame_draw_replaced(g_ecx)) MEM32(g_esp) = 0; return 0; }
 
+/* ---- SOFTDRINK v0.9: audible L/R slide for the pad on the quarterback -------
+ *
+ * The pack's Slide Left / Slide Right code hangs off the retail case at 0x18FE65,
+ * which only a pad controlling no player reaches. A pad on the quarterback gets
+ * actions 0x3A / 0x3B through the handler table at 0xAABFD4 to the unpatched
+ * 0x18F8C0, where they are audible slots 3 and 4 of a 3-slot panel: nothing
+ * happens. Here those two actions run the pack's own code instead. It ends with
+ * a jump into 0x18FBE0's cases, so those two exits come back to 0x18F8D8, the
+ * point after the slot lookup (0 = no audible: the action is cleared).
+ *
+ * Armed only on the bytes it was written for: the pack's slide code and hook, and
+ * the retail handler, table and control row, so a release that fixes this or moves
+ * any of it turns the patch off by itself. It runs in the interpreter, as all pack
+ * code does, so every platform gets it. */
+#define AS_PACK_CODE     0x014F1E5Cu   /* the pack: ecx = action, esi = team */
+#define AS_RESUME        0x0018F8D8u   /* retail: after the slot lookup, eax = audible */
+#define AS_PANEL_ON      0x00BA3178u   /* the offense's panel: open */
+#define AS_PANEL_SLOTS   0x00BA317Eu   /* its slot count: the pack's menu has 3 */
+#define AS_OFFENSE       0x00E60280u
+static const uint32_t k_as_guard[][2] = {
+    { 0x0018F8C0u, 0x0018FA20u },      /* retail audible handler */
+    { 0x0018FE65u, 0x0018FE6Au },      /* the pack's hook */
+    { 0x00A99F98u, 0x00A9A004u },      /* audible control row: L = 0x3A, R = 0x3B */
+    { 0x00AABFD4u, 0x00AABFE8u },      /* handler table, actions 0x37 to 0x3B */
+    { 0x014F1DE0u, 0x014F1EDFu },      /* the pack's slide code */
+};
+#define AS_GUARD_HASH    0xBC65973Fu   /* SOFTDRINK 2K28 v0.9 */
+static int s_as_running;               /* the pack's code is running for us */
+
+static uint32_t ih_as_action(void)     /* 0x18F8CE: eax = action, esi = team */
+{
+    if ((g_eax != 0x3Au && g_eax != 0x3Bu) || !MEM32(AS_PANEL_ON) || MEM8(AS_PANEL_SLOTS) != 3u ||
+        g_esi != MEM32(AS_OFFENSE))
+        return 0;
+    g_ecx = g_eax;
+    s_as_running = 1;
+    return AS_PACK_CODE;
+}
+static uint32_t ih_as_slid(void)       /* 0x18FF1C: the pack took it */
+{
+    if (!s_as_running) return 0;
+    s_as_running = 0;
+    g_eax = 0;
+    return AS_RESUME;
+}
+static uint32_t ih_as_declined(void)   /* 0x18FE6F: the pack looked up the slot itself */
+{
+    if (!s_as_running) return 0;
+    s_as_running = 0;
+    return AS_RESUME;
+}
+
+static void nfl2k5_audible_slide_hooks(void)
+{
+    extern unsigned nfl2k5_interp_force(uint32_t lo, uint32_t hi);
+    uint32_t h = 2166136261u;
+    if (!g_interp_active) return;
+    for (unsigned g = 0; g < sizeof k_as_guard / sizeof k_as_guard[0]; g++)
+        for (uint32_t a = k_as_guard[g][0]; a < k_as_guard[g][1]; a++)
+            h = (h ^ MEM8(a)) * 16777619u;
+    if (h != AS_GUARD_HASH) return;
+    nfl2k5_interp_force(0x0018F8C0u, 0x0018F8CFu);
+    recomp_interp_add_hook(0x0018F8CEu, 0, ih_as_action);
+    recomp_interp_add_hook(0x0018FF1Cu, 0, ih_as_slid);
+    recomp_interp_add_hook(0x0018FE6Fu, 0, ih_as_declined);
+    fprintf(stderr, "[AUD] audible slide patch armed: pack code %08X, guard %08X (SOFTDRINK 2K28 v0.9)\n",
+            AS_PACK_CODE, h);
+}
+
 void nfl2k5_scorebug_interp_hooks(void)
 {
     recomp_interp_add_hook(0x00064CF2u, 0, ih_sandbox_delta);
@@ -3156,6 +3225,7 @@ void nfl2k5_scorebug_interp_hooks(void)
     recomp_interp_add_hook(0x001BCEBFu, 0, ih_popup_effective_alpha);
     recomp_interp_add_hook(0x001BD22Du, 0, ih_popup_dynamic_alpha);
     recomp_interp_add_hook(0x001BD2F6u, 0, ih_popup_dynamic_alpha);
+    nfl2k5_audible_slide_hooks();
 }
 
 
