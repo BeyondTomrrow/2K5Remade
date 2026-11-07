@@ -344,7 +344,7 @@ static void career_load(uint32_t rec)
     rec_name(rec, 0x14, last, sizeof last);
     m = (MEM8(rec + 0x19) >> 4) & 15;
     d = MEM8(rec + 0x1A) & 31;
-    y = ((MEM8(rec + 0x1A) >> 5) & 7) | ((MEM8(rec + 0x1B) & 15) << 3);
+    y = 1900 + (((MEM8(rec + 0x1A) >> 5) & 7) | ((MEM8(rec + 0x1B) & 15) << 3));
     snprintf(key, sizeof key, "%s %s %d-%d-%d pos%u", first[0] ? first : "MyPlayer", last, y, m, d, (unsigned)MEM8(rec + 0x35));
     for (i = 0; key[i]; i++) if (key[i] == '[' || key[i] == ']' || key[i] == '=') key[i] = '_';
     if (s_c.valid && !strcmp(s_c.key, key)) return;
@@ -515,7 +515,7 @@ static int room_load(void)
     }
     MEM32(s_h.room + 8) |= 1u;                    /* as sub_00276020 does to its room */
     if (!s_h.hide_env) snprintf(s_h.hide, sizeof s_h.hide, "%s%s", k_hide_items, k_hide_tier[s_c.tier]);
-    if (!s_h.swap_env) snprintf(s_h.swap, sizeof s_h.swap, "%s%s,standee_02=@reflection", k_swap_base, k_swap_tier[s_c.tier]);
+    if (!s_h.swap_env) snprintf(s_h.swap, sizeof s_h.swap, "%s%s,standee_02=chrome", k_swap_base, k_swap_tier[s_c.tier]);
     room_hide();
     room_swap();
     room_log();
@@ -768,7 +768,7 @@ static void ev_draw(void)
                 uint32_t icon = lookup(0, FOURCC_TXTR, s_h.w_phone_icon);
                 if (icon) rect_tex(64.0f, 120.0f, 184.0f, 184.0f, icon, 0xFFFFFFFFu);
             }
-            if (s_h.phase == 1) rect(300.0f, 288.0f + 26.0f * (float)s_h.pick, 312.0f, 24.0f,
+            if (s_h.phase == 1) rect(300.0f, 266.0f + 26.0f * (float)s_h.pick, 312.0f, 22.0f,
                                      (uint32_t)(0x90 + (int)(60.0f * sinf(s_h.anim * 5.0f))) << 24 | 0x26254Au);
         }
         gcall(sub_0002AC80, s_h.camsave, 0);
