@@ -3658,6 +3658,17 @@ static std::string featured_players_json(const GameState &g, int side)
     return "[" + s_featured.player[side] + "]";
 }
 
+/* A game HUD element (the MyCareer stat bar, src/nfl2k5_mycareer_hud.c) is using the top-right
+ * corner: context.cornerClaimed tells packages to clear their corner bug. Claimed by a call each
+ * frame the element draws; it lapses 250 ms after the last one. */
+static std::atomic<unsigned long long> s_corner_claim_ms{ 0 };
+extern "C" void nfl2k5_presentation_corner_claim(void) { s_corner_claim_ms.store(GetTickCount64()); }
+static bool corner_claimed(void)
+{
+    unsigned long long t = s_corner_claim_ms.load();
+    return t && GetTickCount64() - t < 250u;
+}
+
 static std::string html_state_json(const GameState &g, const HtmlContext &cx)
 {
     std::string j = "{\"apiVersion\":1";
@@ -3705,6 +3716,7 @@ static std::string html_state_json(const GameState &g, const HtmlContext &cx)
     j += ",\"animationsEnabled\":" + std::string(s_sel_anim.load() ? "true" : "false");
     j += ",\"nativeScorebug\":" + std::string(cx.native_scorebug ? "true" : "false");
     j += ",\"periodEnding\":" + std::string(period_ending(g) ? "true" : "false");
+    j += ",\"cornerClaimed\":" + std::string(corner_claimed() ? "true" : "false");
     const char *pregame_stage = native_pregame_stage(g, cx, match);
     j += ",\"pregameStage\":" + (pregame_stage ? json_str(pregame_stage) : std::string("null"));
     j += ",\"flag\":" + std::string(GetTickCount64() < s_flag_until ? "true" : "false") + "}";

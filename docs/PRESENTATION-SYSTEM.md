@@ -153,7 +153,9 @@ Pages include the runtime and register handlers:
 | `decade` | string / null | `"1980s"` in an Eras game, else null |
 | `week` | number / null | the Eras fixture's week, else null |
 | `away`, `home` | object | `abbreviation`, `city`, `name`, `logo` (URL), `record`, `score`, `timeouts`, `primaryColor`, `secondaryColor` |
-| `context` | object | `scorebugVisible` (live play camera: show the bug), `playSelection`, `paused`, `nativeScorebug`, `flag`, `periodEnding` |
+| `context` | object | `scorebugVisible` (live play camera: show the bug), `playSelection`, `paused`, `nativeScorebug`, `flag`, `periodEnding`, `cornerClaimed` |
+
+`context.cornerClaimed` is true while a game HUD element uses the top-right corner (the MyCareer stat bar, `src/nfl2k5_mycareer_hud.c`). A package with a corner bug should clear it while this is true and bring it back when it turns false (NBC_SNF does this in `updateWatermark`).
 
 `context.periodEnding` is true only while the title has entered its actual end-of-period/halftime flow at a zero clock. A last play, pending PAT or untimed down at 0:00 does not imply this state. The field is independent of the later `QUARTER_ENDED` event (currently sent when the period increments), and visibility/menu/pause rules still apply. It is not a command to play a generic quarter bumper.
 

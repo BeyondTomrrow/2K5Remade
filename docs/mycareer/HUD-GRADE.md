@@ -6,16 +6,20 @@ Our own layer over SOFTDRINK v0.9's MyCareer (`src/nfl2k5_mycareer_hud.c`, branc
 ## Where it shows
 
 Only where the pack itself would draw its "F. Last QB: CMP/ATT .." line: a MyCareer game, the
-MyPlayer's team at the line before the snap (the pack hides it on the play-call screen, during
-the play, in replays and when paused), and the pack's own "MyPlayer stat line" setting On
+MyPlayer's team at the line and into the first moments of the snap (the pack hides it on the
+play-call screen, for most of the play, in replays and when paused), and the pack's own "MyPlayer stat line" setting On
 (that row stays the on/off switch). Our bar replaces that line (hook at 0x014EA522, continue at
 0x014EA57C). It is hidden while Supersim runs, so it never sits on the Supersim panel.
 
-Placement, measured in game: the HUD's 640 x 480 is drawn square (one unit as wide as tall),
-centred, and clipped to x 0..640 also with the widescreen patch; y 448 is the bottom of the
-window. The bar sits at the left, bottom edge at y 372, just above the bottom scorebug band
-(the SNF scorebug starts at y 379, x 149), clear of the play art, which is only on the
-play-call screen where the bar is hidden.
+Placement: the top-right corner, where the network bug sits. Measured in game: the HUD's
+640 x 480 is drawn square (one unit as wide as tall), centred, and clipped to x 0..640 also with
+the widescreen patch, so at 16:9 the bar's right edge is about 130 px (of 1280) short of the
+window edge; at 4:3 it reaches the corner. With an HTML presentation the bar sits at the top
+(y 8) and, every frame it draws, tells the presentation `context.cornerClaimed = true`; the
+package hides its corner bug while that holds and brings it back within about half a second
+after the bar goes (snap, Supersim, replays, menus). With the native ESPN scorebug (top bar, and
+Linux/Android, which keep it) the bar sits below it at y 36. SOFTDRINK's own top-right line is
+the one the bar replaces, so the two never show together.
 
 Look: MyCareer > Settings + Save > Settings > "Stat bar look: 2K5 / Modern" (our row, added to
 the pack's list at run time; the pack's rows and its dispatcher are untouched). Stored in

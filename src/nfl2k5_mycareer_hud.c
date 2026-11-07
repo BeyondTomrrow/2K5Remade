@@ -44,6 +44,8 @@
 
 extern uint32_t xbox_HeapAlloc(uint32_t size, uint32_t alignment);
 extern int nfl2k5_guest_player_stat_scope(uint32_t player, uint32_t selector, uint32_t scope, double *out);
+extern int nfl2k5_scorebug_native_hidden(void);      /* src/nfl2k5_presentation.cpp */
+extern void nfl2k5_presentation_corner_claim(void);
 extern int nfl2k5_guest_team_stat(uint32_t team, uint32_t selector, uint32_t scope, double *out);
 
 #define HUD_FN_BASE   0xFED20000u
@@ -75,7 +77,7 @@ typedef struct {
 static struct {
     int on, log, style, diag;
     float ax;                      /* x units per square unit: 1 (the HUD space is shown square) */
-    float left;                    /* the visible left edge in HUD units */
+    float left, right, top;        /* the visible HUD edges in use (units); top: below any native top bar */
     uint32_t mem, used, size;
     uint32_t state, vtx, wbuf[32], simbuf, label, camsave;
     int wnext;
@@ -405,6 +407,8 @@ static void ini_load(void)
      * centred, and its viewport clips to x 0..640 also with the widescreen patch. */
     s.ax = 1.0f;
     s.left = 0.0f;
+    s.right = 640.0f;
+    { const char *a = getenv("NFL2K5_MC_HUD_RIGHT"); if (a && *a) s.right = (float)atof(a); }
     { const char *a = getenv("NFL2K5_MC_HUD_AX"); if (a && *a) s.ax = (float)atof(a); }
     { const char *a = getenv("NFL2K5_MC_HUD_LEFT"); if (a && *a) s.left = (float)atof(a); }
     if (s.ax < 0.3f || s.ax > 2.0f) s.ax = 1.0f;
@@ -762,14 +766,14 @@ static void draw_modern(void)
     char lab[4][8], val[4][12], b[64];
     float cw[4];
     int nb = boxes(lab, val), i;
-    float R = 34.0f, H = 64.0f, Bot = 372.0f, T = Bot - H;
-    float hx = s.left + 12.0f + R * 0.866f, hy = T + H * 0.5f;
-    float x0 = hx + R * 0.866f + 12.0f;                       /* content */
+    float R = 34.0f, H = 64.0f, T = s.top + 3.0f, hx, hy = T + H * 0.5f, x0;
     float CW = cells(nb, lab, val, 16.0f, cw), nw, W;
     uint32_t gc = grade_colour(s.letter);
     float pulse = s.pulse < 0.7f ? 1.0f - s.pulse / 0.7f : 0.0f;
     nw = text_w(F_NAME, wstr(s.name)) + 10.0f + text_w(F_LABEL, wstr(s.pos)) + 14.0f + 40.0f;
-    W = (CW > nw ? CW : nw) + (x0 - hx) + 10.0f;
+    W = (CW > nw ? CW : nw) + R * 0.866f + 12.0f + 10.0f;
+    hx = s.right - 12.0f - W;                                 /* the panel ends at the corner; the badge hangs left */
+    x0 = hx + R * 0.866f + 12.0f;                             /* content */
     /* shadow, panel, top hairline */
     rrect(hx - 2.0f, T + 4.0f, W + 4.0f, H, 9.0f, 0x58000000u, 0x58000000u, 8.0f);
     rrect(hx, T, W, H, 8.0f, 0xF21D2534u, 0xF20A0E16u, 0.8f);
@@ -816,7 +820,7 @@ static void draw_native(void)
     char lab[4][8], val[4][12], b[64];
     float cw[4];
     int nb = boxes(lab, val), i;
-    float hh = 17.0f, bh = 36.0f, Bot = 372.0f, T = Bot - hh - bh - 1.5f, L = s.left + 12.0f;
+    float hh = 17.0f, bh = 36.0f, T = s.top, L;
     float gw = text_w(F_LABEL, wstr("GRADE")) + 14.0f;
     float CW = cells(nb, lab, val, 14.0f, cw), W, nwid;
     uint32_t gc = grade_colour(s.letter);
@@ -825,6 +829,7 @@ static void draw_native(void)
     nwid = text_w(F_LABEL, wstr(b)) + text_w(F_LABEL, wstr(s.pos)) + 30.0f;
     W = CW + gw + 2.0f;
     if (W < nwid) { cw[nb - 1] += nwid - W; W = nwid; }
+    L = s.right - 12.0f - W;
     /* header: the game's crimson bar with a gold rule */
     rect(L + 3.0f, T + 3.0f, W, hh + bh + 1.5f, 0x70000000u);
     rrect(L, T, W, hh, 0, 0xFFD01A24u, 0xFF8E0D14u, 0);
@@ -855,7 +860,9 @@ static void diag_fonts(void)
     int f;
     float y = 40.0f;
     rect(20.0f, 50.0f, 40.0f, 40.0f, 0xC0FF00FFu);           /* 40 x 40 units: the aspect */
-    for (f = 0; f < 9; f++) {
+    rect(560.0f, 200.0f, 200.0f, 10.0f, 0xC000FF00u);         /* x 560..760: where the right edge clips */
+    rect(-120.0f, 214.0f, 200.0f, 10.0f, 0xC000FFFFu);        /* x -120..80: the left edge */
+    for (f = 0; f < 9 && s.diag == 1; f++) {
         char b[64];
         float w;
         if (!font(f)) continue;
@@ -881,6 +888,10 @@ static uint32_t ih_line(void)
     s.pulse += dt;
     if (player != s.player || now - s.last_read >= 200u) { s.last_read = now; read_stats(player); }
     s.wnext = 0;                    /* the pack's HUD camera stays */
+    /* The top-right corner: with an HTML presentation (its own scorebug) the bar takes the corner
+     * bug's place and tells the package to clear it; with the native ESPN top bar it sits below. */
+    s.top = nfl2k5_scorebug_native_hidden() ? 8.0f : 36.0f;
+    nfl2k5_presentation_corner_claim();
     if (s.diag) diag_fonts();
     if (s.style == 2) draw_modern(); else draw_native();
     g_eax = eax; g_ebx = ebx; g_ecx = ecx; g_edx = edx; g_esi = player; g_edi = edi; g_ebp = ebp; g_esp = esp;
@@ -1008,7 +1019,7 @@ void nfl2k5_mc_hud_install(void)
         !bytes_at(0x014E7245u, "bab6ad4e01") || !bytes_at(0x014E7C6Fu, "686cae4e01"))
         return;                                    /* not SOFTDRINK v0.9 */
     { const char *l = getenv("NFL2K5_MC_HUD_LOG"); s.log = l && *l && *l != '0'; }
-    { const char *d = getenv("NFL2K5_MC_HUD_DIAG"); s.diag = d && !strcmp(d, "fonts"); }
+    { const char *d = getenv("NFL2K5_MC_HUD_DIAG"); s.diag = !d ? 0 : !strcmp(d, "fonts") ? 1 : !strcmp(d, "edge") ? 2 : 0; }
     ini_load();
     s.size = 8192u;
     s.mem = xbox_HeapAlloc(s.size, 16);
