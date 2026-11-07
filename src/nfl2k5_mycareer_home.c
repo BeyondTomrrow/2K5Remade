@@ -331,6 +331,7 @@ static void ini_path(void)
     snprintf(s_ini + strlen(s_ini), sizeof s_ini - strlen(s_ini), "\\careers.ini");
 }
 
+static void shop_career_changed(void);
 static void career_save(void)
 {
     char v[64];
@@ -386,6 +387,7 @@ static void career_load(uint32_t rec)
     if (s_c.valid && !strcmp(s_c.key, key)) return;
     memset(&s_c, 0, sizeof s_c);
     snprintf(s_c.key, sizeof s_c.key, "%s", key);
+    shop_career_changed();                         /* another career: its own placements */
     s_c.valid = 1;
     s_c.tier = (int)ini_get("tier", 0);
     s_c.bank = ini_get("bank", 0);
@@ -1238,12 +1240,13 @@ static const Slot k_slots[] = {
 static char s_place[SLOTS][40];
 static int s_place_loaded = -1;
 static int s_items_dirty = 1;
+static void shop_career_changed(void) { s_place_loaded = -1; s_items_dirty = 1; }
 
 /* which way each Crib node faces in the Crib (degrees, as Slot.face), so a slot can turn it */
 static float node_face(const char *node)
 {
     static const struct { const char *prefix; float face; } k[] = {
-        { "poster_", 0.0f }, { "banner_", 0.0f }, { "pennant_", -90.0f }, { "wall_art", 0.0f },
+        { "poster_", 0.0f }, { "banner_", 0.0f }, { "pennant_", 0.0f }, { "wall_art", 0.0f },
         { "sconce_", 0.0f }, { "standee_", 0.0f }, { "jukebox", 0.0f },
     };
     size_t i;
@@ -1307,7 +1310,7 @@ static void shop_load(void)
             *q = 0;
         }
         if (strchr(it->node, ':')) continue;
-        if (strncmp(it->node, "pennant_", 8) && strncmp(it->node, "jukebox", 7) && strncmp(it->node, "bobblestands", 12)
+        if (strncmp(it->node, "pennant_", 8) && strncmp(it->node, "jukebox", 7)
             ) continue;                                         /* palm, posters, standees, the game-ball case: not right yet */
         if (look >= 0) {                                      /* the Crib's cache look on the node's material */
             const char *texbase = !strncmp(it->node, "poster_", 7) ? "poster" : !strncmp(it->node, "pennant_", 8) ? "pennant"
@@ -1363,6 +1366,7 @@ static void items_from_places(void)
     int i;
     if (s_nshop < 0) shop_load();
     if (s_place_loaded < 0) place_load();
+    if (s_place_loaded < 0) return;               /* no career yet: try again next frame */
     s_nitems = 0;
     {
         char old[1024];
