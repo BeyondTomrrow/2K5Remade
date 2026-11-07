@@ -847,12 +847,23 @@ static int room_add(float x0, float y0, float z0, float x1, float y1, float z1, 
  * the model's footprint centred on (x, z), turned by yaw degrees, its lowest point at y. */
 extern int mc_model_load(const char *gltf_path, int *ids, int max, float bounds[6]);
 extern void mc_model_textures(const char *dir);
+#ifdef _WIN32
+extern int mc_crib_model(const char *source, int team, char *out, size_t n);   /* nfl2k5_mycareer_crib.cpp */
+#else
+static int mc_crib_model(const char *source, int team, char *out, size_t n) { (void)source; (void)team; (void)out; (void)n; return 0; }
+#endif
+static const char *crib_source(const char *id);      /* the shop's Crib source for an item id */
+static int crib_team(void);
+static int slot_replaced(const char *name);
+static const char *slot_replacing(const char *name);
 extern int mc_window_view(const char *hdr_path, float wx, float z0, float z1, float y0, float y1, float turn, float exposure);
 static char s_models_dir[MAX_PATH];
 static int s_view_mesh = -1;
-typedef struct { char name[40]; float x, z, yaw, y, size, height, sc, scy; int ids[12], nid; float b[6]; } RoomModel;
-static RoomModel s_models[40];
-static char s_shop_models[1024];      /* ";name x z yaw y size height" for each model the shop placed */
+/* yc: a wall piece's centre height (0: stands at y); slot: the shop slot it is in; crib: a Crib
+ * item from the cache (front towards +z at yaw 0, its back against the wall in a wall slot) */
+typedef struct { char name[40], slot[8]; float x, z, yaw, y, size, height, sc, scy, yc; int ids[12], nid, crib; float b[6]; } RoomModel;
+static RoomModel s_models[64];
+static char s_shop_models[2048];      /* ";name x z yaw y size height" for each model the shop placed */
 static int s_room_rebuild;
 static int s_nmodels;
 
@@ -880,7 +891,7 @@ static RoomModel *model_find(const char *name)
 
 static void models_load(void)
 {
-    char dir[MAX_PATH], list[2048];
+    char dir[MAX_PATH], list[4096];
     const char *e = getenv("NFL2K5_MC_HOME_MODELS"), *p;
     s_nmodels = 0;
     if (getenv("NFL2K5_MC_HOME_NO_MODELS")) return;
@@ -904,26 +915,36 @@ static void models_load(void)
         snprintf(b, sizeof b, "%.*s", (int)l, p);
         p += l + (p[l] == ';');
         memset(m, 0, sizeof *m);
-        if (sscanf(b, "%39s %f %f %f %f %f %f", m->name, &m->x, &m->z, &m->yaw, &m->y, &m->size, &m->height) < 4) continue;
+        {   /* "name x z yaw y [size height slot]": y "c1.5" puts the centre at 1.5 m (wall pieces) */
+            char ys[16] = "0";
+            if (sscanf(b, "%39s %f %f %f %15s %f %f %7s", m->name, &m->x, &m->z, &m->yaw, ys, &m->size, &m->height, m->slot) < 4) continue;
+            if (ys[0] == 'c') m->yc = (float)atof(ys + 1); else m->y = (float)atof(ys);
+        }
+        if (!m->slot[0] && slot_replaced(m->name)) continue;      /* a bought piece stands in its place */
         {   /* a second copy of a model reuses the first's meshes */
             RoomModel *same = model_find(m->name);
-            if (same) { memcpy(m->ids, same->ids, sizeof m->ids); m->nid = same->nid; memcpy(m->b, same->b, sizeof m->b); s_nmodels++; continue; }
+            if (same) { memcpy(m->ids, same->ids, sizeof m->ids); m->nid = same->nid; memcpy(m->b, same->b, sizeof m->b); m->crib = same->crib; s_nmodels++; continue; }
         }
         /* "k:name": the Kenney Furniture Kit's name.glb (NFL2K5_MC_HOME_KENNEY, or kenney\ in the models folder) */
         if (!strncmp(m->name, "k:", 2)) {
             const char *kd = getenv("NFL2K5_MC_HOME_KENNEY");
             if (kd) snprintf(path, sizeof path, "%s\\%s.glb", kd, m->name + 2);
             else snprintf(path, sizeof path, "%s\\kenney\\%s.glb", dir, m->name + 2);
+        } else if (!strncmp(m->name, "crib:", 5)) {
+            /* a Crib item: the cache's model, made from the disc the first time */
+            const char *src = crib_source(m->name + 5);
+            m->crib = 1;
+            if (!src || !mc_crib_model(src, crib_team(), path, sizeof path)) { fprintf(stderr, "[MCHOME] %s: no Crib model\n", m->name); continue; }
         } else snprintf(path, sizeof path, "%s\\%s\\%s.gltf", dir, m->name, m->name);
         {   /* loaded once a session: a room rebuild (a purchase) reuses the meshes */
-            static struct { char path[MAX_PATH + 96]; int ids[12], nid; float b[6]; } cache[40];
+            static struct { char path[MAX_PATH + 96]; int ids[12], nid; float b[6]; } cache[128];
             static int ncache;
             int ci;
             for (ci = 0; ci < ncache && strcmp(cache[ci].path, path); ci++) ;
             if (ci < ncache) { memcpy(m->ids, cache[ci].ids, sizeof m->ids); m->nid = cache[ci].nid; memcpy(m->b, cache[ci].b, sizeof m->b); }
             else {
                 m->nid = mc_model_load(path, m->ids, 12, m->b);
-                if (m->nid && ncache < 40) {
+                if (m->nid && ncache < 128) {
                     snprintf(cache[ncache].path, sizeof cache[ncache].path, "%s", path);
                     memcpy(cache[ncache].ids, m->ids, sizeof m->ids); cache[ncache].nid = m->nid; memcpy(cache[ncache].b, m->b, sizeof m->b);
                     ncache++;
@@ -941,6 +962,8 @@ static void models_load(void)
             m->sc = m->size > 0.0f && ext > 0.0f ? m->size / ext : 1.0f;
             /* height: a low-poly kit's proportions to real ones (a table 0.75 m high) */
             m->scy = m->height > 0.0f && m->b[4] > m->b[1] ? m->height / (m->b[4] - m->b[1]) : m->sc;
+            if (m->size <= 0.0f && m->height > 0.0f) m->sc = m->scy;          /* a height alone: scaled evenly */
+            if (m->yc > 0.0f) m->y = fmaxf(0.0f, m->yc - (m->b[4] - m->b[1]) * m->scy * 0.5f);
         }
         for (i = 0; i < s_nmodels; i++)
             if (s_models[i].y < 0.0f) {
@@ -979,7 +1002,11 @@ static void models_place(void)
     for (i = 0; i < s_nmodels; i++) {
         RoomModel *m = &s_models[i];
         float c = cosf(m->yaw * 3.14159265f / 180.0f), sn = sinf(m->yaw * 3.14159265f / 180.0f);
-        float cx = (m->b[0] + m->b[3]) * 0.5f, cz = (m->b[2] + m->b[5]) * 0.5f, y = m->y;
+        float cx = (m->b[0] + m->b[3]) * 0.5f, cz = (m->b[2] + m->b[5]) * 0.5f, y = m->y, px = m->x, pz = m->z;
+        if (m->crib && m->slot[0] == 'W') {          /* the slot is 0.12 m off the wall: the back goes against it */
+            float d = (m->b[5] - m->b[2]) * 0.5f * m->sc + 0.01f - 0.12f;
+            px += sn * d; pz += c * d;
+        }
         c *= m->sc; sn *= m->sc;                     /* sc: size over the longest side (models_load) */
         for (k = 0; k < m->nid && s_room.nmesh < XBOX_HOSTSCENE_MESHES; k++) {
             XboxHostMeshInst *in = &s_room.mesh[s_room.nmesh++];
@@ -988,9 +1015,9 @@ static void models_place(void)
             in->m[0] = c;  in->m[2] = -sn;
             in->m[5] = m->scy;
             in->m[8] = sn; in->m[10] = c;
-            in->m[12] = m->x - (cx * c + cz * sn);
+            in->m[12] = px - (cx * c + cz * sn);
             in->m[13] = y - m->b[1] * m->scy;
-            in->m[14] = m->z - (-cx * sn + cz * c);
+            in->m[14] = pz - (-cx * sn + cz * c);
             in->m[15] = 1.0f;
         }
     }
@@ -1000,6 +1027,11 @@ static void models_place(void)
 static float model_top(const char *name)
 {
     RoomModel *m = model_find(name);
+    if (!m) {                                         /* bought in its place: the slot's piece */
+        int i;
+        const char *slot = slot_replacing(name);
+        for (i = 0; slot && i < s_nmodels && !m; i++) if (s_models[i].nid && !strcmp(s_models[i].slot, slot)) m = &s_models[i];
+    }
     return m ? m->y + (m->b[4] - m->b[1]) * (m->scy > 0.0f ? m->scy : 1.0f) : 0.0f;
 }
 
@@ -1051,14 +1083,14 @@ static void room_build_apartment(void)
     s_hot_box[HS_DOOR] = room_add(3.05f, 0, -0.06f, 3.95f, 2.15f, -0.02f, 0x5A3A24, HS_MAT_WOOD);
     room_add(3.8f, 1.0f, -0.02f, 3.86f, 1.06f, 0.02f, 0xC8C8C8, HS_MAT_GLASS);
     /* the living area faces the left wall (x = 0): rug, couch (back to the room), coffee table */
-    if (!model_find("k:rugRectangle")) room_add(0.9f, 0, 2.6f, 3.9f, 0.01f, 5.8f, 0x7A6E62, HS_MAT_FABRIC);
-    if (!model_find("k:loungeDesignSofa")) {
+    if (!model_find("k:rugRectangle") && !slot_replaced("k:rugRectangle")) room_add(0.9f, 0, 2.6f, 3.9f, 0.01f, 5.8f, 0x7A6E62, HS_MAT_FABRIC);
+    if (!model_find("k:loungeDesignSofa") && !slot_replaced("k:loungeDesignSofa")) {
         room_add(3.1f, 0, 3.0f, 4.0f, 0.45f, 5.4f, 0x3C4A5C, HS_MAT_FABRIC);
         room_add(3.7f, 0.45f, 3.0f, 4.0f, 0.95f, 5.4f, 0x3C4A5C, HS_MAT_FABRIC);
         room_add(3.1f, 0, 2.8f, 4.0f, 0.65f, 3.0f, 0x34404F, HS_MAT_FABRIC);
         room_add(3.1f, 0, 5.4f, 4.0f, 0.65f, 5.6f, 0x34404F, HS_MAT_FABRIC);
     }
-    if (!model_find("modern_coffee_table_01")) room_add(1.7f, 0, 3.4f, 2.5f, 0.42f, 5.0f, 0x4A3526, HS_MAT_WOOD);
+    if (!model_find("modern_coffee_table_01") && !slot_replaced("modern_coffee_table_01")) room_add(1.7f, 0, 3.4f, 2.5f, 0.42f, 5.0f, 0x4A3526, HS_MAT_WOOD);
     /* the TV wall (x = 0): a low unit and the screen (Career Menu) */
     if (!model_find("modern_wooden_cabinet")) room_add(0.0f, 0, 2.9f, 0.4f, 0.45f, 5.5f, 0x2E2A26, HS_MAT_WOOD);
     if (model_find("k:cabinetTelevision")) {  /* a slim 65-inch screen on its stand, over the cabinet */
@@ -1224,26 +1256,76 @@ static void items_poll(void)
 /* ---- the furniture shop ------------------------------------------------------------------
  * data/mycareer-home/items.ini (NFL2K5_MC_HOME_ITEMS_INI to point elsewhere): one line an item,
  * "id = Name | tier | price | slot | source | price from". The shop sells what the home's tier
- * allows (tiers stack) and what this build can draw: Crib nodes (crib.iff:<node>, a #lookN
- * picks the Crib texture-cache look). Each room has fixed slots of each kind; a purchase goes
- * in the first free one, or replaces the oldest. Placements live in careers.ini (place_<slot>). */
-enum { SL_WALL, SL_CORNER, SL_TABLE, SL_KINDS };
-static const char *const k_slot_kind[SL_KINDS] = { "Wall", "Corner", "Table Top" };
-typedef struct { char id[40], name[48], node[32], look[48], model[64]; float msize, mheight; int tier, kind; long long price; } ShopItem;
+ * allows (tiers stack) and what this build can draw: the Crib's own pieces (crib.iff:<name>,
+ * crib_<kind>.iff#modelN, #lookN for the Crib's pictures) as models of the Crib cache
+ * (nfl2k5_mycareer_crib.cpp, made from the player's disc), and CC0 models (model:<name>).
+ * ",size,height" after a source sets its size in metres (0 = the Crib's own). Each room has
+ * fixed slots of each kind; a purchase goes in the first free one, or replaces the oldest.
+ * Placements live in careers.ini (place_<slot>). */
+enum { SL_WALL, SL_CORNER, SL_TABLE, SL_SOFA, SL_COFFEE, SL_RUG, SL_SIDE, SL_KINDS };
+static const char *const k_slot_kind[SL_KINDS] = { "Wall", "Corner", "Table Top", "Sofa", "Coffee Table", "Rug", "Side Table" };
+typedef struct { char id[40], name[48], node[32], look[48], model[64], src[96]; float msize, mheight; int tier, kind; long long price; } ShopItem;
 static ShopItem s_shop[160];
 static int s_nshop = -1;
 
-/* the apartment's slots: where, which way the item faces (degrees; 0 = towards +z), how high */
-typedef struct { const char *key; int kind; float x, z, face, dy; } Slot;
+/* the apartment's slots: where, which way the item faces (degrees; 0 = towards +z), how high
+ * (wall pieces: their centre's height; -1/-2 stand on the side table / the desk), and the
+ * room's own piece a purchase there takes the place of */
+typedef struct { const char *key; int kind; float x, z, face, dy; const char *replaces; } Slot;
 static const Slot k_slots[] = {
-    { "W1", SL_WALL, 1.5f, 0.12f, 0.0f, 0.0f },   { "W2", SL_WALL, 5.5f, 0.12f, 0.0f, 0.0f },
-    { "W3", SL_WALL, 0.12f, 7.0f, 90.0f, 0.0f },  { "W4", SL_WALL, 4.4f, 8.88f, 180.0f, 0.0f },
-    { "C1", SL_CORNER, 6.45f, 0.7f, 0.0f, 0.0f }, { "C2", SL_CORNER, 0.6f, 6.2f, 90.0f, 0.0f },
-    { "C3", SL_CORNER, 4.6f, 8.45f, 180.0f, 0.0f },
-    { "T1", SL_TABLE, 3.6f, 6.0f, 0.0f, -1.0f },  { "T2", SL_TABLE, 5.4f, 8.5f, 180.0f, -2.0f },
+    { "W1", SL_WALL, 1.5f, 0.12f, 0.0f, 1.5f, NULL },   { "W2", SL_WALL, 5.5f, 0.12f, 0.0f, 1.5f, NULL },
+    { "W3", SL_WALL, 0.12f, 7.0f, 90.0f, 1.5f, NULL },  { "W4", SL_WALL, 4.4f, 8.88f, 180.0f, 1.5f, NULL },
+    { "C1", SL_CORNER, 6.45f, 0.7f, 0.0f, 0.0f, NULL }, { "C2", SL_CORNER, 0.6f, 6.2f, 90.0f, 0.0f, NULL },
+    { "C3", SL_CORNER, 4.6f, 8.45f, 180.0f, 0.0f, NULL },
+    { "T1", SL_TABLE, 3.6f, 6.0f, 0.0f, -1.0f, NULL },  { "T2", SL_TABLE, 5.4f, 8.5f, 180.0f, -2.0f, NULL },
+    /* the living area faces the TV wall (x = 0): face 270 */
+    { "S1", SL_SOFA, 3.55f, 4.2f, 270.0f, 0.0f, "k:loungeDesignSofa" },
+    { "F1", SL_COFFEE, 2.1f, 4.2f, 270.0f, 0.0f, "modern_coffee_table_01" },
+    { "R1", SL_RUG, 2.2f, 4.2f, 270.0f, 0.0f, "k:rugRectangle" },
+    { "E1", SL_SIDE, 3.6f, 6.0f, 270.0f, 0.0f, "side_table_01" },
 };
 #define SLOTS ((int)(sizeof k_slots / sizeof k_slots[0]))
 static char s_place[SLOTS][40];
+static const ShopItem *shop_find(const char *id);
+static void shop_load(void);
+
+static const char *crib_source(const char *id)
+{
+    const ShopItem *si;
+    if (s_nshop < 0) shop_load();
+    si = shop_find(id);
+    return si && si->src[0] ? si->src : NULL;
+}
+
+/* The Crib's team pictures are by the team's asset number ("25" the 49ers): the MyPlayer's team
+ * (my_team below), or NFL2K5_MC_HOME_CRIB_TEAM. */
+static uint32_t my_team(uint32_t rec, int *index);
+static uint32_t res_ptr(uint32_t field);
+static void wtoa(uint32_t w, char *out, size_t n);
+static int crib_team(void)
+{
+    const char *e = getenv("NFL2K5_MC_HOME_CRIB_TEAM");
+    uint32_t rec, slot;
+    int index = -1;
+    char code[8] = "";
+    if (e && *e) return atoi(e);
+    rec = MEM32(SD_PLAYER);
+    if (rec < 0x10000u || rec >= 0xF0000000u) return 0;
+    slot = my_team(rec, &index);
+    if (!slot) return 0;
+    wtoa(res_ptr(slot + 0x10Cu), code, sizeof code);
+    return code[0] >= '0' && code[0] <= '9' ? atoi(code) : 0;
+}
+
+/* a filled slot's room piece stands aside (slot_replacing: which slot took it) */
+static const char *slot_replacing(const char *name)
+{
+    int i;
+    for (i = 0; i < SLOTS; i++)
+        if (k_slots[i].replaces && s_place[i][0] && !strcmp(k_slots[i].replaces, name)) return k_slots[i].key;
+    return NULL;
+}
+static int slot_replaced(const char *name) { return slot_replacing(name) != NULL; }
 static int s_place_loaded = -1;
 static int s_items_dirty = 1;
 static void shop_career_changed(void) { s_place_loaded = -1; s_items_dirty = 1; }
@@ -1296,6 +1378,10 @@ static void shop_load(void)
         if (!strcmp(fld[3], "wall")) it->kind = SL_WALL;
         else if (!strcmp(fld[3], "floor_corner")) it->kind = SL_CORNER;
         else if (!strcmp(fld[3], "table_top")) it->kind = SL_TABLE;
+        else if (!strcmp(fld[3], "big_floor") && (strstr(fld[4], "crib_couch") || strstr(fld[4], "crib_recliner"))) it->kind = SL_SOFA;
+        else if (!strcmp(fld[3], "floor") && strstr(fld[4], "crib_coffee_table")) it->kind = SL_COFFEE;
+        else if (!strcmp(fld[3], "floor") && strstr(fld[4], "rug_")) it->kind = SL_RUG;
+        else if (!strcmp(fld[3], "floor") && (strstr(fld[4], "crib_end_table") || strstr(fld[4], "crib_bench"))) it->kind = SL_SIDE;
         else continue;                                       /* other slot kinds: the house and mansion */
         if (!strncmp(fld[4], "model:", 6)) {                /* CC0 decor: "model:<name>,<size>,<height>" */
             char *c1;
@@ -1308,25 +1394,12 @@ static void shop_load(void)
             s_nshop++;
             continue;
         }
-        if (strncmp(fld[4], "crib.iff:", 9)) continue;       /* Crib furniture files: not drawn yet */
-        snprintf(it->node, sizeof it->node, "%s", fld[4] + 9);
-        if ((q = strchr(it->node, '+')) != NULL) *q = 0;
-        if ((q = strchr(it->node, '#')) != NULL) {
-            if (!strncmp(q, "#look", 5)) look = atoi(q + 5);
-            *q = 0;
-        }
-        if (strchr(it->node, ':')) continue;
-        if (strncmp(it->node, "pennant_", 8) && strncmp(it->node, "jukebox", 7)
-            ) continue;                                         /* palm, posters, standees, the game-ball case: not right yet */
-        if (look >= 0) {                                      /* the Crib's cache look on the node's material */
-            const char *texbase = !strncmp(it->node, "poster_", 7) ? "poster" : !strncmp(it->node, "pennant_", 8) ? "pennant"
-                                : !strncmp(it->node, "banner_", 7) ? "banner" : !strncmp(it->node, "standee_", 8) ? "standee"
-                                : !strncmp(it->node, "wall_art_player", 15) ? "painting" : NULL;
-            char mat[40];
-            const char *pp = strstr(it->node, "_p");
-            if (!texbase || !pp) continue;
-            snprintf(mat, sizeof mat, "%.*s_%s", (int)(pp - it->node), it->node, pp + 2);   /* poster_p01 -> poster_01 */
-            snprintf(it->look, sizeof it->look, "%s=%s_%02d", mat, texbase, look);
+        {   /* a Crib piece, drawn from the Crib cache: "crib:<id>" in the room's model list */
+            char *c1;
+            snprintf(it->src, sizeof it->src, "%s", fld[4]);
+            it->msize = 0.0f; it->mheight = 0.0f;
+            if ((c1 = strchr(it->src, ',')) != NULL) { *c1 = 0; sscanf(c1 + 1, "%f,%f", &it->msize, &it->mheight); }
+            snprintf(it->model, sizeof it->model, "crib:%s", it->id);
         }
         s_nshop++;
     }
@@ -1375,15 +1448,21 @@ static void items_from_places(void)
     if (s_place_loaded < 0) return;               /* no career yet: try again next frame */
     s_nitems = 0;
     {
-        char old[1024];
+        char old[sizeof s_shop_models];
         snprintf(old, sizeof old, "%s", s_shop_models);
         s_shop_models[0] = 0;
         for (i = 0; i < SLOTS; i++) {
             const ShopItem *si = s_place[i][0] ? shop_find(s_place[i]) : NULL;
             char b[160];
             if (!si || !si->model[0]) continue;
-            snprintf(b, sizeof b, ";%s %.2f %.2f %.0f %s %.2f %.2f", si->model, k_slots[i].x, k_slots[i].z, k_slots[i].face,
-                     k_slots[i].dy < 0.0f ? "-1" : "0", si->msize, si->mheight);
+            {
+                char ys[16];
+                if (k_slots[i].dy < 0.0f) snprintf(ys, sizeof ys, "-1");
+                else if (k_slots[i].kind == SL_WALL) snprintf(ys, sizeof ys, "c%.2f", k_slots[i].dy);
+                else snprintf(ys, sizeof ys, "%.2f", k_slots[i].dy);
+                snprintf(b, sizeof b, ";%s %.2f %.2f %.0f %s %.2f %.2f %s", si->model, k_slots[i].x, k_slots[i].z, k_slots[i].face,
+                         ys, si->msize, si->mheight, k_slots[i].key);
+            }
             if (strlen(s_shop_models) + strlen(b) < sizeof s_shop_models) strcat(s_shop_models, b);
         }
         if (strcmp(old, s_shop_models)) s_room_rebuild = 1;
