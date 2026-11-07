@@ -85,8 +85,8 @@ typedef struct { float eye[3], at[3], fov, mark[3]; } Stop;
  * dollies part of the way towards `at`. */
 static Stop s_stop[HOTS] = {
     { { 2100.0f, 150.0f, -1750.0f }, {  200.0f, 100.0f, -2150.0f }, 58.0f, {  500.0f, 240.0f, -2100.0f } },   /* the hallway out */
-    { { 1500.0f, 130.0f, -1900.0f }, {  910.0f,  40.0f, -2225.0f }, 50.0f, {  910.0f, 235.0f, -2225.0f } },   /* the mirror (a silvered standee) */
-    { { 2100.0f, 150.0f, -1750.0f }, { 2520.0f, 130.0f, -1410.0f }, 58.0f, { 2500.0f, 395.0f, -1410.0f } },   /* the wall screens by the bar */
+    { { 1500.0f, 130.0f, -1900.0f }, {  910.0f,  40.0f, -2225.0f }, 50.0f, {  910.0f, 185.0f, -2225.0f } },   /* the mirror (a silvered standee) */
+    { { 2100.0f, 150.0f, -1750.0f }, { 2520.0f, 130.0f, -1410.0f }, 58.0f, { 2440.0f, 225.0f, -1560.0f } },   /* the wall screens by the bar */
     { { 2100.0f, 150.0f, -1750.0f }, { 3510.0f,  30.0f, -1890.0f }, 58.0f, { 3510.0f, 200.0f, -1890.0f } },   /* the fireplace */
 };
 
