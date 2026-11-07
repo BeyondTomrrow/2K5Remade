@@ -39,6 +39,7 @@ extern uint32_t xbox_HeapAlloc(uint32_t size, uint32_t alignment);
 #define SND_SELECT    0x00E7FD70u          /* L"Ambient: Menu Select" */
 #define SND_CURSOR    0x00E7FD3Cu
 #define FOURCC_SCNE   0x454E4353u
+#define FOURCC_LAYT   0x5459414Cu
 #define FSM_DT        0x104u
 
 /* SOFTDRINK v0.9 (checked at install) */
@@ -69,9 +70,10 @@ static struct {
     int on, log;
     uint32_t mem, used, size;
     uint32_t header, rows, events, title;
-    uint32_t camobj, camsave, slot, eye, at, light, vp;
-    uint32_t w_ctx, w_file, w_room, w_sky_day, w_sky_night;
-    int loaded;
+    uint32_t camobj, camsave, slot, slot2, eye, at, light, vp;
+    uint32_t w_ctx, w_file, w_room, w_sky_day, w_ctx2, w_file2, w_layout;
+    int loaded, slim;
+    char camfile[260];
     uint32_t room, sky;
     int shown;                     /* our screen is top: draw */
     float cur[7];                  /* eye, at, fov now */
@@ -181,14 +183,34 @@ static int room_load(void)
     PUSH32(g_esp, heap);
     PUSH32(g_esp, s_h.slot);
     gcall(sub_00043F50, s_h.w_ctx, s_h.w_file);
+    /* fr.iff for the Front Office's layout only (title bar + slim list): the
+     * navigation layout's panel would hide the room. MyCareer never loads it
+     * under FRANCHISE1 (the pack replaces the desk), and this is our own context. */
+    if (s_h.slim) {
+        PUSH32(g_esp, 0); PUSH32(g_esp, 0);
+        heap = gcall(sub_00038FB0, 0, 0);
+        PUSH32(g_esp, heap);
+        PUSH32(g_esp, s_h.slot2);
+        gcall(sub_00043F50, s_h.w_ctx2, s_h.w_file2);
+    }
     gcall(sub_000432D0, 0, 0);
     s_h.room = lookup(s_h.w_ctx, FOURCC_SCNE, s_h.w_room);
     s_h.sky = lookup(s_h.w_ctx, FOURCC_SCNE, s_h.w_sky_day);
     g_ebx = save_ebx; g_esi = save_esi; g_edi = save_edi; g_ebp = save_ebp;
     fprintf(stderr, "[MCHOME] crib.iff under MCHOME: room %08X sky %08X, %lu ms\n", s_h.room, s_h.sky,
             (unsigned long)(GetTickCount() - t0));
-    if (!s_h.room) { gcall(sub_000432F0, s_h.w_ctx, 0); return -1; }
+    if (!s_h.room) {
+        if (s_h.slim) gcall(sub_000432F0, s_h.w_ctx2, 0);
+        gcall(sub_000432F0, s_h.w_ctx, 0);
+        return -1;
+    }
     s_h.loaded = 1;
+    if (s_h.slim) {
+        uint32_t lay = lookup(s_h.w_ctx2, FOURCC_LAYT, s_h.w_layout);
+        fprintf(stderr, "[MCHOME] layout front_office %08X\n", lay);
+        MEM32(s_h.header + 0x18) = lay ? s_h.w_layout : MEM32(FEATURES + 0x18);
+        MEM32(s_h.header + 0x1C) = lay ? 0 : MEM32(FEATURES + 0x1C);
+    }
     MEM32(s_h.room + 8) |= 1u;                    /* as sub_00275xxx does to its room */
     room_hide();
     room_log();
@@ -198,6 +220,7 @@ static int room_load(void)
 static void room_unload(void)
 {
     if (!s_h.loaded) return;
+    if (s_h.slim) gcall(sub_000432F0, s_h.w_ctx2, 0);
     gcall(sub_000432F0, s_h.w_ctx, 0);
     s_h.loaded = 0;
     s_h.room = s_h.sky = 0;
@@ -237,6 +260,20 @@ static void stop_vec(const Stop *s, float d, float o[7])
 
 static int top_row(uint32_t fsm) { return (int)MEM32(fsm + MEM32(fsm + 0x100u) * 8u + 4u); }
 
+/* NFL2K5_MC_HOME_CAMFILE (tests): "ex ey ez tx ty tz fov" replaces the stop under the cursor. */
+static void cam_poll(int row)
+{
+    static DWORD next;
+    FILE *f;
+    Stop t;
+    if (!s_h.camfile[0] || GetTickCount() < next) return;
+    next = GetTickCount() + 250;
+    if (fopen_s(&f, s_h.camfile, "r") || !f) return;
+    if (fscanf(f, "%f %f %f %f %f %f %f", &t.eye[0], &t.eye[1], &t.eye[2], &t.at[0], &t.at[1], &t.at[2], &t.fov) == 7) s_stop[row] = t;
+    fclose(f);
+    remove(s_h.camfile);
+}
+
 static void ev_frame(uint32_t fsm)
 {
     float dt = MEMF(fsm + FSM_DT), want[7], k;
@@ -244,6 +281,7 @@ static void ev_frame(uint32_t fsm)
     if (!(dt > 0.0f && dt < 1.0f)) dt = 1.0f / 60.0f;
     if (r < 0 || r >= ROWS) r = ROW_DOOR;
     if (r != s_h.last_row) { MH_LOG("cursor %d\n", r); s_h.last_row = r; }
+    cam_poll(r);
     if (s_h.leaving) {
         s_h.dolly += dt * 0.9f;
         gcall(sub_0014FC40, 0, 0);
@@ -285,7 +323,7 @@ static void mh_event(int msg, uint32_t fsm)
     switch (msg) {
     case 1:
         s_h.leaving = 0; s_h.dolly = 0.0f; s_h.cur_set = 0; s_h.last_row = -1; s_h.shown = 0;
-        if (room_load() == 0) camera_init();
+        if (s_h.loaded) camera_init();        /* loaded before the push: the handler resolves the layout */
         break;
     case 2:
         s_h.shown = 0;
@@ -354,6 +392,7 @@ static uint32_t ih_handler(void)
     if (s_h.cool > 0) { s_h.cool--; return 0; }
     if (s_h.manual) return 0;
     fprintf(stderr, "[MCHOME] Career Home on top: pushing the home\n");
+    if (room_load()) { s_h.manual = 1; return 0; }  /* no room: the pack's list stays */
     gcall(sub_0006E390, fsm, s_h.header);
     return SD_HANDLER_RET;
 }
@@ -384,6 +423,8 @@ void nfl2k5_mc_home_install(void)
         return;                                    /* not SOFTDRINK v0.9 */
     { const char *l = getenv("NFL2K5_MC_HOME_LOG"); s_h.log = l && *l && *l != '0'; }
     { const char *h = getenv("NFL2K5_MC_HOME_HIDE"); if (h) snprintf(s_h.hide, sizeof s_h.hide, "%s", h); }
+    { const char *h = getenv("NFL2K5_MC_HOME_CAMFILE"); if (h) snprintf(s_h.camfile, sizeof s_h.camfile, "%s", h); }
+    { const char *h = getenv("NFL2K5_MC_HOME_SLIM"); s_h.slim = !(h && *h == '0'); }
     {
         const char *c = getenv("NFL2K5_MC_HOME_CAM");
         for (i = 0; c && *c && i < ROWS; i++) {
@@ -399,6 +440,7 @@ void nfl2k5_mc_home_install(void)
     s_h.camobj = h_alloc(0x2C0, 16);
     s_h.camsave = h_alloc(0x2C0, 16);
     s_h.slot = h_alloc(0x40, 16);
+    s_h.slot2 = h_alloc(0x40, 16);
     s_h.eye = h_alloc(16, 16);
     s_h.at = h_alloc(16, 16);
     s_h.light = h_alloc(0x80, 16);
@@ -407,6 +449,9 @@ void nfl2k5_mc_home_install(void)
     s_h.w_file = h_wstr("crib.iff");
     s_h.w_room = h_wstr("room");
     s_h.w_sky_day = h_wstr("skybox_day");
+    s_h.w_ctx2 = h_wstr("MCHOMEFR");
+    s_h.w_file2 = h_wstr("fr.iff");
+    s_h.w_layout = h_wstr("front_office");
     s_h.title = h_wstr("Home");
     /* Header: the template's list, our events, our rows; flags 0x10: Back pops, no backdrop. */
     s_h.rows = h_alloc(MH_ROW * (ROWS + 1), 4);
