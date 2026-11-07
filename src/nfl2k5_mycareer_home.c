@@ -390,7 +390,13 @@ static void career_load(uint32_t rec)
     shop_career_changed();                         /* another career: its own placements */
     s_c.valid = 1;
     s_c.tier = (int)ini_get("tier", 0);
-    s_c.bank = ini_get("bank", 0);
+    s_c.bank = ini_get("bank", -1);
+    if (s_c.bank < 0) {                           /* a career this file has never seen */
+        const char *sb = getenv("NFL2K5_MC_HOME_START_BANK");   /* test builds only: money to try the shop with */
+        s_c.bank = sb ? _strtoi64(sb, NULL, 10) : 0;
+        if (s_c.bank < 0) s_c.bank = 0;
+        if (sb) fprintf(stderr, "[MCHOME] new career: starting bank $%lld (NFL2K5_MC_HOME_START_BANK)\n", s_c.bank);
+    }
     s_c.week = (int)ini_get("week", 0);
     s_c.salary = (int)ini_get("salary", 0);
     s_c.agent_req = (int)ini_get("agent_req", 0);
