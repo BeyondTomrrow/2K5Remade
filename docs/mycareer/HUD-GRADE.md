@@ -5,15 +5,32 @@ Our own layer over SOFTDRINK v0.9's MyCareer (`src/nfl2k5_mycareer_hud.c`, branc
 
 ## Where it shows
 
-Only where the pack itself would draw its "F. Last QB: CMP/ATT .." line: a MyCareer game, live
-play (not the play-call screen, not paused), the MyPlayer on the field, and the pack's own
-"MyPlayer stat line" setting On. Our bar replaces that line (hook at 0x014EA522, continue at
-0x014EA57C). Bottom left, clear of the scorebug (bottom centre in the SNF package, top in the
-retail ESPN one) and of the play art (the play-call screen hides it).
+Only where the pack itself would draw its "F. Last QB: CMP/ATT .." line: a MyCareer game, the
+MyPlayer's team at the line before the snap (the pack hides it on the play-call screen, during
+the play, in replays and when paused), and the pack's own "MyPlayer stat line" setting On
+(that row stays the on/off switch). Our bar replaces that line (hook at 0x014EA522, continue at
+0x014EA57C). It is hidden while Supersim runs, so it never sits on the Supersim panel.
 
-Look: MyCareer > Settings > "Stat bar look: 2K5 / Modern" (our row, added to the pack's list at
-run time). Stored in `<root>\nfl2k5_mycareer_hud.ini` (`[hud] style=1|2`), default 1. The same
-setting styles the Supersim backdrop.
+Placement, measured in game: the HUD's 640 x 480 is drawn square (one unit as wide as tall),
+centred, and clipped to x 0..640 also with the widescreen patch; y 448 is the bottom of the
+window. The bar sits at the left, bottom edge at y 372, just above the bottom scorebug band
+(the SNF scorebug starts at y 379, x 149), clear of the play art, which is only on the
+play-call screen where the bar is hidden.
+
+Look: MyCareer > Settings + Save > Settings > "Stat bar look: 2K5 / Modern" (our row, added to
+the pack's list at run time; the pack's rows and its dispatcher are untouched). Stored in
+`<root>/nfl2k5_mycareer_hud.ini` (`[hud]`, `style=1|2`), default 1. The same setting styles the
+Supersim panel.
+
+## Drawing, every renderer and platform
+
+No host overlay and no WebView: everything is drawn by the game's own guest UI calls (its
+immediate-mode primitives sub_0002D2A0 / 2CBE0 / 2CA70 / 2CA00, the path its rects take, and its
+text sub_0006BC30 with its own fonts), so it goes through the NV2A command stream like the rest
+of the HUD and comes out the same on D3D11, D3D12 and Vulkan, on Windows, Linux and Android.
+Shapes (rounded panels, gradients, the hexagon, the grade letters) are triangle lists with a
+one-unit alpha fringe, so their edges stay smooth at any render scale. The grade letters are
+drawn as strokes (no font file); names, numbers and labels use the game's fonts F2 and F3.
 
 ## Stats (live, this match)
 

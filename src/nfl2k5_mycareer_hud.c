@@ -79,7 +79,7 @@ static struct {
     uint32_t mem, used, size;
     uint32_t state, vtx, wbuf[32], simbuf, label, camsave;
     int wnext;
-    char ini[MAX_PATH];
+    char ini[300];
     /* the bar */
     uint32_t player;
     int group, side, jersey;
@@ -372,40 +372,50 @@ static float text(const char *t, int f, float x, float y, uint32_t argb, int ali
 
 /* ---- the setting ---------------------------------------------------------------- */
 
+#ifdef _WIN32
+#define HUD_SEP "\\"
+#else
+#define HUD_SEP "/"
+#endif
+
+/* [hud] style=1|2 in <root>/nfl2k5_mycareer_hud.ini: plain stdio, the same on every platform. */
 static void ini_load(void)
 {
-    char root[MAX_PATH];
-    const char *e = getenv("NFL2K5_MC_HUD_STYLE");
-    DWORD n = GetEnvironmentVariableA("NFL2K5_ROOT", root, sizeof root);
-    if (!n || n >= sizeof root) {
+    char root[260] = "";
+    const char *e = getenv("NFL2K5_MC_HUD_STYLE"), *r = getenv("NFL2K5_ROOT");
+    FILE *f;
+    if (r && *r && strlen(r) < sizeof root) snprintf(root, sizeof root, "%s", r);
+    else {
         GetModuleFileNameA(NULL, root, sizeof root);
         { char *b = strrchr(root, '\\'); if (!b) b = strrchr(root, '/'); if (b) *b = 0; }
     }
-    snprintf(s.ini, sizeof s.ini, "%s\\nfl2k5_mycareer_hud.ini", root);
-    s.style = (int)GetPrivateProfileIntA("hud", "style", 1, s.ini);
+    snprintf(s.ini, sizeof s.ini, "%s" HUD_SEP "nfl2k5_mycareer_hud.ini", root);
+    s.style = 1;
+    f = fopen(s.ini, "r");
+    if (f) {
+        char line[128];
+        int v;
+        while (fgets(line, sizeof line, f))
+            if (sscanf(line, " style = %d", &v) == 1 || sscanf(line, " style=%d", &v) == 1) s.style = v;
+        fclose(f);
+    }
     if (e && *e) s.style = atoi(e);
     if (s.style != 2) s.style = 1;
-    /* The HUD's 640 x 480 is shown square (measured in game: a 40 x 40 rect is square) and
-     * centred; with the widescreen patch the window shows x from about -80 to 720. */
+    /* Measured in game: the HUD's 640 x 480 is shown square (a 40 x 40 rect is square) and
+     * centred, and its viewport clips to x 0..640 also with the widescreen patch. */
     s.ax = 1.0f;
     s.left = 0.0f;
-    {
-        char p[MAX_PATH];
-        FILE *f;
-        snprintf(p, sizeof p, "%s\\nfl2k5_video.ini", root);
-        f = fopen(p, "r");                      /* no section: read the line by hand */
-        if (f) {
-            char line[256];
-            while (fgets(line, sizeof line, f)) {
-                int w;
-                if (sscanf(line, " widescreen = %d", &w) == 1) s.left = 0.0f; (void)w;   /* measured: the HUD viewport clips to x 0..640 */
-            }
-            fclose(f);
-        }
-    }
     { const char *a = getenv("NFL2K5_MC_HUD_AX"); if (a && *a) s.ax = (float)atof(a); }
     { const char *a = getenv("NFL2K5_MC_HUD_LEFT"); if (a && *a) s.left = (float)atof(a); }
     if (s.ax < 0.3f || s.ax > 2.0f) s.ax = 1.0f;
+}
+
+static void ini_save(void)
+{
+    FILE *f = fopen(s.ini, "w");
+    if (!f) return;
+    fprintf(f, "[hud]\n; stat bar and Supersim look: 1 = 2K5, 2 = modern\nstyle=%d\n", s.style);
+    fclose(f);
 }
 
 static void label_refresh(void)
@@ -423,7 +433,7 @@ static void hud_fn(void)
     g_esp += 4;
     esp = g_esp;
     s.style = s.style == 2 ? 1 : 2;
-    { char v[8]; snprintf(v, sizeof v, "%d", s.style); WritePrivateProfileStringA("hud", "style", v, s.ini); }
+    ini_save();
     label_refresh();
     gcall(sub_0014D390, SND_SELECT, 0);
     HLOG("style -> %d\n", s.style);
@@ -691,8 +701,8 @@ static void read_stats(uint32_t player)
         s.tgt = grade_target();
         s.letter = letter_of(s.tgt);
         if (s.letter != was) { s.letter_prev = was; s.pulse = 0.0f; }
-        HLOG("stats %s: %.0f %.0f %.0f %.0f %.0f %.0f -> grade %.1f %s (f %.2f)\n", s.pos, st.v[0], st.v[1], st.v[2],
-             st.v[3], st.v[4], st.v[5], s.tgt, k_letters[s.letter], game_fraction());
+        HLOG("stats %s: %.0f %.0f %.0f %.0f %.0f %.0f %.0f %.0f %.0f -> grade %.1f %s (f %.2f)\n", s.pos, st.v[0], st.v[1], st.v[2],
+             st.v[3], st.v[4], st.v[5], st.v[6], st.v[7], st.v[8], s.tgt, k_letters[s.letter], game_fraction());
     }
 }
 
