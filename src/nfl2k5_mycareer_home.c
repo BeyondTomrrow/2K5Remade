@@ -473,8 +473,117 @@ static void room_hide(void)
     }
 }
 
+/* NFL2K5_MC_HOME_NODEDUMP (research): every node of the Crib room, name + its 0x60 bytes. */
+static void room_node_dump(void)
+{
+    uint32_t n = MEM32(s_h.room + 0x24), a = MEM32(s_h.room + 0x28), i, k;
+    static int done;
+    if (done++ || !getenv("NFL2K5_MC_HOME_NODEDUMP")) return;
+    for (i = 0; i < n && i < 256; i++) {
+        uint32_t nd = a + i * 0x60u, w = MEM32(nd);
+        char name[48];
+        for (k = 0; k < 47 && w >= 0x10000u && w < 0xF0000000u && MEM16(w + k * 2u); k++) name[k] = (char)MEM16(w + k * 2u);
+        name[k] = 0;
+        fprintf(stderr, "[MCNODE] %3u %-28s", i, name);
+        for (k = 1; k < 24; k++) {
+            uint32_t v = MEM32(nd + k * 4u);
+            float f; memcpy(&f, &v, 4);
+            if (v && (v & 0x7F800000u) && (v & 0x7F800000u) != 0x7F800000u && fabsf(f) > 1e-3f && fabsf(f) < 1e6f) fprintf(stderr, " %.1f", f);
+            else fprintf(stderr, " %X", v);
+        }
+        fprintf(stderr, "\n");
+    }
+    {   /* the materials (stride 0x80, name first), and node 4's sub-structure */
+        uint32_t nm = MEM32(s_h.room + 0x1Cu), ma = MEM32(s_h.room + 0x20u), w;
+        for (i = 0; i < nm && i < 256; i++) {
+            char name[48];
+            w = MEM32(ma + i * 0x80u);
+            for (k = 0; k < 47 && w >= 0x10000u && w < 0xF0000000u && MEM16(w + k * 2u); k++) name[k] = (char)MEM16(w + k * 2u);
+            name[k] = 0;
+            fprintf(stderr, "[MCMAT] %3u %-24s flags %08X tex %08X\n", i, name, MEM32(ma + i * 0x80u + 8u), MEM32(ma + i * 0x80u + 0x30u));
+        }
+        for (i = 0; i < n && i < 256; i++) {
+            uint32_t sub = MEM32(a + i * 0x60u + 8u);
+            if (sub < 0x10000u || sub >= 0xF0000000u) continue;
+            fprintf(stderr, "[MCSUB] %3u", i);
+            for (k = 0; k < 64; k++) fprintf(stderr, " %08X", MEM32(sub + k * 4u));
+            fprintf(stderr, "\n");
+        }
+    }
+}
+
+/* NFL2K5_MC_HOME_CRIBDUMP=<file> (research): the Crib's catalogue resource ('CRIB' "cribdata",
+ * what sub_00276183's caller looks up at [0xAC9054]) from our crib.iff context, 64 KB raw, for
+ * decoding offline. Written to the test sandbox only. */
+static void crib_data_dump(void)
+{
+    const char *path = getenv("NFL2K5_MC_HOME_CRIBDUMP");
+    static int done;
+    uint32_t w, p, ctxs[3], i;
+    if (!path || done++) return;
+    w = s_h.wstr[15];
+    h_put(w, "cribdata");
+    ctxs[0] = s_h.w_ctx; ctxs[1] = 0; ctxs[2] = MEM32(0x00AC9054u);
+    for (i = 0; i < 3; i++) {
+        p = lookup(ctxs[i], 0x42495243u, w);
+        fprintf(stderr, "[MCCRIB] cribdata in context %u (%08X): %08X\n", i, ctxs[i], p);
+        if (p >= 0x10000u && p < 0xF0000000u) {
+            FILE *f;
+            if (!fopen_s(&f, path, "wb") && f) {
+                uint32_t k;
+                for (k = 0; k < 65536u; k += 4) { uint32_t v = MEM32(p + k); fwrite(&v, 4, 1, f); }
+                fclose(f);
+                fprintf(stderr, "[MCCRIB] wrote 64 KB from %08X to %s\n", p, path);
+            }
+            return;
+        }
+    }
+}
+
+/* NFL2K5_MC_HOME_CRIBONLY (research): only these Crib nodes draw in the CRIBXF pass. */
+static void crib_only(int on)
+{
+    static uint32_t saved[256];
+    uint32_t n = MEM32(s_h.room + 0x24), a = MEM32(s_h.room + 0x28), i;
+    const char *only = getenv("NFL2K5_MC_HOME_CRIBONLY");
+    static char file_list[1024];
+    static DWORD next;
+    if (!only) return;
+    if (only[0] == '@') {                     /* "@path": the list is read from a file (tests switch it) */
+        if (on && GetTickCount() >= next) {
+            FILE *f;
+            next = GetTickCount() + 500;
+            if (!fopen_s(&f, only + 1, "r") && f) {
+                size_t r = fread(file_list, 1, sizeof file_list - 1, f);
+                file_list[r] = 0;
+                while (r && (file_list[r - 1] == '\n' || file_list[r - 1] == '\r' || file_list[r - 1] == ' ')) file_list[--r] = 0;
+                fclose(f);
+            }
+        }
+        only = file_list;
+    }
+    for (i = 0; i < n && i < 256; i++) {
+        uint32_t f = a + i * 0x60u + 0x0Cu;
+        if (on) {
+            const char *p = only;
+            int keep = 0;
+            saved[i] = MEM32(f);
+            while (*p) {
+                char name[48];
+                size_t l = strcspn(p, ",");
+                snprintf(name, sizeof name, "%.*s", (int)l, p);
+                if (weq(MEM32(a + i * 0x60u), name)) keep = 1;
+                p += l + (p[l] == ',');
+            }
+            MEM32(f) = keep ? (saved[i] & ~0x10u) : (saved[i] | 0x10u);
+        } else MEM32(f) = saved[i];
+    }
+}
+
 static void room_log(void)
 {
+    room_node_dump();
+    crib_data_dump();
     MH_LOG("room %08X: %u nodes, %u materials, sky %08X, cursor %08X, phone %08X, tier %d\n", s_h.room,
            MEM32(s_h.room + 0x24), MEM32(s_h.room + 0x1C), s_h.sky, s_h.cursor, s_h.phone, s_c.tier);
 }
@@ -581,10 +690,150 @@ static int room_add(float x0, float y0, float z0, float x1, float y1, float z1, 
     return s_room.nbox++;
 }
 
+
+/* ---- CC0 furniture (glTF) -------------------------------------------------------------
+ * Models the player puts in <root>\mods\mycareer-home\models\<name>\<name>.gltf (or
+ * NFL2K5_MC_HOME_MODELS=<folder>), drawn by the host renderer. Each slot: "name x z yaw y" --
+ * the model's footprint centred on (x, z), turned by yaw degrees, its lowest point at y. */
+extern int mc_model_load(const char *gltf_path, int *ids, int max, float bounds[6]);
+extern void mc_model_textures(const char *dir);
+typedef struct { char name[40]; float x, z, yaw, y, size, height, sc, scy; int ids[12], nid; float b[6]; } RoomModel;
+static RoomModel s_models[24];
+static int s_nmodels;
+
+static const char k_models_default[] =
+    /* living area, facing the TV wall (x = 0) */
+    "k:rugRectangle 2.2 4.2 90 0 3.0;k:loungeDesignSofa 3.55 4.2 90 0 2.3 0.8;modern_coffee_table_01 2.1 4.2 90 0;"
+    "k:cabinetTelevision 0.3 4.2 90 0 1.8 0.55;side_table_01 3.6 6.0 0 0;"
+    "k:lampRoundFloor 3.7 2.6 0 0 0.4 1.6;"
+    /* sleeping corner by the windows, the desk, the dining table by the kitchen */
+    "k:bedDouble 6.0 2.6 90 0 2.1 0.6;metal_office_desk 6.0 8.45 180 0;k:laptop 6.0 8.5 180 -1 0.36;"
+    "k:tableRound 1.8 6.9 0 0 1.0 0.75;k:chairModernCushion 1.05 6.9 90 0 0.48 0.9;k:chairModernCushion 2.55 6.9 270 0 0.48 0.9;"
+    "potted_plant_02 6.55 6.9 0 0;"
+    /* the kitchen run along the back wall (z = 9), base units and wall units */
+    "k:kitchenCabinetDrawer 0.3 8.7 0 0 0.6 0.9;k:kitchenSink 0.9 8.7 0 0 0.6 0.9;k:kitchenCabinet 1.5 8.7 0 0 0.6 0.9;"
+    "k:kitchenStove 2.1 8.7 0 0 0.6 0.9;k:kitchenCabinetDrawer 2.7 8.7 0 0 0.6 0.9;k:kitchenFridge 3.4 8.65 0 0 0.75 1.85;"
+    "k:kitchenCabinetUpper 0.3 8.82 0 1.45 0.6 0.7;k:kitchenCabinetUpper 0.9 8.82 0 1.45 0.6 0.7;"
+    "k:kitchenCabinetUpper 1.5 8.82 0 1.45 0.6 0.7;k:kitchenCabinetUpper 2.7 8.82 0 1.45 0.6 0.7";
+
+static RoomModel *model_find(const char *name)
+{
+    int i;
+    for (i = 0; i < s_nmodels; i++) if (s_models[i].nid && !strcmp(s_models[i].name, name)) return &s_models[i];
+    return NULL;
+}
+
+static void models_load(void)
+{
+    char dir[MAX_PATH], list[1024];
+    const char *e = getenv("NFL2K5_MC_HOME_MODELS"), *p;
+    s_nmodels = 0;
+    if (getenv("NFL2K5_MC_HOME_NO_MODELS")) return;
+    if (e) snprintf(dir, sizeof dir, "%s", e);
+    else {
+        DWORD n = GetEnvironmentVariableA("NFL2K5_ROOT", dir, sizeof dir);
+        if (!n || n >= sizeof dir) { GetModuleFileNameA(NULL, dir, sizeof dir); { char *b = strrchr(dir, '\\'); if (b) *b = 0; } }
+        snprintf(dir + strlen(dir), sizeof dir - strlen(dir), "\\mods\\mycareer-home\\models");
+    }
+    snprintf(list, sizeof list, "%s", getenv("NFL2K5_MC_HOME_PLACE") ? getenv("NFL2K5_MC_HOME_PLACE") : k_models_default);
+    {   /* ambientCG surfaces for flat-coloured fabric and wood: NFL2K5_MC_HOME_TEXTURES or models\\ambientcg */
+        char td[MAX_PATH + 16];
+        if (getenv("NFL2K5_MC_HOME_TEXTURES")) snprintf(td, sizeof td, "%s", getenv("NFL2K5_MC_HOME_TEXTURES"));
+        else snprintf(td, sizeof td, "%s\\ambientcg", dir);
+        mc_model_textures(td);
+    }
+    for (p = list; *p && s_nmodels < (int)(sizeof s_models / sizeof s_models[0]); ) {
+        RoomModel *m = &s_models[s_nmodels];
+        size_t l = strcspn(p, ";");
+        char b[128], path[MAX_PATH + 96];
+        snprintf(b, sizeof b, "%.*s", (int)l, p);
+        p += l + (p[l] == ';');
+        memset(m, 0, sizeof *m);
+        if (sscanf(b, "%39s %f %f %f %f %f %f", m->name, &m->x, &m->z, &m->yaw, &m->y, &m->size, &m->height) < 4) continue;
+        {   /* a second copy of a model reuses the first's meshes */
+            RoomModel *same = model_find(m->name);
+            if (same) { memcpy(m->ids, same->ids, sizeof m->ids); m->nid = same->nid; memcpy(m->b, same->b, sizeof m->b); s_nmodels++; continue; }
+        }
+        /* "k:name": the Kenney Furniture Kit's name.glb (NFL2K5_MC_HOME_KENNEY, or kenney\ in the models folder) */
+        if (!strncmp(m->name, "k:", 2)) {
+            const char *kd = getenv("NFL2K5_MC_HOME_KENNEY");
+            if (kd) snprintf(path, sizeof path, "%s\\%s.glb", kd, m->name + 2);
+            else snprintf(path, sizeof path, "%s\\kenney\\%s.glb", dir, m->name + 2);
+        } else snprintf(path, sizeof path, "%s\\%s\\%s.gltf", dir, m->name, m->name);
+        m->nid = mc_model_load(path, m->ids, 12, m->b);
+        if (m->nid) s_nmodels++;
+    }
+    /* sizes, then heights: "y < 0" stands a model on the one under it (the TV on its cabinet) */
+    {
+        int i, j;
+        for (i = 0; i < s_nmodels; i++) {
+            RoomModel *m = &s_models[i];
+            float ext = fmaxf(m->b[3] - m->b[0], m->b[5] - m->b[2]);
+            m->sc = m->size > 0.0f && ext > 0.0f ? m->size / ext : 1.0f;
+            /* height: a low-poly kit's proportions to real ones (a table 0.75 m high) */
+            m->scy = m->height > 0.0f && m->b[4] > m->b[1] ? m->height / (m->b[4] - m->b[1]) : m->sc;
+        }
+        for (i = 0; i < s_nmodels; i++)
+            if (s_models[i].y < 0.0f) {
+                float y = 0.0f;
+                for (j = 0; j < s_nmodels; j++)
+                    if (j != i && s_models[j].y >= 0.0f && fabsf(s_models[j].x - s_models[i].x) < 0.5f && fabsf(s_models[j].z - s_models[i].z) < 0.5f)
+                        y = s_models[j].y + (s_models[j].b[4] - s_models[j].b[1]) * s_models[j].scy;
+                s_models[i].y = y;
+            }
+    }
+    fprintf(stderr, "[MCHOME] host room: %d CC0 models from %s\n", s_nmodels, dir);
+}
+
+/* The placements, into the scene (y < 0 in a slot: stand on whatever model is under it). */
+static void models_place(void)
+{
+    int i, k;
+    s_room.nmesh = 0;
+    s_room.room[0] = 0.0f; s_room.room[1] = 0.0f; s_room.room[2] = 7.0f; s_room.room[3] = 9.0f; s_room.ceiling = 2.8f;
+    s_room.nshadow = 0;
+    for (i = 0; i < s_nmodels && s_room.nshadow < XBOX_HOSTSCENE_SHADOWS; i++) {
+        const RoomModel *m = &s_models[i];
+        float hx = (m->b[3] - m->b[0]) * 0.5f * m->sc, hz = (m->b[5] - m->b[2]) * 0.5f * m->sc;
+        float c = fabsf(cosf(m->yaw * 3.14159265f / 180.0f)), sn = fabsf(sinf(m->yaw * 3.14159265f / 180.0f));
+        float *sh = s_room.shadow[s_room.nshadow];
+        if (m->y > 0.05f || (m->b[4] - m->b[1]) * m->scy < 0.15f) continue;                 /* rugs; things on things */
+        sh[0] = m->x; sh[1] = m->z; sh[2] = hx * c + hz * sn - 0.04f; sh[3] = hx * sn + hz * c - 0.04f;
+        s_room.nshadow++;
+    }
+    for (i = 0; i < s_nmodels; i++) {
+        RoomModel *m = &s_models[i];
+        float c = cosf(m->yaw * 3.14159265f / 180.0f), sn = sinf(m->yaw * 3.14159265f / 180.0f);
+        float cx = (m->b[0] + m->b[3]) * 0.5f, cz = (m->b[2] + m->b[5]) * 0.5f, y = m->y;
+        c *= m->sc; sn *= m->sc;                     /* sc: size over the longest side (models_load) */
+        for (k = 0; k < m->nid && s_room.nmesh < XBOX_HOSTSCENE_MESHES; k++) {
+            XboxHostMeshInst *in = &s_room.mesh[s_room.nmesh++];
+            memset(in, 0, sizeof *in);
+            in->mesh = m->ids[k];
+            in->m[0] = c;  in->m[2] = -sn;
+            in->m[5] = m->scy;
+            in->m[8] = sn; in->m[10] = c;
+            in->m[12] = m->x - (cx * c + cz * sn);
+            in->m[13] = y - m->b[1] * m->scy;
+            in->m[14] = m->z - (-cx * sn + cz * c);
+            in->m[15] = 1.0f;
+        }
+    }
+}
+
+/* A model's top, for things put on it (the phone on the side table); 0 when it is not there. */
+static float model_top(const char *name)
+{
+    RoomModel *m = model_find(name);
+    return m ? m->y + (m->b[4] - m->b[1]) * (m->scy > 0.0f ? m->scy : 1.0f) : 0.0f;
+}
+
 static int s_ceil[4] = { -1, -1, -1, -1 };
 static void room_build_apartment(void)
 {
+    float top;
     memset(&s_room, 0, sizeof s_room);
+    models_load();
     s_room.highlight = -1;
     /* shell: floor, ceiling, walls (the front wall has the door gap at x 3.0..4.0) */
     room_add(0, -0.05f, 0, 7, 0, 9, 0x8A6A4A, HS_MAT_WOOD);
@@ -600,40 +849,72 @@ static void room_build_apartment(void)
     room_add(7.08f, 0.9f, 0, 7.12f, 2.4f, 9, 0x6E8FC0, HS_MAT_EMISSIVE);
     room_add(7.0f, 0.9f, 2.95f, 7.05f, 2.4f, 3.05f, 0x2B2B2B, HS_MAT_MATTE);
     room_add(7.0f, 0.9f, 5.95f, 7.05f, 2.4f, 6.05f, 0x2B2B2B, HS_MAT_MATTE);
+    {   /* frames: a sill, a head, jambs and slim mullions between the big panes */
+        static const float mz[] = { 1.5f, 4.5f, 7.5f };
+        int q;
+        room_add(6.88f, 0.86f, 0.0f, 7.06f, 0.9f, 9.0f, 0xEDEBE6, HS_MAT_MATTE);
+        room_add(6.98f, 2.38f, 0.0f, 7.06f, 2.44f, 9.0f, 0x2B2B2B, HS_MAT_MATTE);
+        room_add(6.98f, 0.9f, 0.0f, 7.06f, 2.4f, 0.06f, 0x2B2B2B, HS_MAT_MATTE);
+        room_add(6.98f, 0.9f, 8.94f, 7.06f, 2.4f, 9.0f, 0x2B2B2B, HS_MAT_MATTE);
+        for (q = 0; q < 3; q++) room_add(7.0f, 0.9f, mz[q] - 0.02f, 7.04f, 2.4f, mz[q] + 0.02f, 0x2B2B2B, HS_MAT_MATTE);
+    }
     /* skirting */
     room_add(0, 0, 8.98f, 7, 0.1f, 9, 0x3A3A3A, HS_MAT_MATTE);
     room_add(0, 0, 0, 0.02f, 0.1f, 9, 0x3A3A3A, HS_MAT_MATTE);
+    room_add(6.98f, 0, 0, 7.0f, 0.1f, 9, 0x3A3A3A, HS_MAT_MATTE);
+    room_add(0, 0, 0, 3.0f, 0.1f, 0.02f, 0x3A3A3A, HS_MAT_MATTE);
+    room_add(4.0f, 0, 0, 7.0f, 0.1f, 0.02f, 0x3A3A3A, HS_MAT_MATTE);
     /* the front door, in its gap */
     s_hot_box[HS_DOOR] = room_add(3.05f, 0, -0.06f, 3.95f, 2.15f, -0.02f, 0x5A3A24, HS_MAT_WOOD);
     room_add(3.8f, 1.0f, -0.02f, 3.86f, 1.06f, 0.02f, 0xC8C8C8, HS_MAT_GLASS);
     /* the living area faces the left wall (x = 0): rug, couch (back to the room), coffee table */
-    room_add(0.9f, 0, 2.6f, 3.9f, 0.01f, 5.8f, 0x7A6E62, HS_MAT_FABRIC);
-    room_add(3.1f, 0, 3.0f, 4.0f, 0.45f, 5.4f, 0x3C4A5C, HS_MAT_FABRIC);
-    room_add(3.7f, 0.45f, 3.0f, 4.0f, 0.95f, 5.4f, 0x3C4A5C, HS_MAT_FABRIC);
-    room_add(3.1f, 0, 2.8f, 4.0f, 0.65f, 3.0f, 0x34404F, HS_MAT_FABRIC);
-    room_add(3.1f, 0, 5.4f, 4.0f, 0.65f, 5.6f, 0x34404F, HS_MAT_FABRIC);
-    room_add(1.7f, 0, 3.4f, 2.5f, 0.42f, 5.0f, 0x4A3526, HS_MAT_WOOD);
+    if (!model_find("k:rugRectangle")) room_add(0.9f, 0, 2.6f, 3.9f, 0.01f, 5.8f, 0x7A6E62, HS_MAT_FABRIC);
+    if (!model_find("k:loungeDesignSofa")) {
+        room_add(3.1f, 0, 3.0f, 4.0f, 0.45f, 5.4f, 0x3C4A5C, HS_MAT_FABRIC);
+        room_add(3.7f, 0.45f, 3.0f, 4.0f, 0.95f, 5.4f, 0x3C4A5C, HS_MAT_FABRIC);
+        room_add(3.1f, 0, 2.8f, 4.0f, 0.65f, 3.0f, 0x34404F, HS_MAT_FABRIC);
+        room_add(3.1f, 0, 5.4f, 4.0f, 0.65f, 5.6f, 0x34404F, HS_MAT_FABRIC);
+    }
+    if (!model_find("modern_coffee_table_01")) room_add(1.7f, 0, 3.4f, 2.5f, 0.42f, 5.0f, 0x4A3526, HS_MAT_WOOD);
     /* the TV wall (x = 0): a low unit and the screen (Career Menu) */
-    room_add(0.0f, 0, 2.9f, 0.4f, 0.45f, 5.5f, 0x2E2A26, HS_MAT_WOOD);
-    s_hot_box[HS_MENU] = room_add(0.12f, 0.75f, 3.3f, 0.16f, 1.75f, 5.1f, 0x1C3550, HS_MAT_SCREEN);
-    room_add(0.08f, 0.7f, 3.25f, 0.12f, 1.8f, 5.15f, 0x111111, HS_MAT_MATTE);
+    if (!model_find("modern_wooden_cabinet")) room_add(0.0f, 0, 2.9f, 0.4f, 0.45f, 5.5f, 0x2E2A26, HS_MAT_WOOD);
+    if (model_find("k:cabinetTelevision")) {  /* a slim 65-inch screen on its stand, over the cabinet */
+        float cb = model_top("k:cabinetTelevision");
+        room_add(0.22f, cb, 4.05f, 0.30f, cb + 0.02f, 4.35f, 0x1A1A1C, HS_MAT_GLASS);           /* foot */
+        room_add(0.24f, cb, 4.17f, 0.27f, cb + 0.14f, 4.23f, 0x1A1A1C, HS_MAT_GLASS);           /* neck */
+        room_add(0.19f, cb + 0.12f, 3.47f, 0.23f, cb + 0.95f, 4.93f, 0x0E0E10, HS_MAT_GLASS);   /* panel */
+        s_hot_box[HS_MENU] = room_add(0.23f, cb + 0.14f, 3.49f, 0.235f, cb + 0.93f, 4.91f, 0x1C3550, HS_MAT_SCREEN);
+    } else {
+        s_hot_box[HS_MENU] = room_add(0.12f, 0.75f, 3.3f, 0.16f, 1.75f, 5.1f, 0x1C3550, HS_MAT_SCREEN);
+        room_add(0.08f, 0.7f, 3.25f, 0.12f, 1.8f, 5.15f, 0x111111, HS_MAT_MATTE);
+    }
     /* the side table at the couch's end and the phone */
-    room_add(3.3f, 0, 5.8f, 3.9f, 0.55f, 6.4f, 0x4A3526, HS_MAT_WOOD);
-    s_hot_box[HS_PHONE] = room_add(3.54f, 0.55f, 5.98f, 3.66f, 0.57f, 6.22f, 0x1A1A1A, HS_MAT_GLASS);
+    top = model_top("side_table_01");
+    if (top <= 0.0f) { room_add(3.3f, 0, 5.8f, 3.9f, 0.55f, 6.4f, 0x4A3526, HS_MAT_WOOD); top = 0.55f; }
+    s_hot_box[HS_PHONE] = room_add(3.54f, top, 5.98f, 3.66f, top + 0.02f, 6.22f, 0x1A1A1A, HS_MAT_GLASS);
     /* the desk and the laptop (the computer) */
-    room_add(5.2f, 0.72f, 8.2f, 6.8f, 0.76f, 8.9f, 0x5A4030, HS_MAT_WOOD);
-    room_add(5.25f, 0, 8.25f, 5.3f, 0.72f, 8.85f, 0x222222, HS_MAT_MATTE);
-    room_add(6.7f, 0, 8.25f, 6.75f, 0.72f, 8.85f, 0x222222, HS_MAT_MATTE);
-    room_add(5.7f, 0.76f, 8.35f, 6.3f, 0.78f, 8.7f, 0x8C8C90, HS_MAT_GLASS);
-    s_hot_box[HS_COMPUTER] = room_add(5.7f, 0.78f, 8.68f, 6.3f, 1.12f, 8.71f, 0x3A6EA5, HS_MAT_SCREEN);
+    if (!model_find("metal_office_desk")) {
+        room_add(5.2f, 0.72f, 8.2f, 6.8f, 0.76f, 8.9f, 0x5A4030, HS_MAT_WOOD);
+        room_add(5.25f, 0, 8.25f, 5.3f, 0.72f, 8.85f, 0x222222, HS_MAT_MATTE);
+        room_add(6.7f, 0, 8.25f, 6.75f, 0.72f, 8.85f, 0x222222, HS_MAT_MATTE);
+    }
+    if (model_find("classic_laptop") || model_find("k:laptop")) {   /* the hotspot: a point at the laptop's screen */
+        top = model_top("metal_office_desk");
+        s_hot_box[HS_COMPUTER] = room_add(5.99f, top + 0.15f, 8.5f, 6.01f, top + 0.17f, 8.52f, 0x101010, HS_MAT_MATTE);
+    } else {
+        room_add(5.7f, 0.76f, 8.35f, 6.3f, 0.78f, 8.7f, 0x8C8C90, HS_MAT_GLASS);
+        s_hot_box[HS_COMPUTER] = room_add(5.7f, 0.78f, 8.68f, 6.3f, 1.12f, 8.71f, 0x3A6EA5, HS_MAT_SCREEN);
+    }
     room_add(5.8f, 0, 7.5f, 6.3f, 0.48f, 8.0f, 0x30302E, HS_MAT_FABRIC);
     /* the mirror by the door, in a black frame */
     room_add(0.0f, 0.25f, 1.15f, 0.04f, 2.15f, 2.05f, 0x101010, HS_MAT_MATTE);
     s_hot_box[HS_MIRROR] = room_add(0.04f, 0.3f, 1.2f, 0.06f, 2.1f, 2.0f, 0xD8DCE0, HS_MAT_MIRROR);
     /* kitchen counter along the back wall */
-    room_add(0.0f, 0, 8.3f, 3.6f, 0.9f, 9.0f, 0xE5E2DC, HS_MAT_MATTE);
-    room_add(0.0f, 0.9f, 8.25f, 3.6f, 0.94f, 9.0f, 0x2F3135, HS_MAT_TILE);
-    room_add(0.0f, 1.5f, 8.65f, 3.6f, 2.2f, 9.0f, 0xE5E2DC, HS_MAT_MATTE);
+    if (!model_find("k:kitchenSink")) {
+        room_add(0.0f, 0, 8.3f, 3.6f, 0.9f, 9.0f, 0xE5E2DC, HS_MAT_MATTE);
+        room_add(0.0f, 0.9f, 8.25f, 3.6f, 0.94f, 9.0f, 0x2F3135, HS_MAT_TILE);
+        room_add(0.0f, 1.5f, 8.65f, 3.6f, 2.2f, 9.0f, 0xE5E2DC, HS_MAT_MATTE);
+    } else room_add(0.0f, 0.9f, 8.97f, 3.0f, 1.45f, 9.0f, 0xD8D4CC, HS_MAT_TILE);   /* the splashback */
     /* ceiling lights */
     s_ceil[1] = room_add(2.0f, 2.78f, 4.0f, 2.4f, 2.8f, 4.4f, 0xFFF2D8, HS_MAT_EMISSIVE);
     s_ceil[2] = room_add(5.8f, 2.78f, 8.0f, 6.2f, 2.8f, 8.4f, 0xFFF2D8, HS_MAT_EMISSIVE);
@@ -645,6 +926,7 @@ static void room_build_apartment(void)
     { XboxHostLight l = { { 6.0f, 2.6f, 8.2f }, { 1.1f, 1.0f, 0.85f }, 4.5f }; s_room.light[1] = l; }
     { XboxHostLight l = { { 6.6f, 1.7f, 4.5f }, { 0.55f, 0.65f, 0.95f }, 7.0f }; s_room.light[2] = l; }
     { XboxHostLight l = { { 1.8f, 2.6f, 8.6f }, { 0.9f, 0.85f, 0.75f }, 4.0f }; s_room.light[3] = l; }
+    models_place();
     fprintf(stderr, "[MCHOME] host room: test apartment, %d boxes\n", s_room.nbox);
 }
 
@@ -677,6 +959,130 @@ static int emit_marker(void)
 }
 
 static void rect_tex(float x, float y, float w, float h, uint32_t tex, uint32_t argb);
+/* ---- Crib items in the host room ----------------------------------------------------
+ * The Crib scene (crib.iff) is one set of nodes (stride 0x60: +0 name, +0x08 the node's
+ * data -- its centre (x, y, z) in Crib centimetres first -- +0x0C flags, 0x10 hidden, +0x20 a
+ * row-major 4x4 matrix, identity on the disc). The game draws them: for each item we show
+ * only that node, give it a matrix that turns it about its centre and puts it on our slot
+ * (metres x 100; the Crib's floor is y 0 as ours), draw the scene with our camera, and put
+ * everything back. Nothing is extracted or stored. */
+typedef struct { char node[32]; float x, z, yaw, dy; } RoomItem;   /* dy: metres up or down */
+static RoomItem s_items[24];
+static int s_nitems = -1;
+
+static const char k_items_default[] =
+    "z_plant_palm 6.45 0.6 0;jukebox 4.5 8.6 180;bobblestands 1.6 0.45 0;bobblelogos 1.6 0.45 0;"
+    "wall_art_generic_p01 5.6 0.08 0;standee_p02 0.6 7.6 90";
+
+static void items_parse(const char *p)
+{
+    s_nitems = 0;
+    while (*p && s_nitems < (int)(sizeof s_items / sizeof s_items[0])) {
+        RoomItem it;
+        size_t l = strcspn(p, ";");
+        char b[96];
+        snprintf(b, sizeof b, "%.*s", (int)l, p);
+        memset(&it, 0, sizeof it);
+        if (sscanf(b, "%31s %f %f %f %f", it.node, &it.x, &it.z, &it.yaw, &it.dy) >= 4) s_items[s_nitems++] = it;
+        p += l + (p[l] == ';');
+    }
+}
+
+/* NFL2K5_MC_HOME_ITEMS: "node x z yaw;..." replaces the list, or "@path" reads it from a file
+ * every half second (tests move things live). */
+static void items_poll(void)
+{
+    const char *e = getenv("NFL2K5_MC_HOME_ITEMS");
+    static DWORD next;
+    if (e && e[0] == '@') {
+        if (GetTickCount() >= next) {
+            FILE *f;
+            char b[1024];
+            next = GetTickCount() + 500;
+            if (!fopen_s(&f, e + 1, "r") && f) {
+                size_t r = fread(b, 1, sizeof b - 1, f);
+                b[r] = 0;
+                fclose(f);
+                items_parse(b);
+            }
+        }
+        if (s_nitems < 0) items_parse(k_items_default);
+    } else if (s_nitems < 0) items_parse(e ? e : k_items_default);
+}
+
+static void host_draw_items(void)
+{
+    uint32_t n, a, i, k, save_flags[256], save_m[256][16];
+    int it;
+    if (!s_h.room || getenv("NFL2K5_MC_HOME_NO_ITEMS")) return;
+    items_poll();
+    if (s_nitems <= 0) return;
+    n = MEM32(s_h.room + 0x24); a = MEM32(s_h.room + 0x28);
+    if (n > 256) n = 256;
+    for (i = 0; i < n; i++) {
+        save_flags[i] = MEM32(a + i * 0x60u + 0x0Cu);
+        for (k = 0; k < 16; k++) save_m[i][k] = MEM32(a + i * 0x60u + 0x20u + k * 4u);
+        MEM32(a + i * 0x60u + 0x0Cu) = save_flags[i] | 0x10u;
+    }
+    /* our camera, in Crib centimetres */
+    for (i = 0; i < 2; i++) {
+        uint32_t dst = i ? s_h.at : s_h.eye;
+        for (k = 0; k < 3; k++) MEMF(dst + k * 4u) = s_h.cur[i * 3 + k] * 100.0f;
+        MEMF(dst + 12u) = 1.0f;
+    }
+    PUSH32(g_esp, s_h.at);
+    gcall(sub_0002BDF0, s_h.camobj, s_h.eye);
+    gcall(sub_0002B860, s_h.camobj, (uint32_t)(int)(s_h.cur[6] * 182.04445f));
+    gcall(sub_0002AC80, s_h.camobj, 0);
+    /* The camera's projection (viewport folded in, right-handed view): row 2 col 2 and row 3
+     * col 2 give depth-buffer z = -m22 + m32 / distance, w = distance. The host scene writes the
+     * same into the game's depth buffer, so these items hide behind our walls and furniture.
+     * Measured (t40: the Crib floor read back at 2.62 m and 5.28 m along the view axis) the
+     * game's depth is 1.00003 - 1.479 / d(cm), where this matrix predicts 2.0 / d: its scene
+     * draws see distances 1.352 times this camera's, so the distance unit is 135.2 a metre. */
+    if (MEMF(s_h.camobj + 44u) == -1.0f) {
+        s_room.zmap[0] = -MEMF(s_h.camobj + 40u);
+        s_room.zmap[1] = MEMF(s_h.camobj + 56u);
+        s_room.zmap[2] = 135.2f;
+        s_room.zmap[3] = 1.0f;
+    }
+    if (getenv("RECOMP_HOSTSCENE_LOG")) {     /* research: the camera object, for the depth encoding */
+        static int told;
+        if (told++ == 120) {
+            fprintf(stderr, "[MCCAM] eye %.1f %.1f %.1f at %.1f %.1f %.1f fov %.1f obj", s_h.cur[0], s_h.cur[1], s_h.cur[2],
+                    s_h.cur[3], s_h.cur[4], s_h.cur[5], s_h.cur[6]);
+            for (k = 0; k < 96; k++) fprintf(stderr, " %g", MEMF(s_h.camobj + k * 4u));
+            fprintf(stderr, "\n");
+        }
+    }
+    for (it = 0; it < s_nitems; it++) {
+        for (i = 0; i < n; i++) {
+            uint32_t nd = a + i * 0x60u, sub = MEM32(nd + 8u), m = nd + 0x20u;
+            float cx, cz, c, s, tx, tz;
+            if (!weq(MEM32(nd), s_items[it].node) || sub < 0x10000u || sub >= 0xF0000000u) continue;
+            cx = MEMF(sub + 0u); cz = MEMF(sub + 8u);
+            c = cosf(s_items[it].yaw * 3.14159265f / 180.0f); s = sinf(s_items[it].yaw * 3.14159265f / 180.0f);
+            /* v' = (v - centre) R + slot, R about y; the row-vector convention of the engine */
+            tx = s_items[it].x * 100.0f - (cx * c + cz * s);
+            tz = s_items[it].z * 100.0f - (-cx * s + cz * c);
+            MEMF(m + 0x00u) = c;  MEMF(m + 0x04u) = 0; MEMF(m + 0x08u) = -s; MEMF(m + 0x0Cu) = 0;
+            MEMF(m + 0x10u) = 0;  MEMF(m + 0x14u) = 1; MEMF(m + 0x18u) = 0;  MEMF(m + 0x1Cu) = 0;
+            MEMF(m + 0x20u) = s;  MEMF(m + 0x24u) = 0; MEMF(m + 0x28u) = c;  MEMF(m + 0x2Cu) = 0;
+            MEMF(m + 0x30u) = tx; MEMF(m + 0x34u) = s_items[it].dy * 100.0f; MEMF(m + 0x38u) = tz; MEMF(m + 0x3Cu) = 1;
+            /* the engine culls by the node's stored centre: it moves with the item for the draw */
+            MEMF(sub + 0u) = s_items[it].x * 100.0f; MEMF(sub + 8u) = s_items[it].z * 100.0f;
+            MEM32(nd + 0x0Cu) = save_flags[i] & ~0x10u;
+            gcall(sub_0002DE60, s_h.room, 0);
+            MEM32(nd + 0x0Cu) = save_flags[i] | 0x10u;
+            MEMF(sub + 0u) = cx; MEMF(sub + 8u) = cz;
+        }
+    }
+    for (i = 0; i < n; i++) {
+        MEM32(a + i * 0x60u + 0x0Cu) = save_flags[i];
+        for (k = 0; k < 16; k++) MEM32(a + i * 0x60u + 0x20u + k * 4u) = save_m[i][k];
+    }
+}
+
 static void host_draw_scene(void)
 {
     static int logged;
@@ -832,6 +1238,14 @@ static int free_blocked(float x, float z)
         if (b->hi[1] < 0.2f || b->lo[1] > 1.8f || b->mat == HS_MAT_EMISSIVE) continue;
         if (b->hi[0] - b->lo[0] > 6.0f && b->hi[2] - b->lo[2] > 6.0f) continue;       /* floor-sized */
         if (x + r > b->lo[0] && x - r < b->hi[0] && z + r > b->lo[2] && z - r < b->hi[2]) return 1;
+    }
+    for (i = 0; i < s_nmodels; i++) {        /* the furniture: its footprint, turned by its yaw */
+        const RoomModel *m = &s_models[i];
+        float hx = (m->b[3] - m->b[0]) * 0.5f * m->sc, hz = (m->b[5] - m->b[2]) * 0.5f * m->sc, c, sn, ex, ez;
+        if ((m->b[4] - m->b[1]) * m->scy < 0.15f || m->y > 1.0f) continue;               /* rugs; things on things */
+        c = fabsf(cosf(m->yaw * 3.14159265f / 180.0f)); sn = fabsf(sinf(m->yaw * 3.14159265f / 180.0f));
+        ex = hx * c + hz * sn; ez = hx * sn + hz * c;
+        if (fabsf(x - m->x) < ex + r && fabsf(z - m->z) < ez + r) return 1;
     }
     return 0;
 }
@@ -1047,8 +1461,33 @@ static void ev_draw(void)
     float sx, sy;
     if (!s_h.shown || !s_h.room || !s_h.cur_set) return;
     gcall(sub_0002AD80, s_h.camsave, 0);
-    if (s_h.host) host_draw_scene();
-    else {
+    if (s_h.host) {
+        const char *xf = getenv("NFL2K5_MC_HOME_CRIBXF");
+        host_draw_scene();
+        if (!xf) host_draw_items();
+        /* Research (Crib furniture in the host room): the game draws the Crib scene with its
+         * camera put where ours is. Crib units are centimetres; "sx sz ox oy oz" maps
+         * crib = (s * host * 100) + o, so the Crib's own items can be lined up with our room. */
+        if (xf) {
+            float m[5] = { 1, 1, 0, 0, 0 };
+            sscanf(xf, "%f %f %f %f %f", &m[0], &m[1], &m[2], &m[3], &m[4]);
+            for (i = 0; i < 2; i++) {
+                const float *v = s_h.cur + i * 3;
+                uint32_t dst = i ? s_h.at : s_h.eye;
+                MEMF(dst + 0u) = m[0] * v[0] * 100.0f + m[2];
+                MEMF(dst + 4u) = v[1] * 100.0f + m[3];
+                MEMF(dst + 8u) = m[1] * v[2] * 100.0f + m[4];
+                MEMF(dst + 12u) = 1.0f;
+            }
+            PUSH32(g_esp, s_h.at);
+            gcall(sub_0002BDF0, s_h.camobj, s_h.eye);
+            gcall(sub_0002B860, s_h.camobj, (uint32_t)(int)(s_h.cur[6] * 182.04445f));
+            gcall(sub_0002AC80, s_h.camobj, 0);
+            crib_only(1);
+            gcall(sub_0002DE60, s_h.room, 0);
+            crib_only(0);
+        }
+    } else {
         for (i = 0; i < 3; i++) { MEMF(s_h.eye + i * 4u) = s_h.cur[i]; MEMF(s_h.at + i * 4u) = s_h.cur[3 + i]; }
         MEMF(s_h.eye + 12u) = 1.0f; MEMF(s_h.at + 12u) = 1.0f;
         PUSH32(g_esp, s_h.at);
