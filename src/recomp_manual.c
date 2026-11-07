@@ -3166,8 +3166,10 @@ static uint32_t ih_as_action(void)     /* 0x18F8CE: eax = action, esi = team */
 }
 static uint32_t ih_as_slid(void)       /* 0x18FF1C: the pack took it */
 {
+    static int told;
     if (!s_as_running) return 0;
     s_as_running = 0;
+    if (told++ < 8) fprintf(stderr, "[AUD] audible slide ran (team %08X)\n", (unsigned)g_esi);
     g_eax = 0;
     return AS_RESUME;
 }
