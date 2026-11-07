@@ -7,6 +7,15 @@ set(NFL2K5_LOCALS_DIR "${PROJECT_SOURCE_DIR}/build/gen-locals" CACHE PATH "Regis
 # code, in which every function keeps the guest registers it uses in locals
 # instead of thread-local globals. tools/build.ps1 writes it.
 option(NFL2K5_REG_LOCALS "Compile the generated code with guest registers in locals" ON)
+# Every release build. A clean checkout has neither and used to build anyway: mod
+# packs then ran the retail code (Android test25-29), and the game the slower
+# generated code. NFL2K5_REG_LOCALS=OFF is the mod-pack build's own choice.
+if(NOT EXISTS "${PROJECT_SOURCE_DIR}/analysis/disasm/functions.json")
+  message(FATAL_ERROR "analysis/disasm/functions.json is missing: mod packs would run the wrong code. Copy analysis/ into this tree.")
+endif()
+if(NFL2K5_REG_LOCALS AND NOT EXISTS "${NFL2K5_LOCALS_DIR}/recomp_0000.c")
+  message(FATAL_ERROR "${NFL2K5_LOCALS_DIR} is missing: run python tools/gen-reg-locals.py first.")
+endif()
 if(NFL2K5_REG_LOCALS AND EXISTS "${NFL2K5_LOCALS_DIR}/recomp_0000.c")
   file(GLOB NFL2K5_GENERATED CONFIGURE_DEPENDS "${NFL2K5_LOCALS_DIR}/*.c")
 else()
@@ -39,15 +48,10 @@ else()
   # no-op stubs on Linux until it is ported (Android compiles it, see below).
   # src/platform/posix supplies <windows.h>.
   set(NFL2K5_FUNC_RANGES "${CMAKE_BINARY_DIR}/generated/nfl2k5_func_ranges.c")
-  if(EXISTS "${PROJECT_SOURCE_DIR}/analysis/disasm/functions.json")
-    find_package(Python3 REQUIRED COMPONENTS Interpreter)
-    execute_process(COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tools/gen-func-ranges.py"
-                            "${PROJECT_SOURCE_DIR}/analysis" "${NFL2K5_FUNC_RANGES}"
-                    COMMAND_ERROR_IS_FATAL ANY)
-  elseif(NOT EXISTS "${NFL2K5_FUNC_RANGES}")
-    message(WARNING "analysis/ not found: mod-pack interpreter ranges are empty (retail runs unaffected)")
-    file(WRITE "${NFL2K5_FUNC_RANGES}" "#include <stdint.h>\nconst uint32_t g_nfl2k5_func_ranges[1][2] = {{0, 0}};\nconst unsigned g_nfl2k5_func_range_count = 0;\n")
-  endif()
+  find_package(Python3 REQUIRED COMPONENTS Interpreter)
+  execute_process(COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tools/gen-func-ranges.py"
+                          "${PROJECT_SOURCE_DIR}/analysis" "${NFL2K5_FUNC_RANGES}"
+                  COMMAND_ERROR_IS_FATAL ANY)
   find_package(OpenSSL REQUIRED)
   if(ANDROID)
     # SDL's Java activity (android/app) loads the game as libmain.so.

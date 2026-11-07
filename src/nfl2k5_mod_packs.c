@@ -211,6 +211,9 @@ static int mp_launch(const char *exe)
     char path[MAX_PATH];
     snprintf(path, sizeof path, "%s", exe);
     xbox_path_normalize(path);
+    /* as on Windows: the new game reads active-pack.ini, not this run's choice */
+    unsetenv("NFL2K5_PACK");
+    unsetenv("NFL2K5_RETAIL");
     snprintf(cmd, sizeof(cmd), "\"%s\" --run", path);
     snprintf(work, sizeof(work), "%s", path);
     slash = strrchr(work, '/');

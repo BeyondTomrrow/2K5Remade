@@ -48,14 +48,20 @@ int _snprintf_s(char *buf, size_t size, size_t count, const char *fmt, ...)
     return (size_t)n >= cap ? -1 : n;          /* MSVC returns -1 on truncation */
 }
 
-int fopen_s(FILE **f, const char *name, const char *mode)
+#undef fopen
+FILE *nfl2k5_fopen(const char *name, const char *mode)
 {
     char p[1024];
     size_t i;
-    if (!f) return 22;
     for (i = 0; name && name[i] && i < sizeof p - 1; i++) p[i] = name[i] == '\\' ? '/' : name[i];
     p[i] = 0;
-    *f = fopen(p, mode);
+    return fopen(p, mode);
+}
+
+int fopen_s(FILE **f, const char *name, const char *mode)
+{
+    if (!f) return 22;
+    *f = nfl2k5_fopen(name, mode);
     return *f ? 0 : errno ? errno : 2;
 }
 

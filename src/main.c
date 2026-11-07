@@ -37,6 +37,9 @@
 #include "recomp_icall_feedback.h"
 #include "nfl2k5_presentation.h"
 #include "nfl2k5_widescreen_patch.h"
+#if !defined(_WIN32)
+#include <sys/resource.h>
+#endif
 #include "platform/android/xbe_identify.h"
 #if defined(__ANDROID__)
 #include <SDL3/SDL.h>
@@ -45,6 +48,7 @@
 #include <pthread.h>
 #include <dirent.h>
 #include <unistd.h>
+#include <sys/resource.h>
 #endif
 #if defined(__aarch64__) && !defined(_WIN32)
 int xbox_arm64_mmio_fault(void *raw_ctx, uintptr_t host, uint32_t va);   /* apu/arm64_mmio.c */
@@ -867,15 +871,28 @@ static void android_unpack_presentations(const char *root)
 static void *android_cpu_report_thread(void *arg)
 {
     enum { MAXT = 160 };
-    struct { int tid; unsigned long long t; char name[20]; } prev[MAXT], cur[MAXT];
+    struct { int tid; unsigned long long t; char name[20]; int core; } prev[MAXT], cur[MAXT];
     int np = 0;
     long hz = sysconf(_SC_CLK_TCK);
     (void)arg;
+    {   /* the cores' top speeds, once: which of the numbers below are big cores */
+        char line[256], path[80];
+        int o = snprintf(line, sizeof line, "[CPU] cores (max MHz):");
+        for (int c = 0; c < 16 && o < (int)sizeof line - 16; c++) {
+            unsigned long khz = 0;
+            FILE *f;
+            snprintf(path, sizeof path, "/sys/devices/system/cpu/cpu%d/cpufreq/cpuinfo_max_freq", c);
+            if (!(f = fopen(path, "r"))) continue;
+            if (fscanf(f, "%lu", &khz) == 1) o += snprintf(line + o, sizeof line - o, " %d:%lu", c, khz / 1000);
+            fclose(f);
+        }
+        fprintf(stderr, "%s\n", line);
+    }
     for (;;) {
         DIR *d = opendir("/proc/self/task");
         struct dirent *e;
         int nc = 0, i, j, k;
-        struct { int pct10; const char *name; } top[6];
+        struct { int pct10; const char *name; int core; } top[6];
         int ntop = 0, total10 = 0;
         if (!d) return NULL;
         while ((e = readdir(d)) && nc < MAXT) {
@@ -897,6 +914,14 @@ static void *android_cpu_report_thread(void *arg)
                 p = strrchr(buf, ')') + 2;
                 /* fields after the name: state ppid pgrp session tty tpgid flags minflt cminflt majflt cmajflt utime stime */
                 sscanf(p, "%*c %*d %*d %*d %*d %*d %*u %*u %*u %*u %*u %llu %llu", &ut, &st);
+                /* ...and field 39 of the line, the core it last ran on */
+                cur[nc].core = -1;
+                {
+                    int field = 3;
+                    char *q = p;
+                    while (q && field < 39) { q = strchr(q, ' '); if (q) { q++; field++; } }
+                    if (q) cur[nc].core = atoi(q);
+                }
             }
             cur[nc].t = ut + st;
             nc++;
@@ -910,13 +935,13 @@ static void *android_cpu_report_thread(void *arg)
             pct10 = (int)((cur[i].t - was) * 1000ull / (unsigned long long)(hz * 30));
             total10 += pct10;
             for (k = ntop; k > 0 && top[k - 1].pct10 < pct10; k--) if (k < 6) top[k] = top[k - 1];
-            if (k < 6) { top[k].pct10 = pct10; top[k].name = cur[i].name; if (ntop < 6) ntop++; }
+            if (k < 6) { top[k].pct10 = pct10; top[k].name = cur[i].name; top[k].core = cur[i].core; if (ntop < 6) ntop++; }
         }
         if (np) {
             char line[512];
             int o = snprintf(line, sizeof line, "[CPU] last 30 s: %d.%d%% of one core in total;", total10 / 10, total10 % 10);
             for (k = 0; k < ntop && o < (int)sizeof line - 40; k++)
-                o += snprintf(line + o, sizeof line - o, " %s %d.%d%%", top[k].name, top[k].pct10 / 10, top[k].pct10 % 10);
+                o += snprintf(line + o, sizeof line - o, " %s %d.%d%% (core %d)", top[k].name, top[k].pct10 / 10, top[k].pct10 % 10, top[k].core);
             fprintf(stderr, "%s\n", line);
         }
         memcpy(prev, cur, sizeof cur[0] * (size_t)nc);
@@ -967,6 +992,14 @@ static int ps_read_int(const char *path, long *v)
 
 /* level, scale, temperature and status from the sticky battery intent, and
  * the current (uA) and remaining charge (uAh) from BatteryManager */
+static int ps_battery_jni(int *pct, int *temp10, int *charging, long *ua, long *uah);
+int nfl2k5_battery_temp10(void)     /* tenths of a degree C, 0 if unknown (android_settings.c) */
+{
+    int pct = 0, temp10 = 0, charging = 0;
+    long ua = 0, uah = 0;
+    return ps_battery_jni(&pct, &temp10, &charging, &ua, &uah) ? temp10 : 0;
+}
+
 static int ps_battery_jni(int *pct, int *temp10, int *charging, long *ua, long *uah)
 {
     char name[17] = { 0 };
@@ -1372,6 +1405,27 @@ int main(int argc, char **argv)
 {
 #if defined(_WIN32)
     SetThreadExecutionState(ES_CONTINUOUS | ES_DISPLAY_REQUIRED | ES_SYSTEM_REQUIRED);
+#elif !defined(__ANDROID__)
+    {
+        /* The recompiled game runs on this thread and needs the 16 MB stack
+         * Windows links in (/STACK:16777216). Linux sizes the main stack when
+         * a program starts, so raise the limit and start again. */
+        struct rlimit rl;
+        const rlim_t want = 16u << 20;
+        if (getrlimit(RLIMIT_STACK, &rl) == 0 && rl.rlim_cur != RLIM_INFINITY && rl.rlim_cur < want &&
+            !getenv("NFL2K5_STACK_RAISED")) {
+            rl.rlim_cur = rl.rlim_max == RLIM_INFINITY || rl.rlim_max >= want ? want : rl.rlim_max;
+            if (setrlimit(RLIMIT_STACK, &rl) == 0) {
+                char self[MAX_PATH];
+                ssize_t n = readlink("/proc/self/exe", self, sizeof self - 1);
+                setenv("NFL2K5_STACK_RAISED", "1", 1);
+                if (n > 0) {
+                    self[n] = 0;
+                    execv(self, argv);   /* by name: /proc/self/exe would call the process "exe" */
+                }
+            }
+        }
+    }
 #endif
 #if defined(__ANDROID__)
     {
@@ -1400,6 +1454,13 @@ int main(int argc, char **argv)
             pthread_detach(t);
         }
         fprintf(stderr, "[ANDROID] log %s\n", lp);
+        {
+            size_t info_size = 0;
+            char *info = (char *)SDL_LoadFile("build-info.json", &info_size);
+            if (info && info_size < 2048)
+                fprintf(stderr, "[BUILD] %.*s\n", (int)info_size, info);
+            SDL_free(info);
+        }
         android_crash_reporter();
         {
             /* Android's own log of the run before this one -- the system's crash
@@ -1432,7 +1493,12 @@ int main(int argc, char **argv)
         const char *root = getenv("NFL2K5_ROOT") ? getenv("NFL2K5_ROOT") : "/sdcard/NFL2K5";
         snprintf(cache, sizeof cache, "%s/cache", root);
         mkdir(cache, 0775);
-        snprintf(cache, sizeof cache, "%s/cache/vk_pipelines.bin", root);
+        {   /* a chosen GPU driver, before anything loads Vulkan; its own pipeline cache */
+            extern void nfl2k5_gpu_driver_boot(char *cache, size_t cache_n);
+            char cache_name[128];
+            nfl2k5_gpu_driver_boot(cache_name, sizeof cache_name);
+            snprintf(cache, sizeof cache, "%s/cache/%s", root, cache_name);
+        }
         setenv("SDL_GPU_VULKAN_PIPELINE_CACHE", cache, 0);
         android_unpack_presentations(root);
         snprintf(cache, sizeof cache, "%s/Music", root);   /* Music/<playlist>/<songs>: custom soundtracks */
@@ -1450,7 +1516,10 @@ int main(int argc, char **argv)
         if (pthread_create(&t, NULL, android_perf_stats_thread, NULL) == 0) pthread_detach(t);
     }
 #elif !defined(_WIN32)
-    android_crash_reporter();   /* the Linux test VM: same report in its log */
+    android_crash_reporter();   /* same report in the log as on Android */
+#ifdef NFL2K5_GX_PORTABLE
+    setenv("RECOMP_RENDERER", "vulkan", 0);   /* the GPU renderer (gx) on Vulkan; "cpu" for software */
+#endif
 #endif
 
     const char *root = nfl2k5_project_root();
@@ -1857,6 +1926,11 @@ int main(int argc, char **argv)
     nfl2k5_controller_art_init();
     nfl2k5_save_library_menu_init();
     { extern void nfl2k5_music_player_init(void); nfl2k5_music_player_init(); }   /* F1 > Music Player */
+#ifdef __ANDROID__
+    /* This thread runs the game. SetThreadPriority only records a value on
+     * POSIX; Android lets an app raise its own threads (who 0 = this one). */
+    setpriority(PRIO_PROCESS, 0, -4);
+#endif
     xbox_kernel_bridge_init();
 
     if (!validate_only && getenv("RECOMP_AC97_READY")) {

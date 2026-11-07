@@ -48,6 +48,18 @@ add_library(pthread INTERFACE)
 set(NFL2K5_BUILD_GAME ON CACHE BOOL "" FORCE)
 add_subdirectory(.. nfl2k5)
 
+# ---- Custom GPU drivers (src/nfl2k5_gpu_driver.c) -----------------------------
+target_sources(NFL2K5 PRIVATE ../src/nfl2k5_gpu_driver.c)
+if(ANDROID AND ANDROID_ABI STREQUAL "arm64-v8a")
+  # libadrenotools (BSD-2-Clause, third_party/libadrenotools/VENDORED.txt). Its
+  # two hook libraries are loaded by name from nativeLibraryDir, so they ship
+  # in the APK next to libmain.so.
+  add_subdirectory(third_party/libadrenotools adrenotools EXCLUDE_FROM_ALL)
+  target_link_libraries(NFL2K5 PRIVATE adrenotools)
+  target_compile_definitions(NFL2K5 PRIVATE NFL2K5_HAVE_ADRENOTOOLS)
+  add_dependencies(NFL2K5 main_hook hook_impl)
+endif()
+
 # ---- FFmpeg (static, audio only): Music folder songs -> WMA in process ------
 # (src/nfl2k5_wma_encode.cpp; desktop builds run the ffmpeg program instead).
 # Built from the release source by C:/Android/src/ffmpeg-build.sh.
