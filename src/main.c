@@ -37,6 +37,9 @@
 #include "recomp_icall_feedback.h"
 #include "nfl2k5_presentation.h"
 #include "nfl2k5_widescreen_patch.h"
+#if !defined(_WIN32)
+#include <sys/resource.h>
+#endif
 #include "platform/android/xbe_identify.h"
 #if defined(__ANDROID__)
 #include <SDL3/SDL.h>
@@ -1402,6 +1405,27 @@ int main(int argc, char **argv)
 {
 #if defined(_WIN32)
     SetThreadExecutionState(ES_CONTINUOUS | ES_DISPLAY_REQUIRED | ES_SYSTEM_REQUIRED);
+#elif !defined(__ANDROID__)
+    {
+        /* The recompiled game runs on this thread and needs the 16 MB stack
+         * Windows links in (/STACK:16777216). Linux sizes the main stack when
+         * a program starts, so raise the limit and start again. */
+        struct rlimit rl;
+        const rlim_t want = 16u << 20;
+        if (getrlimit(RLIMIT_STACK, &rl) == 0 && rl.rlim_cur != RLIM_INFINITY && rl.rlim_cur < want &&
+            !getenv("NFL2K5_STACK_RAISED")) {
+            rl.rlim_cur = rl.rlim_max == RLIM_INFINITY || rl.rlim_max >= want ? want : rl.rlim_max;
+            if (setrlimit(RLIMIT_STACK, &rl) == 0) {
+                char self[MAX_PATH];
+                ssize_t n = readlink("/proc/self/exe", self, sizeof self - 1);
+                setenv("NFL2K5_STACK_RAISED", "1", 1);
+                if (n > 0) {
+                    self[n] = 0;
+                    execv(self, argv);   /* by name: /proc/self/exe would call the process "exe" */
+                }
+            }
+        }
+    }
 #endif
 #if defined(__ANDROID__)
     {
@@ -1492,7 +1516,10 @@ int main(int argc, char **argv)
         if (pthread_create(&t, NULL, android_perf_stats_thread, NULL) == 0) pthread_detach(t);
     }
 #elif !defined(_WIN32)
-    android_crash_reporter();   /* the Linux test VM: same report in its log */
+    android_crash_reporter();   /* same report in the log as on Android */
+#ifdef NFL2K5_GX_PORTABLE
+    setenv("RECOMP_RENDERER", "vulkan", 0);   /* the GPU renderer (gx) on Vulkan; "cpu" for software */
+#endif
 #endif
 
     const char *root = nfl2k5_project_root();

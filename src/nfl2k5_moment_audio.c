@@ -88,7 +88,7 @@ static int resolve_clip(const char *dir, const char *key, char *out, size_t n)
     static const char *const ext[] = { ".mp3", ".wma", ".wav", ".m4a", ".ogg" };
     int e;
     for (e = 0; e < (int)(sizeof ext / sizeof ext[0]); e++) {
-        snprintf(out, n, "%s\\%s%s", dir, key, ext[e]);
+        snprintf(out, n, "%s/%s%s", dir, key, ext[e]);
         if (file_exists(out)) return 1;
     }
     return 0;
@@ -168,7 +168,7 @@ void nfl2k5_moment_audio_service(void)
 
 void nfl2k5_moment_audio_install(const char *root)
 {
-    if (root && *root) snprintf(s_dir, sizeof s_dir, "%s\\moment-audio", root);
+    if (root && *root) snprintf(s_dir, sizeof s_dir, "%s/moment-audio", root);
     else               s_dir[0] = 0;
     s_armed = 1;
     mlog("[MOMENT-AUDIO] armed; clips from %s\n", s_dir[0] ? s_dir : "moment-audio");
