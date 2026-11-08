@@ -540,6 +540,40 @@ static void process_import_inbox(const std::string &base)
     }
 }
 
+/* The folder an Xbox save lives in is a function of its name: the title's
+ * XAPI (XCreateSaveGame, 0x3790F9 -> 0x378CBF) folds the UTF-16 name into
+ * h = (h * 65536 + c) mod (2^48 - 59) -- the add in the low 32 bits only, as
+ * the code does -- and writes h as 12 hex digits. Opening a save by name
+ * looks only there, and the save list's fill pass (0x4C8E0) opens every save
+ * by name and stops at the first that fails: one save in a folder its name
+ * does not give (the old random IDs here) left every later entry of the
+ * Load screen garbage (2026-10-15). Checked against the console's own saves:
+ * Team1 006113C91778, Franchise1 256B40374FD6, VIP1 004900501403. */
+static std::string xbox_save_folder(const std::string &name)
+{
+    const unsigned long long m = (1ULL << 48) - 59;
+    unsigned long long h = 0;
+    char id[13];
+    for (unsigned char c : name) {
+        unsigned long long p = h << 16;
+        p = (p & ~0xFFFFFFFFULL) | ((p + c) & 0xFFFFFFFFULL);
+        h = p % m;
+    }
+    snprintf(id, sizeof id, "%012llX", h);
+    return id;
+}
+
+/* A name no other save in `udata` uses: "Name", else "Name (2)", "Name (3)"... */
+static std::string unique_save_name(const std::string &udata, const std::string &name, const std::string &self)
+{
+    for (int k = 1; k < 1000; ++k) {
+        std::string n = k == 1 ? name : name + " (" + std::to_string(k) + ")";
+        std::string id = xbox_save_folder(n);
+        if (id == self || !is_dir(join(udata, id))) return n;
+    }
+    return name;
+}
+
 static std::string new_container_id(const std::string &udata)
 {
     unsigned char random[6];
@@ -547,7 +581,7 @@ static std::string new_container_id(const std::string &udata)
 #ifdef _WIN32
         if (BCryptGenRandom(NULL, random, sizeof random, BCRYPT_USE_SYSTEM_PREFERRED_RNG) < 0) {
 #else
-        if (getrandom(random, sizeof random, 0) != (ssize_t)sizeof random) {
+        if (getentropy(random, sizeof random) != 0) {
 #endif
             unsigned long long n = GetTickCount64() ^ (unsigned long long)GetCurrentProcessId() << 32;
             memcpy(random, &n, sizeof random);
@@ -719,7 +753,16 @@ static void import_library(const std::string &base, const std::string &udata)
                 continue;
             }
             std::string id = m["container"];
-            if (!valid_container_id(id)) id = new_container_id(udata);
+            if (!valid_container_id(id)) {
+                /* a new save: the folder its name gives (xbox_save_folder),
+                 * under a name no other save has */
+                std::string name = trim(read_utf16_value(join(src, "SaveMeta.xbx"), "Name="));
+                if (name.empty()) name = folder;
+                std::string unique = unique_save_name(udata, name, "");
+                if (unique != name || !is_file(join(src, "SaveMeta.xbx")))
+                    write_utf16(join(src, "SaveMeta.xbx"), "Name=" + unique + "\r\n", true);
+                id = xbox_save_folder(unique);
+            }
             std::string dst = join(udata, id);
             make_dirs(dst);
             std::string effective_type = read_utf16_value(join(src, "TYPE"), nullptr);
@@ -733,10 +776,77 @@ static void import_library(const std::string &base, const std::string &udata)
     }
 }
 
+/* Startup, before the game reads its saves: every save into the folder its
+ * name gives (xbox_save_folder). A save whose name another save already has
+ * gets "Name (2)" -- an Xbox cannot hold two saves of one name -- in its
+ * SaveMeta, its library copy and its library folder name. */
+static void repair_save_folders(const std::string &base, const std::string &udata)
+{
+    std::map<std::string, std::string> lib;      /* container -> library folder */
+    for (const auto &kind : kKinds) {
+        std::string parent = join(base, kind.folder);
+        for (const std::string &folder : dirs(parent)) {
+            auto m = read_manifest(join(parent, folder));
+            if (valid_container_id(m["container"])) lib[m["container"]] = join(parent, folder);
+        }
+    }
+    int moved = 0, renamed = 0;
+    for (const std::string &id : dirs(udata)) {
+        if (!valid_container_id(id)) continue;
+        std::string dir = join(udata, id);
+        if (trim(read_utf16_value(join(dir, "TYPE"), nullptr)).empty()) {
+            /* An empty TYPE lists as "Damaged". Name it from the payload:
+             * VIP 20,720 bytes, franchise 720,044, settings 736, a ROST roster. */
+            std::vector<unsigned char> dat = read_bytes(join(dir, "SAVEGAME.DAT"));
+            const char *code = dat.size() == 20720 ? "USR" : dat.size() == 720044 ? "FXG" :
+                               dat.size() == 736 ? "STG" :
+                               (dat.size() >= 4 && !memcmp(dat.data(), "ROST", 4)) ? "ROS" : nullptr;
+            if (code && write_utf16(join(dir, "TYPE"), code, false))
+                fprintf(stderr, "[SAVE-LIBRARY] save %s had no type; now %s\n", id.c_str(), code);
+        }
+        std::string name = trim(read_utf16_value(join(dir, "SaveMeta.xbx"), "Name="));
+        if (name.empty()) continue;
+        std::string want = xbox_save_folder(name), fixed = name;
+        if (_stricmp(want.c_str(), id.c_str()) == 0) continue;
+        if (is_dir(join(udata, want))) {
+            fixed = unique_save_name(udata, name, id);
+            want = xbox_save_folder(fixed);
+            if (is_dir(join(udata, want))) continue;
+            write_utf16(join(dir, "SaveMeta.xbx"), "Name=" + fixed + "\r\n", true);
+            ++renamed;
+        }
+        if (!MoveFileExA(dir.c_str(), join(udata, want).c_str(), MOVEFILE_WRITE_THROUGH)) {
+            fprintf(stderr, "[SAVE-LIBRARY] could not move save %s to %s (%lu)\n", id.c_str(), want.c_str(), GetLastError());
+            continue;
+        }
+        ++moved;
+        auto it = lib.find(id);
+        if (it != lib.end()) {
+            std::string folder = it->second;
+            auto m = read_manifest(folder);
+            if (fixed != name) {
+                write_utf16(join(folder, "SaveMeta.xbx"), "Name=" + fixed + "\r\n", true);
+                std::string parent = folder.substr(0, folder.find_last_of("\\/"));
+                std::string to = join(parent, safe_name(fixed, "Save"));
+                if (!is_dir(to) && MoveFileExA(folder.c_str(), to.c_str(), 0)) folder = to;
+            }
+            write_manifest(folder, want, m["type"], fixed);
+            lib.erase(it);
+            lib[want] = folder;
+        }
+        fprintf(stderr, "[SAVE-LIBRARY] save \"%s\" moved to its folder %s (was %s)\n", fixed.c_str(), want.c_str(), id.c_str());
+    }
+    if (moved) fprintf(stderr, "[SAVE-LIBRARY] %d save(s) moved to their name's folder, %d renamed (duplicate names)\n", moved, renamed);
+}
+
 static void sync_once()
 {
     std::string title = join(join(g_save_root, "UDATA"), "53450030");
     make_dirs(title);
+    {
+        static bool repaired;
+        if (!repaired) { repaired = true; repair_save_folders(g_save_root, title); }
+    }
     for (const auto &k : kKinds) make_dirs(join(g_save_root, k.folder));
     make_dirs(join(g_save_root, "import"));
     process_import_inbox(g_save_root);
@@ -866,3 +976,33 @@ const XboxMenuPage kSystemPage = { "SYSTEM", sys_count, sys_label, sys_change, s
 
 extern "C" void xbox_MenuAddPage(const void *p);
 extern "C" void nfl2k5_save_library_menu_init(void) { xbox_MenuAddPage(&kSystemPage); }
+
+/* Study (NFL2K5_DIRTRACE=1): the save scanner's per-save check result
+ * (gen patch SAVESCAN_CHECK_LOG in sub_0004C8E0). */
+extern "C" void nfl2k5_savescan_check(uint32_t result)
+{
+    static int on = -1;
+    if (on < 0) on = getenv("NFL2K5_DIRTRACE") != NULL;
+    if (on) fprintf(stderr, "[SAVESCAN] save check -> %u\n", result);
+}
+
+/* Gen patch SAVESCAN_SKIP_BAD: the save list's fill pass could not open a
+ * save; it is left out of the list instead of ending the list there. */
+extern "C" void nfl2k5_savescan_skipped(uint32_t total)
+{
+    fprintf(stderr, "[SAVE-LIST] a save could not be read; left out of the list (%u found)\n", total);
+}
+
+/* Gen patch SAVE_SPACE_LOG (docs/SAVES-UNLIMITED-20261021.md): the boot check
+ * behind "Your Xbox doesn't have enough free blocks" -- the disk's free
+ * blocks against what every save type needs together. Logged on change. */
+extern "C" void nfl2k5_save_space_log(uint32_t free_blocks, uint32_t need_blocks)
+{
+    static uint32_t last_free = 0xFFFFFFFFu, last_need = 0xFFFFFFFFu;
+    if (free_blocks == last_free && need_blocks == last_need) return;
+    last_free = free_blocks;
+    last_need = need_blocks;
+    fprintf(stderr, "[SAVE-SPACE] %d free blocks, all save types need %d: %s\n",
+            (int)free_blocks, (int)need_blocks,
+            (int)free_blocks >= (int)need_blocks ? "ok" : "NOT ENOUGH (the game warns)");
+}

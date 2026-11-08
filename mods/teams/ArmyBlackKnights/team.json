@@ -1,0 +1,16 @@
+{
+  "code": "Q1",
+  "base": "25",
+  "city": "Army",
+  "nickname": "Black Knights",
+  "abbreviation": "ARMY",
+  "name": "Black Knights",
+  "colors": {
+    "primary": "#1C1C1E",
+    "secondary": "#D3BC8D",
+    "text": "#FFFFFF"
+  },
+  "logos": {},
+  "aliases": [],
+  "created_with": "NFL2K5-PC Team Creator"
+}

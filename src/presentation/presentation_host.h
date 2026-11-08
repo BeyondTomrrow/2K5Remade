@@ -27,6 +27,10 @@ struct PresentationSurface {
     const uint8_t *pixels = nullptr;
     int width = 0, height = 0, stride = 0;
     uint64_t serial = 0;
+    /* Rows [dirty_y0, dirty_y1) changed since this consumer's last call;
+     * the rest of `pixels` is as it was then. Empty when nothing changed. */
+    int dirty_y0 = 0, dirty_y1 = 0;
+    const uint8_t *dirty_rows = nullptr;   /* if set: 1 for each changed row (height bytes) */
 };
 
 /* The newest frame as a GPU texture shared between devices: an NT handle
@@ -44,6 +48,7 @@ struct PresentationHostConfig {
     std::string entry = "index.html"; /* page inside package_dir */
     std::string root_dir;             /* folder served as https://presentation.local/ */
     std::string teams_dir;            /* folder served as https://teams.local/ */
+    std::string eras_teams_dir;       /* folder served as https://erateams.local/ (My NFL Eras team art, M9) */
     std::string portraits_dir;        /* folder served as https://portraits.local/ (player headshots) */
     int canvas_width = 1920;          /* logical CSS pixels */
     int canvas_height = 1080;

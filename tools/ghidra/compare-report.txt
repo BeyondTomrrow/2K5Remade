@@ -1,0 +1,1231 @@
+both 19753 | ghidra only 224 | ours only 13470 | size disagreements 656
+
+# ghidra only (first 500)
+0x00011130 FUN_00011130 size 46
+0x0001641E FUN_0001641e size 27
+0x00023790 FUN_00023790 size 62
+0x00025B6E FUN_00025b6e size 15
+0x00025D00 FUN_00025d00 size 46
+0x00029F20 FUN_00029f20 size 46
+0x0002EC00 FUN_0002ec00 size 25
+0x000309C0 FUN_000309c0 size 48
+0x00030ED0 FUN_00030ed0 size 67
+0x00030FC0 FUN_00030fc0 size 55
+0x000326B0 FUN_000326b0 size 46
+0x000328C0 FUN_000328c0 size 55
+0x00034AF0 FUN_00034af0 size 66
+0x000390B0 FUN_000390b0 size 46
+0x00039DF0 FUN_00039df0 size 46
+0x0003EBA0 FUN_0003eba0 size 46
+0x000419D0 FUN_000419d0 size 46
+0x00042AE0 FUN_00042ae0 size 46
+0x000437F0 FUN_000437f0 size 38
+0x00044A50 FUN_00044a50 size 111
+0x00046180 FUN_00046180 size 46
+0x000475C0 FUN_000475c0 size 46
+0x00048280 FUN_00048280 size 24
+0x00048AD0 FUN_00048ad0 size 28
+0x00048E80 FUN_00048e80 size 46
+0x0004A450 FUN_0004a450 size 46
+0x0004A930 FUN_0004a930 size 20
+0x0004A966 FUN_0004a966 size 171
+0x0004ABD0 FUN_0004abd0 size 46
+0x0004E7C0 FUN_0004e7c0 size 46
+0x0004F3F0 FUN_0004f3f0 size 113
+0x000521C0 FUN_000521c0 size 46
+0x00055690 FUN_00055690 size 46
+0x00057E50 FUN_00057e50 size 46
+0x0005B510 FUN_0005b510 size 46
+0x0005DD00 FUN_0005dd00 size 46
+0x00063890 FUN_00063890 size 46
+0x0006B3F0 FUN_0006b3f0 size 25
+0x000729A0 FUN_000729a0 size 46
+0x00074C80 FUN_00074c80 size 46
+0x00074EF0 FUN_00074ef0 size 46
+0x00077FF0 FUN_00077ff0 size 46
+0x0007D8F0 FUN_0007d8f0 size 54
+0x0007E6C0 FUN_0007e6c0 size 46
+0x0007F990 FUN_0007f990 size 46
+0x000850D0 FUN_000850d0 size 46
+0x00088780 FUN_00088780 size 80
+0x0008926A FUN_0008926a size 202
+0x00089FD0 FUN_00089fd0 size 46
+0x0008D29C FUN_0008d29c size 13
+0x0008D700 FUN_0008d700 size 46
+0x0008E320 FUN_0008e320 size 26
+0x00093C40 FUN_00093c40 size 46
+0x00095410 FUN_00095410 size 46
+0x000962F0 FUN_000962f0 size 46
+0x00096EA0 FUN_00096ea0 size 46
+0x0009A5D0 FUN_0009a5d0 size 46
+0x0009D830 FUN_0009d830 size 46
+0x000A3670 FUN_000a3670 size 46
+0x000A5B00 FUN_000a5b00 size 31
+0x000B4A60 FUN_000b4a60 size 46
+0x000BA1B0 FUN_000ba1b0 size 46
+0x000C3260 FUN_000c3260 size 50
+0x000CF3C0 FUN_000cf3c0 size 46
+0x000D8B90 FUN_000d8b90 size 46
+0x000DD570 FUN_000dd570 size 46
+0x000DD7F0 FUN_000dd7f0 size 46
+0x000E1120 FUN_000e1120 size 77
+0x000E1170 FUN_000e1170 size 81
+0x000E1CC0 FUN_000e1cc0 size 70
+0x000E1D10 FUN_000e1d10 size 78
+0x000E8447 FUN_000e8447 size 834
+0x000F22B0 FUN_000f22b0 size 46
+0x000F30F0 FUN_000f30f0 size 78
+0x000F57C0 FUN_000f57c0 size 46
+0x000FA4A0 FUN_000fa4a0 size 46
+0x000FAA50 FUN_000faa50 size 46
+0x000FF710 FUN_000ff710 size 46
+0x00101050 FUN_00101050 size 46
+0x0010BA50 FUN_0010ba50 size 46
+0x001163C0 FUN_001163c0 size 20
+0x001163E0 FUN_001163e0 size 20
+0x00116400 FUN_00116400 size 20
+0x00116420 FUN_00116420 size 20
+0x00116440 FUN_00116440 size 20
+0x00116460 FUN_00116460 size 20
+0x00116480 FUN_00116480 size 20
+0x001164A0 FUN_001164a0 size 20
+0x001164C0 FUN_001164c0 size 20
+0x00118A10 FUN_00118a10 size 46
+0x00119920 FUN_00119920 size 26
+0x0011C1F0 FUN_0011c1f0 size 46
+0x0011D620 FUN_0011d620 size 46
+0x00122660 FUN_00122660 size 46
+0x00125E10 FUN_00125e10 size 46
+0x0012929F FUN_0012929f size 84
+0x0012E230 FUN_0012e230 size 46
+0x0012FBED FUN_0012fbed size 812
+0x00139D80 FUN_00139d80 size 46
+0x0013A410 FUN_0013a410 size 46
+0x0013AAF0 FUN_0013aaf0 size 46
+0x0013B9D0 FUN_0013b9d0 size 46
+0x0013F4E0 FUN_0013f4e0 size 46
+0x00140080 FUN_00140080 size 22
+0x00145B20 FUN_00145b20 size 63
+0x00145C10 FUN_00145c10 size 63
+0x00145C50 FUN_00145c50 size 77
+0x00151920 FUN_00151920 size 46
+0x00160780 FUN_00160780 size 46
+0x00162E18 FUN_00162e18 size 191
+0x00165B10 FUN_00165b10 size 46
+0x00169800 FUN_00169800 size 46
+0x0016ED10 FUN_0016ed10 size 149
+0x001709E0 FUN_001709e0 size 77
+0x00170A30 FUN_00170a30 size 118
+0x00176E50 FUN_00176e50 size 46
+0x00182C70 FUN_00182c70 size 46
+0x00190C80 FUN_00190c80 size 57
+0x00191840 FUN_00191840 size 46
+0x0019CAA0 FUN_0019caa0 size 46
+0x001A8DB0 FUN_001a8db0 size 40
+0x001A9CB0 FUN_001a9cb0 size 46
+0x001B0E80 FUN_001b0e80 size 46
+0x001B5A70 FUN_001b5a70 size 46
+0x001C1C30 FUN_001c1c30 size 53
+0x001C1D30 FUN_001c1d30 size 46
+0x001C4100 FUN_001c4100 size 64
+0x001C8660 FUN_001c8660 size 46
+0x001D3370 FUN_001d3370 size 46
+0x001D7400 FUN_001d7400 size 46
+0x001DDC20 FUN_001ddc20 size 46
+0x001E1500 FUN_001e1500 size 46
+0x001F80E0 FUN_001f80e0 size 46
+0x001FC700 FUN_001fc700 size 10
+0x001FFA60 FUN_001ffa60 size 58
+0x0020F050 FUN_0020f050 size 46
+0x00213AD0 FUN_00213ad0 size 46
+0x00216E70 FUN_00216e70 size 46
+0x0022D960 FUN_0022d960 size 46
+0x0022EFA0 FUN_0022efa0 size 46
+0x00240EA0 FUN_00240ea0 size 28
+0x00240EC0 FUN_00240ec0 size 28
+0x00240EE0 FUN_00240ee0 size 28
+0x00240F00 FUN_00240f00 size 28
+0x00255A10 FUN_00255a10 size 36
+0x00255AE0 FUN_00255ae0 size 21
+0x0025CC50 FUN_0025cc50 size 46
+0x002638E5 FUN_002638e5 size 14
+0x0026CA00 FUN_0026ca00 size 46
+0x0027C450 FUN_0027c450 size 32
+0x002890F0 FUN_002890f0 size 1939
+0x0028BF60 FUN_0028bf60 size 46
+0x0028D4D0 FUN_0028d4d0 size 46
+0x002922E0 FUN_002922e0 size 46
+0x002952B0 FUN_002952b0 size 140
+0x002979F0 FUN_002979f0 size 143
+0x00299C30 FUN_00299c30 size 46
+0x0029ADB0 FUN_0029adb0 size 76
+0x0029E125 FUN_0029e125 size 229
+0x0029E74A FUN_0029e74a size 80
+0x0029F6B0 FUN_0029f6b0 size 46
+0x002A07D0 FUN_002a07d0 size 46
+0x002A3230 FUN_002a3230 size 46
+0x002A3A20 FUN_002a3a20 size 46
+0x002A3F90 FUN_002a3f90 size 46
+0x002B09D9 FUN_002b09d9 size 18
+0x002B80FC FUN_002b80fc size 12
+0x002C7F60 FUN_002c7f60 size 37
+0x002C8A50 FUN_002c8a50 size 46
+0x002C9110 FUN_002c9110 size 106
+0x002D02E0 FUN_002d02e0 size 28
+0x002D03E0 FUN_002d03e0 size 70
+0x002D0430 FUN_002d0430 size 31
+0x002FE910 FUN_002fe910 size 46
+0x00303970 FUN_00303970 size 46
+0x00304410 FUN_00304410 size 46
+0x003071B0 FUN_003071b0 size 46
+0x003096B0 FUN_003096b0 size 46
+0x0030D930 FUN_0030d930 size 46
+0x00312D60 FUN_00312d60 size 46
+0x00314BA0 FUN_00314ba0 size 46
+0x0031E650 FUN_0031e650 size 84
+0x00329C80 FUN_00329c80 size 46
+0x0032B940 FUN_0032b940 size 46
+0x0032F100 FUN_0032f100 size 46
+0x00332A80 FUN_00332a80 size 46
+0x00337F60 FUN_00337f60 size 46
+0x003405C0 FUN_003405c0 size 46
+0x00349581 FUN_00349581 size 435
+0x0034BF20 FUN_0034bf20 size 78
+0x00350D60 FUN_00350d60 size 46
+0x00351DE0 FUN_00351de0 size 46
+0x00355F40 FUN_00355f40 size 46
+0x00357830 FUN_00357830 size 74
+0x00372D40 FUN_00372d40 size 118
+0x00373DBA FUN_00373dba size 25
+0x00387D00 FUN_00387d00 size 141
+0x00388640 FUN_00388640 size 350
+0x003BA610 FUN_003ba610 size 592
+0x003BABE0 FUN_003babe0 size 333
+0x003C7F30 FUN_003c7f30 size 46
+0x003D1430 FUN_003d1430 size 91
+0x003D1610 FUN_003d1610 size 142
+0x003D1C40 FUN_003d1c40 size 81
+0x003D2000 FUN_003d2000 size 125
+0x003DC170 FUN_003dc170 size 262
+0x003E9999 FUN_003e9999 size 7
+0x003EB0D0 FUN_003eb0d0 size 250
+0x003EE61A FUN_003ee61a size 76
+0x003F1999 FUN_003f1999 size 38
+0x003F7857 FUN_003f7857 size 12
+0x0041AF88 FUN_0041af88 size 10
+0x0043E499 FUN_0043e499 size 659
+0x00446499 FUN_00446499 size 56
+0x00449A88 FUN_00449a88 size 98
+0x00452259 FUN_00452259 size 27
+0x00488100 FUN_00488100 size 17
+0x004B011F FUN_004b011f size 39
+0x0050C15C FUN_0050c15c size 152
+0x00530BF1 FUN_00530bf1 size 819
+0x00541F9D FUN_00541f9d size 45
+0x0076DBBF FUN_0076dbbf size 67
+0x007B022F FUN_007b022f size 137
+0x00BE0F25 FUN_00be0f25 size 34
+
+# ours only (first 500)
+0x00011012 sub_00011012 size 126 recomp=generated
+0x000116F0 sub_000116F0 size 105 recomp=generated
+0x00011831 sub_00011831 size 170 recomp=generated
+0x000119B0 sub_000119B0 size 48 recomp=generated
+0x000119D0 sub_000119D0 size 16 recomp=generated
+0x00011C80 sub_00011C80 size 158 recomp=generated
+0x00011D1E sub_00011D1E size 60 recomp=generated
+0x00011D40 sub_00011D40 size 26 recomp=generated
+0x00011D60 sub_00011D60 size 96 recomp=generated
+0x00011F50 sub_00011F50 size 176 recomp=generated
+0x00011F90 sub_00011F90 size 112 recomp=generated
+0x00011FF0 sub_00011FF0 size 16 recomp=generated
+0x00012000 sub_00012000 size 6 recomp=generated
+0x00012010 sub_00012010 size 48 recomp=generated
+0x00012090 sub_00012090 size 96 recomp=generated
+0x000120C0 sub_000120C0 size 48 recomp=generated
+0x000120D0 sub_000120D0 size 32 recomp=generated
+0x000122E0 sub_000122E0 size 80 recomp=generated
+0x00012390 sub_00012390 size 80 recomp=generated
+0x000123B0 sub_000123B0 size 48 recomp=generated
+0x000123D0 sub_000123D0 size 16 recomp=generated
+0x000125D0 sub_000125D0 size 15 recomp=generated
+0x000125DF sub_000125DF size 6 recomp=generated
+0x000125F0 sub_000125F0 size 36 recomp=generated
+0x00012614 sub_00012614 size 6 recomp=generated
+0x00012620 sub_00012620 size 64 recomp=generated
+0x00012640 sub_00012640 size 32 recomp=generated
+0x00012770 sub_00012770 size 112 recomp=generated
+0x00012780 sub_00012780 size 96 recomp=generated
+0x00012850 sub_00012850 size 16 recomp=generated
+0x00012860 sub_00012860 size 20 recomp=generated
+0x00012C50 sub_00012C50 size 16 recomp=generated
+0x00012D00 sub_00012D00 size 192 recomp=generated
+0x00012D20 sub_00012D20 size 160 recomp=generated
+0x00012D50 sub_00012D50 size 112 recomp=generated
+0x00012D60 sub_00012D60 size 96 recomp=generated
+0x00013040 sub_00013040 size 80 recomp=generated
+0x0001320E sub_0001320E size 34 recomp=generated
+0x00013330 sub_00013330 size 16 recomp=generated
+0x00013B13 sub_00013B13 size 125 recomp=generated
+0x00013BC0 sub_00013BC0 size 209 recomp=generated
+0x00013C90 sub_00013C90 size 1 recomp=generated
+0x00013D45 sub_00013D45 size 75 recomp=generated
+0x00013D90 sub_00013D90 size 26 recomp=generated
+0x00014012 sub_00014012 size 134 recomp=generated
+0x00014A94 sub_00014A94 size 43 recomp=generated
+0x00014BDF sub_00014BDF size 57 recomp=generated
+0x00015390 sub_00015390 size 451 recomp=generated
+0x000155A6 sub_000155A6 size 9 recomp=generated
+0x000155AF sub_000155AF size 321 recomp=generated
+0x0001570D sub_0001570D size 307 recomp=generated
+0x00015840 sub_00015840 size 8 recomp=generated
+0x00015848 sub_00015848 size 13 recomp=generated
+0x00015B30 sub_00015B30 size 24 recomp=generated
+0x00015BFC sub_00015BFC size 2 recomp=generated
+0x00015F10 sub_00015F10 size 189 recomp=generated
+0x00015FCD sub_00015FCD size 3 recomp=generated
+0x00015FD9 sub_00015FD9 size 82 recomp=generated
+0x00016344 sub_00016344 size 8 recomp=generated
+0x0001634C sub_0001634C size 210 recomp=generated
+0x000164B9 sub_000164B9 size 6 recomp=generated
+0x000164BF sub_000164BF size 6 recomp=generated
+0x000164C5 sub_000164C5 size 6 recomp=generated
+0x000164CB sub_000164CB size 6 recomp=generated
+0x000164FD sub_000164FD size 99 recomp=generated
+0x00016560 sub_00016560 size 3 recomp=generated
+0x00016563 sub_00016563 size 9 recomp=generated
+0x000167AC sub_000167AC size 40 recomp=generated
+0x00016821 sub_00016821 size 2 recomp=generated
+0x0001682C sub_0001682C size 42 recomp=generated
+0x00016856 sub_00016856 size 42 recomp=generated
+0x00016880 sub_00016880 size 110 recomp=generated
+0x000168DA sub_000168DA size 20 recomp=generated
+0x000168EE sub_000168EE size 154 recomp=generated
+0x000169CC sub_000169CC size 45 recomp=generated
+0x000169DA sub_000169DA size 31 recomp=generated
+0x00016A1C sub_00016A1C size 34 recomp=generated
+0x00016AC9 sub_00016AC9 size 9 recomp=generated
+0x00016B5D sub_00016B5D size 116 recomp=generated
+0x00016E7C sub_00016E7C size 11 recomp=generated
+0x00016E87 sub_00016E87 size 37 recomp=generated
+0x00016F1D sub_00016F1D size 25 recomp=generated
+0x00017018 sub_00017018 size 96 recomp=generated
+0x0001702E sub_0001702E size 74 recomp=generated
+0x000170B4 sub_000170B4 size 152 recomp=generated
+0x00017132 sub_00017132 size 26 recomp=generated
+0x0001713B sub_0001713B size 17 recomp=generated
+0x0001721B sub_0001721B size 72 recomp=generated
+0x00017238 sub_00017238 size 43 recomp=generated
+0x00017263 sub_00017263 size 143 recomp=generated
+0x0001737F sub_0001737F size 245 recomp=generated
+0x00017445 sub_00017445 size 47 recomp=generated
+0x00017453 sub_00017453 size 33 recomp=generated
+0x000176FF sub_000176FF size 234 recomp=generated
+0x00018000 sub_00018000 size 171 recomp=generated
+0x0001866A sub_0001866A size 995 recomp=generated
+0x00018678 sub_00018678 size 981 recomp=generated
+0x000191AC sub_000191AC size 9 recomp=generated
+0x000191C8 sub_000191C8 size 2148 recomp=generated
+0x000199E3 sub_000199E3 size 73 recomp=generated
+0x000199F7 sub_000199F7 size 53 recomp=generated
+0x00019C20 sub_00019C20 size 3 recomp=generated
+0x00019C36 sub_00019C36 size 429 recomp=generated
+0x00019D79 sub_00019D79 size 106 recomp=generated
+0x00019DBD sub_00019DBD size 38 recomp=generated
+0x00019DC1 sub_00019DC1 size 34 recomp=generated
+0x00019DE3 sub_00019DE3 size 3 recomp=generated
+0x0001A35B sub_0001A35B size 438 recomp=generated
+0x0001A35F sub_0001A35F size 434 recomp=generated
+0x0001A475 sub_0001A475 size 156 recomp=generated
+0x0001A489 sub_0001A489 size 136 recomp=generated
+0x0001A5CC sub_0001A5CC size 44 recomp=generated
+0x0001A62A sub_0001A62A size 117 recomp=generated
+0x0001A631 sub_0001A631 size 110 recomp=generated
+0x0001A638 sub_0001A638 size 103 recomp=generated
+0x0001A63E sub_0001A63E size 97 recomp=generated
+0x0001A65B sub_0001A65B size 68 recomp=generated
+0x0001A687 sub_0001A687 size 24 recomp=generated
+0x0001A695 sub_0001A695 size 10 recomp=generated
+0x0001A80B sub_0001A80B size 46 recomp=generated
+0x0001AFFC sub_0001AFFC size 31 recomp=generated
+0x0001B325 sub_0001B325 size 32 recomp=generated
+0x0001B3FC sub_0001B3FC size 38 recomp=generated
+0x0001B753 sub_0001B753 size 32 recomp=generated
+0x0001B93C sub_0001B93C size 62 recomp=generated
+0x0001B965 sub_0001B965 size 21 recomp=generated
+0x0001B969 sub_0001B969 size 17 recomp=generated
+0x0001B9CA sub_0001B9CA size 21 recomp=generated
+0x0001B9CE sub_0001B9CE size 17 recomp=generated
+0x0001B9DF sub_0001B9DF size 90 recomp=generated
+0x0001BA24 sub_0001BA24 size 21 recomp=generated
+0x0001BA28 sub_0001BA28 size 17 recomp=generated
+0x0001BA62 sub_0001BA62 size 21 recomp=generated
+0x0001BA66 sub_0001BA66 size 17 recomp=generated
+0x0001C640 sub_0001C640 size 553 recomp=generated
+0x0001C847 sub_0001C847 size 34 recomp=generated
+0x0001C84B sub_0001C84B size 30 recomp=generated
+0x0001C869 sub_0001C869 size 6 recomp=generated
+0x0001C86F sub_0001C86F size 40 recomp=generated
+0x0001D410 sub_0001D410 size 46 recomp=generated
+0x0001D5CF sub_0001D5CF size 13 recomp=generated
+0x0001D629 sub_0001D629 size 18 recomp=generated
+0x0001D6AF sub_0001D6AF size 25 recomp=generated
+0x0001D6C8 sub_0001D6C8 size 3 recomp=generated
+0x0001D6CB sub_0001D6CB size 86 recomp=generated
+0x0001EE79 sub_0001EE79 size 22 recomp=generated
+0x0001EE8F sub_0001EE8F size 440 recomp=generated
+0x0001F5E8 sub_0001F5E8 size 26 recomp=generated
+0x0001F9C1 sub_0001F9C1 size 56 recomp=generated
+0x0001F9E4 sub_0001F9E4 size 21 recomp=generated
+0x0001F9E8 sub_0001F9E8 size 17 recomp=generated
+0x0001FA50 sub_0001FA50 size 21 recomp=generated
+0x0001FA54 sub_0001FA54 size 17 recomp=generated
+0x0001FA65 sub_0001FA65 size 56 recomp=generated
+0x0001FA88 sub_0001FA88 size 21 recomp=generated
+0x0001FA8C sub_0001FA8C size 17 recomp=generated
+0x0001FAC2 sub_0001FAC2 size 21 recomp=generated
+0x0001FAC6 sub_0001FAC6 size 17 recomp=generated
+0x0001FB7A sub_0001FB7A size 88 recomp=generated
+0x0001FF87 sub_0001FF87 size 188 recomp=generated
+0x0001FFCF sub_0001FFCF size 116 recomp=generated
+0x0001FFE8 sub_0001FFE8 size 91 recomp=generated
+0x0001FFF1 sub_0001FFF1 size 82 recomp=generated
+0x0001FFF3 sub_0001FFF3 size 80 recomp=generated
+0x0001FFF5 sub_0001FFF5 size 78 recomp=generated
+0x0001FFF6 sub_0001FFF6 size 77 recomp=generated
+0x0001FFF8 sub_0001FFF8 size 75 recomp=generated
+0x0001FFFB sub_0001FFFB size 72 recomp=generated
+0x0001FFFD sub_0001FFFD size 70 recomp=generated
+0x00020000 sub_00020000 size 67 recomp=generated
+0x00020006 sub_00020006 size 61 recomp=generated
+0x0002000B sub_0002000B size 56 recomp=generated
+0x00020010 sub_00020010 size 51 recomp=generated
+0x00020017 sub_00020017 size 44 recomp=generated
+0x0002001E sub_0002001E size 37 recomp=generated
+0x0002001F sub_0002001F size 36 recomp=generated
+0x00020022 sub_00020022 size 33 recomp=generated
+0x00020024 sub_00020024 size 31 recomp=generated
+0x00020026 sub_00020026 size 29 recomp=generated
+0x00020028 sub_00020028 size 27 recomp=generated
+0x0002002B sub_0002002B size 24 recomp=generated
+0x0002002C sub_0002002C size 23 recomp=generated
+0x0002002F sub_0002002F size 20 recomp=generated
+0x00020030 sub_00020030 size 19 recomp=generated
+0x00020037 sub_00020037 size 12 recomp=generated
+0x00020039 sub_00020039 size 10 recomp=generated
+0x0002003B sub_0002003B size 8 recomp=generated
+0x0002003D sub_0002003D size 6 recomp=generated
+0x0002003E sub_0002003E size 5 recomp=generated
+0x0002003F sub_0002003F size 4 recomp=generated
+0x00020040 sub_00020040 size 3 recomp=generated
+0x00020046 sub_00020046 size 108 recomp=generated
+0x00020054 sub_00020054 size 94 recomp=generated
+0x0002005D sub_0002005D size 85 recomp=generated
+0x00020060 sub_00020060 size 82 recomp=generated
+0x0002006B sub_0002006B size 71 recomp=generated
+0x0002006D sub_0002006D size 69 recomp=generated
+0x00020071 sub_00020071 size 65 recomp=generated
+0x00020075 sub_00020075 size 61 recomp=generated
+0x0002007D sub_0002007D size 53 recomp=generated
+0x0002007E sub_0002007E size 52 recomp=generated
+0x00020085 sub_00020085 size 45 recomp=generated
+0x0002008B sub_0002008B size 39 recomp=generated
+0x0002008D sub_0002008D size 37 recomp=generated
+0x0002008F sub_0002008F size 35 recomp=generated
+0x00020097 sub_00020097 size 27 recomp=generated
+0x00020098 sub_00020098 size 26 recomp=generated
+0x0002009B sub_0002009B size 23 recomp=generated
+0x000200A0 sub_000200A0 size 18 recomp=generated
+0x000200A3 sub_000200A3 size 15 recomp=generated
+0x000200A5 sub_000200A5 size 13 recomp=generated
+0x000200AB sub_000200AB size 7 recomp=generated
+0x000200AD sub_000200AD size 5 recomp=generated
+0x000200AE sub_000200AE size 4 recomp=generated
+0x000200AF sub_000200AF size 3 recomp=generated
+0x000200B3 sub_000200B3 size 165 recomp=generated
+0x000200B5 sub_000200B5 size 163 recomp=generated
+0x000200B8 sub_000200B8 size 160 recomp=generated
+0x000200BB sub_000200BB size 157 recomp=generated
+0x000200BE sub_000200BE size 154 recomp=generated
+0x000200BF sub_000200BF size 153 recomp=generated
+0x000200C5 sub_000200C5 size 147 recomp=generated
+0x000200D0 sub_000200D0 size 136 recomp=generated
+0x000200D2 sub_000200D2 size 134 recomp=generated
+0x000200D5 sub_000200D5 size 131 recomp=generated
+0x000200D6 sub_000200D6 size 130 recomp=generated
+0x000200D9 sub_000200D9 size 127 recomp=generated
+0x000200DA sub_000200DA size 126 recomp=generated
+0x000200F1 sub_000200F1 size 103 recomp=generated
+0x000200F7 sub_000200F7 size 97 recomp=generated
+0x00020101 sub_00020101 size 87 recomp=generated
+0x00020105 sub_00020105 size 83 recomp=generated
+0x00020106 sub_00020106 size 82 recomp=generated
+0x00020107 sub_00020107 size 81 recomp=generated
+0x0002010A sub_0002010A size 78 recomp=generated
+0x0002010C sub_0002010C size 76 recomp=generated
+0x00020111 sub_00020111 size 71 recomp=generated
+0x00020159 sub_00020159 size 74 recomp=generated
+0x00020161 sub_00020161 size 66 recomp=generated
+0x0002016E sub_0002016E size 53 recomp=generated
+0x00020171 sub_00020171 size 50 recomp=generated
+0x00020247 sub_00020247 size 116 recomp=generated
+0x00020293 sub_00020293 size 40 recomp=generated
+0x000202A6 sub_000202A6 size 21 recomp=generated
+0x000202AB sub_000202AB size 16 recomp=generated
+0x000202B6 sub_000202B6 size 5 recomp=generated
+0x000202C7 sub_000202C7 size 130 recomp=generated
+0x000202D9 sub_000202D9 size 112 recomp=generated
+0x000202E3 sub_000202E3 size 102 recomp=generated
+0x000202E8 sub_000202E8 size 97 recomp=generated
+0x00020300 sub_00020300 size 73 recomp=generated
+0x00020302 sub_00020302 size 71 recomp=generated
+0x00020304 sub_00020304 size 69 recomp=generated
+0x0002030C sub_0002030C size 61 recomp=generated
+0x0002031A sub_0002031A size 47 recomp=generated
+0x0002031B sub_0002031B size 46 recomp=generated
+0x0002032B sub_0002032B size 30 recomp=generated
+0x0002033C sub_0002033C size 13 recomp=generated
+0x0002033D sub_0002033D size 12 recomp=generated
+0x00020344 sub_00020344 size 5 recomp=generated
+0x00020346 sub_00020346 size 3 recomp=generated
+0x00020349 sub_00020349 size 54 recomp=generated
+0x00020350 sub_00020350 size 47 recomp=generated
+0x00020357 sub_00020357 size 40 recomp=generated
+0x0002035A sub_0002035A size 37 recomp=generated
+0x00020361 sub_00020361 size 30 recomp=generated
+0x00020367 sub_00020367 size 24 recomp=generated
+0x00020375 sub_00020375 size 10 recomp=generated
+0x00020400 sub_00020400 size 180 recomp=generated
+0x00020401 sub_00020401 size 179 recomp=generated
+0x00020406 sub_00020406 size 174 recomp=generated
+0x00020506 sub_00020506 size 134 recomp=generated
+0x000208C0 sub_000208C0 size 6 recomp=generated
+0x00020B74 sub_00020B74 size 76 recomp=generated
+0x00020CA0 sub_00020CA0 size 155 recomp=generated
+0x00021190 sub_00021190 size 252 recomp=generated
+0x00021371 sub_00021371 size 24 recomp=generated
+0x00021F5C sub_00021F5C size 6 recomp=generated
+0x00022BE6 sub_00022BE6 size 26 recomp=generated
+0x00022DDD sub_00022DDD size 237 recomp=generated
+0x00023023 sub_00023023 size 522 recomp=generated
+0x00023555 sub_00023555 size 123 recomp=generated
+0x00025680 sub_00025680 size 88 recomp=generated
+0x00025E26 sub_00025E26 size 169 recomp=generated
+0x00026EA0 sub_00026EA0 size 27 recomp=generated
+0x00026EC0 sub_00026EC0 size 29 recomp=generated
+0x00026EE0 sub_00026EE0 size 34 recomp=generated
+0x0002716E sub_0002716E size 66 recomp=generated
+0x000271C5 sub_000271C5 size 11 recomp=generated
+0x000271FF sub_000271FF size 454 recomp=generated
+0x000281E8 sub_000281E8 size 1312 recomp=generated
+0x00029FB0 sub_00029FB0 size 34 recomp=generated
+0x0002A2FC sub_0002A2FC size 8 recomp=generated
+0x0002B000 sub_0002B000 size 37 recomp=generated
+0x0002BE3E sub_0002BE3E size 38 recomp=generated
+0x0002CED6 sub_0002CED6 size 10 recomp=generated
+0x0002D813 sub_0002D813 size 472 recomp=generated
+0x0002D82D sub_0002D82D size 446 recomp=generated
+0x0002E660 sub_0002E660 size 393 recomp=generated
+0x0002FD8A sub_0002FD8A size 281 recomp=generated
+0x0002FE6E sub_0002FE6E size 53 recomp=generated
+0x0002FFE9 sub_0002FFE9 size 663 recomp=generated
+0x0002FFF3 sub_0002FFF3 size 653 recomp=generated
+0x0002FFF7 sub_0002FFF7 size 649 recomp=generated
+0x0002FFF9 sub_0002FFF9 size 647 recomp=generated
+0x00030000 sub_00030000 size 640 recomp=generated
+0x00030006 sub_00030006 size 634 recomp=generated
+0x0003000C sub_0003000C size 628 recomp=generated
+0x00030010 sub_00030010 size 624 recomp=generated
+0x00030016 sub_00030016 size 618 recomp=generated
+0x00030018 sub_00030018 size 616 recomp=generated
+0x0003001B sub_0003001B size 613 recomp=generated
+0x0003001D sub_0003001D size 611 recomp=generated
+0x00030021 sub_00030021 size 607 recomp=generated
+0x00030025 sub_00030025 size 603 recomp=generated
+0x0003002B sub_0003002B size 597 recomp=generated
+0x0003002D sub_0003002D size 595 recomp=generated
+0x00030032 sub_00030032 size 590 recomp=generated
+0x00030036 sub_00030036 size 586 recomp=generated
+0x00030038 sub_00030038 size 584 recomp=generated
+0x0003003E sub_0003003E size 578 recomp=generated
+0x00030042 sub_00030042 size 574 recomp=generated
+0x00030044 sub_00030044 size 572 recomp=generated
+0x00030046 sub_00030046 size 570 recomp=generated
+0x0003004E sub_0003004E size 562 recomp=generated
+0x00030052 sub_00030052 size 558 recomp=generated
+0x00030056 sub_00030056 size 554 recomp=generated
+0x00030059 sub_00030059 size 551 recomp=generated
+0x0003005A sub_0003005A size 550 recomp=generated
+0x0003005F sub_0003005F size 545 recomp=generated
+0x00030061 sub_00030061 size 543 recomp=generated
+0x00030063 sub_00030063 size 541 recomp=generated
+0x00030066 sub_00030066 size 538 recomp=generated
+0x00030068 sub_00030068 size 536 recomp=generated
+0x0003006B sub_0003006B size 533 recomp=generated
+0x0003006E sub_0003006E size 530 recomp=generated
+0x00030070 sub_00030070 size 528 recomp=generated
+0x00030073 sub_00030073 size 525 recomp=generated
+0x00030075 sub_00030075 size 523 recomp=generated
+0x00030076 sub_00030076 size 522 recomp=generated
+0x0003007B sub_0003007B size 517 recomp=generated
+0x0003007F sub_0003007F size 513 recomp=generated
+0x00030082 sub_00030082 size 510 recomp=generated
+0x0003008B sub_0003008B size 501 recomp=generated
+0x0003008E sub_0003008E size 498 recomp=generated
+0x00030090 sub_00030090 size 496 recomp=generated
+0x000300A0 sub_000300A0 size 480 recomp=generated
+0x000300CF sub_000300CF size 433 recomp=generated
+0x000300D2 sub_000300D2 size 430 recomp=generated
+0x000300D7 sub_000300D7 size 425 recomp=generated
+0x000300D9 sub_000300D9 size 423 recomp=generated
+0x000300DF sub_000300DF size 417 recomp=generated
+0x000300E1 sub_000300E1 size 415 recomp=generated
+0x000300E6 sub_000300E6 size 410 recomp=generated
+0x000300EA sub_000300EA size 406 recomp=generated
+0x000300EB sub_000300EB size 405 recomp=generated
+0x00030109 sub_00030109 size 375 recomp=generated
+0x00030201 sub_00030201 size 127 recomp=generated
+0x000302CC sub_000302CC size 136 recomp=generated
+0x00030300 sub_00030300 size 84 recomp=generated
+0x00030303 sub_00030303 size 81 recomp=generated
+0x0003030D sub_0003030D size 71 recomp=generated
+0x00030316 sub_00030316 size 62 recomp=generated
+0x00030330 sub_00030330 size 36 recomp=generated
+0x00030340 sub_00030340 size 20 recomp=generated
+0x00030361 sub_00030361 size 162 recomp=generated
+0x00030369 sub_00030369 size 154 recomp=generated
+0x0003038D sub_0003038D size 118 recomp=generated
+0x00030398 sub_00030398 size 107 recomp=generated
+0x000303A1 sub_000303A1 size 98 recomp=generated
+0x00030401 sub_00030401 size 2 recomp=generated
+0x00030410 sub_00030410 size 160 recomp=generated
+0x00030459 sub_00030459 size 87 recomp=generated
+0x00030501 sub_00030501 size 176 recomp=generated
+0x0003052B sub_0003052B size 134 recomp=generated
+0x00030731 sub_00030731 size 18 recomp=generated
+0x00030981 sub_00030981 size 58 recomp=generated
+0x00030AA1 sub_00030AA1 size 1 recomp=generated
+0x00030D31 sub_00030D31 size 8 recomp=generated
+0x00031220 sub_00031220 size 368 recomp=generated
+0x0003172B sub_0003172B size 196 recomp=generated
+0x00032013 sub_00032013 size 314 recomp=generated
+0x00033410 sub_00033410 size 12 recomp=generated
+0x00034260 sub_00034260 size 14 recomp=generated
+0x00034556 sub_00034556 size 169 recomp=generated
+0x00034724 sub_00034724 size 6 recomp=generated
+0x000355CE sub_000355CE size 34 recomp=generated
+0x000359B0 sub_000359B0 size 10 recomp=generated
+0x00036A12 sub_00036A12 size 236 recomp=generated
+0x000373F0 sub_000373F0 size 17 recomp=generated
+0x00037420 sub_00037420 size 11 recomp=generated
+0x000390A0 sub_000390A0 size 9 recomp=generated
+0x00039110 sub_00039110 size 90 recomp=generated
+0x00039192 sub_00039192 size 46 recomp=generated
+0x00039310 sub_00039310 size 105 recomp=generated
+0x0003A310 sub_0003A310 size 44 recomp=generated
+0x0003A340 sub_0003A340 size 19 recomp=generated
+0x0003A360 sub_0003A360 size 19 recomp=generated
+0x0003A825 sub_0003A825 size 11 recomp=generated
+0x0003ACC0 sub_0003ACC0 size 272 recomp=generated
+0x0003B574 sub_0003B574 size 122 recomp=generated
+0x0003B720 sub_0003B720 size 227 recomp=generated
+0x0003B792 sub_0003B792 size 113 recomp=generated
+0x0003B95B sub_0003B95B size 145 recomp=generated
+0x0003C1A0 sub_0003C1A0 size 78 recomp=generated
+0x0003C250 sub_0003C250 size 78 recomp=generated
+0x0003C2A0 sub_0003C2A0 size 170 recomp=generated
+0x0003C3AF sub_0003C3AF size 1 recomp=generated
+0x0003C500 sub_0003C500 size 48 recomp=generated
+0x0003C530 sub_0003C530 size 25 recomp=generated
+0x0003C6D2 sub_0003C6D2 size 62 recomp=generated
+0x0003C900 sub_0003C900 size 49 recomp=generated
+0x0003CA00 sub_0003CA00 size 167 recomp=generated
+0x0003CA53 sub_0003CA53 size 84 recomp=generated
+0x0003D95D sub_0003D95D size 33 recomp=generated
+0x0003E692 sub_0003E692 size 300 recomp=generated
+0x0003E752 sub_0003E752 size 108 recomp=generated
+0x0003EA67 sub_0003EA67 size 123 recomp=generated
+0x0003EB52 sub_0003EB52 size 158 recomp=generated
+0x0003F26A sub_0003F26A size 332 recomp=generated
+0x0003F7D0 sub_0003F7D0 size 22 recomp=generated
+0x0003FB00 sub_0003FB00 size 91 recomp=generated
+0x0003FD0C sub_0003FD0C size 60 recomp=generated
+0x0003FD92 sub_0003FD92 size 62 recomp=generated
+0x0003FFF6 sub_0003FFF6 size 1 recomp=generated
+0x0003FFF7 sub_0003FFF7 size 5 recomp=generated
+0x0003FFF8 sub_0003FFF8 size 4 recomp=generated
+0x0003FFF9 sub_0003FFF9 size 3 recomp=generated
+0x0003FFFA sub_0003FFFA size 2 recomp=generated
+0x0003FFFC sub_0003FFFC size 3 recomp=generated
+0x0003FFFD sub_0003FFFD size 2 recomp=generated
+0x0003FFFE sub_0003FFFE size 1 recomp=generated
+0x0003FFFF sub_0003FFFF size 1 recomp=generated
+0x00040004 sub_00040004 size 235 recomp=generated
+0x00040005 sub_00040005 size 234 recomp=generated
+0x00040006 sub_00040006 size 233 recomp=generated
+0x00040008 sub_00040008 size 231 recomp=generated
+0x0004000A sub_0004000A size 229 recomp=generated
+0x0004000B sub_0004000B size 228 recomp=generated
+0x0004000D sub_0004000D size 226 recomp=generated
+0x0004000F sub_0004000F size 224 recomp=generated
+0x00040015 sub_00040015 size 218 recomp=generated
+0x0004001C sub_0004001C size 211 recomp=generated
+0x00040022 sub_00040022 size 205 recomp=generated
+0x00040028 sub_00040028 size 199 recomp=generated
+0x0004002A sub_0004002A size 197 recomp=generated
+0x0004002C sub_0004002C size 195 recomp=generated
+0x0004002D sub_0004002D size 194 recomp=generated
+0x0004002E sub_0004002E size 193 recomp=generated
+0x00040030 sub_00040030 size 191 recomp=generated
+0x00040031 sub_00040031 size 190 recomp=generated
+0x00040034 sub_00040034 size 187 recomp=generated
+0x00040036 sub_00040036 size 185 recomp=generated
+0x00040039 sub_00040039 size 182 recomp=generated
+0x0004003C sub_0004003C size 179 recomp=generated
+0x0004003F sub_0004003F size 176 recomp=generated
+0x00040041 sub_00040041 size 174 recomp=generated
+0x00040043 sub_00040043 size 172 recomp=generated
+0x00040046 sub_00040046 size 169 recomp=generated
+0x00040048 sub_00040048 size 167 recomp=generated
+0x000400A1 sub_000400A1 size 78 recomp=generated
+0x000400C8 sub_000400C8 size 39 recomp=generated
+0x0004014E sub_0004014E size 156 recomp=generated
+0x000401C5 sub_000401C5 size 37 recomp=generated
+0x00040247 sub_00040247 size 138 recomp=generated
+0x00040249 sub_00040249 size 136 recomp=generated
+0x00040268 sub_00040268 size 105 recomp=generated
+0x0004026C sub_0004026C size 101 recomp=generated
+0x00040278 sub_00040278 size 89 recomp=generated
+0x000402B3 sub_000402B3 size 30 recomp=generated
+0x000402ED sub_000402ED size 161 recomp=generated
+0x000402F3 sub_000402F3 size 155 recomp=generated
+0x00040300 sub_00040300 size 142 recomp=generated
+0x00040303 sub_00040303 size 139 recomp=generated
+0x00040305 sub_00040305 size 137 recomp=generated
+0x00040307 sub_00040307 size 135 recomp=generated
+0x0004030E sub_0004030E size 128 recomp=generated
+0x00040315 sub_00040315 size 121 recomp=generated
+0x0004032C sub_0004032C size 98 recomp=generated
+0x0004032E sub_0004032E size 96 recomp=generated
+0x00040334 sub_00040334 size 90 recomp=generated
+0x0004033A sub_0004033A size 84 recomp=generated
+0x0004033C sub_0004033C size 82 recomp=generated
+0x00040340 sub_00040340 size 78 recomp=generated
+0x00040343 sub_00040343 size 75 recomp=generated
+0x00040345 sub_00040345 size 73 recomp=generated
+0x00040348 sub_00040348 size 70 recomp=generated
+0x0004034A sub_0004034A size 68 recomp=generated
+0x0004034C sub_0004034C size 66 recomp=generated
+0x00040351 sub_00040351 size 61 recomp=generated
+0x00040354 sub_00040354 size 58 recomp=generated
+0x00040357 sub_00040357 size 55 recomp=generated
+0x0004035B sub_0004035B size 51 recomp=generated
+0x00040368 sub_00040368 size 38 recomp=generated
+0x00040374 sub_00040374 size 26 recomp=generated
+0x00040385 sub_00040385 size 9 recomp=generated
+0x000405C6 sub_000405C6 size 42 recomp=generated
+0x00040605 sub_00040605 size 23 recomp=generated
+0x000409F8 sub_000409F8 size 17 recomp=generated
+0x00040A50 sub_00040A50 size 233 recomp=generated
+
+# size disagreements (first 500): address ghidra_size ours_size
+0x00012C90 54 100
+0x00016998 62 97
+0x00022300 115 233
+0x00022410 115 233
+0x00023870 32 672
+0x00025B20 26 93
+0x00025E00 14 38
+0x000267E0 115 233
+0x000268F0 115 233
+0x00028790 32 672
+0x0002C680 115 233
+0x0002C790 115 233
+0x0002CC00 32 672
+0x0002F950 115 233
+0x0002FA60 115 233
+0x0002FFE0 32 672
+0x00034480 14 176
+0x00034530 14 38
+0x00039380 1580 1793
+0x0003A020 53 208
+0x0003A0F0 11 164
+0x0003A1C0 166 305
+0x0003B4B0 283 318
+0x0003BF20 113 163
+0x0003EF30 50 269
+0x0003F060 26 204
+0x000406F0 305 361
+0x00042070 102 400
+0x00049A60 63 512
+0x00049AC0 63 416
+0x00049B30 63 304
+0x0004A950 22 193
+0x0004EB50 17 292
+0x0004ECA0 172 368
+0x0004F0C0 68 290
+0x0004F210 25 215
+0x0004FEA0 660 852
+0x000505A0 126 1107
+0x00050A40 257 297
+0x00050B80 228 1792
+0x00051280 60 304
+0x00051820 48 176
+0x00054970 32 160
+0x00055BD0 284 152
+0x00058050 29 72
+0x0005A330 48 336
+0x00061D40 48 80
+0x00062550 26 48
+0x00064C70 47 96
+0x000656E0 15 169
+0x00065CC0 74 112
+0x00067120 131 36
+0x00067830 69 96
+0x00067E80 216 258
+0x0006BFD0 10 139
+0x0006E4E0 129 277
+0x0006E840 26 97
+0x0006ED30 33 128
+0x0006ED80 18 48
+0x0006EDD0 14 128
+0x0006EFE0 110 144
+0x00073300 82 896
+0x00081760 66 108
+0x000817B0 78 28
+0x00082580 59 688
+0x000825C0 66 624
+0x000882B0 24 48
+0x00089260 10 212
+0x0008D3F0 31 52
+0x0008D420 31 52
+0x000A40D0 73 256
+0x000A4150 47 128
+0x000A4180 47 80
+0x000A4E80 77 320
+0x000A4ED0 72 240
+0x000A4F20 72 160
+0x000A7000 65 224
+0x000A7050 30 144
+0x000A7070 31 112
+0x000A7190 57 1248
+0x000A71D0 59 1184
+0x000A8840 29 72
+0x000A89F0 1983 2448
+0x000A9380 207 272
+0x000AB750 80 258
+0x000AD3B0 259 1712
+0x000AD4C0 186 1440
+0x000AD580 126 1248
+0x000AD600 188 1120
+0x000B2950 147 301
+0x000B7610 279 324
+0x000B8910 215 240
+0x000B8B30 83 112
+0x000BCB10 29 72
+0x000BCCE0 51 112
+0x000C4C50 12 61
+0x000C4FD0 25 95
+0x000C6430 12 48
+0x000C69C0 27 208
+0x000C6AF0 50 128
+0x000C6D10 25 104
+0x000C7C30 38 91
+0x000C7CB0 64 97
+0x000C80B0 153 336
+0x000C82D0 49 100
+0x000C8780 29 3455
+0x000D2520 18 528
+0x000D2540 18 496
+0x000D62E0 274 327
+0x000D6450 89 665
+0x000D64B0 89 569
+0x000D6510 89 473
+0x000D6570 81 377
+0x000D67E0 98 304
+0x000D6850 92 192
+0x000D72E0 23 384
+0x000D7A80 21 192
+0x000D7AA0 21 160
+0x000D7AC0 21 128
+0x000D7AE0 21 96
+0x000D8050 60 128
+0x000DAF50 25 122
+0x000DD520 33 384
+0x000DE5E0 27 44
+0x000E2A90 18 418
+0x000E3150 89 312
+0x000E33F0 22 65
+0x000E3740 28 958
+0x000E46C0 5 4560
+0x000E46D0 27 4544
+0x000E46F0 5 4512
+0x000E6040 159 794
+0x000E8410 55 892
+0x000E9160 51 80
+0x000E9930 41 144
+0x000E9960 41 96
+0x000EB100 62 225
+0x000EF360 14 44
+0x000EF990 23 155
+0x000F0140 448 3857
+0x000F1090 18 101
+0x000F1110 319 2837
+0x000F6510 10 161
+0x000FC010 29 222
+0x000FC030 29 190
+0x000FC050 29 158
+0x000FC070 29 126
+0x001016B0 29 72
+0x0010C9A0 221 82
+0x0010CCE0 69 400
+0x0010D300 6 2560
+0x0010D320 6 2528
+0x0010D3C0 7 2368
+0x0010D3D0 7 2352
+0x0010E100 38 64
+0x0010E600 102 288
+0x0010EC10 27 77
+0x0010EDA0 88 352
+0x0010EE00 88 256
+0x00111FC0 97 128
+0x00116920 1505 1354
+0x00119D10 109 127
+0x0011B420 29 72
+0x0011B840 35 64
+0x0011F890 250 448
+0x00120370 96 192
+0x00120580 31 64
+0x00123AA0 75 128
+0x00129290 15 99
+0x00129C70 7 766
+0x0012A4E0 153 371
+0x0012C7F0 17 803
+0x0012D150 204 316
+0x0012E750 24 97
+0x0012EE30 21 126
+0x0012F670 357 898
+0x0012FBE0 13 834
+0x0012FF40 29 102
+0x00130050 154 255
+0x00132ED0 545 971
+0x00133CF0 356 690
+0x00134040 367 243
+0x00137EC0 34 416
+0x001382F0 28 64
+0x00138440 76 847
+0x00138490 28 767
+0x001384B0 28 735
+0x001384D0 28 703
+0x001386F0 28 159
+0x001388D0 42 1776
+0x00138900 43 1728
+0x00138930 51 1680
+0x00138970 73 1616
+0x001399A0 45 960
+0x001399D0 45 912
+0x00139A00 18 864
+0x00139A20 18 832
+0x00139A40 35 800
+0x00139A70 42 752
+0x00139AA0 42 704
+0x00139AD0 68 656
+0x00139B20 41 576
+0x00139B90 38 464
+0x00139BC0 31 416
+0x00139BE0 40 384
+0x00139C10 92 336
+0x00139C70 96 240
+0x00139CD0 49 144
+0x00139D10 39 80
+0x0013A020 86 112
+0x0013B740 585 702
+0x0013D410 195 224
+0x0013DC80 109 208
+0x0013F980 47 64
+0x00140060 22 64
+0x00142DD0 469 1216
+0x00143AF0 29 100
+0x00146140 19 64
+0x00146610 202 256
+0x001466E0 29 48
+0x00146880 67 96
+0x00148C40 32 14928
+0x00148CC0 37 14800
+0x0014C8C0 50 912
+0x00150020 444 539
+0x00150400 113 144
+0x00156640 122 144
+0x001566D0 90 112
+0x0015DF40 52 2448
+0x00164020 110 144
+0x0016A100 52 153
+0x0016A260 7 149
+0x0016AB70 20 114
+0x0016B270 153 544
+0x0016B370 170 288
+0x0016D010 185 722
+0x0016DD30 27 1009
+0x0016E540 205 2464
+0x0016EFE0 131 248
+0x0016F740 109 233
+0x0016FAF0 31 48
+0x0016FC10 263 429
+0x00170CA0 231 829
+0x00171C90 163 401
+0x001739F0 67 574
+0x001747C0 93 130
+0x00175020 131 4869
+0x001776A0 63 144
+0x00177E30 70 379
+0x00179840 109 336
+0x001798B0 107 224
+0x0017B550 7 848
+0x0017B700 7 416
+0x0017B760 7 320
+0x0017BA20 133 290
+0x0018D1D0 24 688
+0x0018D840 24 160
+0x0018DDA0 28 544
+0x0018DDC0 26 512
+0x0018F8C0 135 352
+0x001A83B0 223 92
+0x001A85E0 147 528
+0x001ACE40 1369 1893
+0x001B32C0 40 119
+0x001BCDE0 50 80
+0x001C0A90 84 836
+0x001C5D30 41 96
+0x001CFFC0 73 128
+0x001D6840 114 144
+0x001D6F00 239 138
+0x001D9A80 60 112
+0x001E9E40 29 72
+0x001EA830 7 128
+0x001EC7C0 7 59
+0x001EC830 7 137
+0x001EC8F0 7 59
+0x001EC960 7 137
+0x001F1E90 11 62
+0x001F7DF0 143 214
+0x001FC590 61 96
+0x001FC5F0 47 80
+0x001FC640 54 96
+0x001FC6A0 54 106
+0x00200470 39 208
+0x0020C710 120 240
+0x00210D50 31 96
+0x002132A0 75 272
+0x00213300 16 176
+0x00213310 69 160
+0x00216400 231 109
+0x002194C0 190 224
+0x0021A100 12 36
+0x0021A290 389 826
+0x0021DD10 236 531
+0x0021DF40 418 707
+0x0021F330 452 688
+0x00222B50 93 272
+0x00222BB0 81 176
+0x00222C10 16 80
+0x0022E2D0 184 208
+0x002301D0 64 336
+0x00232F40 52 256
+0x00232F80 52 192
+0x00232FC0 55 128
+0x00234000 45 64
+0x00234960 62 336
+0x002349A0 169 272
+0x00240670 60 80
+0x00243A40 37 96
+0x00243E40 25 768
+0x00243E80 48 704
+0x00243EB0 42 656
+0x0024C3F0 30 80
+0x0024D440 29 80
+0x0024DF60 51 224
+0x0024E700 51 128
+0x0024E960 51 192
+0x002500D0 7 98
+0x00251AB0 142 240
+0x00252170 91 344
+0x00252570 31 1696
+0x00252F20 73 119
+0x00253580 57 240
+0x002535C0 59 176
+0x00253600 59 112
+0x00253A30 131 162
+0x00254180 148 432
+0x00254540 147 208
+0x00254AC0 98 144
+0x00256F40 44 1088
+0x00256F70 47 1040
+0x00256FA0 47 992
+0x00256FD0 47 944
+0x00257000 41 896
+0x00259C20 22 976
+0x0025A520 108 23
+0x0025A590 48 160
+0x0025A9E0 68 224
+0x0025B180 70 640
+0x0025D160 164 320
+0x0025D570 146 304
+0x0025ECE0 18 116
+0x00260B30 66 98
+0x002613F0 229 272
+0x00261890 400 944
+0x00261A40 180 512
+0x00261B10 143 304
+0x00261CE0 101 688
+0x00261D50 77 576
+0x00262090 75 176
+0x00262290 69 336
+0x00262430 56 495
+0x00262610 67 15
+0x002628E0 93 224
+0x002632C0 22 224
+0x002632E0 22 192
+0x002633C0 18 496
+0x002633E0 18 464
+0x00263400 18 432
+0x00263440 22 368
+0x00263460 22 336
+0x00263480 22 304
+0x00264020 256 1888
+0x00265930 103 1456
+0x002659A0 96 1344
+0x00265A30 66 1200
+0x00265A80 67 1120
+0x00265AD0 67 1040
+0x00265B20 66 960
+0x00265B70 66 880
+0x00265BC0 67 800
+0x00265C10 66 720
+0x00265C60 66 640
+0x00265CB0 66 560
+0x00265D00 66 480
+0x00265D50 66 400
+0x00265DA0 74 320
+0x00265DF0 67 240
+0x00265E40 67 160
+0x0026B220 366 240
+0x0026B340 31 336
+0x0026B4C0 71 224
+0x0026B560 44 64
+0x0026BA00 98 352
+0x0026BB30 26 48
+0x0026BBF0 26 298
+0x0026BC60 40 186
+0x0026BD80 26 858
+0x0026BDA0 111 826
+0x0026BED0 26 522
+0x0026BFD0 116 266
+0x0026C140 26 944
+0x0026C160 111 912
+0x0026C290 26 608
+0x0026C390 116 352
+0x0026E0F0 187 224
+0x0026E4F0 166 927
+0x0026F280 141 288
+0x0026F640 14 132
+0x0026FEA0 39 279
+0x002702B0 142 176
+0x002720C0 460 512
+0x002726E0 165 194
+0x00272A60 15 299
+0x002771D0 39 77
+0x00277220 8 384
+0x00278830 40 96
+0x00279BF0 53 192
+0x00279CC0 80 128
+0x00279D40 13 163
+0x00279E00 1003 1351
+0x0027A370 29 112
+0x0027A390 29 80
+0x0027ABF0 16 144
+0x0027B7F0 20 224
+0x0027B810 16 192
+0x0027E910 46 467
+0x0027EDF0 12 208
+0x0027F740 17 59
+0x00282DF0 36 240
+0x00282E20 36 192
+0x00283A90 124 176
+0x0028B620 329 433
+0x0028FD90 66 29
+0x00290660 51 112
+0x002912A0 24 97
+0x00295A90 92 192
+0x0029BF90 113 392
+0x0029E0E0 69 298
+0x0029E740 10 90
+0x002A4460 59 112
+0x002A4510 35 131
+0x002A5750 119 337
+0x002A6330 28 208
+0x002A6360 74 160
+0x002A85B0 5 1656
+0x002A85C0 27 1640
+0x002AA450 13 67
+0x002AA4A0 13 67
+0x002AA8A0 26 313
+0x002AAA60 87 125
+0x002AB610 42 436
+0x002ACB10 27 832
+0x002ACB40 149 784
+0x002ACBE0 109 624
+0x002AD000 31 352
+0x002AD040 41 288
+0x002AEEF0 22 576
+0x002B07E0 310 688
+0x002B1AF0 27 85
+0x002B1B60 85 1104
+0x002B2030 90 128
+0x002B20B0 127 221
+0x002B3500 183 320
+0x002B80F0 12 37
+0x002B8140 30 143
+0x002B82B0 72 2752
+0x002B8310 199 2656
+0x002B9D40 90 212
+0x002B9DA0 92 116
+0x002B9EE0 103 240
+0x002BA230 16 319
+0x002BA620 252 425
+0x002BE0F0 145 1073
+0x002C0D60 12 80
+0x002C0E70 12 112
+0x002C1140 127 240
+0x002C16B0 53 208
+0x002C20F0 169 336
+0x002C25D0 26 928
+0x002C25F0 43 896
+0x002C2730 77 576
+0x002C2930 29 64
+0x002C3A50 45 258
+0x002C3AA0 440 178
+0x002C44D0 370 977
+0x002C48C0 367 835
+0x002C4E10 275 704
+0x002C7E90 28 256
+0x002C85F0 92 544
+0x002C8660 29 432
+0x002C8690 92 384
+0x002C86F0 28 288
+0x002C8FA0 26 256
+0x002C9040 41 96
+0x002CD3A0 76 126
+0x002CDD20 181 709
+0x002CE2C0 55 457
+0x002CE4A0 477 578
+0x002D1950 125 566
+0x002D5860 1968 3258
+0x002D87E0 16 96
+0x002DA6A0 64 576
+0x002DBB90 34 192
+0x002DC7F0 237 432
+0x002F5370 29 170
+0x002F5730 358 1363
+0x00304830 198 258
+0x00306610 24 97
+0x003067E0 31 67

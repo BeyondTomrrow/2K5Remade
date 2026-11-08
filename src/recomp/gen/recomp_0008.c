@@ -43408,6 +43408,8 @@ loc_00117402: ;
 loc_00117411: ;
     ecx = 0xBA4E78;
     PUSH32(esp, 0x0011741Bu); RECOMP_ABI_CALL(0x0008ACF0u, sub_0008ACF0); /* call 0x0008ACF0 */
+    /* NFL2K5-GENPATCH:PRES_REVIEW_ACCEPTED */
+    { extern void nfl2k5_presentation_review_accepted(int, unsigned); nfl2k5_presentation_review_accepted((int)eax, 0u); }
 
 loc_0011741B: ;
     POP32(esp, edi);
@@ -43624,6 +43626,8 @@ loc_0011755F: ;
 loc_0011756E: ;
     ecx = 0xBA4E78;
     PUSH32(esp, 0x00117578u); RECOMP_ABI_CALL(0x0008ACF0u, sub_0008ACF0); /* call 0x0008ACF0 */
+    /* NFL2K5-GENPATCH:PRES_REVIEW_RULING_ACCEPTED */
+    { extern void nfl2k5_presentation_review_accepted(int, unsigned); nfl2k5_presentation_review_accepted((int)eax, 1u); }
 
 loc_00117578: ;
     _fb = (uint32_t)(0x108) & 0xFFFFFFFFu; _fbs = (int32_t)(int32_t)(_fb); /* add source, before the write */

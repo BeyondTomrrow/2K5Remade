@@ -87380,6 +87380,8 @@ loc_001BCEBB: ;
     PUSH32(esp, eax);
     g_ebp = ebp; /* frame stays current across calls */
     g_seh_ebp = ebp;
+    /* NFL2K5-GENPATCH:SNF_POPUP_LAYOUT_EFFECTIVE_ALPHA */
+    { extern int nfl2k5_presentation_pregame_draw_replaced(uint32_t ctx); if (nfl2k5_presentation_pregame_draw_replaced(MEM32(esp + 0x18u))) MEM32(esp) = 0; }
     PUSH32(esp, 0x001BCEC4u); RECOMP_ABI_CALL(0x001BC200u, sub_001BC200); /* call 0x001BC200 */
 
 loc_001BCEC4: ;
@@ -87810,9 +87812,13 @@ loc_001BD16F: ;
     ecx = edi;
     g_ebp = ebp; /* frame stays current across calls */
     g_seh_ebp = ebp;
+    /* NFL2K5-GENPATCH:PRESENTATION_POPUP_TEXT_BEGIN */
+    { extern void nfl2k5_presentation_native_text_begin(uint32_t ctx); nfl2k5_presentation_native_text_begin(MEM32(esp + 0x14u)); }
     PUSH32(esp, 0x001BD17Bu); RECOMP_ABI_CALL(0x001513D0u, sub_001513D0); /* call 0x001513D0 */
 
 loc_001BD17B: ;
+    /* NFL2K5-GENPATCH:PRESENTATION_POPUP_TEXT_END */
+    { extern void nfl2k5_presentation_native_text_end(void); nfl2k5_presentation_native_text_end(); }
     ecx = esi;
     ebx++;
     _fa = (uint32_t)(ebx) & 0xFFFFFFFFu;
@@ -87931,6 +87937,8 @@ loc_001BD220: ;
     PUSH32(esp, eax);
     PUSH32(esp, edi);
     edx = esp + 0x68;
+    /* NFL2K5-GENPATCH:SNF_POPUP_DYNAMIC_ART_ALPHA */
+    { extern int nfl2k5_presentation_pregame_draw_replaced(uint32_t ctx); if (nfl2k5_presentation_pregame_draw_replaced(ecx)) MEM32(esp) = 0; }
     { uint32_t _icall_target = MEM32(ebx + 4); PUSH32(esp, 0x001BD230u); RECOMP_ICALL_SAFE(_icall_target, _icall_esp); } /* indirect call */
     }
 
@@ -88061,6 +88069,8 @@ loc_001BD2E9: ;
     PUSH32(esp, eax);
     PUSH32(esp, ebx);
     edx = esp + 0x68;
+    /* NFL2K5-GENPATCH:SNF_POPUP_DYNAMIC_TEXTURE_ALPHA */
+    { extern int nfl2k5_presentation_pregame_draw_replaced(uint32_t ctx); if (nfl2k5_presentation_pregame_draw_replaced(ecx)) MEM32(esp) = 0; }
     { uint32_t _icall_target = MEM32(edi + 4); PUSH32(esp, 0x001BD2F9u); RECOMP_ICALL_SAFE(_icall_target, _icall_esp); } /* indirect call */
     }
 

@@ -1,0 +1,33 @@
+/* Written by Presentation Studio. Overrides scorebug.css; edit freely. */
+div.away-panel {
+  width: 353px !important;
+  left: -48px !important;
+  height: 60px !important;
+  top: 23px !important;
+}
+div.home-panel {
+  width: 400px !important;
+  left: 244px !important;
+  top: 22px !important;
+  height: 61px !important;
+}
+main.demo-field {
+  left: 4px !important;
+  top: -1px !important;
+}
+div.away-divider {
+  left: 201px !important;
+  top: 7px !important;
+}
+div.home-divider {
+  left: 201px !important;
+  top: 9px !important;
+}
+div.home-abbr {
+  height: 27px !important;
+  width: 94px !important;
+}
+#scorebug {
+  height: 114px !important;
+  top: 923px !important;
+}

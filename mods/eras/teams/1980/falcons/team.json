@@ -1,0 +1,18 @@
+{
+  "abbreviation": "ATL",
+  "city": "Atlanta",
+  "name": "Falcons",
+  "season": 1980,
+  "eras_id": "falcons",
+  "colors": {
+    "primary": "#A71930",
+    "secondary": "#000000",
+    "text": "#FFFFFF"
+  },
+  "logos": {
+    "scorebug": "logos/scorebug.png",
+    "mini": "logos/mini.png"
+  },
+  "source": "disc logo_01_6",
+  "colors_note": "1980 colours from memory, not yet checked against a source"
+}

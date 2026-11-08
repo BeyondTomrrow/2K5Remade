@@ -228,6 +228,171 @@ extern "C" int nfl2k5_asf_strip_tags(const wchar_t *path)
     return nfl2k5_asf_strip_tags_utf8(utf8);
 }
 
+#if defined(__ANDROID__) && defined(NFL2K5_HAVE_FFMPEG)
+/* Android has no ffmpeg program to run: the same conversion in process with
+ * FFmpeg's libraries (a minimal static build, android/ffmpeg): decode,
+ * resample to 44.1 kHz stereo, encode wmav2 at 128 kbit/s, write ASF with no
+ * tags. */
+extern "C" {
+#include <libavformat/avformat.h>
+#include <libavcodec/avcodec.h>
+#include <libswresample/swresample.h>
+#include <libavutil/audio_fifo.h>
+#include <libavutil/opt.h>
+}
+
+namespace {
+
+struct Transcode {
+    AVFormatContext *in = nullptr, *out = nullptr;
+    AVCodecContext *dec = nullptr, *enc = nullptr;
+    SwrContext *swr = nullptr;
+    AVAudioFifo *fifo = nullptr;
+    AVPacket *pkt = nullptr;
+    AVFrame *frame = nullptr, *ef = nullptr;
+    int stream = -1;
+    int64_t pts = 0;
+    ~Transcode()
+    {
+        av_frame_free(&frame);
+        av_frame_free(&ef);
+        av_packet_free(&pkt);
+        if (fifo) av_audio_fifo_free(fifo);
+        swr_free(&swr);
+        avcodec_free_context(&dec);
+        avcodec_free_context(&enc);
+        if (out) {
+            if (out->pb) avio_closep(&out->pb);
+            avformat_free_context(out);
+        }
+        avformat_close_input(&in);
+    }
+
+    /* Encode whole frames from the FIFO (all that is left when flushing). */
+    int drain(bool flush)
+    {
+        const int fs = enc->frame_size > 0 ? enc->frame_size : 2048;
+        while (av_audio_fifo_size(fifo) >= fs || (flush && av_audio_fifo_size(fifo) > 0)) {
+            int n = FFMIN(fs, av_audio_fifo_size(fifo));
+            av_frame_unref(ef);
+            ef->nb_samples = fs;
+            ef->format = enc->sample_fmt;
+            ef->sample_rate = enc->sample_rate;
+            av_channel_layout_copy(&ef->ch_layout, &enc->ch_layout);
+            if (av_frame_get_buffer(ef, 0) < 0) return -1;
+            if (n < fs)   /* the last frame: silence after the song */
+                av_samples_set_silence(ef->extended_data, n, fs - n, enc->ch_layout.nb_channels, enc->sample_fmt);
+            if (av_audio_fifo_read(fifo, (void **)ef->extended_data, n) < n) return -1;
+            ef->pts = pts;
+            pts += fs;
+            if (avcodec_send_frame(enc, ef) < 0 || write_packets() < 0) return -1;
+        }
+        return 0;
+    }
+
+    int write_packets()
+    {
+        for (;;) {
+            int r = avcodec_receive_packet(enc, pkt);
+            if (r == AVERROR(EAGAIN) || r == AVERROR_EOF) return 0;
+            if (r < 0) return -1;
+            pkt->stream_index = 0;
+            av_packet_rescale_ts(pkt, enc->time_base, out->streams[0]->time_base);
+            r = av_interleaved_write_frame(out, pkt);
+            if (r < 0) return -1;
+        }
+    }
+
+    int convert(AVFrame *f)
+    {
+        uint8_t **buf = nullptr;
+        int max = swr_get_out_samples(swr, f ? f->nb_samples : 0);
+        if (max <= 0) return 0;
+        if (av_samples_alloc_array_and_samples(&buf, nullptr, enc->ch_layout.nb_channels, max, enc->sample_fmt, 0) < 0)
+            return -1;
+        int n = swr_convert(swr, buf, max, f ? (const uint8_t **)f->extended_data : nullptr, f ? f->nb_samples : 0);
+        int r = n < 0 ? -1 : (n > 0 && av_audio_fifo_write(fifo, (void **)buf, n) < n ? -1 : 0);
+        av_freep(&buf[0]);
+        av_freep(&buf);
+        return r;
+    }
+
+    int decoded()
+    {
+        for (;;) {
+            int r = avcodec_receive_frame(dec, frame);
+            if (r == AVERROR(EAGAIN) || r == AVERROR_EOF) return 0;
+            if (r < 0) return -1;
+            if (convert(frame) < 0 || drain(false) < 0) return -1;
+            av_frame_unref(frame);
+        }
+    }
+
+    long run(const char *src, const char *dst)
+    {
+        if (avformat_open_input(&in, src, nullptr, nullptr) < 0 || avformat_find_stream_info(in, nullptr) < 0) return -2;
+        const AVCodec *dc = nullptr;
+        stream = av_find_best_stream(in, AVMEDIA_TYPE_AUDIO, -1, -1, &dc, 0);
+        if (stream < 0 || !dc) return -3;
+        dec = avcodec_alloc_context3(dc);
+        if (!dec || avcodec_parameters_to_context(dec, in->streams[stream]->codecpar) < 0 || avcodec_open2(dec, dc, nullptr) < 0)
+            return -4;
+        const AVCodec *ec = avcodec_find_encoder(AV_CODEC_ID_WMAV2);
+        if (!ec) return -5;
+        enc = avcodec_alloc_context3(ec);
+        enc->sample_rate = 44100;
+        av_channel_layout_default(&enc->ch_layout, 2);
+        enc->sample_fmt = AV_SAMPLE_FMT_FLTP;
+        enc->bit_rate = 128000;
+        enc->time_base = AVRational{ 1, 44100 };
+        if (avformat_alloc_output_context2(&out, nullptr, "asf", dst) < 0 || !out) return -6;
+        if (out->oformat->flags & AVFMT_GLOBALHEADER) enc->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+        if (avcodec_open2(enc, ec, nullptr) < 0) return -7;
+        AVStream *os = avformat_new_stream(out, nullptr);
+        if (!os || avcodec_parameters_from_context(os->codecpar, enc) < 0) return -8;
+        os->time_base = enc->time_base;
+        if (avio_open(&out->pb, dst, AVIO_FLAG_WRITE) < 0 || avformat_write_header(out, nullptr) < 0) return -9;
+        if (swr_alloc_set_opts2(&swr, &enc->ch_layout, enc->sample_fmt, enc->sample_rate,
+                                &dec->ch_layout, dec->sample_fmt, dec->sample_rate, 0, nullptr) < 0 || swr_init(swr) < 0)
+            return -10;
+        fifo = av_audio_fifo_alloc(enc->sample_fmt, enc->ch_layout.nb_channels, 8192);
+        pkt = av_packet_alloc();
+        frame = av_frame_alloc();
+        ef = av_frame_alloc();
+        if (!fifo || !pkt || !frame || !ef) return -11;
+        while (av_read_frame(in, pkt) >= 0) {
+            int r = 0;
+            if (pkt->stream_index == stream) r = avcodec_send_packet(dec, pkt) < 0 ? 0 : decoded();   /* a bad packet is skipped */
+            av_packet_unref(pkt);
+            if (r < 0) return -12;
+        }
+        avcodec_send_packet(dec, nullptr);
+        if (decoded() < 0 || convert(nullptr) < 0 || drain(true) < 0) return -13;
+        avcodec_send_frame(enc, nullptr);
+        if (write_packets() < 0 || av_write_trailer(out) < 0) return -14;
+        return 0;
+    }
+};
+
+} // namespace
+
+extern "C" long nfl2k5_wma_transcode_utf8(const char *src, const char *dst)
+{
+    unlink(dst);
+    long r;
+    {
+        Transcode t;
+        r = t.run(src, dst);
+    }
+    if (r != 0) {
+        unlink(dst);
+        return r;
+    }
+    nfl2k5_asf_strip_tags_utf8(dst);
+    return 0;
+}
+
+#else
 extern "C" long nfl2k5_wma_transcode_utf8(const char *src, const char *dst)
 {
     unlink(dst);
@@ -261,6 +426,8 @@ extern "C" long nfl2k5_wma_transcode_utf8(const char *src, const char *dst)
     nfl2k5_asf_strip_tags_utf8(dst);
     return 0;
 }
+
+#endif /* __ANDROID__ && NFL2K5_HAVE_FFMPEG */
 
 extern "C" long nfl2k5_wma_transcode(const wchar_t *src, const wchar_t *dst)
 {

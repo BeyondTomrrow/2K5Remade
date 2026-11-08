@@ -32,6 +32,12 @@ struct Album {
 
 fs::path g_music, g_out, g_cache;
 std::vector<Album> g_albums;
+/* The scanner runs below the game thread.  Do not let hooks dereference the
+ * vector while it is still being grown; once the scan is published the
+ * vector's shape is stable and only per-song readiness changes. */
+static SDL_AtomicInt g_music_ready;
+static SDL_AtomicInt g_music_stop;
+static SDL_Thread *g_music_thread;
 
 // Convert UTF-8 std::string to 2-byte UTF-16LE std::u16string for Xbox guest RAM & ST.DB
 static std::u16string u8_to_u16(const std::string &s)
@@ -220,6 +226,10 @@ static void put_name(uint8_t *dst, const std::u16string &s)
     memcpy(dst, s.data(), std::min<size_t>(s.size(), 31) * sizeof(char16_t));
 }
 
+// Soundtracks in the last ST.DB written (the title numbers them 0..count-1).
+static SDL_AtomicInt g_st_count;
+
+// ST.DB from the songs converted so far; replaces the file in one step.
 static void write_db()
 {
     std::vector<uint8_t> db(0x200 * 101, 0);
@@ -259,6 +269,7 @@ static void write_db()
         count++;
     }
     uint32_t head[3] = { 1, count, (uint32_t)g_albums.size() };
+    SDL_SetAtomicInt(&g_st_count, (int)count);
     memcpy(&db[0], head, 12);
     for (auto &g : groups) db.insert(db.end(), g.begin(), g.end());
 
@@ -298,12 +309,33 @@ static void link_song(size_t a, size_t k)
 
 static int SDLCALL worker(void *)
 {
+    SDL_SetCurrentThreadPriority(SDL_THREAD_PRIORITY_LOW);
     size_t total = 0, todo = 0;
     std::error_code ec;
-    for (const fs::path &dir : list(g_music, true)) {
+    std::vector<fs::path> album_dirs = list(g_music, true);
+#ifdef NFL2K5_UWP
+    /* UWP/Xbox: more song folders (LocalState\Music, a USB folder named in
+     * LocalState\music.txt), ';'-separated UTF-8, from uwp_game.cpp. */
+    if (const char *extra = getenv("NFL2K5_EXTRA_MUSIC")) {
+        std::string all(extra);
+        for (size_t p = 0; p <= all.size();) {
+            size_t e = all.find(';', p);
+            if (e == std::string::npos) e = all.size();
+            if (e > p) {
+                fs::path more = fs::u8path(all.substr(p, e - p));
+                if (!fs::equivalent(more, g_music, ec))
+                    for (const fs::path &d : list(more, true)) album_dirs.push_back(d);
+            }
+            p = e + 1;
+        }
+    }
+#endif
+    for (const fs::path &dir : album_dirs) {
+        if (SDL_GetAtomicInt(&g_music_stop)) break;
         Album al;
         al.name = u8_to_u16(dir.filename().string());
         for (const fs::path &f : list(dir, false)) {
+            if (SDL_GetAtomicInt(&g_music_stop)) break;
             Song s;
             s.src = f;
             s.cache = cache_name(s.src);
@@ -316,13 +348,19 @@ static int SDLCALL worker(void *)
         if (!al.songs.empty()) g_albums.push_back(al);
     }
     fprintf(stderr, "[MUSIC] library: %zu playlists, %zu songs, %zu to convert\n", g_albums.size(), total, todo);
-    for (size_t a = 0; a < g_albums.size(); a++)
-        for (size_t k = 0; k < g_albums[a].songs.size(); k++)
+    /* Publish only after all Album/Song entries have been appended. */
+    SDL_SetAtomicInt(&g_music_ready, 1);
+    for (size_t a = 0; a < g_albums.size(); a++) {
+        for (size_t k = 0; k < g_albums[a].songs.size(); k++) {
+            if (SDL_GetAtomicInt(&g_music_stop)) break;
             if (g_albums[a].songs[k].ready) link_song(a, k);
+        }
+    }
     write_db();
 
     for (size_t a = 0; a < g_albums.size(); a++) {
         for (size_t k = 0; k < g_albums[a].songs.size(); k++) {
+            if (SDL_GetAtomicInt(&g_music_stop)) break;
             Song &s = g_albums[a].songs[k];
             if (s.ready) continue;
             fs::path part = s.cache;
@@ -346,8 +384,24 @@ static int SDLCALL worker(void *)
 
 } // namespace
 
+static void nfl2k5_pack_music_hooks(void);   /* SOFTDRINK: the playlist wins (end of file) */
+static void nfl2k5_retail_next_interp_hook(void);   /* R3 when the retail player is interpreted (end of file) */
+
+// root: the game root (holds Music/); save_dir: where Soundtracks/ lives.
+static std::string g_start_root, g_start_save;
+
 extern "C" void nfl2k5_local_music_start(const char *root, const char *save_dir)
 {
+    g_start_root = root;
+    g_start_save = save_dir;
+    static bool hooked;                               /* once: a rescan starts here again */
+    if (!hooked) {
+        hooked = true;
+        nfl2k5_pack_music_hooks();
+        nfl2k5_retail_next_interp_hook();
+    }
+    SDL_SetAtomicInt(&g_music_ready, 0);
+    SDL_SetAtomicInt(&g_music_stop, 0);
     std::error_code ec;
     g_music = fs::path(root) / "Music";
     g_out   = fs::path(save_dir) / "Soundtracks";
@@ -357,11 +411,39 @@ extern "C" void nfl2k5_local_music_start(const char *root, const char *save_dir)
     fs::create_directories(g_cache, ec);
     fs::create_directories(g_music, ec);
 
-    SDL_Thread *t = SDL_CreateThread(worker, "local_music", nullptr);
-    if (t) SDL_DetachThread(t);
+    /* Kept (not detached) so shutdown can stop it and wait. */
+    g_music_thread = SDL_CreateThread(worker, "local_music", nullptr);
 }
 
-/* ── Now playing / skip ────────────────────────────────────────────────── */
+extern "C" void nfl2k5_local_music_shutdown(void)
+{
+    SDL_SetAtomicInt(&g_music_stop, 1);
+    if (g_music_thread) {
+        SDL_WaitThread(g_music_thread, nullptr);
+        g_music_thread = nullptr;
+    }
+    SDL_SetAtomicInt(&g_music_ready, 0);
+}
+
+/* Songs were added while the game runs (Android: Phone Settings > Add Songs):
+ * scan again, convert the new ones and write ST.DB once more. */
+extern "C" void nfl2k5_local_music_rescan(void)
+{
+    if (g_start_root.empty()) return;
+    std::string root = g_start_root, save = g_start_save;
+    nfl2k5_local_music_shutdown();
+    nfl2k5_local_music_start(root.c_str(), save.c_str());
+}
+
+/* ── Now playing / skip ──────────────────────────────────────────────────
+ * The game's soundtrack player (sub_00328130) opens song ids we handed out:
+ * (playlist << 16) | track. Opening shows NOW PLAYING; R3 skips by moving
+ * the song's end point to the start, so the player ends it exactly as it
+ * ends a song or a clip preview and the game's own playlist moves on,
+ * shuffle and repeat included. Two earlier tries hung: starving the decoder
+ * read as an I/O error, and raising the "finished" flag directly skipped the
+ * stream discontinuity, so entering a game mode waited on the stream forever
+ * (2026-10-01). L3 shows NOW PLAYING again. */
 extern "C" int nfl2k5_in_match(void);
 extern "C" ptrdiff_t xbox_GetMemoryOffset(void);
 extern "C" uint32_t xbox_HeapAlloc(uint32_t size, uint32_t alignment);
@@ -505,6 +587,7 @@ static void banner_tick(void)
 
 static bool show_now_playing(uint32_t id)
 {
+    if (SDL_GetAtomicInt(&g_music_ready) == 0) return false;
     size_t a = id >> 16, k = id & 0xFFFF;
     if (a >= g_albums.size() || k >= g_albums[a].songs.size()) return false;
     const Song &song = g_albums[a].songs[k];
@@ -514,11 +597,14 @@ static bool show_now_playing(uint32_t id)
     return banner_show(u"Now Playing", sub);
 }
 
+extern "C" void xbox_MenuInvalidate(void);
+
 extern "C" void nfl2k5_local_music_opening(uint32_t song_id, uint32_t player)
 {
     g_player = player;
     SDL_SetAtomicInt(&g_cur_id, (int)song_id);
     show_now_playing(song_id);
+    xbox_MenuInvalidate();             /* F1 > Music Player: Now playing */
 }
 
 extern "C" void nfl2k5_local_music_closed(void)
@@ -600,8 +686,12 @@ static bool show_retail_now_playing(RetailBank bank, uint32_t index)
 
 extern "C" int nfl2k5_retail_music_take_next(void)
 {
-    return SDL_SetAtomicInt(&g_retail_next, 0) != 0;
+    if (SDL_SetAtomicInt(&g_retail_next, 0) == 0) return 0;
+    fprintf(stderr, "[MUSIC] R3: the retail player advances (stop + next on the guest thread)\n");
+    return 1;
 }
+
+static SDL_AtomicInt g_skip_request;   /* F1 > Music Player: Next Song, an R3 press */
 
 extern "C" void nfl2k5_local_music_buttons(int l3, int r3)
 {
@@ -651,8 +741,14 @@ extern "C" void nfl2k5_local_music_buttons(int l3, int r3)
         volatile uint32_t *end_pos =
             (volatile uint32_t *)((uint8_t *)xbox_GetMemoryOffset() + player + 0x1004Cu);
         *end_pos = 1;
+        fprintf(stderr, "[MUSIC] R3: skip the playing song %08lX (end point pulled in)\n", (unsigned long)cur);
     } else if (retail_live && r3 && !prev_r3) {
         SDL_SetAtomicInt(&g_retail_next, 1);
+        fprintf(stderr, "[MUSIC] R3: next %s track requested (now %u)\n",
+                retail_bank == RETAIL_CRIB ? "cribmusic" : "femusic", retail_index);
+    } else if (r3 && !prev_r3) {
+        fprintf(stderr, "[MUSIC] R3: nothing to skip (no playlist song, no retail track; mode %08X list %08X)\n",
+                g32(0xC3CC08u), g32(0xC3AC90u));
     }
     if (cur >= 0 && l3 && !prev_l3)
         show_now_playing((uint32_t)cur);
@@ -662,4 +758,633 @@ extern "C" void nfl2k5_local_music_buttons(int l3, int r3)
         banner_show(u"Now Playing", u"Ramblin' Man From Gramblin - Sam Spence & Da Riffs");
     prev_l3 = l3;
     prev_r3 = r3;
+}
+
+
+/* ── SOFTDRINK: the player's playlist wins over the pack's menu shuffle ────
+ * SOFTDRINK 2K28 (since v0.6; addresses below are v0.7's) replaces the game's menu
+ * music with a shuffle of the retail femusic + cribmusic banks, and on the way
+ * shuts out the player's own Jukebox playlist everywhere: its data makes the
+ * UserList row (retail: the playlist) a cribmusic bank row, its music-mode switch
+ * (0x014DFD71 for retail 0x000F6510) sends the Crib and the menus to its shuffle,
+ * its context switch (0x014DFD00 for retail 0x002804C0) does the same for
+ * UserList, and its song-finished callback (0x014DFBF6 for retail 0x0027F040)
+ * restarts the current song, so a song never moved on -- R3 skip included.
+ * When the player has a playable playlist selected (the Jukebox list, Crib Music
+ * Crib/Menus for the menus), these interpreter hooks run the retail code instead
+ * (its bytes after each 5-byte jump are intact) and the pack's own "playlist
+ * playing" flag (0x014DFCE4) keeps its shuffle out. With no playlist the pack's
+ * shuffle plays as before. docs/MUSIC-FIX-20261021.md.
+ * nfl2k5_game.ini: pack_shuffle_first = 1 gives the pack's shuffle priority
+ * again; NFL2K5_PACK_SHUFFLE_FIRST=0/1 overrides it for one run;
+ * NFL2K5_PACK_MUSIC_LOG=1 logs every request. */
+#if defined(_MSC_VER)
+#define LOCALMUSIC_TLS __declspec(thread)
+#else
+#define LOCALMUSIC_TLS __thread
+#endif
+extern "C" void recomp_interp_add_hook(uint32_t va, uint32_t from, uint32_t (*fn)(void));
+extern "C" LOCALMUSIC_TLS uint32_t g_eax, g_ecx, g_edx, g_ebx, g_esp, g_esi;
+extern "C" char *xbox_user_path(const char *rel, char *out, size_t n);
+
+static int g_pack_shuffle_first;
+
+/* The pack's shuffle state. Its code and data move between releases (v0.8 moved
+ * the code 0x160 bytes on), so nfl2k5_pack_music_hooks reads these from the code. */
+static uint32_t g_pk_enabled, g_pk_busy0, g_pk_busy1, g_pk_playing, g_pk_playing1;
+
+static bool guest_wide_eq(uint32_t va, const char16_t *s)
+{
+    if (!va || va >= 0x08000000u) return false;
+    const uint16_t *p = (const uint16_t *)(guest() + va);
+    for (; *s; s++, p++) if (*p != (uint16_t)*s) return false;
+    return *p == 0;
+}
+
+/* SOFTDRINK's data turns the UserList row into a second cribmusic bank row
+ * ({UserList, 1, 1, "cribmusic"} at 0xAC9ED0; retail {UserList, 0, 0, 0}), so
+ * retail sub_00280450 plays a bank there instead of the playlist. A playlist is
+ * selected when the game holds a current entry in its list (0xC3CBFC, list head
+ * 0xC3CBE8). */
+static uint32_t g_pick_nodes;          /* F1 > Music Player: guest playlist entries, kMaxPick of them */
+static constexpr uint32_t kPickNode = 0x18u, kMaxPick = 504u;
+
+static bool pack_playlist_selected(void)
+{
+    uint32_t cur = g32(0xC3CBFCu);
+    if (g_pick_nodes && cur >= g_pick_nodes && cur < g_pick_nodes + kPickNode * kMaxPick) return true;
+    if (g32(0xC3CBF8u) == 0xC3CBE8u || !cur || cur == 0xC3CBE8u || cur >= 0x08000000u) return false;
+    /* Its current entry must be playable: albums 0..0x11 are the game's own banks,
+     * 0x12+ the custom soundtracks (retail 0x0028013A checks the same against the
+     * soundtrack count). A playlist saved with songs that are gone from Music
+     * leaves the pack's shuffle alone instead of silence. */
+    uint32_t album = g32(cur);
+    return album < 0x12u || album - 0x12u < (uint32_t)SDL_GetAtomicInt(&g_st_count);
+}
+
+static void pack_music_restore_userlist_row(void)
+{
+    if (g32(0xAC9ED8u) == 0) return;
+    g32(0xAC9ED4u) = 0;
+    g32(0xAC9ED8u) = 0;                               /* no bank: the playlist */
+    g32(0xAC9EDCu) = 0;
+    fprintf(stderr, "[MUSIC] pack music: the UserList row plays the player's playlist again (was a cribmusic bank row)\n");
+}
+
+static void pack_music_log(const char *what, uint32_t mode)
+{
+    fprintf(stderr, "[MUSIC] pack music %s (mode %u, row %u, row1 bank %08X, song %08X, flags %u/%u/%u, "
+                    "player %08X/%08X, state %u/%u, pack %u/%u)\n",
+            what, mode, g32(0xC3CC08u), g32(0xAC9ED8u), g32(0xC3CBFCu),
+            g32(0xB9E298u), g32(0xB9E29Cu), g32(0xB9E2A4u), g32(0xC3CC10u), g32(0xC3CC14u),
+            g32(0xC3AC90u), g32(0xC5D3A4u), g32(g_pk_enabled), g32(g_pk_playing));
+}
+
+/* 0x00280507, the end of the retail context switch reached from the two hooks
+ * above: "jmp 0x00280450" (start the row). Under the pack that start went to its
+ * shuffle again (traced 2026-10-22: pack stop, then pack shuffle start, never the
+ * playlist start), so for the UserList row with a playlist do what 0x00280450 does
+ * for a bankless row: start the current playlist entry at 0x0027FF90 (a tail
+ * call: the caller's return address is on top). The pack's 0x014DFCE4 hook there
+ * marks its "playlist playing" flag and stays out. */
+static uint32_t ih_pack_music_start(void)
+{
+    if (g_pack_shuffle_first || g32(0xC3CC08u) != 1u || g32(0xAC9ED8u) != 0 ||
+        !pack_playlist_selected() || !g32(0xC3CC10u))
+        return 0;
+    pack_music_log("start: the player's playlist (0x27FF90)", 1);
+    g32(0xC3AC90u) = 1;
+    g_ecx = g32(0xC3CBFCu);
+    return 0x0027FF90u;
+}
+
+/* 0x014DF9C5, the pack's "start my shuffle" (called on screen pushes / pops and
+ * when a paused menu resumes, e.g. 0x014DFE59). With the UserList row active and a
+ * playlist selected, resume the playlist instead -- only when the pack would really
+ * start its shuffle (enabled 0x014F24C4, nothing playing: 0x014F24C8 / CC / E4 / E8). */
+static uint32_t ih_pack_music_shuffle(void)
+{
+    if (getenv("NFL2K5_PACK_MUSIC_LOG")) pack_music_log("trace: pack shuffle start", 0);
+    if (g_pack_shuffle_first || g32(0xC3CC08u) != 1u || g32(0xAC9ED8u) != 0 || !pack_playlist_selected() ||
+        !g32(g_pk_enabled) || g32(g_pk_busy0) || g32(g_pk_busy1) || g32(g_pk_playing) || g32(g_pk_playing1) ||
+        !g32(0xC3CC10u))
+        return 0;
+    pack_music_log("resume: the player's playlist instead of the pack's shuffle (0x27FF90)", 1);
+    g32(0xC3AC90u) = 1;
+    g_ecx = g32(0xC3CBFCu);
+    return 0x0027FF90u;                               /* runs as this function: returns to its caller */
+}
+
+/* 0x014DFE72, the pack's replacement for the retail "next song" routine
+ * (0x0027F040, called when a song ends -- also after an R3 skip, which pulls the
+ * song's end in). For a playlist it only stopped and asked for a restart of the
+ * current entry, so a song that ended, or was skipped, played again from the top
+ * ("when i skip a song in softdrink plays a song cant skip", 2026-10-22). With the
+ * UserList row and a playlist, run the retail routine (intact after the 5-byte
+ * jump; its first instruction is mov eax, [0xC3CC08]): it moves to the next entry
+ * with the game's own shuffle / repeat rules. */
+static uint32_t ih_pack_music_advance(void)
+{
+    if (g_pack_shuffle_first || g32(0xC3CC08u) != 1u || g32(0xAC9ED8u) != 0 || !pack_playlist_selected())
+        return 0;
+    pack_music_log("next: the playlist's next song (retail 0x27F040)", 1);
+    g_eax = g32(0xC3CC08u);
+    return 0x0027F045u;
+}
+
+/* 0x014DFBF6: the pack registers this instead of 0x0027F040 as the custom song's
+ * "finished" callback (retail 0x0028016D push 0x27F040). It stops and restarts the
+ * current entry, so a finished or skipped song played again. For the player's
+ * playlist hand it to the next-song routine (0x27F040 -> the hook above). */
+static uint32_t ih_pack_music_song_end(void)
+{
+    if (g_pack_shuffle_first || g32(0xC3CC08u) != 1u || g32(0xAC9ED8u) != 0 || !pack_playlist_selected())
+        return 0;
+    pack_music_log("song end: on to the playlist's next song", 1);
+    return 0x0027F040u;
+}
+
+static uint32_t ih_pack_music_trace_play(void) { pack_music_log("trace: playlist start (0x27FF90)", g_ecx); return 0; }
+static uint32_t ih_pack_music_trace_stop(void) { pack_music_log("trace: pack stop", 0); return 0; }
+
+/* 0x014DFD00, the pack's "set music context" (retail 0x002804C0). */
+static uint32_t ih_pack_music_context(void)
+{
+    if (getenv("NFL2K5_PACK_MUSIC_LOG"))
+        pack_music_log(guest_wide_eq(g_ecx, u"UserList") ? "context request UserList" :
+                       guest_wide_eq(g_ecx, u"Frontend") ? "context request Frontend" : "context request (none)", 0xFFFFFFFFu);
+    if (g_pack_shuffle_first || !guest_wide_eq(g_ecx, u"UserList") || !pack_playlist_selected()) return 0;
+    pack_music_log("context UserList: the player's playlist", 0xFFFFFFFFu);
+    pack_music_restore_userlist_row();
+    g_esp -= 4;                                       /* retail 0x002804C0: push ebx; mov ebx, ecx */
+    g32(g_esp) = g_ebx;
+    g_ebx = g_ecx;
+    return 0x002804C7u;                               /* ebx != 0: past its test/je */
+}
+
+/* 0x014DFD71, the pack's music mode switch (retail 0x000F6510: 0 off, 1 menus,
+ * 2 loading, 3 the Crib, 4 in game). The pack sends the menus and the Crib to its
+ * Frontend shuffle; retail asks for the UserList row in the Crib, and in the
+ * menus / loading / game when Crib Music says so (0xB9E298 / 0xB9E29C / 0xB9E2A4).
+ * Those cases go to the retail handlers (intact after the pack's 5-byte jump). */
+static uint32_t ih_pack_music_mode(void)
+{
+    uint32_t mode = g_ecx;
+    if (getenv("NFL2K5_PACK_MUSIC_LOG")) pack_music_log("mode request", mode);
+    if (g_pack_shuffle_first || mode > 4 || !pack_playlist_selected()) return 0;
+    bool user = mode == 3 || (mode == 1 && g32(0xB9E298u)) || (mode == 2 && g32(0xB9E29Cu)) ||
+                (mode == 4 && g32(0xB9E2A4u));
+    if (!user) return 0;
+    pack_music_log("mode: the player's playlist (retail handler)", mode);
+    pack_music_restore_userlist_row();
+    g_esp -= 4;                                       /* retail 0x000F6510: push esi; mov esi, ecx */
+    g32(g_esp) = g_esi;
+    g_esi = g_ecx;
+    return g32(0x000F65B4u + mode * 4u);              /* jmp [esi*4 + 0xF65B4] */
+}
+
+/* Where a 5-byte jmp / call at `va` goes, or 0 if there is none. */
+static uint32_t pack_branch(const uint8_t *m, uint32_t va, uint8_t op)
+{
+    int32_t rel;
+    if (m[va] != op) return 0;
+    memcpy(&rel, m + va + 1, 4);
+    return va + 5u + (uint32_t)rel;
+}
+
+/* The address in a `cmp dword ptr [addr], 0` at `va`, or 0 if it is not one. */
+static uint32_t pack_cmp_addr(const uint8_t *m, uint32_t va)
+{
+    uint32_t a;
+    if (m[va] != 0x83 || m[va + 1] != 0x3D || m[va + 6] != 0) return 0;
+    memcpy(&a, m + va + 2, 4);
+    return a;
+}
+
+static void nfl2k5_pack_music_hooks(void)
+{
+    /* Pack code is found through the retail sites it hooks, and checked by what it
+     * does, so a release that only moves the code keeps these working. */
+    static const uint8_t ctx_sig[12] = { 0x85, 0xC9, 0x74, 0x22, 0x56, 0x89, 0xCE, 0xBA, 0xC0, 0xC0, 0xE6, 0x00 };
+    static const uint8_t retail_tail[8] = { 0x56, 0x57, 0x33, 0xFF, 0xBE, 0xC0, 0x9E, 0xAC };   /* 0x2804C7 */
+    static const uint8_t mode_ctx_sig[5] = { 0x83, 0xF9, 0x04, 0x77, 0x6E };
+    uint8_t *m = guest();
+    if (!m) return;
+    uint32_t ctx = pack_branch(m, 0x2804C0u, 0xE9);    /* the pack's "set music context" */
+    uint32_t modesw = pack_branch(m, 0x000F6510u, 0xE9);   /* its music mode switch */
+    uint32_t next = pack_branch(m, 0x0027F040u, 0xE9); /* its "next song" */
+    uint32_t end = g32(0x0028016Eu);                   /* its song-finished callback */
+    auto in_pack = [](uint32_t va) { return va >= 0x01400000u && va < 0x01600000u; };
+    if (!in_pack(ctx) || !in_pack(modesw) || !in_pack(next) || !in_pack(end) ||
+        memcmp(m + ctx, ctx_sig, 12) || pack_branch(m, ctx + 12u, 0xE8) != 0x00030CF0u ||
+        memcmp(m + 0x2804C7u, retail_tail, 8) || memcmp(m + modesw, mode_ctx_sig, 5) ||
+        m[0x000F651Au] != 0x33 || g32(0x000F65C4u) != 0x000F6578u || g32(0x0027F045u) != 0x8B04E0C1u)
+        return;                                       /* not SOFTDRINK's music code */
+    uint32_t helper = pack_branch(m, next, 0xE8);
+    g_pk_playing = pack_cmp_addr(m, next + 5u);
+    g_pk_enabled = pack_cmp_addr(m, next + 18u);
+    if (!in_pack(helper) || !in_pack(g_pk_playing) || !in_pack(g_pk_enabled) || pack_cmp_addr(m, end) != g_pk_playing)
+        return;
+    /* "Start my shuffle": call helper, then the five checks of the state it reads. */
+    uint32_t shuffle = 0;
+    for (uint32_t va = next; va > next - 0x1000u && !shuffle; va--)
+        if (pack_branch(m, va, 0xE8) == helper && pack_cmp_addr(m, va + 5u) == g_pk_enabled &&
+            m[va + 12u] == 0x0F && m[va + 13u] == 0x84 && pack_cmp_addr(m, va + 44u) == g_pk_playing)
+            shuffle = va;
+    if (!shuffle) return;
+    g_pk_busy0 = pack_cmp_addr(m, shuffle + 18u);
+    g_pk_busy1 = pack_cmp_addr(m, shuffle + 31u);
+    g_pk_playing1 = pack_cmp_addr(m, shuffle + 57u);
+    if (!in_pack(g_pk_busy0) || !in_pack(g_pk_busy1) || !in_pack(g_pk_playing1)) return;
+    g_pack_shuffle_first = 0;
+    char ip[1024], line[160];
+    FILE *f = fopen(xbox_user_path("nfl2k5_game.ini", ip, sizeof ip), "r");
+    bool listed = false;
+    if (f) {
+        int v;
+        while (fgets(line, sizeof line, f))
+            if (sscanf(line, " pack_shuffle_first = %d", &v) == 1) { g_pack_shuffle_first = v != 0; listed = true; }
+        fclose(f);
+    }
+    if (!listed && (f = fopen(ip, "a")) != NULL) {    /* make the switch visible in the file */
+        fprintf(f, "; pack_shuffle_first: 1 = a mod pack's own menu music (SOFTDRINK's shuffle) plays even when\n"
+                   "; a Crib Jukebox playlist is selected; 0 = the playlist wins (Crib Music: Crib/Menus).\n"
+                   "pack_shuffle_first = 0\n");
+        fclose(f);
+    }
+    if (const char *e = getenv("NFL2K5_PACK_SHUFFLE_FIRST")) g_pack_shuffle_first = atoi(e) != 0;
+    recomp_interp_add_hook(ctx, 0, ih_pack_music_context);
+    recomp_interp_add_hook(modesw, 0, ih_pack_music_mode);
+    recomp_interp_add_hook(0x00280507u, 0x00280506u, ih_pack_music_start);
+    recomp_interp_add_hook(shuffle, 0, ih_pack_music_shuffle);
+    recomp_interp_add_hook(next, 0, ih_pack_music_advance);
+    recomp_interp_add_hook(end, 0, ih_pack_music_song_end);
+    if (getenv("NFL2K5_PACK_MUSIC_LOG")) {           /* diagnostics: the pack's own music entry points */
+        /* `end` stops the song through the pack's stop routine; its playlist
+         * start calls that first too (push ecx; call stop). */
+        uint32_t stop = pack_branch(m, end + 22u, 0xE8);
+        if (in_pack(stop)) {
+            recomp_interp_add_hook(stop, 0, ih_pack_music_trace_stop);
+            for (uint32_t va = stop; va < stop + 0x200u; va++)
+                if (m[va] == 0x51 && pack_branch(m, va + 1u, 0xE8) == stop) {
+                    recomp_interp_add_hook(va, 0, ih_pack_music_trace_play);
+                    break;
+                }
+        }
+    }
+    fprintf(stderr, "[MUSIC] SOFTDRINK menu music: %s (nfl2k5_game.ini pack_shuffle_first = %d)\n",
+            g_pack_shuffle_first ? "the pack's shuffle has priority" : "the player's Jukebox playlist wins",
+            g_pack_shuffle_first);
+}
+
+/* ── R3 for the original-disc music when the retail player runs interpreted ──
+ * The retail music frame routine 0x00280620 is reached only by the tail jump at the end of
+ * sub_000F6420. A mod pack that changes sub_000F6420 (SOFTDRINK 2K28 v0.6/v0.6.1 does) runs it
+ * in the interpreter, and the interpreter follows the jump into 0x00280620 itself -- so the
+ * generated code's LOCALMUSIC_RETAIL_NEXT hook never ran there, and R3 queued a skip that
+ * nothing took: "plays a song, can't skip" (AUDIO-FIX-20261021: the log showed "R3: next
+ * cribmusic track requested" three times and no "advances"). The same skip in the interpreter:
+ * at 0x00280620, take the request, then "call" the stop (0x0027FEC0) and the advance
+ * (0x0027F040) -- the pack's own versions when it replaced them -- by returning into the stop
+ * with the advance and 0x00280620 as the return addresses; the second arrival restores the
+ * scratch registers the native hook keeps (eax, ecx, edx) and lets the routine run. */
+static uint32_t ih_retail_music_next(void)
+{
+    static LOCALMUSIC_TLS int restore;
+    static LOCALMUSIC_TLS uint32_t keep_eax, keep_ecx, keep_edx;
+    if (restore) {
+        restore = 0;
+        g_eax = keep_eax; g_ecx = keep_ecx; g_edx = keep_edx;
+        return 0;
+    }
+    if (!nfl2k5_retail_music_take_next()) return 0;
+    keep_eax = g_eax; keep_ecx = g_ecx; keep_edx = g_edx;
+    restore = 1;
+    g_esp -= 4; g32(g_esp) = 0x00280620u;             /* the advance returns here (restore, then run) */
+    g_esp -= 4; g32(g_esp) = 0x0027F040u;             /* the stop's ret goes on into the advance */
+    return 0x0027FEC0u;
+}
+
+static void nfl2k5_retail_next_interp_hook(void)
+{
+    recomp_interp_add_hook(0x00280620u, 0, ih_retail_music_next);
+}
+
+/* ── F1 > Music Player ─────────────────────────────────────────────────────
+ * Works without the Crib, so also under a pack that took the Jukebox away.
+ * Sources: the game's own music, the VIP's Jukebox playlist, each Music folder.
+ * A folder plays through entries of the game's playlist form {album, track, ..,
+ * next at +0x10} kept here, looped; the VIP's own list is never touched, the
+ * game's "current entry" 0xC3CBFC just points into them. The choice is carried
+ * out on the guest thread by nfl2k5_music_frame_service (front-end frames). */
+extern "C" void sub_000CF0F0(void);
+extern "C" void sub_0027F550(void);
+extern "C" void sub_0027FEC0(void);
+extern "C" void sub_002804C0(void);
+extern "C" void sub_00280450(void);
+extern "C" void xbox_MenuAddPage(const void *page);
+
+static SDL_AtomicInt g_pick_request;   /* 0 none, else 1 + source */
+static SDL_AtomicInt g_pick_song;      /* 0 all songs, else 1 + song */
+static int g_ui_source, g_ui_song;
+static int g_pick_row = -1, g_pick_wait, g_pick_hold;
+static bool g_pick_told;
+extern "C" void xbox_PresentToast(const char *header, const char *line1, const char *line2, unsigned ms);
+static uint32_t g_keep_menus, g_keep_loading;
+static bool g_keep_valid;
+
+static std::vector<size_t> music_folders(void)
+{
+    std::vector<size_t> out;
+    if (SDL_GetAtomicInt(&g_music_ready) == 0) return out;
+    for (size_t a = 0; a < g_albums.size() && out.size() < 100; a++)
+        for (const Song &s : g_albums[a].songs)
+            if (s.ready) { out.push_back(a); break; }
+    return out;
+}
+
+static std::vector<size_t> folder_songs(size_t a)
+{
+    std::vector<size_t> out;
+    for (size_t k = 0; k < g_albums[a].songs.size() && out.size() < kMaxPick; k++)
+        if (g_albums[a].songs[k].ready) out.push_back(k);
+    return out;
+}
+
+static void text_of(const std::u16string &s, char *out, size_t n)
+{
+    size_t i = 0;
+    if (n > 49) n = 49;                /* the row's value column */
+    for (; i < s.size() && i + 1 < n; i++) out[i] = s[i] < 0x80 ? (char)s[i] : '?';
+    out[i] = 0;
+    if (i < s.size() && i > 3) strcpy(out + i - 3, "...");
+}
+
+static void music_guest_call(void (*fn)(void), uint32_t ecx)
+{
+    g_ecx = ecx;
+    g_esp -= 4;
+    g32(g_esp) = 0xFEC0F000u;          /* any return address: fn returns to here in C */
+    fn();
+}
+
+extern "C" void nfl2k5_music_frame_service(void)
+{
+    /* In a match, the attract demo or the title there is no menu music to
+     * replace, and starting a song there is lost or starts nothing: a pick
+     * waits for the menus, Next song is dropped. The Main Menu stays on the
+     * screen stack through a match; the match's own screen 0x4E7EC0 sits above
+     * it until the End Of Game menu is left. The title and demo have no Main
+     * Menu yet. */
+    uint32_t fsm_depth = g32(0x00A84B18u + 0x100u);
+    bool under_main_menu = false, match_screen = false;
+    for (uint32_t i = 0; i <= fsm_depth && i < 0x20u; i++) {
+        uint32_t screen = g32(0x00A84B18u + i * 8u);
+        if (screen == 0x00515660u) under_main_menu = true;
+        if (screen == 0x004E7EC0u) match_screen = true;
+    }
+    /* A mod pack's interpreter pushes screens past the [FSM] push log. */
+    static const bool log_top = getenv("NFL2K5_FSM_LOG") != nullptr;
+    static uint32_t last_top = 0;
+    uint32_t top_screen = fsm_depth < 0x20u ? g32(0x00A84B18u + fsm_depth * 8u) : 0u;
+    if (log_top && top_screen != last_top) {
+        last_top = top_screen;
+        fprintf(stderr, "[FSM] top depth %u desc %08X\n", fsm_depth, top_screen);
+        fflush(stderr);
+    }
+    if (!under_main_menu || match_screen) {
+        if (SDL_SetAtomicInt(&g_skip_request, 0))
+            xbox_PresentToast("MUSIC PLAYER", "Next song works in the menus", "", 3000);
+        if (SDL_GetAtomicInt(&g_pick_request) && !g_pick_told) {
+            g_pick_told = true;
+            xbox_PresentToast("MUSIC PLAYER", "Your pick plays back in the menus", "", 3000);
+        }
+        return;
+    }
+    g_pick_told = false;
+    if (g_pick_row >= 0 && g_pick_hold > 0) {
+        g_pick_hold--;                                       /* a custom song's stream closes first */
+    } else if (g_pick_row >= 0) {
+        /* the bank player takes a moment to stop, and 0x280450 starts nothing
+         * while it is busy (sub_000CF0F0) */
+        uint32_t keep_eax = g_eax, keep_ebx = g_ebx, keep_esi = g_esi, keep_ecx = g_ecx, keep_edx = g_edx;
+        g_edx = 0;
+        music_guest_call(sub_000CF0F0, 0xC3CC10u);
+        if (!g_eax || ++g_pick_wait > 240) {
+            uint32_t row = (uint32_t)g_pick_row;
+            g_pick_row = -1;
+            g32(0xC3CC08u) = row ^ 1u;                       /* as a change of row: that path starts it, pack or not */
+            music_guest_call(sub_002804C0, g32(0xAC9EC0u + row * 0x10u));   /* that row, by its name */
+            if (!g32(0xC5D3A4u)) music_guest_call(sub_00280450, 0);  /* start it, if that did not */
+            fprintf(stderr, "[MUSIC] F1 Music Player: row %u started after %d frames (player %u)\n",
+                    row, g_pick_wait, g32(0xC5D3A4u));
+        }
+        g_eax = keep_eax; g_ebx = keep_ebx; g_esi = keep_esi; g_ecx = keep_ecx; g_edx = keep_edx;
+    }
+    if (SDL_SetAtomicInt(&g_skip_request, 0)) {
+        uint32_t entry = g32(0xC3CBFCu);
+        if (SDL_GetAtomicInt(&g_cur_id) >= 0 && entry && entry != 0xC3CBE8u) {
+            /* a playlist song: straight to the next entry */
+            uint32_t next = g32(entry + 0x10u);
+            uint32_t keep_eax = g_eax, keep_ebx = g_ebx, keep_esi = g_esi, keep_ecx = g_ecx, keep_edx = g_edx;
+            if (next == 0xC3CBE8u) next = g32(0xC3CBF8u);
+            g32(0xC3CBFCu) = next;
+            fprintf(stderr, "[MUSIC] F1 Music Player: next entry %08X\n", next);
+            music_guest_call(sub_0027FEC0, 0);
+            g_pick_row = 1;                                  /* and on, as a pick does */
+            g_pick_wait = 0;
+            g_pick_hold = 45;
+            g_eax = keep_eax; g_ebx = keep_ebx; g_esi = keep_esi; g_ecx = keep_ecx; g_edx = keep_edx;
+        } else {                                     /* the game's own music: an R3 press and release */
+            nfl2k5_local_music_buttons(0, 1);
+            nfl2k5_local_music_buttons(0, 0);
+        }
+    }
+    int request = SDL_SetAtomicInt(&g_pick_request, 0);
+    if (!request) return;
+    int source = request - 1, song = SDL_GetAtomicInt(&g_pick_song);
+    uint32_t first = g32(0xC3CBF8u), cur = 0, row = 1;
+    uint32_t keep_eax = g_eax, keep_ebx = g_ebx, keep_esi = g_esi, keep_ecx = g_ecx, keep_edx = g_edx;
+    if (!g_keep_valid) {
+        g_keep_menus = g32(0xB9E298u);
+        g_keep_loading = g32(0xB9E29Cu);
+        g_keep_valid = true;
+    }
+    bool no_list = !first || first == 0xC3CBE8u || !g32(0xC3CC04u);   /* 0xC3CC04: entries in the list */
+    if (source == 0) {
+        cur = no_list ? 0 : first;
+        row = 0;
+        g32(0xB9E298u) = g_keep_menus;
+        g32(0xB9E29Cu) = g_keep_loading;
+    } else if (source == 1) {
+        if (no_list) {
+            banner_show(u"Music Player", u"The Jukebox playlist is empty");
+            return;
+        }
+        cur = first;
+    } else {
+        std::vector<size_t> folders = music_folders();
+        if ((size_t)(source - 2) >= folders.size()) return;
+        std::vector<size_t> songs = folder_songs(folders[(size_t)(source - 2)]);
+        if (songs.empty()) return;
+        if (!g_pick_nodes) g_pick_nodes = xbox_HeapAlloc(kPickNode * kMaxPick, 16);
+        if (!g_pick_nodes) return;
+        for (size_t i = 0; i < songs.size(); i++) {
+            uint32_t node = g_pick_nodes + (uint32_t)i * kPickNode;
+            for (uint32_t o = 0; o < kPickNode; o += 4) g32(node + o) = 0;
+            g32(node + 0x00) = 0x12u + (uint32_t)(source - 2);   /* the ST.DB's numbering */
+            g32(node + 0x04) = (uint32_t)i;
+            g_edx = (uint32_t)i;                             /* +8: the name check 0x27FF90 compares */
+            music_guest_call(sub_0027F550, g32(node + 0x00));
+            g32(node + 0x08) = g_eax;
+            g32(node + 0x10) = g_pick_nodes + (uint32_t)((i + 1) % songs.size()) * kPickNode;
+        }
+        cur = g_pick_nodes + (uint32_t)(song > 0 && (size_t)(song - 1) < songs.size() ? song - 1 : 0) * kPickNode;
+    }
+    if (row) { g32(0xB9E298u) = 1; g32(0xB9E29Cu) = 1; }     /* Crib Music: Crib/Menus for now */
+    if (cur) g32(0xC3CBFCu) = cur;
+    fprintf(stderr, "[MUSIC] F1 Music Player: source %d song %d, entry %08X, row %u\n", source, song, cur, row);
+    music_guest_call(sub_0027FEC0, 0);                       /* stop what plays */
+    g_pick_row = (int)row;                                   /* and start when the player has let go */
+    g_pick_wait = 0;
+    g_eax = keep_eax; g_ebx = keep_ebx; g_esi = keep_esi; g_ecx = keep_ecx; g_edx = keep_edx;
+}
+
+static void now_playing_text(char *out, size_t n)
+{
+    int cur = SDL_GetAtomicInt(&g_cur_id);
+    RetailBank bank = RETAIL_NONE;
+    uint32_t mode = 0, index = 0;
+    size_t a = (size_t)cur >> 16, k = (size_t)cur & 0xFFFF;
+    if (cur >= 0 && SDL_GetAtomicInt(&g_music_ready) && a < g_albums.size() && k < g_albums[a].songs.size()) {
+        const Song &s = g_albums[a].songs[k];
+        std::u16string line = s.title;
+        const std::u16string &by = s.artist.empty() ? g_albums[a].name : s.artist;
+        if (!by.empty()) line += u" - " + by;
+        text_of(line, out, n);
+    } else if (retail_current(bank, mode, index)) {
+        if (bank == RETAIL_CRIB) snprintf(out, n, "%s - %s", g_crib_tracks[index].title, g_crib_tracks[index].artist);
+        else snprintf(out, n, "Original Menu Music %02u", index + 1);
+    } else {
+        snprintf(out, n, "Nothing");
+    }
+}
+
+enum { MP_NOW, MP_NEXT, MP_SOURCE, MP_SONG, MP_PLAY, MP_ROWS };
+
+static void mp_label(int row, char *name, char *val, size_t n)
+{
+    std::vector<size_t> folders = music_folders();
+    val[0] = 0;
+    if (g_ui_source >= (int)folders.size() + 2) g_ui_source = 0;
+    switch (row) {
+    case MP_NOW: strcpy(name, "Now playing"); now_playing_text(val, n); break;
+    case MP_NEXT: strcpy(name, "Next song"); break;
+    case MP_SOURCE:
+        strcpy(name, "Playlist");
+        if (g_ui_source == 0) snprintf(val, n, "Game music");
+        else if (g_ui_source == 1) snprintf(val, n, "Jukebox playlist");
+        else text_of(g_albums[folders[(size_t)(g_ui_source - 2)]].name, val, n);
+        break;
+    case MP_SONG:
+        strcpy(name, "Song");
+        if (g_ui_source < 2 || g_ui_song == 0) snprintf(val, n, "All songs");
+        else {
+            size_t a = folders[(size_t)(g_ui_source - 2)];
+            std::vector<size_t> songs = folder_songs(a);
+            if ((size_t)(g_ui_song - 1) < songs.size()) text_of(g_albums[a].songs[songs[(size_t)(g_ui_song - 1)]].title, val, n);
+        }
+        break;
+    case MP_PLAY: strcpy(name, "Play"); break;
+    default: name[0] = 0; break;
+    }
+}
+
+static void mp_change(int row, int dir)
+{
+    std::vector<size_t> folders = music_folders();
+    if (row == MP_SOURCE) {
+        int count = (int)folders.size() + 2;
+        g_ui_source = (g_ui_source + count + dir) % count;
+        g_ui_song = 0;
+    } else if (row == MP_SONG && g_ui_source >= 2 && (size_t)(g_ui_source - 2) < folders.size()) {
+        int count = (int)folder_songs(folders[(size_t)(g_ui_source - 2)]).size() + 1;
+        g_ui_song = (g_ui_song + count + dir) % count;
+    }
+    xbox_MenuInvalidate();
+}
+
+static void mp_activate(int row)
+{
+    if (row < 0) return;
+    if (row == MP_NEXT) SDL_SetAtomicInt(&g_skip_request, 1);
+    else if (row == MP_PLAY) {
+        SDL_SetAtomicInt(&g_pick_song, g_ui_song);
+        SDL_SetAtomicInt(&g_pick_request, g_ui_source + 1);
+    } else mp_change(row, 1);
+    xbox_MenuInvalidate();
+}
+
+static int mp_count(void) { return MP_ROWS; }
+
+/* xbox_MenuAddPage's XboxMenuPage (nv2a_gpu_present.inc.c) */
+static const struct {
+    const char *title;
+    int (*count)(void);
+    void (*label)(int row, char *name, char *val, size_t n);
+    void (*change)(int row, int dir);
+    void (*activate)(int row);
+    int (*busy)(void);
+} k_music_page = { "MUSIC PLAYER", mp_count, mp_label, mp_change, mp_activate, nullptr };
+
+extern "C" void nfl2k5_music_player_init(void)
+{
+    xbox_MenuAddPage(&k_music_page);
+}
+
+/* The same page as rows of the game's own menus (Options > Music Player,
+ * src/nfl2k5_video_menu.c), where there is no F1 menu to show it. */
+static int mp_values(int row)
+{
+    std::vector<size_t> folders = music_folders();
+    if (row == MP_SOURCE) return (int)folders.size() + 2;
+    if (row == MP_SONG && g_ui_source >= 2 && (size_t)(g_ui_source - 2) < folders.size())
+        return (int)folder_songs(folders[(size_t)(g_ui_source - 2)]).size() + 1;
+    if (row == MP_NEXT || row == MP_PLAY) return 2;     /* an action: any change fires it */
+    return 1;
+}
+
+extern "C" int nfl2k5_music_rows(void) { return MP_ROWS; }
+extern "C" const char *nfl2k5_music_row_label(int row)
+{
+    static const char *const k_names[MP_ROWS] = { "Now Playing", "Next Song", "Playlist", "Song", "Play" };
+    return row >= 0 && row < MP_ROWS ? k_names[row] : "";
+}
+extern "C" int nfl2k5_music_row_toggle(int row) { (void)row; return 0; }
+extern "C" int nfl2k5_music_row_values(int row) { return mp_values(row); }
+extern "C" int nfl2k5_music_row_get(int row)
+{
+    return row == MP_SOURCE ? g_ui_source : row == MP_SONG ? g_ui_song : 0;
+}
+extern "C" void nfl2k5_music_row_set(int row, int value)
+{
+    if (row == MP_SOURCE) { g_ui_source = value; g_ui_song = 0; }
+    else if (row == MP_SONG) g_ui_song = value;
+    else if (row == MP_NEXT || row == MP_PLAY) mp_activate(row);
+}
+extern "C" void nfl2k5_music_row_name(int row, int value, char *out, size_t n)
+{
+    char name[32];
+    int source = g_ui_source, song = g_ui_song;
+    out[0] = 0;
+    if (row == MP_NEXT) { snprintf(out, n, "Skip"); return; }
+    if (row == MP_PLAY) { snprintf(out, n, "Start"); return; }
+    /* mp_label names the current choice; the menu also asks for every value */
+    if (row == MP_SOURCE) g_ui_source = value;
+    else if (row == MP_SONG) g_ui_song = value;
+    mp_label(row, name, out, n);
+    g_ui_source = source;
+    g_ui_song = song;
+    /* wider than this and the screen draws a sideways scroll bar and no values */
+    if (strlen(out) > 30 && n > 30) strcpy(out + 27, "...");
 }

@@ -36387,6 +36387,8 @@ loc_0016B084: ;
 
 loc_0016B089: ;
     edx = 0x2000;
+    /* NFL2K5-GENPATCH:SAVE_NAMES_32K */
+    edx = 0x8000;
     ecx = eax;
     PUSH32(esp, 0x0016B095u); RECOMP_ABI_CALL(0x00048700u, sub_00048700); /* call 0x00048700 */
 
@@ -38673,6 +38675,8 @@ loc_0016B674: ;
     PUSH32(esp, 0x0016B679u); RECOMP_ABI_CALL(0x0016B490u, sub_0016B490); /* call 0x0016B490 */
 
 loc_0016B679: ;
+    /* NFL2K5-GENPATCH:SAVE_SPACE_LOG */
+    { extern void nfl2k5_save_space_log(uint32_t, uint32_t); nfl2k5_save_space_log(edi, eax); }
     _fa = (uint32_t)(edi) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;
     _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp edi, eax (32-bit) */
     if (CMP_GE(_fas, _fbs)) goto loc_0016B692; /* jge: greater or equal (signed >=) */
@@ -83099,6 +83103,8 @@ void sub_001770C0(void)
     (void)_fa; (void)_fb; (void)_fas; (void)_fbs;
 
 loc_001770C0: ;
+    /* NFL2K5-GENPATCH:LINEUP_OWNER_FRAME */
+    { extern void nfl2k5_presentation_lineup_frame(uint32_t ctx); nfl2k5_presentation_lineup_frame(eax); }
     PUSH32(esp, ebp);
     ebp = esp;
     g_ebp = ebp; /* publish frame for frameless callees */
@@ -83177,6 +83183,8 @@ loc_00177118: ;
 loc_00177123: ;
     g_ebp = ebp; /* frame stays current across calls */
     g_seh_ebp = ebp;
+    /* NFL2K5-GENPATCH:LINEUP_OWNER_MESH */
+    { extern int nfl2k5_presentation_lineup_draw_replaced(uint32_t ctx); if (nfl2k5_presentation_lineup_draw_replaced(esi)) goto loc_00177128; }
     PUSH32(esp, 0x00177128u); RECOMP_ABI_CALL(0x00021860u, sub_00021860); /* call 0x00021860 */
 
 loc_00177128: ;
@@ -83256,6 +83264,8 @@ loc_00177189: ;
     edx = MEM32(esi + edx * 4);
     g_ebp = ebp; /* frame stays current across calls */
     g_seh_ebp = ebp;
+    /* NFL2K5-GENPATCH:LINEUP_OWNER_TEXT */
+    { extern int nfl2k5_presentation_lineup_draw_replaced(uint32_t ctx); if (nfl2k5_presentation_lineup_draw_replaced(esi)) goto loc_001771A3; }
     PUSH32(esp, 0x001771A3u); RECOMP_ABI_CALL(0x001513D0u, sub_001513D0); /* call 0x001513D0 */
 
 loc_001771A3: ;
@@ -85476,6 +85486,8 @@ void sub_00178150(void)
     #define fp_st1() fp_st(1)
 
 loc_00178150: ;
+    /* NFL2K5-GENPATCH:MOVIE_HOLD_RESET */
+    { extern void nfl2k5_movie_frame_reset(void); nfl2k5_movie_frame_reset(); }
     /* NFL2K5-GENPATCH:SKIP_INTRO */
     /* Runtime option NFL2K5_SKIP_INTRO=1 (2026-09-23): sub_00178150 plays one
      * intro movie (espn_videogames, vc, espn_game_sound, intro -- the table at
@@ -85490,8 +85502,12 @@ loc_00178150: ;
         extern char *__cdecl getenv(const char *);
         extern int __cdecl fprintf(void *, const char *, ...);
         extern void *__cdecl __acrt_iob_func(unsigned);
+        /* Mod packs play the boot intro again (2026-10-31): it froze under
+         * SOFTDRINK too, and the cause was the scheduler pulse running beside the
+         * movie (BOOT_MOVIE_BEGIN/END below, kernel_bridge.c). */
+        extern int nfl2k5_pack_build;
         static int skip = -1, calls;
-        if (skip < 0) { const char *v = getenv("NFL2K5_SKIP_INTRO"); skip = v && *v && *v != '0'; }
+        if (skip < 0) { const char *v = getenv("NFL2K5_SKIP_INTRO"); skip = (v && *v && *v != '0'); }
         fprintf(__acrt_iob_func(2), "  [MOVIE] sub_00178150 call %d from %08X arg %08X%s\n", calls,
                 MEM32(esp), MEM32(esp + 4), skip && calls == 0 ? " (skipped: NFL2K5_SKIP_INTRO)" : "");
         if (skip && calls++ == 0) { eax = 2; esp += 8; return; /* ret 4 */ }
@@ -86011,6 +86027,8 @@ loc_00178563: ;
     PUSH32(esp, 0x00178582u); RECOMP_ABI_CALL(0x003CC0D0u, sub_003CC0D0); /* call 0x003CC0D0 */
 
 loc_00178582: ;
+    /* NFL2K5-GENPATCH:MOVIE_HOLD_FRAME */
+    { extern uint32_t nfl2k5_movie_frame_hold(uint32_t); eax = nfl2k5_movie_frame_hold(eax); }
     PUSH32(esp, ebx);
     edx = esp + 0x164;
     PUSH32(esp, edx);

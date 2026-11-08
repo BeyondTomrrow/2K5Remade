@@ -151933,6 +151933,8 @@ loc_000F4F4A: ;
     PUSH32(esp, 0x000F4F52u); RECOMP_ABI_CALL(0x0006E6A0u, sub_0006E6A0); /* call 0x0006E6A0 */
 
 loc_000F4F52: ;
+    /* NFL2K5-GENPATCH:COACH_FF_FRAME */
+    { extern void nfl2k5_coach_ff_extra(uint32_t, uint32_t); RECOMP_REGS_OUT(); nfl2k5_coach_ff_extra(edi, esi); RECOMP_REGS_IN(); }
     eax = MEM32(0xA92888);
     _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;
     _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test eax, eax (32-bit) */
@@ -167282,6 +167284,8 @@ void sub_000FC360(void)
     #define fp_st1() fp_st(1)
 
 loc_000FC360: ;
+    /* NFL2K5-GENPATCH:TIMEOUT_BUG_BEGIN */
+    int _nfl2k5_timeout_bug_eligible = 0;
     PUSH32(esp, ebp);
     ebp = esp;
     g_ebp = ebp; /* publish frame for frameless callees */
@@ -167316,6 +167320,8 @@ loc_000FC38E: ;
     if (TEST_NZ(_fa, _fb)) goto loc_000FC6A3; /* jne: not equal / not zero */
 
 loc_000FC396: ;
+    /* NFL2K5-GENPATCH:TIMEOUT_BUG_ADMITTED */
+    _nfl2k5_timeout_bug_eligible = 1;
     ecx = esp + 0x120;
     g_ebp = ebp; /* frame stays current across calls */
     g_seh_ebp = ebp;
@@ -167750,6 +167756,8 @@ loc_000FC697: ;
     PUSH32(esp, 0x000FC6A3u); RECOMP_ABI_CALL(0x0002AC80u, sub_0002AC80); /* call 0x0002AC80 */
 
 loc_000FC6A3: ;
+    /* NFL2K5-GENPATCH:TIMEOUT_BUG_COMPLETED */
+    { extern void nfl2k5_presentation_timeout_bug_frame(int visible); nfl2k5_presentation_timeout_bug_frame(_nfl2k5_timeout_bug_eligible); }
     POP32(esp, edi);
     POP32(esp, esi);
     POP32(esp, ebx);
@@ -174887,6 +174895,8 @@ void sub_000FFDA0(void)
     (void)_fa; (void)_fb; (void)_fas; (void)_fbs;
 
 loc_000FFDA0: ;
+    /* NFL2K5-GENPATCH:LINEUP_OWNER_HIDE */
+    { extern void nfl2k5_presentation_lineup_hide(uint32_t completed); nfl2k5_presentation_lineup_hide(0); }
     eax = MEM32(0xBA3214);
     _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;
     _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test eax, eax (32-bit) */
@@ -174918,6 +174928,8 @@ void sub_000FFDC0(void)
     ebp = g_seh_ebp; /* fpo_leaf: inherit caller's frame */
 
 loc_000FFDC0: ;
+    /* NFL2K5-GENPATCH:LINEUP_OWNER_DESTROY */
+    { extern void nfl2k5_presentation_lineup_hide(uint32_t completed); nfl2k5_presentation_lineup_hide(1); }
     ecx = MEM32(0xBA3534);
     g_seh_ebp = ebp; sub_001774D0(); return; /* tail jmp 0x001774D0 */
 
@@ -175057,6 +175069,8 @@ void sub_000FFE70(void)
     (void)_fa; (void)_fb; (void)_fas; (void)_fbs;
 
 loc_000FFE70: ;
+    /* NFL2K5-GENPATCH:LINEUP_OWNER_COMPLETE */
+    { extern void nfl2k5_presentation_lineup_hide(uint32_t completed); nfl2k5_presentation_lineup_hide(1); }
     PUSH32(esp, 0x000FFE75u); RECOMP_ABI_CALL(0x000FFDA0u, sub_000FFDA0); /* call 0x000FFDA0 */
 
 loc_000FFE75: ;

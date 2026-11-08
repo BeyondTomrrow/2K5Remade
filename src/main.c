@@ -28,6 +28,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
+#include <math.h>
 
 #include "kernel.h"
 #include "xbox_memory_layout.h"
@@ -36,6 +37,22 @@
 #include "recomp_icall_feedback.h"
 #include "nfl2k5_presentation.h"
 #include "nfl2k5_widescreen_patch.h"
+#if !defined(_WIN32)
+#include <sys/resource.h>
+#endif
+#include "platform/android/xbe_identify.h"
+#if defined(__ANDROID__)
+#include <SDL3/SDL.h>
+#include <SDL3/SDL_main.h>      /* main() is SDL_main: SDLActivity calls it */
+#include <android/log.h>
+#include <pthread.h>
+#include <dirent.h>
+#include <unistd.h>
+#include <sys/resource.h>
+#endif
+#if defined(__aarch64__) && !defined(_WIN32)
+int xbox_arm64_mmio_fault(void *raw_ctx, uintptr_t host, uint32_t va);   /* apu/arm64_mmio.c */
+#endif
 
 #define NFL2K5_RETAIL_XBE_SHA256 "73105b17a3161c546fea792a1c84ce37f9966a67c416f474cdbfab74b911a4a9"
 #ifndef NFL2K5_XBE_SHA256
@@ -65,6 +82,7 @@ extern int          (*g_xbox_apu_irq_line)(void);
 extern int            mcpx_apu_irq_line(void);
 extern void         (*g_apu_irq_wake)(void);
 extern void           xbox_kernel_irq_wake(void);
+extern void         (*g_apu_pitch_hook)(unsigned voice, int was, int now);
 
 extern RECOMP_TLS uint32_t g_eax, g_ecx, g_edx, g_esp, g_ebx, g_esi, g_edi;
 
@@ -88,6 +106,17 @@ extern int  nfl2k5_lineup_active(void);
 extern int  nfl2k5_presentation_playercard(uint32_t kind, const char *title);
 extern void nfl2k5_presentation_popup(const char *title);
 extern void nfl2k5_presentation_popup_text(const char *title, const char *text);
+
+/* Feature modules (src/nfl2k5_plugin_host.c, docs/eras/MOD-PACK-DESIGN.md),
+ * Main Menu "Exit", moment audio and the front end's FSM clean-up hooks */
+extern void nfl2k5_plugins_boot(const char *xbe_sha256, uint32_t base_kind, const char *xbe_pack_name, uint32_t flags);
+extern void nfl2k5_hook_menus_ready(void);
+extern void nfl2k5_hook_fsm_pop(uint32_t fsm, uint32_t top);
+extern void nfl2k5_teams_fsm_pop(uint32_t fsm, uint32_t top);
+extern void nfl2k5_exit_menu_install(void);
+extern void nfl2k5_moment_audio_install(const char *root);
+extern void nfl2k5_local_music_shutdown(void);
+extern int  nfl2k5_walk_diag_on;
 
 static uint32_t main_stack_begin = 0;
 static uint32_t main_stack_end   = 0;
@@ -227,6 +256,35 @@ static LONG CALLBACK crash_report(EXCEPTION_POINTERS *ep)
             code, (unsigned long long)ep->ContextRecord->Rip);
     fprintf(stderr, "[CRASH] eax=%08X ecx=%08X edx=%08X esp=%08X ebx=%08X esi=%08X edi=%08X\n",
             g_eax, g_ecx, g_edx, g_esp, g_ebx, g_esi, g_edi);
+    {   /* where: module + offset, and the function when the PDB is beside the exe */
+        DWORD64 rip = ep->ContextRecord->Rip, disp = 0;
+        HMODULE mod = NULL;
+        char name[MAX_PATH] = "?";
+        union { SYMBOL_INFO s; char buf[sizeof(SYMBOL_INFO) + 256]; } sym;
+        if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                               (LPCSTR)(uintptr_t)rip, &mod) && mod) {
+            GetModuleFileNameA(mod, name, sizeof name);
+            fprintf(stderr, "[CRASH] module %s+0x%llX\n", name, (unsigned long long)(rip - (DWORD64)(uintptr_t)mod));
+        }
+        memset(&sym, 0, sizeof sym);
+        sym.s.SizeOfStruct = sizeof(SYMBOL_INFO);
+        sym.s.MaxNameLen = 255;
+        if (SymFromAddr(GetCurrentProcess(), rip, &disp, &sym.s))
+            fprintf(stderr, "[CRASH] function %s+0x%llX\n", sym.s.Name, (unsigned long long)disp);
+    }
+    if (g_esp >= 0x1000u && g_esp < 0x07FFF000u) {   /* guest stack words that look like code addresses */
+        const uint32_t *st = (const uint32_t *)((uint8_t *)xbox_GetMemoryOffset() + g_esp);
+        int i, shown = 0;
+        fprintf(stderr, "[CRASH] guest stack:");
+        for (i = 0; i < 512 && shown < 24 && g_esp + 4u * (uint32_t)i < 0x07FFF000u; i++) {
+            uint32_t v = st[i];
+            if ((v >= 0x00011000u && v < 0x00420120u) || (v >= 0x014B0000u && v < 0x01520000u)) {
+                fprintf(stderr, " +%X:%08X", (unsigned)(i * 4), v);
+                shown++;
+            }
+        }
+        fprintf(stderr, "\n");
+    }
     fflush(stderr);
     RECOMP_ICALL_FEEDBACK_DUMP();
     return EXCEPTION_EXECUTE_HANDLER;
@@ -245,10 +303,15 @@ static void posix_audio_mmio_sigaction(int sig, siginfo_t *si, void *ucontext)
         uintptr_t host = (uintptr_t)si->si_addr;
         uintptr_t offset = (uintptr_t)xbox_GetMemoryOffset();
         if (host >= offset && host - offset >= 0xFE800000ULL && host - offset < 0xFE880000ULL) {
+#if defined(__x86_64__)
             ucontext_t *uc = (ucontext_t *)ucontext;
             int is_write = (uc->uc_mcontext.gregs[REG_ERR] & 0x2) != 0;
             if (apu_hook_handle_mmio((PCONTEXT)uc, host, (uint32_t)(host - offset), is_write))
                 return;
+#elif defined(__aarch64__)
+            if (xbox_arm64_mmio_fault(ucontext, host, (uint32_t)(host - offset)))
+                return;
+#endif
         }
     }
     const struct sigaction *previous = sig == SIGTRAP ? &g_prev_trap_sa : &g_prev_segv_sa;
@@ -270,7 +333,7 @@ static bool install_audio_mmio_handler(void)
     memset(&sa, 0, sizeof(sa));
     sa.sa_sigaction = posix_audio_mmio_sigaction;
     sigemptyset(&sa.sa_mask);
-    sa.sa_flags = SA_SIGINFO | SA_NODEFER;
+    sa.sa_flags = SA_SIGINFO | SA_NODEFER | SA_ONSTACK;   /* the thread's signal stack where it has one */
     if (sigaction(SIGSEGV, &sa, &g_prev_segv_sa) != 0) return false;
     if (sigaction(SIGTRAP, &sa, &g_prev_trap_sa) != 0) {
         sigaction(SIGSEGV, &g_prev_segv_sa, NULL);
@@ -290,6 +353,20 @@ static DWORD WINAPI nfl2k5_stderr_flusher(LPVOID unused)
         fflush(stderr);
     }
     return 0;
+}
+
+/* NFL2K5_CROWD_PROBE=1 (AUDIO-REPORT-HOTKEY-20261022): each pitch change of the
+ * crowd-reaction stream (voice 0x44) with the wall clock, to compare the swell
+ * against time with xemu (tools/audio/crowd_clock.py). */
+static void crowd_probe(unsigned voice, int was, int now)
+{
+    LARGE_INTEGER f, c;
+    if (voice != 0x44)
+        return;
+    QueryPerformanceFrequency(&f);
+    QueryPerformanceCounter(&c);
+    fprintf(stderr, "[CROWD] qpc=%.1f p=%d->%d hz=%.0f\n", (double)c.QuadPart * 1000.0 / (double)f.QuadPart,
+            was, now, 48000.0 * exp2(now / 4096.0));
 }
 
 /* ============================================================================
@@ -328,6 +405,41 @@ uint32_t nfl2k5_frame_interval(uint32_t requested, uint32_t caller)
         g_xbox_fps_limit_changed = nfl2k5_frame_interval_refresh;
     s_frame_req = requested;
     return nfl2k5_frame_interval_for(requested);
+}
+
+/* Optional short-quarter harness for reproducing quarter/halftime bugs. The
+ * retail game is untouched unless NFL2K5_QUARTER_SECONDS is set. The title
+ * rewrites its period length when a match is created, so keep the override
+ * alive until the game has entered a valid period. */
+static DWORD WINAPI nfl2k5_short_quarter_thread(LPVOID arg)
+{
+    float seconds = *(const float *)arg;
+    const uint8_t *m = (const uint8_t *)xbox_GetMemoryOffset();
+    uint32_t last_period = 0xFFFFFFFFu;
+    for (;;) {
+        uint32_t period = *(const uint32_t *)(m + 0x00E602C4u);
+        if (period != last_period) {
+            fprintf(stderr, "[TEST] period %u -> %u (t=%lu)\n", last_period, period, (unsigned long)GetTickCount());
+            last_period = period;
+        }
+        if (period >= 1u && period <= 4u) {
+            float *length = (float *)(m + 0x00E602B0u);
+            /* the length is read when a quarter starts; the running clock
+             * (clock object [E6028C] + 0x10, seconds) is what counts down */
+            uint32_t clock_object = *(const uint32_t *)(m + 0x00E6028Cu);
+            if (clock_object && clock_object < 0x08000000u) {
+                float *clock = (float *)((uint8_t *)m + clock_object + 0x10u);
+                if (*clock > seconds && *clock < 4000.0f)
+                    *clock = seconds;
+            }
+            if (*length != seconds) {
+                *length = seconds;
+                fprintf(stderr, "[TEST] quarter length override: %.0f seconds (period %u)\n", seconds, period);
+            }
+        }
+        Sleep(100);
+    }
+    return 0;
 }
 
 static void nfl2k5_expand_limits(void)
@@ -434,7 +546,11 @@ void nfl2k5_diag_popup(uint32_t obj, int what)
         int i;
         if (obj < 0x10000u || obj > 0x4000000u - 0xF20u)
             return;
-        if (*(const int32_t *)(m + obj) == 1 && nfl2k5_lineup_active())
+        /* A presentation package is playing its lineup intro: the game's
+         * player card (slot 1) closes at once instead of covering it, unless
+         * the package still needs the card's pregame metadata. */
+        if (*(const int32_t *)(m + obj) == 1 && nfl2k5_lineup_active() &&
+            !nfl2k5_presentation_pregame_metadata_needed())
             *(float *)((uint8_t *)m + obj + 8u) = 0.01f;
 
         for (i = 0; i < 63 && *(const uint16_t *)(m + obj + 0x4Cu + i * 2u); i++)
@@ -446,10 +562,7 @@ void nfl2k5_diag_popup(uint32_t obj, int what)
 
         nfl2k5_presentation_coin_toss(title, msg, *(const float *)(m + obj + 8u),
                                       *(const int32_t *)(m + obj), 0, obj);
-        if (*(const int32_t *)(m + obj) == 1 &&
-            *(const uint32_t *)(m + obj + 0x10u) == 1 &&
-            *(const uint32_t *)(m + obj + 0x48u) == 1 &&
-            *(const uint32_t *)(m + obj + 0x228u) == 1) {
+        if (*(const int32_t *)(m + obj) == 1) {
             if (nfl2k5_presentation_pregame_metadata_needed())
                 nfl2k5_pregame_guest_roster_snapshot();
             nfl2k5_presentation_player_fact(obj);
@@ -490,6 +603,137 @@ void nfl2k5_diag_popup(uint32_t obj, int what)
     }
 }
 
+/* Game state machines (sub_0006E390 push, sub_0006E400 pop; idx at +0x100,
+ * state descriptors at +idx*8). On a pop the M2 staging test releases its
+ * slots at the Main Menu, and feature modules (My NFL Eras) clean up. */
+void nfl2k5_diag_fsm(uint32_t obj, uint32_t desc, int push)
+{
+    const uint8_t *m = (const uint8_t *)xbox_GetMemoryOffset();
+    uint32_t idx = *(const uint32_t *)(m + obj + 0x100u);
+    static int log = -1;
+    if (log < 0) log = getenv("NFL2K5_FSM_LOG") && *getenv("NFL2K5_FSM_LOG") != '0';
+    if (log) {
+        /* NFL2K5_FSM_LOG=1: every screen pushed/popped, with its title */
+        uint32_t d = push ? desc : (idx < 0x20u ? *(const uint32_t *)(m + obj + idx * 8u) : 0);
+        char title[64] = "";
+        if (d >= 0x10000u && d < 0x04000000u) {
+            uint32_t t = *(const uint32_t *)(m + d), i;
+            for (i = 0; t >= 0x10000u && t < 0x04000000u && i + 1 < sizeof title; i++) {
+                uint16_t c = *(const uint16_t *)(m + t + i * 2u);
+                if (!c) break;
+                title[i] = c < 0x80 ? (char)c : '?';
+                title[i + 1] = 0;
+            }
+        }
+        fprintf(stderr, "[FSM] %s fsm %08X depth %u desc %08X \"%s\"\n", push ? "push" : "pop ",
+                (unsigned)obj, (unsigned)idx, (unsigned)d, title);
+    }
+    if (!push && idx < 0x20u) {
+        uint32_t top = *(const uint32_t *)(m + obj + idx * 8u);
+        nfl2k5_teams_fsm_pop(obj, top);
+        nfl2k5_hook_fsm_pop(obj, top);
+    }
+}
+
+/* Optional source-only pregame audit (NFL2K5_DIAG_SNF_PREGAME). The existing
+ * command-start hook is after 5A6F0, so ctx's cursor points at the next
+ * operands. Record them and the actual camera-state identities without
+ * classifying a warmup stage. */
+static int snf_pregame_read(uint32_t address, void *out, size_t size)
+{
+    uint64_t end = (uint64_t)address + size;
+    /* Script contexts and vignette instances also live in the contiguous
+     * guest heap window. Match the presentation reader's two ranges. */
+    if (!((address >= 0x10000u && end <= 0x10000000u) ||
+          (address >= 0x80000000u && end <= 0x90000000u)))
+        return 0;
+    __try {
+        memcpy(out, (const uint8_t *)xbox_GetMemoryOffset() + address, size);
+        return 1;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return 0;
+    }
+}
+
+static void snf_pregame_script_trace(uint32_t ctx, uint32_t op, uint32_t start)
+{
+    static int enabled = -1;
+    static volatile LONG printed;
+    uint32_t period, phase, clock_object, cursor, frame = 0, type = 0;
+    uint32_t state_c8 = 0, state_cc = 0, camera_c4 = 0, camera_c8 = 0;
+    uint32_t camera_mode = 0, camera_pending = 0;
+    float clock, length;
+    uint8_t args[8];
+    if (enabled < 0)
+        enabled = getenv("NFL2K5_DIAG_SNF_PREGAME") != NULL;
+    if (!enabled || !start || op > 255u ||
+        !snf_pregame_read(0x00E602C4u, &period, sizeof(period)) || period != 0 ||
+        !snf_pregame_read(0x00E602B4u, &phase, sizeof(phase)) || phase != 0 ||
+        !snf_pregame_read(0x00E6028Cu, &clock_object, sizeof(clock_object)) || !clock_object ||
+        !snf_pregame_read(clock_object + 0x10u, &clock, sizeof(clock)) ||
+        !snf_pregame_read(0x00E602B0u, &length, sizeof(length)) ||
+        !(clock >= 0.0f && clock < 4000.0f && length > 0.0f && length < 4000.0f) ||
+        clock - length > 0.1f || length - clock > 0.1f ||
+        !snf_pregame_read(ctx, &cursor, sizeof(cursor)) ||
+        !snf_pregame_read(cursor, args, sizeof(args)) ||
+        InterlockedIncrement(&printed) > 2000)
+        return;
+    snf_pregame_read(0x00A6A9B4u, &frame, sizeof(frame));
+    snf_pregame_read(0x00A8F7B8u + op * 12u, &type, sizeof(type));
+    snf_pregame_read(0x00E602C8u, &state_c8, sizeof(state_c8));
+    snf_pregame_read(0x00E602CCu, &state_cc, sizeof(state_cc));
+    snf_pregame_read(0x00B616C4u, &camera_c4, sizeof(camera_c4));
+    snf_pregame_read(0x00B616C8u, &camera_c8, sizeof(camera_c8));
+    snf_pregame_read(0x00B616C0u, &camera_mode, sizeof(camera_mode));
+    snf_pregame_read(0x00B61700u, &camera_pending, sizeof(camera_pending));
+    fprintf(stderr, "[SNF-PREGAME] t=%llu frame=%u ctx=%08X op=%u type=%u cursor=%08X args=%02X%02X%02X%02X %02X%02X%02X%02X state=%08X/%08X camera=%08X/%08X mode=%u pending=%u\n",
+            (unsigned long long)GetTickCount64(), frame, ctx, op, type, cursor,
+            args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7],
+            state_c8, state_cc, camera_c4, camera_c8, camera_mode, camera_pending);
+    for (uint32_t channel = 0; channel < 2u; ++channel) {
+        uint32_t slot = 0x00B607F0u + channel * 0x100u;
+        uint32_t scene = 0, flags = 0, instance = 0, ready = 0;
+        snf_pregame_read(slot, &flags, sizeof(flags));
+        snf_pregame_read(slot + 0x10u, &scene, sizeof(scene));
+        snf_pregame_read(slot + 0x18u, &instance, sizeof(instance));
+        snf_pregame_read(slot + 0xF0u, &ready, sizeof(ready));
+        fprintf(stderr, "[SNF-PREGAME-SCENE] t=%llu channel=%u id=%u flags=%08X instance=%08X ready=%u\n",
+                (unsigned long long)GetTickCount64(), channel, scene, flags, instance, ready);
+    }
+}
+
+/* Presentation script commands (DIAG_SCRIPTOP): each command a script context
+ * starts, and the first poll of a command, with the {type, start, poll} entry
+ * at 0xA8F7B8 + op*12. Verbose logging or NFL2K5_PRESENTATION_TRACE only. */
+void nfl2k5_diag_script(uint32_t ctx, uint32_t op, uint32_t start)
+{
+    static int presentation_trace = -1;
+    static uint32_t ctxs[16], last[16];
+    static volatile LONG printed;
+    snf_pregame_script_trace(ctx, op, start);
+    if (presentation_trace < 0)
+        presentation_trace = getenv("NFL2K5_PRESENTATION_TRACE") != NULL;
+    if (!xbox_verbose() && !presentation_trace)   /* thousands of lines a match */
+        return;
+    if (presentation_trace && !start)             /* focused audit records command starts */
+        return;
+    const uint8_t *m = (const uint8_t *)xbox_GetMemoryOffset();
+    uint32_t key = op | (start ? 0x100u : 0u), e = 0xA8F7B8u + op * 12u;
+    int i;
+    for (i = 0; i < 16 && ctxs[i] && ctxs[i] != ctx; i++) {}
+    if (i == 16)
+        i = 15;
+    if (ctxs[i] == ctx && last[i] == key && !start)
+        return;
+    ctxs[i] = ctx;
+    last[i] = key;
+    if (InterlockedIncrement(&printed) > 20000)
+        return;
+    fprintf(stderr, "  [SCRIPT] ctx=%08X op=%3u %s type=%u start=%08X poll=%08X\n", ctx, op,
+            start ? "start" : "poll ", *(const uint32_t *)(m + e), *(const uint32_t *)(m + e + 4u),
+            *(const uint32_t *)(m + e + 8u));
+}
+
 uint32_t nfl2k5_sim_pick_empty(uint32_t team, uint32_t want, uint32_t arg2, uint32_t mask)
 {
     (void)want; (void)arg2; (void)mask;
@@ -524,12 +768,10 @@ void recomp_flags_fallback_hit(uint32_t address) { (void)address; }
 void recomp_icall_hist(uint32_t va) { (void)va; }
 void recomp_unresolved_hit(uint32_t address) { (void)address; }
 void recomp_todo_hit(uint32_t address) { (void)address; }
-void nfl2k5_diag_fsm(uint32_t obj, uint32_t desc, int push) { (void)obj; (void)desc; (void)push; }
 void nfl2k5_diag_texzero(uint32_t tex, uint32_t ret) { (void)tex; (void)ret; }
 void nfl2k5_diag_reg(uint32_t fn, uint32_t edx_, uint32_t a0, uint32_t a1, uint32_t obj) { (void)fn; (void)edx_; (void)a0; (void)a1; (void)obj; }
 void nfl2k5_diag_res43(uint32_t obj, uint32_t load, uint32_t fre, uint32_t where) { (void)obj; (void)load; (void)fre; (void)where; }
 void nfl2k5_diag_res(uint32_t res, int load, uint32_t ret, uint32_t r2, uint32_t r3) { (void)res; (void)load; (void)ret; (void)r2; (void)r3; }
-void nfl2k5_diag_script(uint32_t ctx, uint32_t op, uint32_t start) { (void)ctx; (void)op; (void)start; }
 void nfl2k5_diag_stream(uint32_t dst, uint32_t src, uint32_t len, uint32_t eax_, uint32_t arg) { (void)dst; (void)src; (void)len; (void)eax_; (void)arg; }
 void nfl2k5_diag_pbreset(uint32_t dev) { (void)dev; }
 void nfl2k5_diag_pbbegin(void) {}
@@ -550,13 +792,783 @@ void nfl2k5_diag_slot(const char *where, uint32_t a, uint32_t b, uint32_t c, uin
  * Main Application Entry Point
  * ============================================================================ */
 
+#if defined(__ANDROID__)
+/* stderr goes nowhere on Android: the log lines go to logcat (tag NFL2K5)
+ * and to <root>/nfl2k5.log, where they can be read off the device. */
+static int android_log_pipe[2];
+static void *android_log_thread(void *arg)
+{
+    FILE *file = (FILE *)arg;
+    char buf[1024];
+    ssize_t n;
+    while ((n = read(android_log_pipe[0], buf, sizeof buf - 1)) > 0) {
+        buf[n] = 0;
+        __android_log_write(ANDROID_LOG_INFO, "NFL2K5", buf);
+        if (file) { fwrite(buf, 1, (size_t)n, file); fflush(file); }
+    }
+    return NULL;
+}
+
+/* The broadcast presentation packages ship inside the APK (android/build_apk.py
+ * puts mods/presentations under assets/presentations with a manifest whose
+ * first line is a version stamp). They are copied into <root>/mods/presentations
+ * when that stamp changes, and a first mods/presentation.ini picks NBC SNF. */
+static void android_mkdirs(const char *path)
+{
+    char tmp[1024];
+    snprintf(tmp, sizeof tmp, "%s", path);
+    for (char *p = tmp + 1; *p; p++)
+        if (*p == '/') { *p = 0; mkdir(tmp, 0775); *p = '/'; }
+    mkdir(tmp, 0775);
+}
+
+/* One asset tree of the APK (assets/<asset>/..., listed in assets/<asset>/manifest.txt, whose
+ * first line is a version stamp) copied into <root>/<dest> when the stamp changes. */
+static void android_unpack_tree(const char *root, const char *asset, const char *dest, const char *what)
+{
+    size_t len = 0;
+    char mpath[256];
+    char *manifest;
+    char dir[1024], stamp_path[1024], old[64] = "";
+    FILE *f;
+    snprintf(mpath, sizeof mpath, "%s/manifest.txt", asset);
+    manifest = (char *)SDL_LoadFile(mpath, &len);
+    if (!manifest) return;
+    snprintf(dir, sizeof dir, "%s/%s", root, dest);
+    snprintf(stamp_path, sizeof stamp_path, "%s/.apk-version-%s", dir, asset);
+    if ((f = fopen(stamp_path, "r"))) { if (!fgets(old, sizeof old, f)) old[0] = 0; fclose(f); }
+    char *line = strtok(manifest, "\n");
+    if (line && strcmp(line, old) && strncmp(line, old, strlen(line))) {
+        char stamp[64];
+        unsigned n = 0, bad = 0;
+        snprintf(stamp, sizeof stamp, "%s", line);
+        android_mkdirs(dir);
+        while ((line = strtok(NULL, "\n"))) {
+            char src[1024], dst[1024];
+            size_t sz = 0;
+            void *data;
+            snprintf(src, sizeof src, "%s/%s", asset, line);
+            snprintf(dst, sizeof dst, "%s/%s", dir, line);
+            if (strrchr(dst, '/')) { *strrchr(dst, '/') = 0; android_mkdirs(dst); dst[strlen(dst)] = '/'; }
+            data = SDL_LoadFile(src, &sz);
+            if (data && (f = fopen(dst, "wb"))) { fwrite(data, 1, sz, f); fclose(f); n++; }
+            else bad++;
+            SDL_free(data);
+        }
+        if ((f = fopen(stamp_path, "w"))) { fprintf(f, "%s\n", stamp); fclose(f); }
+        fprintf(stderr, "[ANDROID] %s unpacked: %u files%s\n", what, n, bad ? " (some failed)" : "");
+    }
+    SDL_free(manifest);
+}
+
+/* The broadcast packages (assets/presentations -> <root>/mods/presentations, the stamp file
+ * keeps its old name), the MyCareer home's CC0 models and shop list (assets/mycareer, paths
+ * relative to <root>), and a first mods/presentation.ini that picks NBC SNF. */
+static void android_unpack_presentations(const char *root)
+{
+    FILE *f;
+    {   /* the presentations' stamp was <dir>/.apk-version before the tree helper: keep reading it */
+        char a[1024], b[1024];
+        snprintf(a, sizeof a, "%s/mods/presentations/.apk-version", root);
+        snprintf(b, sizeof b, "%s/mods/presentations/.apk-version-presentations", root);
+        if (access(b, F_OK) != 0 && access(a, F_OK) == 0) rename(a, b);
+    }
+    android_unpack_tree(root, "presentations", "mods/presentations", "broadcast packages");
+    android_unpack_tree(root, "mycareer", ".", "MyCareer home models");
+    {
+        char ini[1024];
+        snprintf(ini, sizeof ini, "%s/mods/presentation.ini", root);
+        if (access(ini, F_OK) != 0 && (f = fopen(ini, "w"))) {
+            fprintf(f, "; Broadcast presentation (Coach Match Up > Presentation edits this)\n"
+                       "package = NBC Sunday Night Football\nintro = 0\noutro = 0\nanimations = 1\n"
+                       "theme_volume = 100\ncustom_commentary = 0\n");
+            fclose(f);
+        }
+    }
+}
+
+/* Every 30 s: the threads that used the most CPU, as percent of one core.
+ * What drains a phone battery is CPU time, and this names who spends it. */
+static void *android_cpu_report_thread(void *arg)
+{
+    enum { MAXT = 160 };
+    struct { int tid; unsigned long long t; char name[20]; int core; } prev[MAXT], cur[MAXT];
+    int np = 0;
+    long hz = sysconf(_SC_CLK_TCK);
+    (void)arg;
+    {   /* the cores' top speeds, once: which of the numbers below are big cores */
+        char line[256], path[80];
+        int o = snprintf(line, sizeof line, "[CPU] cores (max MHz):");
+        for (int c = 0; c < 16 && o < (int)sizeof line - 16; c++) {
+            unsigned long khz = 0;
+            FILE *f;
+            snprintf(path, sizeof path, "/sys/devices/system/cpu/cpu%d/cpufreq/cpuinfo_max_freq", c);
+            if (!(f = fopen(path, "r"))) continue;
+            if (fscanf(f, "%lu", &khz) == 1) o += snprintf(line + o, sizeof line - o, " %d:%lu", c, khz / 1000);
+            fclose(f);
+        }
+        fprintf(stderr, "%s\n", line);
+    }
+    for (;;) {
+        DIR *d = opendir("/proc/self/task");
+        struct dirent *e;
+        int nc = 0, i, j, k;
+        struct { int pct10; const char *name; int core; } top[6];
+        int ntop = 0, total10 = 0;
+        if (!d) return NULL;
+        while ((e = readdir(d)) && nc < MAXT) {
+            char path[64], buf[512], *p;
+            unsigned long long ut = 0, st = 0;
+            FILE *f;
+            if (e->d_name[0] < '0' || e->d_name[0] > '9') continue;
+            snprintf(path, sizeof path, "/proc/self/task/%s/stat", e->d_name);
+            if (!(f = fopen(path, "r"))) continue;
+            buf[0] = 0;
+            if (!fgets(buf, sizeof buf, f)) buf[0] = 0;
+            fclose(f);
+            cur[nc].tid = atoi(e->d_name);
+            cur[nc].name[0] = 0;
+            if ((p = strchr(buf, '(')) && strrchr(buf, ')')) {
+                size_t l = (size_t)(strrchr(buf, ')') - p - 1);
+                if (l >= sizeof cur[nc].name) l = sizeof cur[nc].name - 1;
+                memcpy(cur[nc].name, p + 1, l); cur[nc].name[l] = 0;
+                p = strrchr(buf, ')') + 2;
+                /* fields after the name: state ppid pgrp session tty tpgid flags minflt cminflt majflt cmajflt utime stime */
+                sscanf(p, "%*c %*d %*d %*d %*d %*d %*u %*u %*u %*u %*u %llu %llu", &ut, &st);
+                /* ...and field 39 of the line, the core it last ran on */
+                cur[nc].core = -1;
+                {
+                    int field = 3;
+                    char *q = p;
+                    while (q && field < 39) { q = strchr(q, ' '); if (q) { q++; field++; } }
+                    if (q) cur[nc].core = atoi(q);
+                }
+            }
+            cur[nc].t = ut + st;
+            nc++;
+        }
+        closedir(d);
+        for (i = 0; i < nc; i++) {
+            unsigned long long was = cur[i].t;
+            int pct10;
+            for (j = 0; j < np; j++) if (prev[j].tid == cur[i].tid) { was = prev[j].t; break; }
+            if (j == np && np) was = 0;            /* new thread: all of its time is in this window */
+            pct10 = (int)((cur[i].t - was) * 1000ull / (unsigned long long)(hz * 30));
+            total10 += pct10;
+            for (k = ntop; k > 0 && top[k - 1].pct10 < pct10; k--) if (k < 6) top[k] = top[k - 1];
+            if (k < 6) { top[k].pct10 = pct10; top[k].name = cur[i].name; top[k].core = cur[i].core; if (ntop < 6) ntop++; }
+        }
+        if (np) {
+            char line[512];
+            int o = snprintf(line, sizeof line, "[CPU] last 30 s: %d.%d%% of one core in total;", total10 / 10, total10 % 10);
+            for (k = 0; k < ntop && o < (int)sizeof line - 40; k++)
+                o += snprintf(line + o, sizeof line - o, " %s %d.%d%% (core %d)", top[k].name, top[k].pct10 / 10, top[k].pct10 % 10, top[k].core);
+            fprintf(stderr, "%s\n", line);
+        }
+        memcpy(prev, cur, sizeof cur[0] * (size_t)nc);
+        np = nc;
+        sleep(30);
+    }
+    return NULL;
+}
+
+/* ---- Performance overlay: device figures (2026-10-31) ----------------------
+ * While the Full performance overlay shows (nv2a_gpu_perfhud.inc.c), every
+ * 2 s: the two busiest threads, battery level/current/drain/temperature
+ * (the sticky ACTION_BATTERY_CHANGED intent and BatteryManager, through
+ * JNI), the thermal status and headroom (libandroid), a CPU/SoC thermal zone
+ * and the GPU's busy share where the kernel lets an app read them. Same
+ * layout as XboxDeviceStats in nv2a_gpu_perfhud.inc.c. */
+#include <jni.h>
+#include <sys/prctl.h>
+#include <dlfcn.h>
+typedef struct {
+    volatile LONG seq;
+    int   valid;
+    char  top[2][16];
+    float top_pct[2];
+    int   ncores;
+    int   batt_pct;
+    int   batt_ma;
+    float batt_drain_pct_h;
+    int   charging;
+    float batt_temp_c;
+    float soc_temp_c;
+    int   thermal_status;
+    float thermal_headroom;
+    float gpu_pct;
+} XboxDeviceStats;
+extern XboxDeviceStats g_xbox_device_stats;
+extern volatile int g_xbox_perf_overlay;
+
+static int ps_read_int(const char *path, long *v)
+{
+    FILE *f = fopen(path, "r");
+    int ok;
+    if (!f) return 0;
+    ok = fscanf(f, "%ld", v) == 1;
+    fclose(f);
+    return ok;
+}
+
+/* level, scale, temperature and status from the sticky battery intent, and
+ * the current (uA) and remaining charge (uAh) from BatteryManager */
+static int ps_battery_jni(int *pct, int *temp10, int *charging, long *ua, long *uah);
+int nfl2k5_battery_temp10(void)     /* tenths of a degree C, 0 if unknown (android_settings.c) */
+{
+    int pct = 0, temp10 = 0, charging = 0;
+    long ua = 0, uah = 0;
+    return ps_battery_jni(&pct, &temp10, &charging, &ua, &uah) ? temp10 : 0;
+}
+
+static int ps_battery_jni(int *pct, int *temp10, int *charging, long *ua, long *uah)
+{
+    char name[17] = { 0 };
+    JNIEnv *env;
+    jobject act, filt = NULL, intent = NULL, bm = NULL;
+    jclass ctx = NULL, ifc = NULL, ic = NULL;
+    int ok = 0;
+    prctl(PR_GET_NAME, name, 0, 0, 0);
+    env = (JNIEnv *)SDL_GetAndroidJNIEnv();        /* attaching renames the thread: keep its name */
+    if (name[0]) prctl(PR_SET_NAME, name, 0, 0, 0);
+    if (!env || !(act = (jobject)SDL_GetAndroidActivity())) return 0;
+    (*env)->PushLocalFrame(env, 16);
+    ctx = (*env)->GetObjectClass(env, act);
+    ifc = (*env)->FindClass(env, "android/content/IntentFilter");
+    if (ctx && ifc) {
+        jmethodID ctor = (*env)->GetMethodID(env, ifc, "<init>", "(Ljava/lang/String;)V");
+        jmethodID reg = (*env)->GetMethodID(env, ctx, "registerReceiver",
+                                            "(Landroid/content/BroadcastReceiver;Landroid/content/IntentFilter;)Landroid/content/Intent;");
+        if (ctor && reg) {
+            filt = (*env)->NewObject(env, ifc, ctor, (*env)->NewStringUTF(env, "android.intent.action.BATTERY_CHANGED"));
+            if (filt) intent = (*env)->CallObjectMethod(env, act, reg, NULL, filt);
+        }
+    }
+    if ((*env)->ExceptionCheck(env)) { (*env)->ExceptionClear(env); intent = NULL; }
+    if (intent && (ic = (*env)->GetObjectClass(env, intent))) {
+        jmethodID gi = (*env)->GetMethodID(env, ic, "getIntExtra", "(Ljava/lang/String;I)I");
+        if (gi) {
+            int level = (*env)->CallIntMethod(env, intent, gi, (*env)->NewStringUTF(env, "level"), -1);
+            int scale = (*env)->CallIntMethod(env, intent, gi, (*env)->NewStringUTF(env, "scale"), 100);
+            int st = (*env)->CallIntMethod(env, intent, gi, (*env)->NewStringUTF(env, "status"), 1);
+            *temp10 = (*env)->CallIntMethod(env, intent, gi, (*env)->NewStringUTF(env, "temperature"), -10000);
+            *charging = st == 2 || st == 5;        /* BATTERY_STATUS_CHARGING / FULL */
+            if (level >= 0 && scale > 0) { *pct = level * 100 / scale; ok = 1; }
+        }
+        if ((*env)->ExceptionCheck(env)) { (*env)->ExceptionClear(env); ok = 0; }
+    }
+    if (ctx) {
+        jmethodID gs = (*env)->GetMethodID(env, ctx, "getSystemService", "(Ljava/lang/String;)Ljava/lang/Object;");
+        if (gs) bm = (*env)->CallObjectMethod(env, act, gs, (*env)->NewStringUTF(env, "batterymanager"));
+        if ((*env)->ExceptionCheck(env)) { (*env)->ExceptionClear(env); bm = NULL; }
+        if (bm) {
+            jclass bc = (*env)->GetObjectClass(env, bm);
+            jmethodID gp = bc ? (*env)->GetMethodID(env, bc, "getIntProperty", "(I)I") : NULL;
+            if (gp) {
+                *ua = (*env)->CallIntMethod(env, bm, gp, 2);    /* BATTERY_PROPERTY_CURRENT_NOW */
+                *uah = (*env)->CallIntMethod(env, bm, gp, 1);   /* BATTERY_PROPERTY_CHARGE_COUNTER */
+            }
+            if ((*env)->ExceptionCheck(env)) { (*env)->ExceptionClear(env); *ua = *uah = 0; }
+        }
+    }
+    (*env)->PopLocalFrame(env, NULL);
+    (*env)->DeleteLocalRef(env, act);
+    return ok;
+}
+
+/* the first readable thermal zone whose type names the CPU or SoC, m°C */
+static int ps_soc_zone(char *path, size_t n)
+{
+    int i;
+    for (i = 0; i < 64; i++) {
+        char tp[96], type[64] = "";
+        long v;
+        FILE *f;
+        snprintf(tp, sizeof tp, "/sys/class/thermal/thermal_zone%d/type", i);
+        if (!(f = fopen(tp, "r"))) { if (i > 8) break; continue; }
+        if (!fgets(type, sizeof type, f)) type[0] = 0;
+        fclose(f);
+        if (!strstr(type, "cpu") && !strstr(type, "soc") && !strstr(type, "CPU") && !strstr(type, "tsens"))
+            continue;
+        snprintf(path, n, "/sys/class/thermal/thermal_zone%d/temp", i);
+        if (ps_read_int(path, &v) && v > 0) return 1;
+    }
+    return 0;
+}
+
+static void *android_perf_stats_thread(void *arg)
+{
+    enum { MAXT = 160 };
+    static struct { int tid; unsigned long long t; char name[16]; } prev[MAXT], cur[MAXT];
+    int np = 0, gpu_src = -1, zone_ok = -1;
+    char zone[96] = "";
+    long hz = sysconf(_SC_CLK_TCK);
+    Uint64 t_prev = 0, drain_t0 = 0;
+    int drain_pct0 = -1;
+    void *lib = dlopen("libandroid.so", RTLD_NOW), *mgr = NULL;
+    void *(*th_acquire)(void) = lib ? (void *(*)(void))dlsym(lib, "AThermal_acquireManager") : NULL;
+    int (*th_status)(void *) = lib ? (int (*)(void *))dlsym(lib, "AThermal_getCurrentThermalStatus") : NULL;
+    float (*th_headroom)(void *, int) = lib ? (float (*)(void *, int))dlsym(lib, "AThermal_getThermalHeadroom") : NULL;
+    static const char *const k_gpu[] = { "/sys/class/kgsl/kgsl-3d0/gpu_busy_percentage", "/sys/kernel/gpu/gpu_busy" };
+    (void)arg;
+    for (;;) {
+        XboxDeviceStats ds = g_xbox_device_stats;
+        Uint64 now;
+        if (g_xbox_perf_overlay < 2) { np = 0; t_prev = 0; sleep(1); continue; }
+        now = SDL_GetTicks();
+        /* threads: CPU time since the last sample */
+        {
+            DIR *d = opendir("/proc/self/task");
+            struct dirent *e;
+            int nc = 0, i, j;
+            float best[2] = { -1, -1 };
+            int bi[2] = { -1, -1 };
+            while (d && (e = readdir(d)) && nc < MAXT) {
+                char path[64], buf[512], *p;
+                unsigned long long ut = 0, st = 0;
+                FILE *f;
+                if (e->d_name[0] < '0' || e->d_name[0] > '9') continue;
+                snprintf(path, sizeof path, "/proc/self/task/%s/stat", e->d_name);
+                if (!(f = fopen(path, "r"))) continue;
+                if (!fgets(buf, sizeof buf, f)) buf[0] = 0;
+                fclose(f);
+                cur[nc].tid = atoi(e->d_name);
+                cur[nc].name[0] = 0;
+                if ((p = strchr(buf, '(')) && strrchr(buf, ')')) {
+                    size_t l = (size_t)(strrchr(buf, ')') - p - 1);
+                    if (l >= sizeof cur[nc].name) l = sizeof cur[nc].name - 1;
+                    memcpy(cur[nc].name, p + 1, l); cur[nc].name[l] = 0;
+                    p = strrchr(buf, ')') + 2;
+                    sscanf(p, "%*c %*d %*d %*d %*d %*d %*u %*u %*u %*u %*u %llu %llu", &ut, &st);
+                }
+                cur[nc].t = ut + st;
+                nc++;
+            }
+            if (d) closedir(d);
+            if (np && t_prev && now > t_prev) {
+                double secs = (double)(now - t_prev) / 1000.0;
+                for (i = 0; i < nc; i++) {
+                    float pct;
+                    for (j = 0; j < np && prev[j].tid != cur[i].tid; j++) {}
+                    if (j == np) continue;
+                    pct = (float)((double)(cur[i].t - prev[j].t) * 100.0 / (double)hz / secs);
+                    if (pct > best[0]) { best[1] = best[0]; bi[1] = bi[0]; best[0] = pct; bi[0] = i; }
+                    else if (pct > best[1]) { best[1] = pct; bi[1] = i; }
+                }
+                for (i = 0; i < 2; i++) {
+                    ds.top[i][0] = 0;
+                    if (bi[i] >= 0 && best[i] >= 1.0f) {
+                        snprintf(ds.top[i], sizeof ds.top[i], "%s", cur[bi[i]].name);
+                        ds.top_pct[i] = best[i];
+                    }
+                }
+            }
+            memcpy(prev, cur, sizeof cur[0] * (size_t)nc);
+            np = nc;
+            t_prev = now;
+        }
+        ds.ncores = SDL_GetNumLogicalCPUCores();
+        /* battery */
+        {
+            int pct = -1, t10 = -10000, chg = 0;
+            long ua = 0, uah = 0, v;
+            if (!ps_battery_jni(&pct, &t10, &chg, &ua, &uah)) {
+                if (ps_read_int("/sys/class/power_supply/battery/capacity", &v)) pct = (int)v;
+                if (ps_read_int("/sys/class/power_supply/battery/temp", &v)) t10 = (int)v;
+                if (ps_read_int("/sys/class/power_supply/battery/current_now", &v)) ua = v;
+            }
+            ds.batt_pct = pct;
+            ds.charging = chg;
+            ds.batt_temp_c = t10 > -10000 ? (float)t10 / 10.0f : -1000.0f;
+            /* uA on most phones, mA on some: a game draws hundreds of mA */
+            ds.batt_ma = (int)(labs(ua) >= 20000 ? ua / 1000 : ua);
+            if (ds.batt_ma > 0 && !chg) ds.batt_ma = -ds.batt_ma;   /* show discharge as negative */
+            ds.batt_drain_pct_h = -1000.0f;
+            if (chg || pct < 0) { drain_pct0 = -1; }
+            else if (ds.batt_ma < 0 && uah > 0 && pct > 0) {
+                /* the current over the full capacity (remaining charge / level) */
+                double full_mah = (double)(labs(uah) >= 20000 ? uah / 1000 : uah) * 100.0 / pct;
+                if (full_mah > 500.0) ds.batt_drain_pct_h = (float)(-ds.batt_ma * 100.0 / full_mah);
+            }
+            if (!chg && pct >= 0) {
+                /* else the level's own fall, once it has moved */
+                if (drain_pct0 < 0) { drain_pct0 = pct; drain_t0 = now; }
+                else if (ds.batt_drain_pct_h < -999.0f && pct < drain_pct0 && now - drain_t0 > 120000)
+                    ds.batt_drain_pct_h = (float)((drain_pct0 - pct) * 3600000.0 / (double)(now - drain_t0));
+            }
+        }
+        /* temperature and thermal state */
+        if (zone_ok < 0) zone_ok = ps_soc_zone(zone, sizeof zone);
+        {
+            long v;
+            ds.soc_temp_c = zone_ok && ps_read_int(zone, &v) && v > 0 ? (v > 1000 ? (float)v / 1000.0f : (float)v) : -1000.0f;
+        }
+        if (th_acquire && !mgr) mgr = th_acquire();
+        ds.thermal_status = mgr && th_status ? th_status(mgr) : -1;
+        ds.thermal_headroom = mgr && th_headroom ? th_headroom(mgr, 0) : -1.0f;
+        /* GPU busy share (Adreno, some Mali/Exynos kernels) */
+        ds.gpu_pct = -1.0f;
+        if (gpu_src != -2) {
+            int k;
+            for (k = gpu_src >= 0 ? gpu_src : 0; k < 2; k++) {
+                long v;
+                if (ps_read_int(k_gpu[k], &v)) { ds.gpu_pct = (float)v; gpu_src = k; break; }
+                if (gpu_src >= 0) break;
+            }
+            if (ds.gpu_pct < 0 && gpu_src < 0) gpu_src = -2;   /* not readable here: stop trying */
+        }
+        ds.valid = 1;
+        ds.seq = g_xbox_device_stats.seq + 1;
+        g_xbox_device_stats = ds;
+        sleep(2);
+    }
+    return NULL;
+}
+
+#endif /* __ANDROID__ */
+
+#if !defined(_WIN32)   /* the crash report: Android and the Linux test VM */
+/* A crash writes where it happened into the log: the signal, the faulting
+ * address and the call stack as offsets in libmain.so (symbolised on the PC
+ * with llvm-symbolizer and the unstripped library), then dies as before. The
+ * game's own SIGSEGV handler, installed later, passes faults it does not
+ * handle on to this one. */
+#include <dlfcn.h>
+#include <fcntl.h>
+#include <unwind.h>
+static struct sigaction s_crash_prev[32];
+
+static void crash_line(const char *s) { (void)!write(2, s, strlen(s)); }
+
+static void crash_pc(uintptr_t pc)
+{
+    char line[512];
+    Dl_info di;
+    if (dladdr((void *)pc, &di) && di.dli_fname)
+        snprintf(line, sizeof line, "[CRASH]   %s+0x%lx (%s)\n", strrchr(di.dli_fname, '/') ? strrchr(di.dli_fname, '/') + 1 : di.dli_fname,
+                 (unsigned long)(pc - (uintptr_t)di.dli_fbase), di.dli_sname ? di.dli_sname : "?");
+    else
+        snprintf(line, sizeof line, "[CRASH]   %p\n", (void *)pc);
+    crash_line(line);
+}
+
+static _Unwind_Reason_Code crash_frame(struct _Unwind_Context *c, void *arg)
+{
+    int *n = (int *)arg;
+    uintptr_t pc = _Unwind_GetIP(c);
+    if (pc) crash_pc(pc);
+    return ++*n < 40 ? _URC_NO_REASON : _URC_END_OF_STACK;
+}
+
+static void crash_handler(int sig, siginfo_t *si, void *uctx)
+{
+    char line[256];
+    int n = 0;
+    ucontext_t *uc = (ucontext_t *)uctx;
+    snprintf(line, sizeof line, "[CRASH] signal %d (code %d) at address %p, thread %d\n", sig,
+             si ? si->si_code : 0, si ? si->si_addr : NULL, (int)gettid());
+    crash_line(line);
+    {   /* the thread's name says whose it is (a driver's worker, the renderer...) */
+        char comm[32];
+        int fd = open("/proc/thread-self/comm", O_RDONLY), k;
+        if (fd >= 0) {
+            k = (int)read(fd, comm, sizeof comm - 1);
+            close(fd);
+            if (k > 0) {
+                comm[k] = 0;
+                crash_line("[CRASH] thread name: ");
+                crash_line(comm);
+            }
+        }
+    }
+#if defined(__aarch64__)
+    if (uc) {
+        crash_line("[CRASH] pc:\n");
+        crash_pc((uintptr_t)uc->uc_mcontext.pc);
+        crash_line("[CRASH] lr:\n");
+        crash_pc((uintptr_t)uc->uc_mcontext.regs[30]);
+    }
+#else
+    (void)uc;
+#endif
+    crash_line("[CRASH] stack:\n");
+    _Unwind_Backtrace(crash_frame, &n);
+    if (si && sig == SIGSEGV) {
+        /* what the address space looks like around the fault: whether the
+         * page is mapped at all, and what the neighbours are */
+        FILE *mf = fopen("/proc/self/maps", "r");
+        uintptr_t a = (uintptr_t)si->si_addr;
+        char ml[512];
+        crash_line("[CRASH] maps within 64 MB of the address:\n");
+        while (mf && fgets(ml, sizeof ml, mf)) {
+            unsigned long lo = 0, hi = 0;
+            if (sscanf(ml, "%lx-%lx", &lo, &hi) == 2 && hi + (64ul << 20) > a && lo < a + (64ul << 20)) {
+                crash_line("[CRASH]   ");
+                crash_line(ml);
+            }
+        }
+        if (mf) fclose(mf);
+    }
+    sigaction(sig, &s_crash_prev[sig], NULL);
+    raise(sig);
+}
+
+static void android_crash_reporter(void)
+{
+    static const int sigs[] = { SIGSEGV, SIGBUS, SIGILL, SIGFPE, SIGABRT };
+    struct sigaction sa;
+    unsigned i;
+    memset(&sa, 0, sizeof sa);
+    sa.sa_sigaction = crash_handler;
+    sa.sa_flags = SA_SIGINFO | SA_ONSTACK;
+    sigemptyset(&sa.sa_mask);
+    for (i = 0; i < sizeof sigs / sizeof sigs[0]; i++)
+        sigaction(sigs[i], &sa, &s_crash_prev[sigs[i]]);
+}
+
+#endif /* !_WIN32 */
+#if defined(__ANDROID__)
+
+/* The game folder: the first of these holding original/default.xbe. The
+ * app's own folder needs no permission (adb push or a file manager);
+ * /sdcard/NFL2K5 needs "All files access" on Android 11+. */
+static void android_pick_root(void)
+{
+    const char *cands[4];
+    char probe[1024];
+    int n = 0;
+    if (getenv("NFL2K5_ROOT")) return;
+    cands[n++] = SDL_GetAndroidExternalStoragePath();
+    cands[n++] = "/sdcard/NFL2K5";
+    cands[n++] = "/storage/emulated/0/NFL2K5";
+    extern int nfl2k5_android_xbe_file_ok(const char *path);   /* platform/android/xiso_extract.c */
+    for (int i = 0; i < n; i++) {
+        if (!cands[i]) continue;
+        snprintf(probe, sizeof probe, "%s/original/default.xbe", cands[i]);
+        if (access(probe, R_OK) == 0 && !nfl2k5_android_xbe_file_ok(probe)) {
+            /* another version of the game (it closed at once, 2026-10-30):
+             * a right disc image found below replaces it */
+            fprintf(stderr, "[BOOT] %s is not the retail USA executable\n", probe);
+            continue;
+        }
+        if (access(probe, R_OK) == 0) {
+            setenv("NFL2K5_ROOT", cands[i], 1);
+            setenv("NFL2K5_PORTABLE", "1", 1);   /* settings and saves beside the game */
+            return;
+        }
+    }
+    {
+        /* Only the disc image on the phone: unpack it (first start only). */
+        extern int nfl2k5_android_unpack_iso(const char *root);   /* platform/android/xiso_extract.c */
+        int r = nfl2k5_android_unpack_iso("/sdcard/NFL2K5");
+        if (r > 0) {
+            setenv("NFL2K5_ROOT", "/sdcard/NFL2K5", 1);
+            setenv("NFL2K5_PORTABLE", "1", 1);
+            return;
+        }
+        if (r < 0) exit(1);                       /* it said why */
+    }
+    {
+        char msg[1536];
+        snprintf(msg, sizeof msg,
+                 "Game files not found.\n\nPut your NFL 2K5 disc image (.iso) in Download or in "
+                 "Internal storage > NFL2K5, and make sure NFL 2K5 has All files access "
+                 "(Settings > Apps > NFL 2K5 > Permissions). The first start unpacks it.\n\n"
+                 "Or copy default.xbe and the vc_53450030 folder into Internal storage > NFL2K5 > original.");
+        extern void nfl2k5_android_notice(const char *title, const char *msg);
+        nfl2k5_android_notice("NFL 2K5: game files not found", msg);
+        exit(1);
+    }
+}
+#endif
+
+#if defined(__ANDROID__)
+/* The recompiled game runs on the thread that calls main, with the deep call
+ * chains of the guest's code: Windows links a 16 MB main-thread stack, and
+ * SDL's Java activity starts this one with Java's default (about 1 MB). The
+ * game gets a thread of its own with room to spare. */
+static int s_main_argc, s_main_ret;
+static char **s_main_argv;
+int nfl2k5_real_main(int argc, char **argv);
+static void *big_stack_main(void *unused)
+{
+    stack_t ss;
+    (void)unused;
+    ss.ss_sp = malloc(64 * 1024);           /* the crash reporter's stack */
+    ss.ss_size = 64 * 1024;
+    ss.ss_flags = 0;
+    if (ss.ss_sp) sigaltstack(&ss, NULL);
+    s_main_ret = nfl2k5_real_main(s_main_argc, s_main_argv);
+    return NULL;
+}
+
+int main(int argc, char **argv)
+{
+    pthread_attr_t at;
+    pthread_t t;
+    s_main_argc = argc;
+    s_main_argv = argv;
+    pthread_attr_init(&at);
+    pthread_attr_setstacksize(&at, 64u << 20);
+    if (pthread_create(&t, &at, big_stack_main, NULL) == 0) {
+        pthread_attr_destroy(&at);
+        pthread_join(t, NULL);
+        return s_main_ret;
+    }
+    pthread_attr_destroy(&at);
+    return nfl2k5_real_main(argc, argv);
+}
+#undef main
+#define main nfl2k5_real_main
+#endif
+
 int main(int argc, char **argv)
 {
 #if defined(_WIN32)
     SetThreadExecutionState(ES_CONTINUOUS | ES_DISPLAY_REQUIRED | ES_SYSTEM_REQUIRED);
+#elif !defined(__ANDROID__)
+    {
+        /* The recompiled game runs on this thread and needs the 16 MB stack
+         * Windows links in (/STACK:16777216). Linux sizes the main stack when
+         * a program starts, so raise the limit and start again. */
+        struct rlimit rl;
+        const rlim_t want = 16u << 20;
+        if (getrlimit(RLIMIT_STACK, &rl) == 0 && rl.rlim_cur != RLIM_INFINITY && rl.rlim_cur < want &&
+            !getenv("NFL2K5_STACK_RAISED")) {
+            rl.rlim_cur = rl.rlim_max == RLIM_INFINITY || rl.rlim_max >= want ? want : rl.rlim_max;
+            if (setrlimit(RLIMIT_STACK, &rl) == 0) {
+                char self[MAX_PATH];
+                ssize_t n = readlink("/proc/self/exe", self, sizeof self - 1);
+                setenv("NFL2K5_STACK_RAISED", "1", 1);
+                if (n > 0) {
+                    self[n] = 0;
+                    execv(self, argv);   /* by name: /proc/self/exe would call the process "exe" */
+                }
+            }
+        }
+    }
+#endif
+#if defined(__ANDROID__)
+    {
+        /* the log first, so a start that stops at the game files says why */
+        char lp[1024];
+        FILE *lf;
+        pthread_t t;
+        mkdir("/sdcard/NFL2K5", 0755);
+        snprintf(lp, sizeof lp, "%s/nfl2k5.log", getenv("NFL2K5_ROOT") ? getenv("NFL2K5_ROOT") : "/sdcard/NFL2K5");
+        lf = fopen(lp, "w");
+        if (!lf) {
+            snprintf(lp, sizeof lp, "%s/nfl2k5.log", SDL_GetAndroidExternalStoragePath());
+            lf = fopen(lp, "w");
+        }
+        setvbuf(stdout, NULL, _IONBF, 0);
+        setvbuf(stderr, NULL, _IONBF, 0);
+        if (lf) {
+            /* straight into the file: a log thread lost the last lines
+             * before a crash (2026-10-30), the ones that say where */
+            dup2(fileno(lf), 1);
+            dup2(fileno(lf), 2);
+        } else if (pipe(android_log_pipe) == 0) {
+            dup2(android_log_pipe[1], 1);
+            dup2(android_log_pipe[1], 2);
+            pthread_create(&t, NULL, android_log_thread, lf);
+            pthread_detach(t);
+        }
+        fprintf(stderr, "[ANDROID] log %s\n", lp);
+        {
+            size_t info_size = 0;
+            char *info = (char *)SDL_LoadFile("build-info.json", &info_size);
+            if (info && info_size < 2048)
+                fprintf(stderr, "[BUILD] %.*s\n", (int)info_size, info);
+            SDL_free(info);
+        }
+        android_crash_reporter();
+        {
+            /* Android's own log of the run before this one -- the system's crash
+             * report (a stack overflow or an abort inside the GPU driver, which
+             * the handler above cannot catch) is in it -- kept beside ours. */
+            FILE *in = popen("logcat -d -v threadtime -t 6000 2>&1", "r");
+            if (in) {
+                char pl[1024], buf[4096];
+                size_t n;
+                FILE *out;
+                snprintf(pl, sizeof pl, "%s", lp);
+                if (strrchr(pl, '/')) strcpy(strrchr(pl, '/') + 1, "previous-run-system.log");
+                out = fopen(pl, "w");
+                while ((n = fread(buf, 1, sizeof buf, in)) > 0) if (out) fwrite(buf, 1, n, out);
+                pclose(in);
+                if (out) { fclose(out); fprintf(stderr, "[ANDROID] system log of the previous run: %s\n", pl); }
+            }
+        }
+    }
+    android_pick_root();
+    fprintf(stderr, "[ANDROID] game folder %s\n", getenv("NFL2K5_ROOT"));
+    setenv("RECOMP_RENDERER", "vulkan", 0);   /* the GPU renderer (gx) on Vulkan; "cpu" for software */
+    SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight");   /* SDL picked portrait from the 640x480 window */
+    if (getenv("NFL2K5_GAME_MODE"))
+        fprintf(stderr, "[ANDROID] game mode: %s\n", getenv("NFL2K5_GAME_MODE"));
+    {   /* Compiled pipelines kept across runs (SDL Vulkan, local patch): the
+         * Adreno driver spends ~0.7 s on each new one, which froze the game
+         * whenever a new scene appeared. */
+        char cache[1024];
+        const char *root = getenv("NFL2K5_ROOT") ? getenv("NFL2K5_ROOT") : "/sdcard/NFL2K5";
+        snprintf(cache, sizeof cache, "%s/cache", root);
+        mkdir(cache, 0775);
+        {   /* a chosen GPU driver, before anything loads Vulkan; its own pipeline cache */
+            extern void nfl2k5_gpu_driver_boot(char *cache, size_t cache_n);
+            char cache_name[128];
+            nfl2k5_gpu_driver_boot(cache_name, sizeof cache_name);
+            snprintf(cache, sizeof cache, "%s/cache/%s", root, cache_name);
+        }
+        setenv("SDL_GPU_VULKAN_PIPELINE_CACHE", cache, 0);
+        android_unpack_presentations(root);
+        snprintf(cache, sizeof cache, "%s/Music", root);   /* Music/<playlist>/<songs>: custom soundtracks */
+        mkdir(cache, 0775);
+    }
+    {
+        extern void nfl2k5_touch_pad_init(void);   /* on-screen controls (platform/android/touch_pad.c) */
+        extern void nfl2k5_android_settings_init(void);   /* Phone Settings (platform/android/android_settings.c) */
+        nfl2k5_android_settings_init();
+        nfl2k5_touch_pad_init();
+    }
+    {
+        pthread_t t;
+        if (pthread_create(&t, NULL, android_cpu_report_thread, NULL) == 0) pthread_detach(t);
+        if (pthread_create(&t, NULL, android_perf_stats_thread, NULL) == 0) pthread_detach(t);
+    }
+#elif !defined(_WIN32)
+    android_crash_reporter();   /* same report in the log as on Android */
+#ifdef NFL2K5_GX_PORTABLE
+    setenv("RECOMP_RENDERER", "vulkan", 0);   /* the GPU renderer (gx) on Vulkan; "cpu" for software */
+#endif
 #endif
 
     const char *root = nfl2k5_project_root();
+
+    /* --retail (or NFL2K5_RETAIL=1): the clean ESPN NFL 2K5, whatever mod pack
+     * Features > Mod Packs has selected; the selection itself is left as it is.
+     * --vanilla (or NFL2K5_VANILLA=1): no XBE pack and no feature packs (My NFL
+     * Eras) either (docs/eras/MOD-PACK-DESIGN.md 3). Both are consumed here. */
+    int force_retail = 0, vanilla = 0;
+    {
+        const char *rv = getenv("NFL2K5_RETAIL"), *vv = getenv("NFL2K5_VANILLA");
+        if (rv && *rv == '1') force_retail = 1;
+        if (vv && *vv == '1') vanilla = force_retail = 1;
+        for (int a = 1; a < argc; a++) {
+            if (strcmp(argv[a], "--retail") == 0 || strcmp(argv[a], "--vanilla") == 0) {
+                force_retail = 1;
+                if (argv[a][2] == 'v')
+                    vanilla = 1;
+                for (int b = a; b < argc - 1; b++)
+                    argv[b] = argv[b + 1];
+                argc--;
+                a--;
+            }
+        }
+        if (force_retail) _putenv_s("NFL2K5_RETAIL", "1");   /* the same choice for anything later */
+        if (vanilla)      _putenv_s("NFL2K5_VANILLA", "1");
+    }
+
 #if defined(_WIN32)
     if (!SetCurrentDirectoryA(root)) {
         fprintf(stderr, "[BOOT] Could not use runtime root %s (error %lu)\n",
@@ -601,12 +1613,15 @@ int main(int argc, char **argv)
             char lp[MAX_PATH];
             CreateDirectoryA("logs", NULL);
             if (freopen(xbox_user_path("logs\\session.log", lp, sizeof(lp)), "w", stderr))
-                setvbuf(stderr, NULL, _IOLBF, 1 << 16);
+                setvbuf(stderr, NULL, getenv("NFL2K5_LOG_UNBUFFERED") ? _IONBF : _IOLBF, 1 << 16);
         }
     }
 #endif
 
-    if (!getenv("NFL2K5_NO_PACK_DISPATCH")) {
+    if (force_retail)
+        fprintf(stderr, vanilla ? "[BOOT] --vanilla: clean ESPN NFL 2K5; no mod pack, no feature packs\n"
+                                : "[BOOT] --retail: clean ESPN NFL 2K5; the selected mod pack is not loaded\n");
+    if (!force_retail && !getenv("NFL2K5_NO_PACK_DISPATCH")) {
         if (nfl2k5_modpacks_boot_dispatch(root)) {
 #if defined(_WIN32)
             SetThreadExecutionState(ES_CONTINUOUS);
@@ -621,6 +1636,12 @@ int main(int argc, char **argv)
     snprintf(original_dir, sizeof(original_dir), "%s/original", root);
     snprintf(original_xbe, sizeof(original_xbe), "%s/default.xbe", original_dir);
     snprintf(save_dir, sizeof(save_dir), "%s/saves", root);
+#ifdef NFL2K5_UWP
+    /* The app may only write its own LocalState: there (LocalState\NFL2K5-PC\
+     * saves), the hard disk images open, and the PC build's saves stay out of
+     * it. In <root>\saves the title found no hard disk and quit (2026-10-31). */
+    xbox_user_path("saves", save_dir, sizeof(save_dir));
+#endif
 
     const char *game_dir = file_exists(disc_xbe) ? disc_dir : original_dir;
     const char *xbe_path = file_exists(disc_xbe) ? disc_xbe : original_xbe;
@@ -629,7 +1650,9 @@ int main(int argc, char **argv)
     {
         char active[MAX_PATH] = "", cand[MAX_PATH];
         const char *env = getenv("NFL2K5_INTERP_PACK");
-        if (env && *env) {
+        if (force_retail) {
+            active[0] = 0;
+        } else if (env && *env) {
             snprintf(active, sizeof(active), "%s", env);
         } else {
             char ini[MAX_PATH];
@@ -656,7 +1679,7 @@ int main(int argc, char **argv)
 
     const int validate_only = (argc == 2 && strcmp(argv[1], "--validate") == 0);
     if (argc > 1 && !validate_only && !(argc == 2 && strcmp(argv[1], "--run") == 0)) {
-        fprintf(stderr, "Usage: NFL2K5 [--validate | --run]\n");
+        fprintf(stderr, "Usage: NFL2K5 [--retail | --vanilla] [--validate | --run]\n");
         return 2;
     }
 
@@ -664,8 +1687,11 @@ int main(int argc, char **argv)
     RECOMP_ICALL_FEEDBACK_INIT();
 
     {
+        /* NFL2K5_LOG_UNBUFFERED=1: every line reaches the log at once, so the
+         * last one is where a process that died without a crash report was. */
         static char stderr_buf[1 << 16];
-        setvbuf(stderr, stderr_buf, _IOFBF, sizeof(stderr_buf));
+        if (getenv("NFL2K5_LOG_UNBUFFERED")) setvbuf(stderr, NULL, _IONBF, 0);
+        else setvbuf(stderr, stderr_buf, _IOFBF, sizeof(stderr_buf));
         CloseHandle(CreateThread(NULL, 0, nfl2k5_stderr_flusher, NULL, 0, NULL));
     }
 
@@ -693,6 +1719,14 @@ int main(int argc, char **argv)
 
     printf("ESPN NFL 2K5 Native Recompilation\n");
     printf("[BOOT] Mounted game disc root: %s\n", game_dir);
+    {   /* the data folder as one compressed .xbpak (Xbox installs, tools/xbpack) */
+        extern int xbox_pack_load(const char *game_dir);
+        xbox_pack_load(game_dir);
+    }
+    {   /* warm the file cache with the packed game data (kernel_file.c) */
+        extern void xbox_PrefetchGameData(const char *root);
+        xbox_PrefetchGameData(game_dir);
+    }
 
     FILE *file = fopen(xbe_path, "rb");
     if (!file) {
@@ -719,6 +1753,14 @@ int main(int argc, char **argv)
     if (!compute_sha256_hex(data, (size_t)length, digest_hex)) {
         free(data);
         return 2;
+    }
+
+    /* A staged native pack is already translated from this exact image.
+     * Comparing it to the retail disc would mark its native functions dirty
+     * against the wrong baseline, mixing two incompatible translations. */
+    if (g_interp_pack && !strcmp(digest_hex, expected_sha)) {
+        g_interp_pack = 0;
+        printf("[BOOT] Selected pack matches this native build; using its translated code.\n");
     }
 
     if (!strcmp(expected_sha, NFL2K5_WIDESCREEN_XBE_SHA256) && !strcmp(digest_hex, NFL2K5_RETAIL_XBE_SHA256)) {
@@ -761,6 +1803,18 @@ int main(int argc, char **argv)
         printf("[BOOT] Pack executable %s\n", digest_hex);
     } else if (strcmp(digest_hex, expected_sha) != 0) {
         fprintf(stderr, "[BOOT] XBE hash mismatch. Expected %s, got %s.\n", expected_sha, digest_hex);
+#if defined(_WIN32)
+        /* Setup extracts whatever image it is given: this used to just close. */
+        MessageBoxA(NULL, nfl2k5_xbe_is_modded(data, (size_t)length)
+            ? "The game folder holds a modded copy of ESPN NFL 2K5 (a SOFTDRINK or 2K5 Mod Studio disc). "
+              "NFL 2K5 cannot start from a modded disc: it needs the original one, and it applies the mod itself.\n\n"
+              "1. Run Setup again with your original USA Xbox disc image, the dump you made the modded disc from.\n"
+              "2. To play the mod, put its .2k5patch file in mods\\patches. The game installs it, then turn it on "
+              "under Extras > Mods."
+            : "The game folder holds a different version of ESPN NFL 2K5 (its default.xbe does not match). "
+              "NFL 2K5 needs the original USA Xbox disc. Run Setup again with that disc image.",
+            "NFL 2K5", MB_OK | MB_ICONERROR);
+#endif
         free(data);
         return 2;
     }
@@ -800,13 +1854,50 @@ int main(int argc, char **argv)
     }
 
     nfl2k5_scorebug_interp_hooks();
+
+    {   /* Feature modules: My NFL Eras registers its hooks here, or nothing does. */
+        const char *pk = g_interp_pack ? strrchr(pack_dir, '/') : NULL;
+        uint32_t kind = g_interp_pack ? 3u                                          /* NF_BASE_INTERP_PACK */
+                      : NFL2K5_BASE_CMP(NFL2K5_XBE_SHA256) != 0 ? 4u                  /* NF_BASE_OTHER */
+                      : !strcmp(NFL2K5_XBE_SHA256, NFL2K5_WIDESCREEN_XBE_SHA256) ? 2u : 1u;   /* widescreen / retail */
+        nfl2k5_plugins_boot(digest_hex, kind, pk ? pk + 1 : NULL, (force_retail ? 2u : 0u) | (vanilla ? 1u : 0u));
+    }
+
     if (!g_interp_pack && NFL2K5_BASE_CMP(NFL2K5_XBE_SHA256) == 0)
         nfl2k5_expand_limits();
     nfl2k5_controller_setup_init();
 
-    if (!strcmp(digest_hex, "f67e6fc1cb76c9ea1f1ad504e4a6491ff126483d66a9da8ddb92950bbaf740ba")) {
+    /* SOFTDRINK v0.6 and later releases (v0.6.1, v0.7, ...) keep the same
+     * dispatcher detour and save-all wrappers: recognise them by their code,
+     * not by one release's executable hash (only v0.6's was listed, so
+     * v0.6.1 and v0.7 ran without these). v0.8 moved the wrappers, so they are
+     * found through the retail jumps into them. */
+    static const uint8_t k_sd_dispatch[16] = { 0x8b,0x87,0x00,0x01,0x00,0x00,0x8b,0x2c,0xc7,0x85,0xed,0x89,0x54,0x24,0x08,0x75 };
+    static const uint8_t k_sd_saveall[16] = { 0x9c,0x60,0xe8,0x8b,0xfa,0xff,0xff,0x85,0xc0,0x0f,0x84,0x22,0x00,0x00,0x00,0xf6 };
+    const uint8_t *sd_guest = (const uint8_t *)(uintptr_t)xbox_GetMemoryOffset();
+    uint32_t sd_saveall = 0x014DE0BEu, sd_clear = 0x014E35C3u;
+    if (sd_guest[0x000B9B9Au] == 0xE9 && sd_guest[0x000B6FB3u] == 0xE9) {
+        int32_t rel;
+        memcpy(&rel, sd_guest + 0x000B9B9Bu, 4);
+        sd_saveall = 0x000B9B9Fu + (uint32_t)rel;
+        memcpy(&rel, sd_guest + 0x000B6FB4u, 4);
+        sd_clear = 0x000B6FB8u + (uint32_t)rel;
+    }
+    if (!strcmp(digest_hex, "f67e6fc1cb76c9ea1f1ad504e4a6491ff126483d66a9da8ddb92950bbaf740ba") ||
+        (g_interp_pack && !memcmp(sd_guest + 0x0006E4E5u, k_sd_dispatch, 16) &&
+         sd_saveall >= 0x01400000u && sd_saveall < 0x01600000u &&
+         !memcmp(sd_guest + sd_saveall, k_sd_saveall, 16))) {
         printf("[BOOT] SOFTDRINK v0.6 dispatcher compatibility: %u function\n",
                nfl2k5_interp_force(0x0006E4E5u, 0x0006E5F5u));
+        /* These save-all detours branch after POPFD. The native lift only
+         * restores DF and emits an unresolved, always-false conditional.
+         * Interpret the wrapper and the copied continuation together so
+         * the original comparisons survive the mod's temporary work. */
+        unsigned flag_paths = nfl2k5_interp_force(sd_saveall, sd_saveall + 0x84u);
+        flag_paths += nfl2k5_interp_force(0x000B6F30u, 0x000B7044u);
+        flag_paths += nfl2k5_interp_force(sd_clear, sd_clear + 0x50u);
+        flag_paths += nfl2k5_interp_force(0x000A27F0u, 0x000A2835u);
+        printf("[BOOT] SOFTDRINK v0.6 saved-flags compatibility: %u functions\n", flag_paths);
     }
 
     nfl2k5_pack_build = NFL2K5_BASE_CMP(NFL2K5_XBE_SHA256) != 0 || g_interp_pack;
@@ -833,17 +1924,42 @@ int main(int argc, char **argv)
             xbox_overlay_load(pack, game_dir);
     }
 
+    /* M4 halftime-hang study: gen patches WALK_DIAG_* in sub_000561F0 */
+    nfl2k5_walk_diag_on = getenv("NFL2K5_WALK_DIAG") != NULL;
+    {
+        const char *short_q = getenv("NFL2K5_QUARTER_SECONDS");
+        static float short_q_seconds;
+        if (short_q && *short_q) {
+            short_q_seconds = (float)strtod(short_q, NULL);
+            if (short_q_seconds >= 10.0f && short_q_seconds <= 900.0f)
+                CloseHandle(CreateThread(NULL, 0, nfl2k5_short_quarter_thread, &short_q_seconds, 0, NULL));
+            else
+                fprintf(stderr, "[BOOT] Ignoring NFL2K5_QUARTER_SECONDS=%s (use 10..900).\n", short_q);
+        }
+    }
+
     nfl2k5_local_music_start(root, save_dir);
+    /* ESPN 25th Anniversary moment audio: the MP3s in <root>/moment-audio, played
+     * when a SOFTDRINK moment is launched (src/nfl2k5_moment_audio.c). */
+    nfl2k5_moment_audio_install(root);
     nfl2k5_controls_start();
     nfl2k5_texture_packs_init();
     nfl2k5_controller_art_init();
     nfl2k5_save_library_menu_init();
+    { extern void nfl2k5_music_player_init(void); nfl2k5_music_player_init(); }   /* F1 > Music Player */
+#ifdef __ANDROID__
+    /* This thread runs the game. SetThreadPriority only records a value on
+     * POSIX; Android lets an app raise its own threads (who 0 = this one). */
+    setpriority(PRIO_PROCESS, 0, -4);
+#endif
     xbox_kernel_bridge_init();
 
     if (!validate_only && getenv("RECOMP_AC97_READY")) {
         g_apu_state = mcpx_apu_init_standalone((uint8_t *)(uintptr_t)xbox_GetMemoryOffset());
         g_xbox_apu_irq_line = mcpx_apu_irq_line;
         g_apu_irq_wake      = xbox_kernel_irq_wake;
+        if (getenv("NFL2K5_CROWD_PROBE"))   /* crowd-reaction pitch vs the game's sequencer clock */
+            g_apu_pitch_hook = crowd_probe;
 #if defined(_WIN32)
         if (!g_apu_state || !AddVectoredExceptionHandler(1, audio_mmio)) {
             fprintf(stderr, "[BOOT] Failed to initialize APU compatibility.\n");
@@ -871,6 +1987,10 @@ int main(int argc, char **argv)
         fprintf(stderr, "[BOOT] Using fallback function lookup.\n");
 
     nfl2k5_video_menu_install();
+    nfl2k5_exit_menu_install();    /* "Exit" in the Main Menu (src/nfl2k5_exit_menu.c, M16) */
+    { extern void nfl2k5_mc_home_install(void); if (g_interp_pack) nfl2k5_mc_home_install(); }   /* src/nfl2k5_mycareer_home.c */
+    { extern void nfl2k5_mc_hud_install(void); if (g_interp_pack) nfl2k5_mc_hud_install(); }     /* src/nfl2k5_mycareer_hud.c */
+    nfl2k5_hook_menus_ready();     /* feature modules' menus ("My NFL Eras", src/nfl2k5_eras_menu.c) */
 
     guest_function entry = recomp_lookup(0x00016BD1);
     if (!entry) {
@@ -880,11 +2000,41 @@ int main(int argc, char **argv)
     printf("[BOOT] XBE loaded; memory, kernel and recompiled entry 0x00016BD1 ready.\n");
 
     if (validate_only) {
+        extern int nfl2k5_sandbox_selftest(void);
+        extern int nfl2k5_sandbox_world_selftest(void);
+        extern int nfl2k5_sandbox_menu_validate(void);
+        extern int nfl2k5_sandbox_actor_properties_selftest(void);
+        extern int nfl2k5_sandbox_pose_selftest(void);
         extern int nfl2k5_test_memmove(uint32_t buffer);
+        extern int nfl2k5_test_interp_flags(uint32_t buffer);
+        if (!nfl2k5_sandbox_selftest() || !nfl2k5_sandbox_world_selftest() ||
+            !nfl2k5_sandbox_menu_validate() || !nfl2k5_sandbox_actor_properties_selftest() ||
+            !nfl2k5_sandbox_pose_selftest())
+            return 10;
         uint32_t test_buffer = xbox_HeapAlloc(4096, 16);
         if (!test_buffer || !nfl2k5_test_memmove(test_buffer))
             return 8;
+        if (!nfl2k5_test_interp_flags(test_buffer))
+            return 9;
+        printf("[TEST] Interpreter native flag handoff and PUSHFD/POPFD preservation passed (8 cases).\n");
+        uint32_t a = xbox_ContiguousAlloc(8192, 4096);
+        uint32_t b = xbox_ContiguousAlloc(4096, 4096);
+        if (!a || !b || xbox_ContiguousBlockSize(a) != 8192 ||
+            !xbox_ContiguousFree(a) || xbox_ContiguousBlockSize(a) != 0)
+            return 7;
+        uint32_t reused = xbox_ContiguousAlloc(8192, 4096);
+        if (reused != a || !xbox_ContiguousFree(b) || !xbox_ContiguousFree(reused) ||
+            xbox_ContiguousBlockSize(b) != 0 || xbox_ContiguousBlockSize(reused) != 0)
+            return 7;
         printf("[TEST] Validation passed.\n");
+        /* Validation is a short-lived diagnostic process, while normal game
+         * launches deliberately run forever. Background guest/APU threads
+         * cannot safely be drained through the full game teardown sequence;
+         * terminate after the checks instead of releasing guest memory
+         * underneath those threads. */
+        fflush(stdout);
+        fflush(stderr);
+        ExitProcess(0);
     } else {
         if (!getenv("RECOMP_DISABLE_FENCE_MIRROR")) {
             if (xbox_Nv2aMirrorFence(0x004409A8, 0x2C, 0x30) != 0)
@@ -908,6 +2058,9 @@ int main(int argc, char **argv)
         printf("[BOOT] Guest entry returned.\n");
     }
 
+    /* The local-music indexer owns a host thread. Join it before releasing
+     * guest memory, or the worker can dereference the torn-down address space. */
+    nfl2k5_local_music_shutdown();
     xbox_kernel_bridge_shutdown();
     xbox_kernel_shutdown();
     xbox_MemoryLayoutShutdown();

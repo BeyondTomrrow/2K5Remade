@@ -150,6 +150,8 @@ loc_004332F3: ;
 loc_004332F5: ;
     eax = MEM32(edi + 0x140);
     MEM32(esi + 0x158) = eax;
+    /* NFL2K5-GENPATCH:D3D_SAVE_INTR_EN */
+    if (eax == 0) MEM32(esi + 0x158) = MEM32(esi + 0xB4);   /* ISR window: save the enable the DPC restores */
     MEM32(ecx) = 0xFFFFFFFFu;
     eax = edi + 0x680504;
     ecx = MEM32(eax);

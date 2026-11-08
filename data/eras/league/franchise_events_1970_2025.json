@@ -1,0 +1,3702 @@
+{
+ "schema": "nfl2k5_eras_franchise_events/v1",
+ "generated_by": "build/eras/league_history.py",
+ "scope": "Franchise lineage events for the 32 current NFL franchises, seasons 1970-2025 (1969 used as the baseline)",
+ "kinds": {
+  "merger_realignment": "1970: placed into the AFC or NFC and a new division by the AFL-NFL merger",
+  "expansion": "first season of a new franchise",
+  "new_franchise": "first season of a franchise that is legally new but took over another club's organisation (Ravens 1996)",
+  "relocation": "home city changed (name city changes with it)",
+  "rename": "name changed without a move (nickname, or geographic name for the same home)",
+  "realignment": "conference and/or division changed",
+  "suspension": "franchise did not play from this season",
+  "reactivation": "suspended franchise resumed play this season"
+ },
+ "conventions": {
+  "season": "the first season the change applies to",
+  "from/to": "identity for the season before / the season of the event (null when there was none)",
+  "identities": "consecutive seasons with the same city, name, conference and division (from PFR season standings)",
+  "abbreviation": "project display convention, not a historical claim"
+ },
+ "season_summary": {
+  "1970": {
+   "teams": 26,
+   "games": 14,
+   "playoff_teams": 8,
+   "divisions": [
+    "AFC Central",
+    "AFC East",
+    "AFC West",
+    "NFC Central",
+    "NFC East",
+    "NFC West"
+   ]
+  },
+  "1971": {
+   "teams": 26,
+   "games": 14,
+   "playoff_teams": 8,
+   "divisions": [
+    "AFC Central",
+    "AFC East",
+    "AFC West",
+    "NFC Central",
+    "NFC East",
+    "NFC West"
+   ]
+  },
+  "1972": {
+   "teams": 26,
+   "games": 14,
+   "playoff_teams": 8,
+   "divisions": [
+    "AFC Central",
+    "AFC East",
+    "AFC West",
+    "NFC Central",
+    "NFC East",
+    "NFC West"
+   ]
+  },
+  "1973": {
+   "teams": 26,
+   "games": 14,
+   "playoff_teams": 8,
+   "divisions": [
+    "AFC Central",
+    "AFC East",
+    "AFC West",
+    "NFC Central",
+    "NFC East",
+    "NFC West"
+   ]
+  },
+  "1974": {
+   "teams": 26,
+   "games": 14,
+   "playoff_teams": 8,
+   "divisions": [
+    "AFC Central",
+    "AFC East",
+    "AFC West",
+    "NFC Central",
+    "NFC East",
+    "NFC West"
+   ]
+  },
+  "1975": {
+   "teams": 26,
+   "games": 14,
+   "playoff_teams": 8,
+   "divisions": [
+    "AFC Central",
+    "AFC East",
+    "AFC West",
+    "NFC Central",
+    "NFC East",
+    "NFC West"
+   ]
+  },
+  "1976": {
+   "teams": 28,
+   "games": 14,
+   "playoff_teams": 8,
+   "divisions": [
+    "AFC Central",
+    "AFC East",
+    "AFC West",
+    "NFC Central",
+    "NFC East",
+    "NFC West"
+   ]
+  },
+  "1977": {
+   "teams": 28,
+   "games": 14,
+   "playoff_teams": 8,
+   "divisions": [
+    "AFC Central",
+    "AFC East",
+    "AFC West",
+    "NFC Central",
+    "NFC East",
+    "NFC West"
+   ]
+  },
+  "1978": {
+   "teams": 28,
+   "games": 16,
+   "playoff_teams": 10,
+   "divisions": [
+    "AFC Central",
+    "AFC East",
+    "AFC West",
+    "NFC Central",
+    "NFC East",
+    "NFC West"
+   ]
+  },
+  "1979": {
+   "teams": 28,
+   "games": 16,
+   "playoff_teams": 10,
+   "divisions": [
+    "AFC Central",
+    "AFC East",
+    "AFC West",
+    "NFC Central",
+    "NFC East",
+    "NFC West"
+   ]
+  },
+  "1980": {
+   "teams": 28,
+   "games": 16,
+   "playoff_teams": 10,
+   "divisions": [
+    "AFC Central",
+    "AFC East",
+    "AFC West",
+    "NFC Central",
+    "NFC East",
+    "NFC West"
+   ]
+  },
+  "1981": {
+   "teams": 28,
+   "games": 16,
+   "playoff_teams": 10,
+   "divisions": [
+    "AFC Central",
+    "AFC East",
+    "AFC West",
+    "NFC Central",
+    "NFC East",
+    "NFC West"
+   ]
+  },
+  "1982": {
+   "teams": 28,
+   "games": 9,
+   "playoff_teams": 16,
+   "divisions": [
+    "AFC Central",
+    "AFC East",
+    "AFC West",
+    "NFC Central",
+    "NFC East",
+    "NFC West"
+   ]
+  },
+  "1983": {
+   "teams": 28,
+   "games": 16,
+   "playoff_teams": 10,
+   "divisions": [
+    "AFC Central",
+    "AFC East",
+    "AFC West",
+    "NFC Central",
+    "NFC East",
+    "NFC West"
+   ]
+  },
+  "1984": {
+   "teams": 28,
+   "games": 16,
+   "playoff_teams": 10,
+   "divisions": [
+    "AFC Central",
+    "AFC East",
+    "AFC West",
+    "NFC Central",
+    "NFC East",
+    "NFC West"
+   ]
+  },
+  "1985": {
+   "teams": 28,
+   "games": 16,
+   "playoff_teams": 10,
+   "divisions": [
+    "AFC Central",
+    "AFC East",
+    "AFC West",
+    "NFC Central",
+    "NFC East",
+    "NFC West"
+   ]
+  },
+  "1986": {
+   "teams": 28,
+   "games": 16,
+   "playoff_teams": 10,
+   "divisions": [
+    "AFC Central",
+    "AFC East",
+    "AFC West",
+    "NFC Central",
+    "NFC East",
+    "NFC West"
+   ]
+  },
+  "1987": {
+   "teams": 28,
+   "games": 15,
+   "playoff_teams": 10,
+   "divisions": [
+    "AFC Central",
+    "AFC East",
+    "AFC West",
+    "NFC Central",
+    "NFC East",
+    "NFC West"
+   ]
+  },
+  "1988": {
+   "teams": 28,
+   "games": 16,
+   "playoff_teams": 10,
+   "divisions": [
+    "AFC Central",
+    "AFC East",
+    "AFC West",
+    "NFC Central",
+    "NFC East",
+    "NFC West"
+   ]
+  },
+  "1989": {
+   "teams": 28,
+   "games": 16,
+   "playoff_teams": 10,
+   "divisions": [
+    "AFC Central",
+    "AFC East",
+    "AFC West",
+    "NFC Central",
+    "NFC East",
+    "NFC West"
+   ]
+  },
+  "1990": {
+   "teams": 28,
+   "games": 16,
+   "playoff_teams": 12,
+   "divisions": [
+    "AFC Central",
+    "AFC East",
+    "AFC West",
+    "NFC Central",
+    "NFC East",
+    "NFC West"
+   ]
+  },
+  "1991": {
+   "teams": 28,
+   "games": 16,
+   "playoff_teams": 12,
+   "divisions": [
+    "AFC Central",
+    "AFC East",
+    "AFC West",
+    "NFC Central",
+    "NFC East",
+    "NFC West"
+   ]
+  },
+  "1992": {
+   "teams": 28,
+   "games": 16,
+   "playoff_teams": 12,
+   "divisions": [
+    "AFC Central",
+    "AFC East",
+    "AFC West",
+    "NFC Central",
+    "NFC East",
+    "NFC West"
+   ]
+  },
+  "1993": {
+   "teams": 28,
+   "games": 16,
+   "playoff_teams": 12,
+   "divisions": [
+    "AFC Central",
+    "AFC East",
+    "AFC West",
+    "NFC Central",
+    "NFC East",
+    "NFC West"
+   ]
+  },
+  "1994": {
+   "teams": 28,
+   "games": 16,
+   "playoff_teams": 12,
+   "divisions": [
+    "AFC Central",
+    "AFC East",
+    "AFC West",
+    "NFC Central",
+    "NFC East",
+    "NFC West"
+   ]
+  },
+  "1995": {
+   "teams": 30,
+   "games": 16,
+   "playoff_teams": 12,
+   "divisions": [
+    "AFC Central",
+    "AFC East",
+    "AFC West",
+    "NFC Central",
+    "NFC East",
+    "NFC West"
+   ]
+  },
+  "1996": {
+   "teams": 30,
+   "games": 16,
+   "playoff_teams": 12,
+   "divisions": [
+    "AFC Central",
+    "AFC East",
+    "AFC West",
+    "NFC Central",
+    "NFC East",
+    "NFC West"
+   ]
+  },
+  "1997": {
+   "teams": 30,
+   "games": 16,
+   "playoff_teams": 12,
+   "divisions": [
+    "AFC Central",
+    "AFC East",
+    "AFC West",
+    "NFC Central",
+    "NFC East",
+    "NFC West"
+   ]
+  },
+  "1998": {
+   "teams": 30,
+   "games": 16,
+   "playoff_teams": 12,
+   "divisions": [
+    "AFC Central",
+    "AFC East",
+    "AFC West",
+    "NFC Central",
+    "NFC East",
+    "NFC West"
+   ]
+  },
+  "1999": {
+   "teams": 31,
+   "games": 16,
+   "playoff_teams": 12,
+   "divisions": [
+    "AFC Central",
+    "AFC East",
+    "AFC West",
+    "NFC Central",
+    "NFC East",
+    "NFC West"
+   ]
+  },
+  "2000": {
+   "teams": 31,
+   "games": 16,
+   "playoff_teams": 12,
+   "divisions": [
+    "AFC Central",
+    "AFC East",
+    "AFC West",
+    "NFC Central",
+    "NFC East",
+    "NFC West"
+   ]
+  },
+  "2001": {
+   "teams": 31,
+   "games": 16,
+   "playoff_teams": 12,
+   "divisions": [
+    "AFC Central",
+    "AFC East",
+    "AFC West",
+    "NFC Central",
+    "NFC East",
+    "NFC West"
+   ]
+  },
+  "2002": {
+   "teams": 32,
+   "games": 16,
+   "playoff_teams": 12,
+   "divisions": [
+    "AFC East",
+    "AFC North",
+    "AFC South",
+    "AFC West",
+    "NFC East",
+    "NFC North",
+    "NFC South",
+    "NFC West"
+   ]
+  },
+  "2003": {
+   "teams": 32,
+   "games": 16,
+   "playoff_teams": 12,
+   "divisions": [
+    "AFC East",
+    "AFC North",
+    "AFC South",
+    "AFC West",
+    "NFC East",
+    "NFC North",
+    "NFC South",
+    "NFC West"
+   ]
+  },
+  "2004": {
+   "teams": 32,
+   "games": 16,
+   "playoff_teams": 12,
+   "divisions": [
+    "AFC East",
+    "AFC North",
+    "AFC South",
+    "AFC West",
+    "NFC East",
+    "NFC North",
+    "NFC South",
+    "NFC West"
+   ]
+  },
+  "2005": {
+   "teams": 32,
+   "games": 16,
+   "playoff_teams": 12,
+   "divisions": [
+    "AFC East",
+    "AFC North",
+    "AFC South",
+    "AFC West",
+    "NFC East",
+    "NFC North",
+    "NFC South",
+    "NFC West"
+   ]
+  },
+  "2006": {
+   "teams": 32,
+   "games": 16,
+   "playoff_teams": 12,
+   "divisions": [
+    "AFC East",
+    "AFC North",
+    "AFC South",
+    "AFC West",
+    "NFC East",
+    "NFC North",
+    "NFC South",
+    "NFC West"
+   ]
+  },
+  "2007": {
+   "teams": 32,
+   "games": 16,
+   "playoff_teams": 12,
+   "divisions": [
+    "AFC East",
+    "AFC North",
+    "AFC South",
+    "AFC West",
+    "NFC East",
+    "NFC North",
+    "NFC South",
+    "NFC West"
+   ]
+  },
+  "2008": {
+   "teams": 32,
+   "games": 16,
+   "playoff_teams": 12,
+   "divisions": [
+    "AFC East",
+    "AFC North",
+    "AFC South",
+    "AFC West",
+    "NFC East",
+    "NFC North",
+    "NFC South",
+    "NFC West"
+   ]
+  },
+  "2009": {
+   "teams": 32,
+   "games": 16,
+   "playoff_teams": 12,
+   "divisions": [
+    "AFC East",
+    "AFC North",
+    "AFC South",
+    "AFC West",
+    "NFC East",
+    "NFC North",
+    "NFC South",
+    "NFC West"
+   ]
+  },
+  "2010": {
+   "teams": 32,
+   "games": 16,
+   "playoff_teams": 12,
+   "divisions": [
+    "AFC East",
+    "AFC North",
+    "AFC South",
+    "AFC West",
+    "NFC East",
+    "NFC North",
+    "NFC South",
+    "NFC West"
+   ]
+  },
+  "2011": {
+   "teams": 32,
+   "games": 16,
+   "playoff_teams": 12,
+   "divisions": [
+    "AFC East",
+    "AFC North",
+    "AFC South",
+    "AFC West",
+    "NFC East",
+    "NFC North",
+    "NFC South",
+    "NFC West"
+   ]
+  },
+  "2012": {
+   "teams": 32,
+   "games": 16,
+   "playoff_teams": 12,
+   "divisions": [
+    "AFC East",
+    "AFC North",
+    "AFC South",
+    "AFC West",
+    "NFC East",
+    "NFC North",
+    "NFC South",
+    "NFC West"
+   ]
+  },
+  "2013": {
+   "teams": 32,
+   "games": 16,
+   "playoff_teams": 12,
+   "divisions": [
+    "AFC East",
+    "AFC North",
+    "AFC South",
+    "AFC West",
+    "NFC East",
+    "NFC North",
+    "NFC South",
+    "NFC West"
+   ]
+  },
+  "2014": {
+   "teams": 32,
+   "games": 16,
+   "playoff_teams": 12,
+   "divisions": [
+    "AFC East",
+    "AFC North",
+    "AFC South",
+    "AFC West",
+    "NFC East",
+    "NFC North",
+    "NFC South",
+    "NFC West"
+   ]
+  },
+  "2015": {
+   "teams": 32,
+   "games": 16,
+   "playoff_teams": 12,
+   "divisions": [
+    "AFC East",
+    "AFC North",
+    "AFC South",
+    "AFC West",
+    "NFC East",
+    "NFC North",
+    "NFC South",
+    "NFC West"
+   ]
+  },
+  "2016": {
+   "teams": 32,
+   "games": 16,
+   "playoff_teams": 12,
+   "divisions": [
+    "AFC East",
+    "AFC North",
+    "AFC South",
+    "AFC West",
+    "NFC East",
+    "NFC North",
+    "NFC South",
+    "NFC West"
+   ]
+  },
+  "2017": {
+   "teams": 32,
+   "games": 16,
+   "playoff_teams": 12,
+   "divisions": [
+    "AFC East",
+    "AFC North",
+    "AFC South",
+    "AFC West",
+    "NFC East",
+    "NFC North",
+    "NFC South",
+    "NFC West"
+   ]
+  },
+  "2018": {
+   "teams": 32,
+   "games": 16,
+   "playoff_teams": 12,
+   "divisions": [
+    "AFC East",
+    "AFC North",
+    "AFC South",
+    "AFC West",
+    "NFC East",
+    "NFC North",
+    "NFC South",
+    "NFC West"
+   ]
+  },
+  "2019": {
+   "teams": 32,
+   "games": 16,
+   "playoff_teams": 12,
+   "divisions": [
+    "AFC East",
+    "AFC North",
+    "AFC South",
+    "AFC West",
+    "NFC East",
+    "NFC North",
+    "NFC South",
+    "NFC West"
+   ]
+  },
+  "2020": {
+   "teams": 32,
+   "games": 16,
+   "playoff_teams": 14,
+   "divisions": [
+    "AFC East",
+    "AFC North",
+    "AFC South",
+    "AFC West",
+    "NFC East",
+    "NFC North",
+    "NFC South",
+    "NFC West"
+   ]
+  },
+  "2021": {
+   "teams": 32,
+   "games": 17,
+   "playoff_teams": 14,
+   "divisions": [
+    "AFC East",
+    "AFC North",
+    "AFC South",
+    "AFC West",
+    "NFC East",
+    "NFC North",
+    "NFC South",
+    "NFC West"
+   ]
+  },
+  "2022": {
+   "teams": 32,
+   "games": 17,
+   "playoff_teams": 14,
+   "divisions": [
+    "AFC East",
+    "AFC North",
+    "AFC South",
+    "AFC West",
+    "NFC East",
+    "NFC North",
+    "NFC South",
+    "NFC West"
+   ]
+  },
+  "2023": {
+   "teams": 32,
+   "games": 17,
+   "playoff_teams": 14,
+   "divisions": [
+    "AFC East",
+    "AFC North",
+    "AFC South",
+    "AFC West",
+    "NFC East",
+    "NFC North",
+    "NFC South",
+    "NFC West"
+   ]
+  },
+  "2024": {
+   "teams": 32,
+   "games": 17,
+   "playoff_teams": 14,
+   "divisions": [
+    "AFC East",
+    "AFC North",
+    "AFC South",
+    "AFC West",
+    "NFC East",
+    "NFC North",
+    "NFC South",
+    "NFC West"
+   ]
+  },
+  "2025": {
+   "teams": 32,
+   "games": 17,
+   "playoff_teams": 14,
+   "divisions": [
+    "AFC East",
+    "AFC North",
+    "AFC South",
+    "AFC West",
+    "NFC East",
+    "NFC North",
+    "NFC South",
+    "NFC West"
+   ]
+  }
+ },
+ "season_summary_note": "teams, games (most played by any team), playoff_teams (teams PFR marks as division winner or wild card) and division names, computed from the PFR season standings",
+ "league_events": [
+  {
+   "season": 1970,
+   "kind": "merger",
+   "note": "AFL-NFL merger in effect: 26 teams in the AFC and NFC, three divisions each; Baltimore, Cleveland and Pittsburgh joined the 10 former AFL teams in the AFC.",
+   "sources": [
+    "https://www.pro-football-reference.com/years/1970/",
+    "https://www.profootballhof.com/teams/indianapolis-colts/team-history/",
+    "https://en.wikipedia.org/wiki/1970_NFL_season"
+   ]
+  },
+  {
+   "season": 1975,
+   "kind": "playoff_format",
+   "note": "Playoff home field by record replaces the 1970-1974 divisional rotation.",
+   "sources": [
+    "https://www.profootballhof.com/news/wild-card-golden-nuggets"
+   ]
+  },
+  {
+   "season": 1976,
+   "kind": "expansion",
+   "note": "Seattle and Tampa Bay join: 28 teams.",
+   "sources": [
+    "https://www.pro-football-reference.com/years/1976/"
+   ]
+  },
+  {
+   "season": 1978,
+   "kind": "schedule_and_playoffs",
+   "note": "Regular season 14 -> 16 games; second wild card per conference (10 playoff teams) with a Wild Card round.",
+   "sources": [
+    "https://www.pro-football-reference.com/years/1978/",
+    "https://www.profootballhof.com/news/wild-card-golden-nuggets"
+   ]
+  },
+  {
+   "season": 1982,
+   "kind": "strike",
+   "note": "Players' strike: 9-game regular season (PFR records); 16-team playoff tournament, top eight per conference regardless of division (Wikipedia cross-check).",
+   "sources": [
+    "https://www.pro-football-reference.com/years/1982/",
+    "https://en.wikipedia.org/wiki/NFL_playoffs"
+   ]
+  },
+  {
+   "season": 1987,
+   "kind": "strike",
+   "note": "Players' strike: 15-game regular season (PFR records; one week cancelled, three weeks played by replacement players - replacement detail: Wikipedia cross-check).",
+   "sources": [
+    "https://www.pro-football-reference.com/years/1987/",
+    "https://en.wikipedia.org/wiki/1987_NFL_season"
+   ]
+  },
+  {
+   "season": 1990,
+   "kind": "playoff_format",
+   "note": "Third wild card per conference: 12 playoff teams.",
+   "sources": [
+    "https://www.profootballhof.com/news/wild-card-golden-nuggets"
+   ]
+  },
+  {
+   "season": 1995,
+   "kind": "expansion",
+   "note": "Carolina and Jacksonville join: 30 teams.",
+   "sources": [
+    "https://www.pro-football-reference.com/years/1995/"
+   ]
+  },
+  {
+   "season": 1996,
+   "kind": "suspension",
+   "note": "Cleveland franchise suspended 1996-1998; Baltimore Ravens begin. Still 30 teams.",
+   "sources": [
+    "https://www.pro-football-reference.com/years/1996/",
+    "https://www.profootballhof.com/teams/cleveland-browns/team-history/"
+   ]
+  },
+  {
+   "season": 1999,
+   "kind": "reactivation",
+   "note": "Cleveland Browns resume play: 31 teams.",
+   "sources": [
+    "https://www.pro-football-reference.com/years/1999/"
+   ]
+  },
+  {
+   "season": 2002,
+   "kind": "expansion_and_realignment",
+   "note": "Houston Texans join (32 teams); eight four-team divisions (AFC/NFC East, North, South, West); playoffs: four division winners and two wild cards per conference.",
+   "sources": [
+    "https://www.espn.com/nfl/news/2001/0522/1202816.html",
+    "https://www.seahawks.com/news/on-this-date-nfl-owners-vote-for-realignment",
+    "https://www.pro-football-reference.com/years/2002/",
+    "https://en.wikipedia.org/wiki/NFL_playoffs"
+   ]
+  },
+  {
+   "season": 2020,
+   "kind": "playoff_format",
+   "note": "Playoffs expand to 14 teams (seven per conference, one bye each); approved March 31, 2020.",
+   "sources": [
+    "https://www.chicagobears.com/news/nfl-owners-vote-to-expand-playoffs-to-14-teams",
+    "https://en.wikipedia.org/wiki/NFL_playoffs"
+   ]
+  },
+  {
+   "season": 2021,
+   "kind": "schedule",
+   "note": "Regular season 16 -> 17 games (approved March 30, 2021).",
+   "sources": [
+    "https://www.fox13news.com/news/nfl-approves-17-game-regular-season-beginning-in-2021",
+    "https://www.pro-football-reference.com/years/2021/"
+   ]
+  }
+ ],
+ "pfr_snapshots": {
+  "https://www.pro-football-reference.com/teams/atl/": "https://web.archive.org/web/20260129033610/https://www.pro-football-reference.com/teams/atl/",
+  "https://www.pro-football-reference.com/teams/buf/": "https://web.archive.org/web/20260116191402/https://www.pro-football-reference.com/teams/buf/",
+  "https://www.pro-football-reference.com/teams/car/": "https://web.archive.org/web/20260228175637/https://www.pro-football-reference.com/teams/car/",
+  "https://www.pro-football-reference.com/teams/chi/": "https://web.archive.org/web/20260307210529/https://www.pro-football-reference.com/teams/chi/",
+  "https://www.pro-football-reference.com/teams/cin/": "https://web.archive.org/web/20260226175450/https://www.pro-football-reference.com/teams/cin/",
+  "https://www.pro-football-reference.com/teams/cle/": "https://web.archive.org/web/20260213035144/https://www.pro-football-reference.com/teams/cle/",
+  "https://www.pro-football-reference.com/teams/clt/": "https://web.archive.org/web/20260307175446/https://www.pro-football-reference.com/teams/clt/",
+  "https://www.pro-football-reference.com/teams/crd/": "https://web.archive.org/web/20260113204455/https://www.pro-football-reference.com/teams/crd/",
+  "https://www.pro-football-reference.com/teams/dal/": "https://web.archive.org/web/20260313004318/https://www.pro-football-reference.com/teams/dal/",
+  "https://www.pro-football-reference.com/teams/den/": "https://web.archive.org/web/20260222205437/https://www.pro-football-reference.com/teams/den/",
+  "https://www.pro-football-reference.com/teams/det/": "https://web.archive.org/web/20260228142326/https://www.pro-football-reference.com/teams/det/",
+  "https://www.pro-football-reference.com/teams/gnb/": "https://web.archive.org/web/20260220093255/https://www.pro-football-reference.com/teams/gnb/",
+  "https://www.pro-football-reference.com/teams/htx/": "https://web.archive.org/web/20260226100317/https://www.pro-football-reference.com/teams/htx/",
+  "https://www.pro-football-reference.com/teams/jax/": "https://web.archive.org/web/20260327165414/https://www.pro-football-reference.com/teams/jax/",
+  "https://www.pro-football-reference.com/teams/kan/": "https://web.archive.org/web/20260220104901/https://www.pro-football-reference.com/teams/kan/",
+  "https://www.pro-football-reference.com/teams/mia/": "https://web.archive.org/web/20260219195204/https://www.pro-football-reference.com/teams/mia/",
+  "https://www.pro-football-reference.com/teams/min/": "https://web.archive.org/web/20260130193719/https://www.pro-football-reference.com/teams/min/",
+  "https://www.pro-football-reference.com/teams/nor/": "https://web.archive.org/web/20260225065144/https://www.pro-football-reference.com/teams/nor/",
+  "https://www.pro-football-reference.com/teams/nwe/": "https://web.archive.org/web/20260322105310/https://www.pro-football-reference.com/teams/nwe/",
+  "https://www.pro-football-reference.com/teams/nyg/": "https://web.archive.org/web/20260227130222/https://www.pro-football-reference.com/teams/nyg/",
+  "https://www.pro-football-reference.com/teams/nyj/": "https://web.archive.org/web/20260223010420/https://www.pro-football-reference.com/teams/nyj/",
+  "https://www.pro-football-reference.com/teams/oti/": "https://web.archive.org/web/20260313002125/https://www.pro-football-reference.com/teams/oti/",
+  "https://www.pro-football-reference.com/teams/phi/": "https://web.archive.org/web/20260319162246/https://www.pro-football-reference.com/teams/phi/",
+  "https://www.pro-football-reference.com/teams/pit/": "https://web.archive.org/web/20260319162246/https://www.pro-football-reference.com/teams/pit/",
+  "https://www.pro-football-reference.com/teams/rai/": "https://web.archive.org/web/20260107102213/https://www.pro-football-reference.com/teams/rai/",
+  "https://www.pro-football-reference.com/teams/ram/": "https://web.archive.org/web/20251113155809/https://www.pro-football-reference.com/teams/ram/",
+  "https://www.pro-football-reference.com/teams/rav/": "https://web.archive.org/web/20260222091933/https://www.pro-football-reference.com/teams/rav/",
+  "https://www.pro-football-reference.com/teams/sdg/": "https://web.archive.org/web/20260220134558/https://www.pro-football-reference.com/teams/sdg/",
+  "https://www.pro-football-reference.com/teams/sea/": "https://web.archive.org/web/20260202112200/https://www.pro-football-reference.com/teams/sea/",
+  "https://www.pro-football-reference.com/teams/sfo/": "https://web.archive.org/web/20260222132633/https://www.pro-football-reference.com/teams/sfo/",
+  "https://www.pro-football-reference.com/teams/tam/": "https://web.archive.org/web/20260302230659/https://www.pro-football-reference.com/teams/tam/",
+  "https://www.pro-football-reference.com/teams/was/": "https://web.archive.org/web/20260311104424/https://www.pro-football-reference.com/teams/was/",
+  "https://www.pro-football-reference.com/years/1969/": "https://web.archive.org/web/20260101112526/https://www.pro-football-reference.com/years/1969/",
+  "https://www.pro-football-reference.com/years/1969_AFL/": "https://web.archive.org/web/20251230030848/https://www.pro-football-reference.com/years/1969_AFL/",
+  "https://www.pro-football-reference.com/years/1970/": "https://web.archive.org/web/20241216073052/https://www.pro-football-reference.com/years/1970/",
+  "https://www.pro-football-reference.com/years/1971/": "https://web.archive.org/web/20241214192159/https://www.pro-football-reference.com/years/1971/",
+  "https://www.pro-football-reference.com/years/1972/": "https://web.archive.org/web/20241226123148/https://www.pro-football-reference.com/years/1972/",
+  "https://www.pro-football-reference.com/years/1973/": "https://web.archive.org/web/20241225204902/https://www.pro-football-reference.com/years/1973/",
+  "https://www.pro-football-reference.com/years/1974/": "https://web.archive.org/web/20241220100804/https://www.pro-football-reference.com/years/1974/",
+  "https://www.pro-football-reference.com/years/1975/": "https://web.archive.org/web/20241222195329/https://www.pro-football-reference.com/years/1975/",
+  "https://www.pro-football-reference.com/years/1976/": "https://web.archive.org/web/20241212115756/https://www.pro-football-reference.com/years/1976/",
+  "https://www.pro-football-reference.com/years/1977/": "https://web.archive.org/web/20241225053002/https://www.pro-football-reference.com/years/1977/",
+  "https://www.pro-football-reference.com/years/1978/": "https://web.archive.org/web/20241212151126/https://www.pro-football-reference.com/years/1978/",
+  "https://www.pro-football-reference.com/years/1979/": "https://web.archive.org/web/20241224153653/https://www.pro-football-reference.com/years/1979/",
+  "https://www.pro-football-reference.com/years/1980/": "https://web.archive.org/web/20241219080443/https://www.pro-football-reference.com/years/1980/",
+  "https://www.pro-football-reference.com/years/1981/": "https://web.archive.org/web/20251010102211/https://www.pro-football-reference.com/years/1981/",
+  "https://www.pro-football-reference.com/years/1982/": "https://web.archive.org/web/20251230072509/https://www.pro-football-reference.com/years/1982/",
+  "https://www.pro-football-reference.com/years/1983/": "https://web.archive.org/web/20251230134331/https://www.pro-football-reference.com/years/1983/",
+  "https://www.pro-football-reference.com/years/1984/": "https://web.archive.org/web/20251227045340/https://www.pro-football-reference.com/years/1984/",
+  "https://www.pro-football-reference.com/years/1985/": "https://web.archive.org/web/20251114172140/https://www.pro-football-reference.com/years/1985/",
+  "https://www.pro-football-reference.com/years/1986/": "https://web.archive.org/web/20251125140222/https://www.pro-football-reference.com/years/1986/",
+  "https://www.pro-football-reference.com/years/1987/": "https://web.archive.org/web/20260103173556/https://www.pro-football-reference.com/years/1987/",
+  "https://www.pro-football-reference.com/years/1988/": "https://web.archive.org/web/20251230094252/https://www.pro-football-reference.com/years/1988/",
+  "https://www.pro-football-reference.com/years/1989/": "https://web.archive.org/web/20251219223526/https://www.pro-football-reference.com/years/1989/",
+  "https://www.pro-football-reference.com/years/1990/": "https://web.archive.org/web/20251219010836/https://www.pro-football-reference.com/years/1990/",
+  "https://www.pro-football-reference.com/years/1991/": "https://web.archive.org/web/20251128011009/https://www.pro-football-reference.com/years/1991/",
+  "https://www.pro-football-reference.com/years/1992/": "https://web.archive.org/web/20251209115043/https://www.pro-football-reference.com/years/1992/",
+  "https://www.pro-football-reference.com/years/1993/": "https://web.archive.org/web/20251226064928/https://www.pro-football-reference.com/years/1993/",
+  "https://www.pro-football-reference.com/years/1994/": "https://web.archive.org/web/20251221035030/https://www.pro-football-reference.com/years/1994/",
+  "https://www.pro-football-reference.com/years/1995/": "https://web.archive.org/web/20251219053356/https://www.pro-football-reference.com/years/1995/",
+  "https://www.pro-football-reference.com/years/1996/": "https://web.archive.org/web/20251220175909/https://www.pro-football-reference.com/years/1996/",
+  "https://www.pro-football-reference.com/years/1997/": "https://web.archive.org/web/20251226141411/https://www.pro-football-reference.com/years/1997/",
+  "https://www.pro-football-reference.com/years/1998/": "https://web.archive.org/web/20251229181912/https://www.pro-football-reference.com/years/1998/",
+  "https://www.pro-football-reference.com/years/1999/": "https://web.archive.org/web/20251220132517/https://www.pro-football-reference.com/years/1999/",
+  "https://www.pro-football-reference.com/years/2000/": "https://web.archive.org/web/20251226071928/https://www.pro-football-reference.com/years/2000/",
+  "https://www.pro-football-reference.com/years/2001/": "https://web.archive.org/web/20251221190122/https://www.pro-football-reference.com/years/2001/",
+  "https://www.pro-football-reference.com/years/2002/": "https://web.archive.org/web/20251221152947/https://www.pro-football-reference.com/years/2002/",
+  "https://www.pro-football-reference.com/years/2003/": "https://web.archive.org/web/20251130130100/https://www.pro-football-reference.com/years/2003/",
+  "https://www.pro-football-reference.com/years/2004/": "https://web.archive.org/web/20251225210613/https://www.pro-football-reference.com/years/2004/",
+  "https://www.pro-football-reference.com/years/2005/": "https://web.archive.org/web/20251219024058/https://www.pro-football-reference.com/years/2005/",
+  "https://www.pro-football-reference.com/years/2006/": "https://web.archive.org/web/20251128062558/https://www.pro-football-reference.com/years/2006/",
+  "https://www.pro-football-reference.com/years/2007/": "https://web.archive.org/web/20251219211839/https://www.pro-football-reference.com/years/2007/",
+  "https://www.pro-football-reference.com/years/2008/": "https://web.archive.org/web/20251221000121/https://www.pro-football-reference.com/years/2008/",
+  "https://www.pro-football-reference.com/years/2009/": "https://web.archive.org/web/20251218050900/https://www.pro-football-reference.com/years/2009/",
+  "https://www.pro-football-reference.com/years/2010/": "https://web.archive.org/web/20251203044132/https://www.pro-football-reference.com/years/2010/",
+  "https://www.pro-football-reference.com/years/2011/": "https://web.archive.org/web/20251231115740/https://www.pro-football-reference.com/years/2011/",
+  "https://www.pro-football-reference.com/years/2012/": "https://web.archive.org/web/20251203022427/https://www.pro-football-reference.com/years/2012/",
+  "https://www.pro-football-reference.com/years/2013/": "https://web.archive.org/web/20251204041418/https://www.pro-football-reference.com/years/2013/",
+  "https://www.pro-football-reference.com/years/2014/": "https://web.archive.org/web/20260217073157/https://www.pro-football-reference.com/years/2014/",
+  "https://www.pro-football-reference.com/years/2015/": "https://web.archive.org/web/20251208172413/https://www.pro-football-reference.com/years/2015/",
+  "https://www.pro-football-reference.com/years/2016/": "https://web.archive.org/web/20251219204237/https://www.pro-football-reference.com/years/2016/",
+  "https://www.pro-football-reference.com/years/2017/": "https://web.archive.org/web/20251204153436/https://www.pro-football-reference.com/years/2017/",
+  "https://www.pro-football-reference.com/years/2018/": "https://web.archive.org/web/20251228140013/https://www.pro-football-reference.com/years/2018/",
+  "https://www.pro-football-reference.com/years/2019/": "https://web.archive.org/web/20251218203204/https://www.pro-football-reference.com/years/2019/",
+  "https://www.pro-football-reference.com/years/2020/": "https://web.archive.org/web/20251220181201/https://www.pro-football-reference.com/years/2020/",
+  "https://www.pro-football-reference.com/years/2021/": "https://web.archive.org/web/20251226133704/https://www.pro-football-reference.com/years/2021/",
+  "https://www.pro-football-reference.com/years/2022/": "https://web.archive.org/web/20251228162400/https://www.pro-football-reference.com/years/2022/",
+  "https://www.pro-football-reference.com/years/2023/": "https://web.archive.org/web/20251205010244/https://www.pro-football-reference.com/years/2023/",
+  "https://www.pro-football-reference.com/years/2024/": "https://web.archive.org/web/20251220182257/https://www.pro-football-reference.com/years/2024/",
+  "https://www.pro-football-reference.com/years/2025/": "https://web.archive.org/web/20260107212314/https://www.pro-football-reference.com/years/2025/"
+ },
+ "pfr_snapshots_note": "PFR answers scripts with a Cloudflare challenge; every PFR page above was read from the Wayback Machine copy given here",
+ "franchises": [
+  {
+   "franchise_id": "49ers",
+   "pfr_code": "sfo",
+   "pfr_page": "https://www.pro-football-reference.com/teams/sfo/",
+   "identities": [
+    {
+     "first_season": 1970,
+     "last_season": 2025,
+     "city": "San Francisco",
+     "name": "49ers",
+     "abbreviation": "SF",
+     "conference": "NFC",
+     "division": "NFC West"
+    }
+   ],
+   "events": [
+    {
+     "season": 1970,
+     "kind": "merger_realignment",
+     "from": {
+      "city": "San Francisco",
+      "name": "49ers",
+      "abbreviation": "SF",
+      "league": "NFL",
+      "conference": null,
+      "division": "Coastal"
+     },
+     "to": {
+      "city": "San Francisco",
+      "name": "49ers",
+      "abbreviation": "SF",
+      "league": "NFL",
+      "conference": "NFC",
+      "division": "NFC West"
+     },
+     "note": "AFL-NFL merger in effect: placed in the NFC West (1969: NFL Coastal division).",
+     "sources": [
+      "https://www.profootballhof.com/teams/indianapolis-colts/team-history/",
+      "https://en.wikipedia.org/wiki/1970_NFL_season",
+      "https://www.pro-football-reference.com/years/1969/",
+      "https://www.pro-football-reference.com/years/1970/",
+      "https://www.pro-football-reference.com/teams/sfo/"
+     ]
+    }
+   ]
+  },
+  {
+   "franchise_id": "bears",
+   "pfr_code": "chi",
+   "pfr_page": "https://www.pro-football-reference.com/teams/chi/",
+   "identities": [
+    {
+     "first_season": 1970,
+     "last_season": 2001,
+     "city": "Chicago",
+     "name": "Bears",
+     "abbreviation": "CHI",
+     "conference": "NFC",
+     "division": "NFC Central"
+    },
+    {
+     "first_season": 2002,
+     "last_season": 2025,
+     "city": "Chicago",
+     "name": "Bears",
+     "abbreviation": "CHI",
+     "conference": "NFC",
+     "division": "NFC North"
+    }
+   ],
+   "events": [
+    {
+     "season": 1970,
+     "kind": "merger_realignment",
+     "from": {
+      "city": "Chicago",
+      "name": "Bears",
+      "abbreviation": "CHI",
+      "league": "NFL",
+      "conference": null,
+      "division": "Central"
+     },
+     "to": {
+      "city": "Chicago",
+      "name": "Bears",
+      "abbreviation": "CHI",
+      "league": "NFL",
+      "conference": "NFC",
+      "division": "NFC Central"
+     },
+     "note": "AFL-NFL merger in effect: placed in the NFC Central (1969: NFL Central division).",
+     "sources": [
+      "https://www.profootballhof.com/teams/indianapolis-colts/team-history/",
+      "https://en.wikipedia.org/wiki/1970_NFL_season",
+      "https://www.pro-football-reference.com/years/1969/",
+      "https://www.pro-football-reference.com/years/1970/",
+      "https://www.pro-football-reference.com/teams/chi/"
+     ]
+    },
+    {
+     "season": 2002,
+     "kind": "realignment",
+     "from": {
+      "city": "Chicago",
+      "name": "Bears",
+      "abbreviation": "CHI",
+      "league": "NFL",
+      "conference": "NFC",
+      "division": "NFC Central"
+     },
+     "to": {
+      "city": "Chicago",
+      "name": "Bears",
+      "abbreviation": "CHI",
+      "league": "NFL",
+      "conference": "NFC",
+      "division": "NFC North"
+     },
+     "note": "2002 realignment into eight four-team divisions, approved by the owners May 22, 2001.",
+     "sources": [
+      "https://www.espn.com/nfl/news/2001/0522/1202816.html",
+      "https://www.seahawks.com/news/on-this-date-nfl-owners-vote-for-realignment",
+      "https://www.pro-football-reference.com/years/2001/",
+      "https://www.pro-football-reference.com/years/2002/",
+      "https://www.pro-football-reference.com/teams/chi/"
+     ]
+    }
+   ]
+  },
+  {
+   "franchise_id": "bengals",
+   "pfr_code": "cin",
+   "pfr_page": "https://www.pro-football-reference.com/teams/cin/",
+   "identities": [
+    {
+     "first_season": 1970,
+     "last_season": 2001,
+     "city": "Cincinnati",
+     "name": "Bengals",
+     "abbreviation": "CIN",
+     "conference": "AFC",
+     "division": "AFC Central"
+    },
+    {
+     "first_season": 2002,
+     "last_season": 2025,
+     "city": "Cincinnati",
+     "name": "Bengals",
+     "abbreviation": "CIN",
+     "conference": "AFC",
+     "division": "AFC North"
+    }
+   ],
+   "events": [
+    {
+     "season": 1970,
+     "kind": "merger_realignment",
+     "from": {
+      "city": "Cincinnati",
+      "name": "Bengals",
+      "abbreviation": "CIN",
+      "league": "AFL",
+      "conference": null,
+      "division": "West"
+     },
+     "to": {
+      "city": "Cincinnati",
+      "name": "Bengals",
+      "abbreviation": "CIN",
+      "league": "NFL",
+      "conference": "AFC",
+      "division": "AFC Central"
+     },
+     "note": "AFL-NFL merger in effect: placed in the AFC Central (1969: AFL West division).",
+     "sources": [
+      "https://www.profootballhof.com/teams/indianapolis-colts/team-history/",
+      "https://en.wikipedia.org/wiki/1970_NFL_season",
+      "https://www.pro-football-reference.com/years/1969/",
+      "https://www.pro-football-reference.com/years/1970/",
+      "https://www.pro-football-reference.com/teams/cin/"
+     ]
+    },
+    {
+     "season": 2002,
+     "kind": "realignment",
+     "from": {
+      "city": "Cincinnati",
+      "name": "Bengals",
+      "abbreviation": "CIN",
+      "league": "NFL",
+      "conference": "AFC",
+      "division": "AFC Central"
+     },
+     "to": {
+      "city": "Cincinnati",
+      "name": "Bengals",
+      "abbreviation": "CIN",
+      "league": "NFL",
+      "conference": "AFC",
+      "division": "AFC North"
+     },
+     "note": "2002 realignment into eight four-team divisions, approved by the owners May 22, 2001.",
+     "sources": [
+      "https://www.espn.com/nfl/news/2001/0522/1202816.html",
+      "https://www.seahawks.com/news/on-this-date-nfl-owners-vote-for-realignment",
+      "https://www.pro-football-reference.com/years/2001/",
+      "https://www.pro-football-reference.com/years/2002/",
+      "https://www.pro-football-reference.com/teams/cin/"
+     ]
+    }
+   ]
+  },
+  {
+   "franchise_id": "bills",
+   "pfr_code": "buf",
+   "pfr_page": "https://www.pro-football-reference.com/teams/buf/",
+   "identities": [
+    {
+     "first_season": 1970,
+     "last_season": 2025,
+     "city": "Buffalo",
+     "name": "Bills",
+     "abbreviation": "BUF",
+     "conference": "AFC",
+     "division": "AFC East"
+    }
+   ],
+   "events": [
+    {
+     "season": 1970,
+     "kind": "merger_realignment",
+     "from": {
+      "city": "Buffalo",
+      "name": "Bills",
+      "abbreviation": "BUF",
+      "league": "AFL",
+      "conference": null,
+      "division": "East"
+     },
+     "to": {
+      "city": "Buffalo",
+      "name": "Bills",
+      "abbreviation": "BUF",
+      "league": "NFL",
+      "conference": "AFC",
+      "division": "AFC East"
+     },
+     "note": "AFL-NFL merger in effect: placed in the AFC East (1969: AFL East division).",
+     "sources": [
+      "https://www.profootballhof.com/teams/indianapolis-colts/team-history/",
+      "https://en.wikipedia.org/wiki/1970_NFL_season",
+      "https://www.pro-football-reference.com/years/1969/",
+      "https://www.pro-football-reference.com/years/1970/",
+      "https://www.pro-football-reference.com/teams/buf/"
+     ]
+    }
+   ]
+  },
+  {
+   "franchise_id": "broncos",
+   "pfr_code": "den",
+   "pfr_page": "https://www.pro-football-reference.com/teams/den/",
+   "identities": [
+    {
+     "first_season": 1970,
+     "last_season": 2025,
+     "city": "Denver",
+     "name": "Broncos",
+     "abbreviation": "DEN",
+     "conference": "AFC",
+     "division": "AFC West"
+    }
+   ],
+   "events": [
+    {
+     "season": 1970,
+     "kind": "merger_realignment",
+     "from": {
+      "city": "Denver",
+      "name": "Broncos",
+      "abbreviation": "DEN",
+      "league": "AFL",
+      "conference": null,
+      "division": "West"
+     },
+     "to": {
+      "city": "Denver",
+      "name": "Broncos",
+      "abbreviation": "DEN",
+      "league": "NFL",
+      "conference": "AFC",
+      "division": "AFC West"
+     },
+     "note": "AFL-NFL merger in effect: placed in the AFC West (1969: AFL West division).",
+     "sources": [
+      "https://www.profootballhof.com/teams/indianapolis-colts/team-history/",
+      "https://en.wikipedia.org/wiki/1970_NFL_season",
+      "https://www.pro-football-reference.com/years/1969/",
+      "https://www.pro-football-reference.com/years/1970/",
+      "https://www.pro-football-reference.com/teams/den/"
+     ]
+    }
+   ]
+  },
+  {
+   "franchise_id": "browns",
+   "pfr_code": "cle",
+   "pfr_page": "https://www.pro-football-reference.com/teams/cle/",
+   "identities": [
+    {
+     "first_season": 1970,
+     "last_season": 1995,
+     "city": "Cleveland",
+     "name": "Browns",
+     "abbreviation": "CLE",
+     "conference": "AFC",
+     "division": "AFC Central"
+    },
+    {
+     "first_season": 1999,
+     "last_season": 2001,
+     "city": "Cleveland",
+     "name": "Browns",
+     "abbreviation": "CLE",
+     "conference": "AFC",
+     "division": "AFC Central"
+    },
+    {
+     "first_season": 2002,
+     "last_season": 2025,
+     "city": "Cleveland",
+     "name": "Browns",
+     "abbreviation": "CLE",
+     "conference": "AFC",
+     "division": "AFC North"
+    }
+   ],
+   "events": [
+    {
+     "season": 1970,
+     "kind": "merger_realignment",
+     "from": {
+      "city": "Cleveland",
+      "name": "Browns",
+      "abbreviation": "CLE",
+      "league": "NFL",
+      "conference": null,
+      "division": "Century"
+     },
+     "to": {
+      "city": "Cleveland",
+      "name": "Browns",
+      "abbreviation": "CLE",
+      "league": "NFL",
+      "conference": "AFC",
+      "division": "AFC Central"
+     },
+     "note": "AFL-NFL merger in effect: placed in the AFC Central (1969: NFL Century division). One of the three NFL clubs moved into the AFC.",
+     "sources": [
+      "https://www.profootballhof.com/teams/indianapolis-colts/team-history/",
+      "https://en.wikipedia.org/wiki/1970_NFL_season",
+      "https://www.pro-football-reference.com/years/1969/",
+      "https://www.pro-football-reference.com/years/1970/",
+      "https://www.pro-football-reference.com/teams/cle/"
+     ]
+    },
+    {
+     "season": 1996,
+     "kind": "suspension",
+     "from": {
+      "city": "Cleveland",
+      "name": "Browns",
+      "abbreviation": "CLE",
+      "league": "NFL",
+      "conference": "AFC",
+      "division": "AFC Central"
+     },
+     "to": null,
+     "note": "Art Modell announced he would move his Cleveland franchise to Baltimore to begin play in 1996, and agreed to give up the Browns name, colors and team history to the new owner of the suspended Cleveland franchise. PFR lists no Browns seasons 1996-1998.",
+     "sources": [
+      "https://www.profootballhof.com/teams/cleveland-browns/team-history/",
+      "https://en.wikipedia.org/wiki/Cleveland_Browns_relocation_controversy",
+      "https://www.pro-football-reference.com/years/1995/",
+      "https://www.pro-football-reference.com/years/1996/",
+      "https://www.pro-football-reference.com/teams/cle/"
+     ]
+    },
+    {
+     "season": 1999,
+     "kind": "reactivation",
+     "from": null,
+     "to": {
+      "city": "Cleveland",
+      "name": "Browns",
+      "abbreviation": "CLE",
+      "league": "NFL",
+      "conference": "AFC",
+      "division": "AFC Central"
+     },
+     "note": "The suspended Cleveland franchise resumed play in 1999 with the Browns name and history; the NFL had guaranteed football would return to Cleveland no later than 1999 (HOF).",
+     "sources": [
+      "https://www.profootballhof.com/teams/cleveland-browns/team-history/",
+      "https://en.wikipedia.org/wiki/1999_Cleveland_Browns_season",
+      "https://www.pro-football-reference.com/years/1999/",
+      "https://www.pro-football-reference.com/teams/cle/"
+     ]
+    },
+    {
+     "season": 2002,
+     "kind": "realignment",
+     "from": {
+      "city": "Cleveland",
+      "name": "Browns",
+      "abbreviation": "CLE",
+      "league": "NFL",
+      "conference": "AFC",
+      "division": "AFC Central"
+     },
+     "to": {
+      "city": "Cleveland",
+      "name": "Browns",
+      "abbreviation": "CLE",
+      "league": "NFL",
+      "conference": "AFC",
+      "division": "AFC North"
+     },
+     "note": "2002 realignment into eight four-team divisions, approved by the owners May 22, 2001.",
+     "sources": [
+      "https://www.espn.com/nfl/news/2001/0522/1202816.html",
+      "https://www.seahawks.com/news/on-this-date-nfl-owners-vote-for-realignment",
+      "https://www.pro-football-reference.com/years/2001/",
+      "https://www.pro-football-reference.com/years/2002/",
+      "https://www.pro-football-reference.com/teams/cle/"
+     ]
+    }
+   ]
+  },
+  {
+   "franchise_id": "buccaneers",
+   "pfr_code": "tam",
+   "pfr_page": "https://www.pro-football-reference.com/teams/tam/",
+   "identities": [
+    {
+     "first_season": 1976,
+     "last_season": 1976,
+     "city": "Tampa Bay",
+     "name": "Buccaneers",
+     "abbreviation": "TB",
+     "conference": "AFC",
+     "division": "AFC West"
+    },
+    {
+     "first_season": 1977,
+     "last_season": 2001,
+     "city": "Tampa Bay",
+     "name": "Buccaneers",
+     "abbreviation": "TB",
+     "conference": "NFC",
+     "division": "NFC Central"
+    },
+    {
+     "first_season": 2002,
+     "last_season": 2025,
+     "city": "Tampa Bay",
+     "name": "Buccaneers",
+     "abbreviation": "TB",
+     "conference": "NFC",
+     "division": "NFC South"
+    }
+   ],
+   "events": [
+    {
+     "season": 1976,
+     "kind": "expansion",
+     "from": null,
+     "to": {
+      "city": "Tampa Bay",
+      "name": "Buccaneers",
+      "abbreviation": "TB",
+      "league": "NFL",
+      "conference": "AFC",
+      "division": "AFC West"
+     },
+     "note": "Awarded the NFL's 27th franchise in 1974; first season 1976 in the AFC West (one season only).",
+     "sources": [
+      "https://www.profootballhof.com/teams/tampa-bay-buccaneers/team-history/",
+      "https://www.buccaneers.com/news/series-history-buccaneers-seahawks-18129237",
+      "https://en.wikipedia.org/wiki/1976_NFL_season",
+      "https://www.pro-football-reference.com/years/1976/",
+      "https://www.pro-football-reference.com/teams/tam/"
+     ]
+    },
+    {
+     "season": 1977,
+     "kind": "realignment",
+     "from": {
+      "city": "Tampa Bay",
+      "name": "Buccaneers",
+      "abbreviation": "TB",
+      "league": "NFL",
+      "conference": "AFC",
+      "division": "AFC West"
+     },
+     "to": {
+      "city": "Tampa Bay",
+      "name": "Buccaneers",
+      "abbreviation": "TB",
+      "league": "NFL",
+      "conference": "NFC",
+      "division": "NFC Central"
+     },
+     "note": "Swapped with Seattle after one season (see seahawks 1977).",
+     "sources": [
+      "https://www.buccaneers.com/news/series-history-buccaneers-seahawks-18129237",
+      "https://en.wikipedia.org/wiki/History_of_the_Tampa_Bay_Buccaneers",
+      "https://www.pro-football-reference.com/years/1976/",
+      "https://www.pro-football-reference.com/years/1977/",
+      "https://www.pro-football-reference.com/teams/tam/"
+     ]
+    },
+    {
+     "season": 2002,
+     "kind": "realignment",
+     "from": {
+      "city": "Tampa Bay",
+      "name": "Buccaneers",
+      "abbreviation": "TB",
+      "league": "NFL",
+      "conference": "NFC",
+      "division": "NFC Central"
+     },
+     "to": {
+      "city": "Tampa Bay",
+      "name": "Buccaneers",
+      "abbreviation": "TB",
+      "league": "NFL",
+      "conference": "NFC",
+      "division": "NFC South"
+     },
+     "note": "2002 realignment into eight four-team divisions, approved by the owners May 22, 2001.",
+     "sources": [
+      "https://www.espn.com/nfl/news/2001/0522/1202816.html",
+      "https://www.seahawks.com/news/on-this-date-nfl-owners-vote-for-realignment",
+      "https://www.pro-football-reference.com/years/2001/",
+      "https://www.pro-football-reference.com/years/2002/",
+      "https://www.pro-football-reference.com/teams/tam/"
+     ]
+    }
+   ]
+  },
+  {
+   "franchise_id": "cardinals",
+   "pfr_code": "crd",
+   "pfr_page": "https://www.pro-football-reference.com/teams/crd/",
+   "identities": [
+    {
+     "first_season": 1970,
+     "last_season": 1987,
+     "city": "St. Louis",
+     "name": "Cardinals",
+     "abbreviation": "STL",
+     "conference": "NFC",
+     "division": "NFC East"
+    },
+    {
+     "first_season": 1988,
+     "last_season": 1993,
+     "city": "Phoenix",
+     "name": "Cardinals",
+     "abbreviation": "PHO",
+     "conference": "NFC",
+     "division": "NFC East"
+    },
+    {
+     "first_season": 1994,
+     "last_season": 2001,
+     "city": "Arizona",
+     "name": "Cardinals",
+     "abbreviation": "ARI",
+     "conference": "NFC",
+     "division": "NFC East"
+    },
+    {
+     "first_season": 2002,
+     "last_season": 2025,
+     "city": "Arizona",
+     "name": "Cardinals",
+     "abbreviation": "ARI",
+     "conference": "NFC",
+     "division": "NFC West"
+    }
+   ],
+   "events": [
+    {
+     "season": 1970,
+     "kind": "merger_realignment",
+     "from": {
+      "city": "St. Louis",
+      "name": "Cardinals",
+      "abbreviation": "STL",
+      "league": "NFL",
+      "conference": null,
+      "division": "Century"
+     },
+     "to": {
+      "city": "St. Louis",
+      "name": "Cardinals",
+      "abbreviation": "STL",
+      "league": "NFL",
+      "conference": "NFC",
+      "division": "NFC East"
+     },
+     "note": "AFL-NFL merger in effect: placed in the NFC East (1969: NFL Century division).",
+     "sources": [
+      "https://www.profootballhof.com/teams/indianapolis-colts/team-history/",
+      "https://en.wikipedia.org/wiki/1970_NFL_season",
+      "https://www.pro-football-reference.com/years/1969/",
+      "https://www.pro-football-reference.com/years/1970/",
+      "https://www.pro-football-reference.com/teams/crd/"
+     ]
+    },
+    {
+     "season": 1988,
+     "kind": "relocation",
+     "from": {
+      "city": "St. Louis",
+      "name": "Cardinals",
+      "abbreviation": "STL",
+      "league": "NFL",
+      "conference": "NFC",
+      "division": "NFC East"
+     },
+     "to": {
+      "city": "Phoenix",
+      "name": "Cardinals",
+      "abbreviation": "PHO",
+      "league": "NFL",
+      "conference": "NFC",
+      "division": "NFC East"
+     },
+     "note": "William Bidwill moved the franchise from St. Louis to Phoenix in 1988.",
+     "sources": [
+      "https://www.profootballhof.com/teams/arizona-cardinals/team-history/",
+      "https://www.pro-football-reference.com/years/1987/",
+      "https://www.pro-football-reference.com/years/1988/",
+      "https://www.pro-football-reference.com/teams/crd/"
+     ]
+    },
+    {
+     "season": 1994,
+     "kind": "rename",
+     "from": {
+      "city": "Phoenix",
+      "name": "Cardinals",
+      "abbreviation": "PHO",
+      "league": "NFL",
+      "conference": "NFC",
+      "division": "NFC East"
+     },
+     "to": {
+      "city": "Arizona",
+      "name": "Cardinals",
+      "abbreviation": "ARI",
+      "league": "NFL",
+      "conference": "NFC",
+      "division": "NFC East"
+     },
+     "note": "Renamed the Arizona Cardinals in March 1994 (same home, new geographic name).",
+     "sources": [
+      "https://www.profootballhof.com/teams/arizona-cardinals/team-history/",
+      "https://www.pro-football-reference.com/years/1993/",
+      "https://www.pro-football-reference.com/years/1994/",
+      "https://www.pro-football-reference.com/teams/crd/"
+     ]
+    },
+    {
+     "season": 2002,
+     "kind": "realignment",
+     "from": {
+      "city": "Arizona",
+      "name": "Cardinals",
+      "abbreviation": "ARI",
+      "league": "NFL",
+      "conference": "NFC",
+      "division": "NFC East"
+     },
+     "to": {
+      "city": "Arizona",
+      "name": "Cardinals",
+      "abbreviation": "ARI",
+      "league": "NFL",
+      "conference": "NFC",
+      "division": "NFC West"
+     },
+     "note": "2002 realignment into eight four-team divisions, approved by the owners May 22, 2001.",
+     "sources": [
+      "https://www.espn.com/nfl/news/2001/0522/1202816.html",
+      "https://www.seahawks.com/news/on-this-date-nfl-owners-vote-for-realignment",
+      "https://www.pro-football-reference.com/years/2001/",
+      "https://www.pro-football-reference.com/years/2002/",
+      "https://www.pro-football-reference.com/teams/crd/"
+     ]
+    }
+   ]
+  },
+  {
+   "franchise_id": "chargers",
+   "pfr_code": "sdg",
+   "pfr_page": "https://www.pro-football-reference.com/teams/sdg/",
+   "identities": [
+    {
+     "first_season": 1970,
+     "last_season": 2016,
+     "city": "San Diego",
+     "name": "Chargers",
+     "abbreviation": "SD",
+     "conference": "AFC",
+     "division": "AFC West"
+    },
+    {
+     "first_season": 2017,
+     "last_season": 2025,
+     "city": "Los Angeles",
+     "name": "Chargers",
+     "abbreviation": "LAC",
+     "conference": "AFC",
+     "division": "AFC West"
+    }
+   ],
+   "events": [
+    {
+     "season": 1970,
+     "kind": "merger_realignment",
+     "from": {
+      "city": "San Diego",
+      "name": "Chargers",
+      "abbreviation": "SD",
+      "league": "AFL",
+      "conference": null,
+      "division": "West"
+     },
+     "to": {
+      "city": "San Diego",
+      "name": "Chargers",
+      "abbreviation": "SD",
+      "league": "NFL",
+      "conference": "AFC",
+      "division": "AFC West"
+     },
+     "note": "AFL-NFL merger in effect: placed in the AFC West (1969: AFL West division).",
+     "sources": [
+      "https://www.profootballhof.com/teams/indianapolis-colts/team-history/",
+      "https://en.wikipedia.org/wiki/1970_NFL_season",
+      "https://www.pro-football-reference.com/years/1969/",
+      "https://www.pro-football-reference.com/years/1970/",
+      "https://www.pro-football-reference.com/teams/sdg/"
+     ]
+    },
+    {
+     "season": 2017,
+     "kind": "relocation",
+     "from": {
+      "city": "San Diego",
+      "name": "Chargers",
+      "abbreviation": "SD",
+      "league": "NFL",
+      "conference": "AFC",
+      "division": "AFC West"
+     },
+     "to": {
+      "city": "Los Angeles",
+      "name": "Chargers",
+      "abbreviation": "LAC",
+      "league": "NFL",
+      "conference": "AFC",
+      "division": "AFC West"
+     },
+     "note": "Dean Spanos announced in January 2017 that the team would relocate from San Diego to Los Angeles \"beginning with the 2017 NFL season\", with the StubHub Center in Carson as a temporary home (NFL.com). Conflict: the HOF team page says 2016; PFR lists 2016 as San Diego and 2017 as Los Angeles.",
+     "sources": [
+      "https://www.nfl.com/news/chargers-announce-decision-to-relocate-to-los-angeles-0ap3000000773179",
+      "https://www.profootballhof.com/teams/los-angeles-chargers/team-history/",
+      "https://www.pro-football-reference.com/years/2016/",
+      "https://www.pro-football-reference.com/years/2017/",
+      "https://www.pro-football-reference.com/teams/sdg/"
+     ]
+    }
+   ]
+  },
+  {
+   "franchise_id": "chiefs",
+   "pfr_code": "kan",
+   "pfr_page": "https://www.pro-football-reference.com/teams/kan/",
+   "identities": [
+    {
+     "first_season": 1970,
+     "last_season": 2025,
+     "city": "Kansas City",
+     "name": "Chiefs",
+     "abbreviation": "KC",
+     "conference": "AFC",
+     "division": "AFC West"
+    }
+   ],
+   "events": [
+    {
+     "season": 1970,
+     "kind": "merger_realignment",
+     "from": {
+      "city": "Kansas City",
+      "name": "Chiefs",
+      "abbreviation": "KC",
+      "league": "AFL",
+      "conference": null,
+      "division": "West"
+     },
+     "to": {
+      "city": "Kansas City",
+      "name": "Chiefs",
+      "abbreviation": "KC",
+      "league": "NFL",
+      "conference": "AFC",
+      "division": "AFC West"
+     },
+     "note": "AFL-NFL merger in effect: placed in the AFC West (1969: AFL West division).",
+     "sources": [
+      "https://www.profootballhof.com/teams/indianapolis-colts/team-history/",
+      "https://en.wikipedia.org/wiki/1970_NFL_season",
+      "https://www.pro-football-reference.com/years/1969/",
+      "https://www.pro-football-reference.com/years/1970/",
+      "https://www.pro-football-reference.com/teams/kan/"
+     ]
+    }
+   ]
+  },
+  {
+   "franchise_id": "colts",
+   "pfr_code": "clt",
+   "pfr_page": "https://www.pro-football-reference.com/teams/clt/",
+   "identities": [
+    {
+     "first_season": 1970,
+     "last_season": 1983,
+     "city": "Baltimore",
+     "name": "Colts",
+     "abbreviation": "BAL",
+     "conference": "AFC",
+     "division": "AFC East"
+    },
+    {
+     "first_season": 1984,
+     "last_season": 2001,
+     "city": "Indianapolis",
+     "name": "Colts",
+     "abbreviation": "IND",
+     "conference": "AFC",
+     "division": "AFC East"
+    },
+    {
+     "first_season": 2002,
+     "last_season": 2025,
+     "city": "Indianapolis",
+     "name": "Colts",
+     "abbreviation": "IND",
+     "conference": "AFC",
+     "division": "AFC South"
+    }
+   ],
+   "events": [
+    {
+     "season": 1970,
+     "kind": "merger_realignment",
+     "from": {
+      "city": "Baltimore",
+      "name": "Colts",
+      "abbreviation": "BAL",
+      "league": "NFL",
+      "conference": null,
+      "division": "Coastal"
+     },
+     "to": {
+      "city": "Baltimore",
+      "name": "Colts",
+      "abbreviation": "BAL",
+      "league": "NFL",
+      "conference": "AFC",
+      "division": "AFC East"
+     },
+     "note": "AFL-NFL merger in effect: placed in the AFC East (1969: NFL Coastal division). One of the three NFL clubs moved into the AFC.",
+     "sources": [
+      "https://www.profootballhof.com/teams/indianapolis-colts/team-history/",
+      "https://en.wikipedia.org/wiki/1970_NFL_season",
+      "https://www.pro-football-reference.com/years/1969/",
+      "https://www.pro-football-reference.com/years/1970/",
+      "https://www.pro-football-reference.com/teams/clt/"
+     ]
+    },
+    {
+     "season": 1984,
+     "kind": "relocation",
+     "from": {
+      "city": "Baltimore",
+      "name": "Colts",
+      "abbreviation": "BAL",
+      "league": "NFL",
+      "conference": "AFC",
+      "division": "AFC East"
+     },
+     "to": {
+      "city": "Indianapolis",
+      "name": "Colts",
+      "abbreviation": "IND",
+      "league": "NFL",
+      "conference": "AFC",
+      "division": "AFC East"
+     },
+     "note": "Robert Irsay moved the Colts to Indianapolis on March 28, 1984 (the HOF page gives the date; the first Indianapolis season, 1984, is from PFR).",
+     "sources": [
+      "https://www.profootballhof.com/teams/indianapolis-colts/team-history/",
+      "https://www.pro-football-reference.com/years/1983/",
+      "https://www.pro-football-reference.com/years/1984/",
+      "https://www.pro-football-reference.com/teams/clt/"
+     ]
+    },
+    {
+     "season": 2002,
+     "kind": "realignment",
+     "from": {
+      "city": "Indianapolis",
+      "name": "Colts",
+      "abbreviation": "IND",
+      "league": "NFL",
+      "conference": "AFC",
+      "division": "AFC East"
+     },
+     "to": {
+      "city": "Indianapolis",
+      "name": "Colts",
+      "abbreviation": "IND",
+      "league": "NFL",
+      "conference": "AFC",
+      "division": "AFC South"
+     },
+     "note": "2002 realignment into eight four-team divisions, approved by the owners May 22, 2001.",
+     "sources": [
+      "https://www.espn.com/nfl/news/2001/0522/1202816.html",
+      "https://www.seahawks.com/news/on-this-date-nfl-owners-vote-for-realignment",
+      "https://www.pro-football-reference.com/years/2001/",
+      "https://www.pro-football-reference.com/years/2002/",
+      "https://www.pro-football-reference.com/teams/clt/"
+     ]
+    }
+   ]
+  },
+  {
+   "franchise_id": "cowboys",
+   "pfr_code": "dal",
+   "pfr_page": "https://www.pro-football-reference.com/teams/dal/",
+   "identities": [
+    {
+     "first_season": 1970,
+     "last_season": 2025,
+     "city": "Dallas",
+     "name": "Cowboys",
+     "abbreviation": "DAL",
+     "conference": "NFC",
+     "division": "NFC East"
+    }
+   ],
+   "events": [
+    {
+     "season": 1970,
+     "kind": "merger_realignment",
+     "from": {
+      "city": "Dallas",
+      "name": "Cowboys",
+      "abbreviation": "DAL",
+      "league": "NFL",
+      "conference": null,
+      "division": "Capitol"
+     },
+     "to": {
+      "city": "Dallas",
+      "name": "Cowboys",
+      "abbreviation": "DAL",
+      "league": "NFL",
+      "conference": "NFC",
+      "division": "NFC East"
+     },
+     "note": "AFL-NFL merger in effect: placed in the NFC East (1969: NFL Capitol division).",
+     "sources": [
+      "https://www.profootballhof.com/teams/indianapolis-colts/team-history/",
+      "https://en.wikipedia.org/wiki/1970_NFL_season",
+      "https://www.pro-football-reference.com/years/1969/",
+      "https://www.pro-football-reference.com/years/1970/",
+      "https://www.pro-football-reference.com/teams/dal/"
+     ]
+    }
+   ]
+  },
+  {
+   "franchise_id": "dolphins",
+   "pfr_code": "mia",
+   "pfr_page": "https://www.pro-football-reference.com/teams/mia/",
+   "identities": [
+    {
+     "first_season": 1970,
+     "last_season": 2025,
+     "city": "Miami",
+     "name": "Dolphins",
+     "abbreviation": "MIA",
+     "conference": "AFC",
+     "division": "AFC East"
+    }
+   ],
+   "events": [
+    {
+     "season": 1970,
+     "kind": "merger_realignment",
+     "from": {
+      "city": "Miami",
+      "name": "Dolphins",
+      "abbreviation": "MIA",
+      "league": "AFL",
+      "conference": null,
+      "division": "East"
+     },
+     "to": {
+      "city": "Miami",
+      "name": "Dolphins",
+      "abbreviation": "MIA",
+      "league": "NFL",
+      "conference": "AFC",
+      "division": "AFC East"
+     },
+     "note": "AFL-NFL merger in effect: placed in the AFC East (1969: AFL East division).",
+     "sources": [
+      "https://www.profootballhof.com/teams/indianapolis-colts/team-history/",
+      "https://en.wikipedia.org/wiki/1970_NFL_season",
+      "https://www.pro-football-reference.com/years/1969/",
+      "https://www.pro-football-reference.com/years/1970/",
+      "https://www.pro-football-reference.com/teams/mia/"
+     ]
+    }
+   ]
+  },
+  {
+   "franchise_id": "eagles",
+   "pfr_code": "phi",
+   "pfr_page": "https://www.pro-football-reference.com/teams/phi/",
+   "identities": [
+    {
+     "first_season": 1970,
+     "last_season": 2025,
+     "city": "Philadelphia",
+     "name": "Eagles",
+     "abbreviation": "PHI",
+     "conference": "NFC",
+     "division": "NFC East"
+    }
+   ],
+   "events": [
+    {
+     "season": 1970,
+     "kind": "merger_realignment",
+     "from": {
+      "city": "Philadelphia",
+      "name": "Eagles",
+      "abbreviation": "PHI",
+      "league": "NFL",
+      "conference": null,
+      "division": "Capitol"
+     },
+     "to": {
+      "city": "Philadelphia",
+      "name": "Eagles",
+      "abbreviation": "PHI",
+      "league": "NFL",
+      "conference": "NFC",
+      "division": "NFC East"
+     },
+     "note": "AFL-NFL merger in effect: placed in the NFC East (1969: NFL Capitol division).",
+     "sources": [
+      "https://www.profootballhof.com/teams/indianapolis-colts/team-history/",
+      "https://en.wikipedia.org/wiki/1970_NFL_season",
+      "https://www.pro-football-reference.com/years/1969/",
+      "https://www.pro-football-reference.com/years/1970/",
+      "https://www.pro-football-reference.com/teams/phi/"
+     ]
+    }
+   ]
+  },
+  {
+   "franchise_id": "falcons",
+   "pfr_code": "atl",
+   "pfr_page": "https://www.pro-football-reference.com/teams/atl/",
+   "identities": [
+    {
+     "first_season": 1970,
+     "last_season": 2001,
+     "city": "Atlanta",
+     "name": "Falcons",
+     "abbreviation": "ATL",
+     "conference": "NFC",
+     "division": "NFC West"
+    },
+    {
+     "first_season": 2002,
+     "last_season": 2025,
+     "city": "Atlanta",
+     "name": "Falcons",
+     "abbreviation": "ATL",
+     "conference": "NFC",
+     "division": "NFC South"
+    }
+   ],
+   "events": [
+    {
+     "season": 1970,
+     "kind": "merger_realignment",
+     "from": {
+      "city": "Atlanta",
+      "name": "Falcons",
+      "abbreviation": "ATL",
+      "league": "NFL",
+      "conference": null,
+      "division": "Coastal"
+     },
+     "to": {
+      "city": "Atlanta",
+      "name": "Falcons",
+      "abbreviation": "ATL",
+      "league": "NFL",
+      "conference": "NFC",
+      "division": "NFC West"
+     },
+     "note": "AFL-NFL merger in effect: placed in the NFC West (1969: NFL Coastal division).",
+     "sources": [
+      "https://www.profootballhof.com/teams/indianapolis-colts/team-history/",
+      "https://en.wikipedia.org/wiki/1970_NFL_season",
+      "https://www.pro-football-reference.com/years/1969/",
+      "https://www.pro-football-reference.com/years/1970/",
+      "https://www.pro-football-reference.com/teams/atl/"
+     ]
+    },
+    {
+     "season": 2002,
+     "kind": "realignment",
+     "from": {
+      "city": "Atlanta",
+      "name": "Falcons",
+      "abbreviation": "ATL",
+      "league": "NFL",
+      "conference": "NFC",
+      "division": "NFC West"
+     },
+     "to": {
+      "city": "Atlanta",
+      "name": "Falcons",
+      "abbreviation": "ATL",
+      "league": "NFL",
+      "conference": "NFC",
+      "division": "NFC South"
+     },
+     "note": "2002 realignment into eight four-team divisions, approved by the owners May 22, 2001.",
+     "sources": [
+      "https://www.espn.com/nfl/news/2001/0522/1202816.html",
+      "https://www.seahawks.com/news/on-this-date-nfl-owners-vote-for-realignment",
+      "https://www.pro-football-reference.com/years/2001/",
+      "https://www.pro-football-reference.com/years/2002/",
+      "https://www.pro-football-reference.com/teams/atl/"
+     ]
+    }
+   ]
+  },
+  {
+   "franchise_id": "giants",
+   "pfr_code": "nyg",
+   "pfr_page": "https://www.pro-football-reference.com/teams/nyg/",
+   "identities": [
+    {
+     "first_season": 1970,
+     "last_season": 2025,
+     "city": "New York",
+     "name": "Giants",
+     "abbreviation": "NYG",
+     "conference": "NFC",
+     "division": "NFC East"
+    }
+   ],
+   "events": [
+    {
+     "season": 1970,
+     "kind": "merger_realignment",
+     "from": {
+      "city": "New York",
+      "name": "Giants",
+      "abbreviation": "NYG",
+      "league": "NFL",
+      "conference": null,
+      "division": "Century"
+     },
+     "to": {
+      "city": "New York",
+      "name": "Giants",
+      "abbreviation": "NYG",
+      "league": "NFL",
+      "conference": "NFC",
+      "division": "NFC East"
+     },
+     "note": "AFL-NFL merger in effect: placed in the NFC East (1969: NFL Century division).",
+     "sources": [
+      "https://www.profootballhof.com/teams/indianapolis-colts/team-history/",
+      "https://en.wikipedia.org/wiki/1970_NFL_season",
+      "https://www.pro-football-reference.com/years/1969/",
+      "https://www.pro-football-reference.com/years/1970/",
+      "https://www.pro-football-reference.com/teams/nyg/"
+     ]
+    }
+   ]
+  },
+  {
+   "franchise_id": "jaguars",
+   "pfr_code": "jax",
+   "pfr_page": "https://www.pro-football-reference.com/teams/jax/",
+   "identities": [
+    {
+     "first_season": 1995,
+     "last_season": 2001,
+     "city": "Jacksonville",
+     "name": "Jaguars",
+     "abbreviation": "JAX",
+     "conference": "AFC",
+     "division": "AFC Central"
+    },
+    {
+     "first_season": 2002,
+     "last_season": 2025,
+     "city": "Jacksonville",
+     "name": "Jaguars",
+     "abbreviation": "JAX",
+     "conference": "AFC",
+     "division": "AFC South"
+    }
+   ],
+   "events": [
+    {
+     "season": 1995,
+     "kind": "expansion",
+     "from": null,
+     "to": {
+      "city": "Jacksonville",
+      "name": "Jaguars",
+      "abbreviation": "JAX",
+      "league": "NFL",
+      "conference": "AFC",
+      "division": "AFC Central"
+     },
+     "note": "Awarded the 30th NFL franchise on November 30, 1993 (HOF); first season 1995, in the AFC Central (PFR).",
+     "sources": [
+      "https://www.profootballhof.com/teams/jacksonville-jaguars/team-history/",
+      "https://www.pro-football-reference.com/years/1995/",
+      "https://www.pro-football-reference.com/teams/jax/"
+     ]
+    },
+    {
+     "season": 2002,
+     "kind": "realignment",
+     "from": {
+      "city": "Jacksonville",
+      "name": "Jaguars",
+      "abbreviation": "JAX",
+      "league": "NFL",
+      "conference": "AFC",
+      "division": "AFC Central"
+     },
+     "to": {
+      "city": "Jacksonville",
+      "name": "Jaguars",
+      "abbreviation": "JAX",
+      "league": "NFL",
+      "conference": "AFC",
+      "division": "AFC South"
+     },
+     "note": "2002 realignment into eight four-team divisions, approved by the owners May 22, 2001.",
+     "sources": [
+      "https://www.espn.com/nfl/news/2001/0522/1202816.html",
+      "https://www.seahawks.com/news/on-this-date-nfl-owners-vote-for-realignment",
+      "https://www.pro-football-reference.com/years/2001/",
+      "https://www.pro-football-reference.com/years/2002/",
+      "https://www.pro-football-reference.com/teams/jax/"
+     ]
+    }
+   ]
+  },
+  {
+   "franchise_id": "jets",
+   "pfr_code": "nyj",
+   "pfr_page": "https://www.pro-football-reference.com/teams/nyj/",
+   "identities": [
+    {
+     "first_season": 1970,
+     "last_season": 2025,
+     "city": "New York",
+     "name": "Jets",
+     "abbreviation": "NYJ",
+     "conference": "AFC",
+     "division": "AFC East"
+    }
+   ],
+   "events": [
+    {
+     "season": 1970,
+     "kind": "merger_realignment",
+     "from": {
+      "city": "New York",
+      "name": "Jets",
+      "abbreviation": "NYJ",
+      "league": "AFL",
+      "conference": null,
+      "division": "East"
+     },
+     "to": {
+      "city": "New York",
+      "name": "Jets",
+      "abbreviation": "NYJ",
+      "league": "NFL",
+      "conference": "AFC",
+      "division": "AFC East"
+     },
+     "note": "AFL-NFL merger in effect: placed in the AFC East (1969: AFL East division).",
+     "sources": [
+      "https://www.profootballhof.com/teams/indianapolis-colts/team-history/",
+      "https://en.wikipedia.org/wiki/1970_NFL_season",
+      "https://www.pro-football-reference.com/years/1969/",
+      "https://www.pro-football-reference.com/years/1970/",
+      "https://www.pro-football-reference.com/teams/nyj/"
+     ]
+    }
+   ]
+  },
+  {
+   "franchise_id": "lions",
+   "pfr_code": "det",
+   "pfr_page": "https://www.pro-football-reference.com/teams/det/",
+   "identities": [
+    {
+     "first_season": 1970,
+     "last_season": 2001,
+     "city": "Detroit",
+     "name": "Lions",
+     "abbreviation": "DET",
+     "conference": "NFC",
+     "division": "NFC Central"
+    },
+    {
+     "first_season": 2002,
+     "last_season": 2025,
+     "city": "Detroit",
+     "name": "Lions",
+     "abbreviation": "DET",
+     "conference": "NFC",
+     "division": "NFC North"
+    }
+   ],
+   "events": [
+    {
+     "season": 1970,
+     "kind": "merger_realignment",
+     "from": {
+      "city": "Detroit",
+      "name": "Lions",
+      "abbreviation": "DET",
+      "league": "NFL",
+      "conference": null,
+      "division": "Central"
+     },
+     "to": {
+      "city": "Detroit",
+      "name": "Lions",
+      "abbreviation": "DET",
+      "league": "NFL",
+      "conference": "NFC",
+      "division": "NFC Central"
+     },
+     "note": "AFL-NFL merger in effect: placed in the NFC Central (1969: NFL Central division).",
+     "sources": [
+      "https://www.profootballhof.com/teams/indianapolis-colts/team-history/",
+      "https://en.wikipedia.org/wiki/1970_NFL_season",
+      "https://www.pro-football-reference.com/years/1969/",
+      "https://www.pro-football-reference.com/years/1970/",
+      "https://www.pro-football-reference.com/teams/det/"
+     ]
+    },
+    {
+     "season": 2002,
+     "kind": "realignment",
+     "from": {
+      "city": "Detroit",
+      "name": "Lions",
+      "abbreviation": "DET",
+      "league": "NFL",
+      "conference": "NFC",
+      "division": "NFC Central"
+     },
+     "to": {
+      "city": "Detroit",
+      "name": "Lions",
+      "abbreviation": "DET",
+      "league": "NFL",
+      "conference": "NFC",
+      "division": "NFC North"
+     },
+     "note": "2002 realignment into eight four-team divisions, approved by the owners May 22, 2001.",
+     "sources": [
+      "https://www.espn.com/nfl/news/2001/0522/1202816.html",
+      "https://www.seahawks.com/news/on-this-date-nfl-owners-vote-for-realignment",
+      "https://www.pro-football-reference.com/years/2001/",
+      "https://www.pro-football-reference.com/years/2002/",
+      "https://www.pro-football-reference.com/teams/det/"
+     ]
+    }
+   ]
+  },
+  {
+   "franchise_id": "oilers_titans",
+   "pfr_code": "oti",
+   "pfr_page": "https://www.pro-football-reference.com/teams/oti/",
+   "identities": [
+    {
+     "first_season": 1970,
+     "last_season": 1996,
+     "city": "Houston",
+     "name": "Oilers",
+     "abbreviation": "HOU",
+     "conference": "AFC",
+     "division": "AFC Central"
+    },
+    {
+     "first_season": 1997,
+     "last_season": 1998,
+     "city": "Tennessee",
+     "name": "Oilers",
+     "abbreviation": "TEN",
+     "conference": "AFC",
+     "division": "AFC Central"
+    },
+    {
+     "first_season": 1999,
+     "last_season": 2001,
+     "city": "Tennessee",
+     "name": "Titans",
+     "abbreviation": "TEN",
+     "conference": "AFC",
+     "division": "AFC Central"
+    },
+    {
+     "first_season": 2002,
+     "last_season": 2025,
+     "city": "Tennessee",
+     "name": "Titans",
+     "abbreviation": "TEN",
+     "conference": "AFC",
+     "division": "AFC South"
+    }
+   ],
+   "events": [
+    {
+     "season": 1970,
+     "kind": "merger_realignment",
+     "from": {
+      "city": "Houston",
+      "name": "Oilers",
+      "abbreviation": "HOU",
+      "league": "AFL",
+      "conference": null,
+      "division": "East"
+     },
+     "to": {
+      "city": "Houston",
+      "name": "Oilers",
+      "abbreviation": "HOU",
+      "league": "NFL",
+      "conference": "AFC",
+      "division": "AFC Central"
+     },
+     "note": "AFL-NFL merger in effect: placed in the AFC Central (1969: AFL East division).",
+     "sources": [
+      "https://www.profootballhof.com/teams/indianapolis-colts/team-history/",
+      "https://en.wikipedia.org/wiki/1970_NFL_season",
+      "https://www.pro-football-reference.com/years/1969/",
+      "https://www.pro-football-reference.com/years/1970/",
+      "https://www.pro-football-reference.com/teams/oti/"
+     ]
+    },
+    {
+     "season": 1997,
+     "kind": "relocation",
+     "from": {
+      "city": "Houston",
+      "name": "Oilers",
+      "abbreviation": "HOU",
+      "league": "NFL",
+      "conference": "AFC",
+      "division": "AFC Central"
+     },
+     "to": {
+      "city": "Tennessee",
+      "name": "Oilers",
+      "abbreviation": "TEN",
+      "league": "NFL",
+      "conference": "AFC",
+      "division": "AFC Central"
+     },
+     "note": "Houston Oilers relocated to Tennessee as the Tennessee Oilers. Home games: Memphis (Liberty Bowl Memorial Stadium) in 1997, Nashville (Vanderbilt Stadium) in 1998 (venues: Wikipedia cross-check).",
+     "sources": [
+      "https://www.profootballhof.com/teams/tennessee-titans/team-history/",
+      "https://en.wikipedia.org/wiki/History_of_the_Tennessee_Titans",
+      "https://www.pro-football-reference.com/years/1996/",
+      "https://www.pro-football-reference.com/years/1997/",
+      "https://www.pro-football-reference.com/teams/oti/"
+     ]
+    },
+    {
+     "season": 1999,
+     "kind": "rename",
+     "from": {
+      "city": "Tennessee",
+      "name": "Oilers",
+      "abbreviation": "TEN",
+      "league": "NFL",
+      "conference": "AFC",
+      "division": "AFC Central"
+     },
+     "to": {
+      "city": "Tennessee",
+      "name": "Titans",
+      "abbreviation": "TEN",
+      "league": "NFL",
+      "conference": "AFC",
+      "division": "AFC Central"
+     },
+     "note": "Retired the Oilers nickname and became the Tennessee Titans in 1999.",
+     "sources": [
+      "https://www.profootballhof.com/teams/tennessee-titans/team-history/",
+      "https://www.pro-football-reference.com/years/1998/",
+      "https://www.pro-football-reference.com/years/1999/",
+      "https://www.pro-football-reference.com/teams/oti/"
+     ]
+    },
+    {
+     "season": 2002,
+     "kind": "realignment",
+     "from": {
+      "city": "Tennessee",
+      "name": "Titans",
+      "abbreviation": "TEN",
+      "league": "NFL",
+      "conference": "AFC",
+      "division": "AFC Central"
+     },
+     "to": {
+      "city": "Tennessee",
+      "name": "Titans",
+      "abbreviation": "TEN",
+      "league": "NFL",
+      "conference": "AFC",
+      "division": "AFC South"
+     },
+     "note": "2002 realignment into eight four-team divisions, approved by the owners May 22, 2001.",
+     "sources": [
+      "https://www.espn.com/nfl/news/2001/0522/1202816.html",
+      "https://www.seahawks.com/news/on-this-date-nfl-owners-vote-for-realignment",
+      "https://www.pro-football-reference.com/years/2001/",
+      "https://www.pro-football-reference.com/years/2002/",
+      "https://www.pro-football-reference.com/teams/oti/"
+     ]
+    }
+   ]
+  },
+  {
+   "franchise_id": "packers",
+   "pfr_code": "gnb",
+   "pfr_page": "https://www.pro-football-reference.com/teams/gnb/",
+   "identities": [
+    {
+     "first_season": 1970,
+     "last_season": 2001,
+     "city": "Green Bay",
+     "name": "Packers",
+     "abbreviation": "GB",
+     "conference": "NFC",
+     "division": "NFC Central"
+    },
+    {
+     "first_season": 2002,
+     "last_season": 2025,
+     "city": "Green Bay",
+     "name": "Packers",
+     "abbreviation": "GB",
+     "conference": "NFC",
+     "division": "NFC North"
+    }
+   ],
+   "events": [
+    {
+     "season": 1970,
+     "kind": "merger_realignment",
+     "from": {
+      "city": "Green Bay",
+      "name": "Packers",
+      "abbreviation": "GB",
+      "league": "NFL",
+      "conference": null,
+      "division": "Central"
+     },
+     "to": {
+      "city": "Green Bay",
+      "name": "Packers",
+      "abbreviation": "GB",
+      "league": "NFL",
+      "conference": "NFC",
+      "division": "NFC Central"
+     },
+     "note": "AFL-NFL merger in effect: placed in the NFC Central (1969: NFL Central division).",
+     "sources": [
+      "https://www.profootballhof.com/teams/indianapolis-colts/team-history/",
+      "https://en.wikipedia.org/wiki/1970_NFL_season",
+      "https://www.pro-football-reference.com/years/1969/",
+      "https://www.pro-football-reference.com/years/1970/",
+      "https://www.pro-football-reference.com/teams/gnb/"
+     ]
+    },
+    {
+     "season": 2002,
+     "kind": "realignment",
+     "from": {
+      "city": "Green Bay",
+      "name": "Packers",
+      "abbreviation": "GB",
+      "league": "NFL",
+      "conference": "NFC",
+      "division": "NFC Central"
+     },
+     "to": {
+      "city": "Green Bay",
+      "name": "Packers",
+      "abbreviation": "GB",
+      "league": "NFL",
+      "conference": "NFC",
+      "division": "NFC North"
+     },
+     "note": "2002 realignment into eight four-team divisions, approved by the owners May 22, 2001.",
+     "sources": [
+      "https://www.espn.com/nfl/news/2001/0522/1202816.html",
+      "https://www.seahawks.com/news/on-this-date-nfl-owners-vote-for-realignment",
+      "https://www.pro-football-reference.com/years/2001/",
+      "https://www.pro-football-reference.com/years/2002/",
+      "https://www.pro-football-reference.com/teams/gnb/"
+     ]
+    }
+   ]
+  },
+  {
+   "franchise_id": "panthers",
+   "pfr_code": "car",
+   "pfr_page": "https://www.pro-football-reference.com/teams/car/",
+   "identities": [
+    {
+     "first_season": 1995,
+     "last_season": 2001,
+     "city": "Carolina",
+     "name": "Panthers",
+     "abbreviation": "CAR",
+     "conference": "NFC",
+     "division": "NFC West"
+    },
+    {
+     "first_season": 2002,
+     "last_season": 2025,
+     "city": "Carolina",
+     "name": "Panthers",
+     "abbreviation": "CAR",
+     "conference": "NFC",
+     "division": "NFC South"
+    }
+   ],
+   "events": [
+    {
+     "season": 1995,
+     "kind": "expansion",
+     "from": null,
+     "to": {
+      "city": "Carolina",
+      "name": "Panthers",
+      "abbreviation": "CAR",
+      "league": "NFL",
+      "conference": "NFC",
+      "division": "NFC West"
+     },
+     "note": "Awarded an NFL expansion franchise on October 26, 1993 (HOF); first season 1995, in the NFC West (PFR).",
+     "sources": [
+      "https://www.profootballhof.com/teams/carolina-panthers/team-history/",
+      "https://www.pro-football-reference.com/years/1995/",
+      "https://www.pro-football-reference.com/teams/car/"
+     ]
+    },
+    {
+     "season": 2002,
+     "kind": "realignment",
+     "from": {
+      "city": "Carolina",
+      "name": "Panthers",
+      "abbreviation": "CAR",
+      "league": "NFL",
+      "conference": "NFC",
+      "division": "NFC West"
+     },
+     "to": {
+      "city": "Carolina",
+      "name": "Panthers",
+      "abbreviation": "CAR",
+      "league": "NFL",
+      "conference": "NFC",
+      "division": "NFC South"
+     },
+     "note": "2002 realignment into eight four-team divisions, approved by the owners May 22, 2001.",
+     "sources": [
+      "https://www.espn.com/nfl/news/2001/0522/1202816.html",
+      "https://www.seahawks.com/news/on-this-date-nfl-owners-vote-for-realignment",
+      "https://www.pro-football-reference.com/years/2001/",
+      "https://www.pro-football-reference.com/years/2002/",
+      "https://www.pro-football-reference.com/teams/car/"
+     ]
+    }
+   ]
+  },
+  {
+   "franchise_id": "patriots",
+   "pfr_code": "nwe",
+   "pfr_page": "https://www.pro-football-reference.com/teams/nwe/",
+   "identities": [
+    {
+     "first_season": 1970,
+     "last_season": 1970,
+     "city": "Boston",
+     "name": "Patriots",
+     "abbreviation": "BOS",
+     "conference": "AFC",
+     "division": "AFC East"
+    },
+    {
+     "first_season": 1971,
+     "last_season": 2025,
+     "city": "New England",
+     "name": "Patriots",
+     "abbreviation": "NE",
+     "conference": "AFC",
+     "division": "AFC East"
+    }
+   ],
+   "events": [
+    {
+     "season": 1970,
+     "kind": "merger_realignment",
+     "from": {
+      "city": "Boston",
+      "name": "Patriots",
+      "abbreviation": "BOS",
+      "league": "AFL",
+      "conference": null,
+      "division": "East"
+     },
+     "to": {
+      "city": "Boston",
+      "name": "Patriots",
+      "abbreviation": "BOS",
+      "league": "NFL",
+      "conference": "AFC",
+      "division": "AFC East"
+     },
+     "note": "AFL-NFL merger in effect: placed in the AFC East (1969: AFL East division).",
+     "sources": [
+      "https://www.profootballhof.com/teams/indianapolis-colts/team-history/",
+      "https://en.wikipedia.org/wiki/1970_NFL_season",
+      "https://www.pro-football-reference.com/years/1969/",
+      "https://www.pro-football-reference.com/years/1970/",
+      "https://www.pro-football-reference.com/teams/nwe/"
+     ]
+    },
+    {
+     "season": 1971,
+     "kind": "rename",
+     "from": {
+      "city": "Boston",
+      "name": "Patriots",
+      "abbreviation": "BOS",
+      "league": "NFL",
+      "conference": "AFC",
+      "division": "AFC East"
+     },
+     "to": {
+      "city": "New England",
+      "name": "Patriots",
+      "abbreviation": "NE",
+      "league": "NFL",
+      "conference": "AFC",
+      "division": "AFC East"
+     },
+     "note": "Boston Patriots became the New England Patriots and moved to a new stadium in Foxboro, about 25 miles south of Boston.",
+     "sources": [
+      "https://www.profootballhof.com/teams/new-england-patriots/team-history/",
+      "https://www.pro-football-reference.com/years/1970/",
+      "https://www.pro-football-reference.com/years/1971/",
+      "https://www.pro-football-reference.com/teams/nwe/"
+     ]
+    }
+   ]
+  },
+  {
+   "franchise_id": "raiders",
+   "pfr_code": "rai",
+   "pfr_page": "https://www.pro-football-reference.com/teams/rai/",
+   "identities": [
+    {
+     "first_season": 1970,
+     "last_season": 1981,
+     "city": "Oakland",
+     "name": "Raiders",
+     "abbreviation": "OAK",
+     "conference": "AFC",
+     "division": "AFC West"
+    },
+    {
+     "first_season": 1982,
+     "last_season": 1994,
+     "city": "Los Angeles",
+     "name": "Raiders",
+     "abbreviation": "LARD",
+     "conference": "AFC",
+     "division": "AFC West"
+    },
+    {
+     "first_season": 1995,
+     "last_season": 2019,
+     "city": "Oakland",
+     "name": "Raiders",
+     "abbreviation": "OAK",
+     "conference": "AFC",
+     "division": "AFC West"
+    },
+    {
+     "first_season": 2020,
+     "last_season": 2025,
+     "city": "Las Vegas",
+     "name": "Raiders",
+     "abbreviation": "LV",
+     "conference": "AFC",
+     "division": "AFC West"
+    }
+   ],
+   "events": [
+    {
+     "season": 1970,
+     "kind": "merger_realignment",
+     "from": {
+      "city": "Oakland",
+      "name": "Raiders",
+      "abbreviation": "OAK",
+      "league": "AFL",
+      "conference": null,
+      "division": "West"
+     },
+     "to": {
+      "city": "Oakland",
+      "name": "Raiders",
+      "abbreviation": "OAK",
+      "league": "NFL",
+      "conference": "AFC",
+      "division": "AFC West"
+     },
+     "note": "AFL-NFL merger in effect: placed in the AFC West (1969: AFL West division).",
+     "sources": [
+      "https://www.profootballhof.com/teams/indianapolis-colts/team-history/",
+      "https://en.wikipedia.org/wiki/1970_NFL_season",
+      "https://www.pro-football-reference.com/years/1969/",
+      "https://www.pro-football-reference.com/years/1970/",
+      "https://www.pro-football-reference.com/teams/rai/"
+     ]
+    },
+    {
+     "season": 1982,
+     "kind": "relocation",
+     "from": {
+      "city": "Oakland",
+      "name": "Raiders",
+      "abbreviation": "OAK",
+      "league": "NFL",
+      "conference": "AFC",
+      "division": "AFC West"
+     },
+     "to": {
+      "city": "Los Angeles",
+      "name": "Raiders",
+      "abbreviation": "LARD",
+      "league": "NFL",
+      "conference": "AFC",
+      "division": "AFC West"
+     },
+     "note": "Moved from the Oakland Coliseum to the Los Angeles Coliseum in 1982.",
+     "sources": [
+      "https://www.profootballhof.com/teams/las-vegas-raiders/team-history/",
+      "https://www.pro-football-reference.com/years/1981/",
+      "https://www.pro-football-reference.com/years/1982/",
+      "https://www.pro-football-reference.com/teams/rai/"
+     ]
+    },
+    {
+     "season": 1995,
+     "kind": "relocation",
+     "from": {
+      "city": "Los Angeles",
+      "name": "Raiders",
+      "abbreviation": "LARD",
+      "league": "NFL",
+      "conference": "AFC",
+      "division": "AFC West"
+     },
+     "to": {
+      "city": "Oakland",
+      "name": "Raiders",
+      "abbreviation": "OAK",
+      "league": "NFL",
+      "conference": "AFC",
+      "division": "AFC West"
+     },
+     "note": "Returned to Oakland for 1995 after 13 seasons in Los Angeles (1982-1994: PFR standings; Wikipedia says they played in Los Angeles from 1982 to 1994, and Davis signed a letter of intent to return to Oakland on June 23, 1995). The HOF page says '12 seasons', which does not match those dates.",
+     "sources": [
+      "https://www.profootballhof.com/teams/las-vegas-raiders/team-history/",
+      "https://en.wikipedia.org/wiki/History_of_the_Los_Angeles_Raiders",
+      "https://www.pro-football-reference.com/years/1994/",
+      "https://www.pro-football-reference.com/years/1995/",
+      "https://www.pro-football-reference.com/teams/rai/"
+     ]
+    },
+    {
+     "season": 2020,
+     "kind": "relocation",
+     "from": {
+      "city": "Oakland",
+      "name": "Raiders",
+      "abbreviation": "OAK",
+      "league": "NFL",
+      "conference": "AFC",
+      "division": "AFC West"
+     },
+     "to": {
+      "city": "Las Vegas",
+      "name": "Raiders",
+      "abbreviation": "LV",
+      "league": "NFL",
+      "conference": "AFC",
+      "division": "AFC West"
+     },
+     "note": "Owners approved the move to Las Vegas 31-1 on March 27, 2017 (AP via Boston.com); PFR lists Oakland through 2019 and Las Vegas from 2020, and the HOF page dates the move to 2020.",
+     "sources": [
+      "https://www.profootballhof.com/teams/las-vegas-raiders/team-history/",
+      "https://www.boston.com/sports/nfl/2017/03/27/raiders-move-to-las-vegas/",
+      "https://www.pro-football-reference.com/years/2019/",
+      "https://www.pro-football-reference.com/years/2020/",
+      "https://www.pro-football-reference.com/teams/rai/"
+     ]
+    }
+   ]
+  },
+  {
+   "franchise_id": "rams",
+   "pfr_code": "ram",
+   "pfr_page": "https://www.pro-football-reference.com/teams/ram/",
+   "identities": [
+    {
+     "first_season": 1970,
+     "last_season": 1994,
+     "city": "Los Angeles",
+     "name": "Rams",
+     "abbreviation": "LA",
+     "conference": "NFC",
+     "division": "NFC West"
+    },
+    {
+     "first_season": 1995,
+     "last_season": 2015,
+     "city": "St. Louis",
+     "name": "Rams",
+     "abbreviation": "STL",
+     "conference": "NFC",
+     "division": "NFC West"
+    },
+    {
+     "first_season": 2016,
+     "last_season": 2025,
+     "city": "Los Angeles",
+     "name": "Rams",
+     "abbreviation": "LAR",
+     "conference": "NFC",
+     "division": "NFC West"
+    }
+   ],
+   "events": [
+    {
+     "season": 1970,
+     "kind": "merger_realignment",
+     "from": {
+      "city": "Los Angeles",
+      "name": "Rams",
+      "abbreviation": "LA",
+      "league": "NFL",
+      "conference": null,
+      "division": "Coastal"
+     },
+     "to": {
+      "city": "Los Angeles",
+      "name": "Rams",
+      "abbreviation": "LA",
+      "league": "NFL",
+      "conference": "NFC",
+      "division": "NFC West"
+     },
+     "note": "AFL-NFL merger in effect: placed in the NFC West (1969: NFL Coastal division).",
+     "sources": [
+      "https://www.profootballhof.com/teams/indianapolis-colts/team-history/",
+      "https://en.wikipedia.org/wiki/1970_NFL_season",
+      "https://www.pro-football-reference.com/years/1969/",
+      "https://www.pro-football-reference.com/years/1970/",
+      "https://www.pro-football-reference.com/teams/ram/"
+     ]
+    },
+    {
+     "season": 1995,
+     "kind": "relocation",
+     "from": {
+      "city": "Los Angeles",
+      "name": "Rams",
+      "abbreviation": "LA",
+      "league": "NFL",
+      "conference": "NFC",
+      "division": "NFC West"
+     },
+     "to": {
+      "city": "St. Louis",
+      "name": "Rams",
+      "abbreviation": "STL",
+      "league": "NFL",
+      "conference": "NFC",
+      "division": "NFC West"
+     },
+     "note": "Moved from Los Angeles to St. Louis in 1995.",
+     "sources": [
+      "https://www.profootballhof.com/teams/los-angeles-rams/team-history/",
+      "https://www.pro-football-reference.com/years/1994/",
+      "https://www.pro-football-reference.com/years/1995/",
+      "https://www.pro-football-reference.com/teams/ram/"
+     ]
+    },
+    {
+     "season": 2016,
+     "kind": "relocation",
+     "from": {
+      "city": "St. Louis",
+      "name": "Rams",
+      "abbreviation": "STL",
+      "league": "NFL",
+      "conference": "NFC",
+      "division": "NFC West"
+     },
+     "to": {
+      "city": "Los Angeles",
+      "name": "Rams",
+      "abbreviation": "LAR",
+      "league": "NFL",
+      "conference": "NFC",
+      "division": "NFC West"
+     },
+     "note": "Owners approved the move from St. Louis to Los Angeles on January 12, 2016, 30-2 (Fortune, citing NFL.com); the HOF page gives 2016 as the move year.",
+     "sources": [
+      "https://www.profootballhof.com/teams/los-angeles-rams/team-history/",
+      "https://fortune.com/2016/01/12/nfl-approves-st-louis-rams-move-to-los-angeles",
+      "https://www.pro-football-reference.com/years/2015/",
+      "https://www.pro-football-reference.com/years/2016/",
+      "https://www.pro-football-reference.com/teams/ram/"
+     ]
+    }
+   ]
+  },
+  {
+   "franchise_id": "ravens",
+   "pfr_code": "rav",
+   "pfr_page": "https://www.pro-football-reference.com/teams/rav/",
+   "identities": [
+    {
+     "first_season": 1996,
+     "last_season": 2001,
+     "city": "Baltimore",
+     "name": "Ravens",
+     "abbreviation": "BAL",
+     "conference": "AFC",
+     "division": "AFC Central"
+    },
+    {
+     "first_season": 2002,
+     "last_season": 2025,
+     "city": "Baltimore",
+     "name": "Ravens",
+     "abbreviation": "BAL",
+     "conference": "AFC",
+     "division": "AFC North"
+    }
+   ],
+   "events": [
+    {
+     "season": 1996,
+     "kind": "new_franchise",
+     "from": null,
+     "to": {
+      "city": "Baltimore",
+      "name": "Ravens",
+      "abbreviation": "BAL",
+      "league": "NFL",
+      "conference": "AFC",
+      "division": "AFC Central"
+     },
+     "note": "Pro football returned to Baltimore in 1996 as \"the new Baltimore Ravens\" (HOF), Modell's organisation from Cleveland; PFR's Ravens history starts in 1996 and the Browns' history stays with Cleveland.",
+     "sources": [
+      "https://www.profootballhof.com/teams/baltimore-ravens/team-history/",
+      "https://www.profootballhof.com/teams/cleveland-browns/team-history/",
+      "https://www.pro-football-reference.com/years/1996/",
+      "https://www.pro-football-reference.com/teams/rav/"
+     ]
+    },
+    {
+     "season": 2002,
+     "kind": "realignment",
+     "from": {
+      "city": "Baltimore",
+      "name": "Ravens",
+      "abbreviation": "BAL",
+      "league": "NFL",
+      "conference": "AFC",
+      "division": "AFC Central"
+     },
+     "to": {
+      "city": "Baltimore",
+      "name": "Ravens",
+      "abbreviation": "BAL",
+      "league": "NFL",
+      "conference": "AFC",
+      "division": "AFC North"
+     },
+     "note": "2002 realignment into eight four-team divisions, approved by the owners May 22, 2001.",
+     "sources": [
+      "https://www.espn.com/nfl/news/2001/0522/1202816.html",
+      "https://www.seahawks.com/news/on-this-date-nfl-owners-vote-for-realignment",
+      "https://www.pro-football-reference.com/years/2001/",
+      "https://www.pro-football-reference.com/years/2002/",
+      "https://www.pro-football-reference.com/teams/rav/"
+     ]
+    }
+   ]
+  },
+  {
+   "franchise_id": "saints",
+   "pfr_code": "nor",
+   "pfr_page": "https://www.pro-football-reference.com/teams/nor/",
+   "identities": [
+    {
+     "first_season": 1970,
+     "last_season": 2001,
+     "city": "New Orleans",
+     "name": "Saints",
+     "abbreviation": "NO",
+     "conference": "NFC",
+     "division": "NFC West"
+    },
+    {
+     "first_season": 2002,
+     "last_season": 2025,
+     "city": "New Orleans",
+     "name": "Saints",
+     "abbreviation": "NO",
+     "conference": "NFC",
+     "division": "NFC South"
+    }
+   ],
+   "events": [
+    {
+     "season": 1970,
+     "kind": "merger_realignment",
+     "from": {
+      "city": "New Orleans",
+      "name": "Saints",
+      "abbreviation": "NO",
+      "league": "NFL",
+      "conference": null,
+      "division": "Capitol"
+     },
+     "to": {
+      "city": "New Orleans",
+      "name": "Saints",
+      "abbreviation": "NO",
+      "league": "NFL",
+      "conference": "NFC",
+      "division": "NFC West"
+     },
+     "note": "AFL-NFL merger in effect: placed in the NFC West (1969: NFL Capitol division).",
+     "sources": [
+      "https://www.profootballhof.com/teams/indianapolis-colts/team-history/",
+      "https://en.wikipedia.org/wiki/1970_NFL_season",
+      "https://www.pro-football-reference.com/years/1969/",
+      "https://www.pro-football-reference.com/years/1970/",
+      "https://www.pro-football-reference.com/teams/nor/"
+     ]
+    },
+    {
+     "season": 2002,
+     "kind": "realignment",
+     "from": {
+      "city": "New Orleans",
+      "name": "Saints",
+      "abbreviation": "NO",
+      "league": "NFL",
+      "conference": "NFC",
+      "division": "NFC West"
+     },
+     "to": {
+      "city": "New Orleans",
+      "name": "Saints",
+      "abbreviation": "NO",
+      "league": "NFL",
+      "conference": "NFC",
+      "division": "NFC South"
+     },
+     "note": "2002 realignment into eight four-team divisions, approved by the owners May 22, 2001.",
+     "sources": [
+      "https://www.espn.com/nfl/news/2001/0522/1202816.html",
+      "https://www.seahawks.com/news/on-this-date-nfl-owners-vote-for-realignment",
+      "https://www.pro-football-reference.com/years/2001/",
+      "https://www.pro-football-reference.com/years/2002/",
+      "https://www.pro-football-reference.com/teams/nor/"
+     ]
+    }
+   ]
+  },
+  {
+   "franchise_id": "seahawks",
+   "pfr_code": "sea",
+   "pfr_page": "https://www.pro-football-reference.com/teams/sea/",
+   "identities": [
+    {
+     "first_season": 1976,
+     "last_season": 1976,
+     "city": "Seattle",
+     "name": "Seahawks",
+     "abbreviation": "SEA",
+     "conference": "NFC",
+     "division": "NFC West"
+    },
+    {
+     "first_season": 1977,
+     "last_season": 2001,
+     "city": "Seattle",
+     "name": "Seahawks",
+     "abbreviation": "SEA",
+     "conference": "AFC",
+     "division": "AFC West"
+    },
+    {
+     "first_season": 2002,
+     "last_season": 2025,
+     "city": "Seattle",
+     "name": "Seahawks",
+     "abbreviation": "SEA",
+     "conference": "NFC",
+     "division": "NFC West"
+    }
+   ],
+   "events": [
+    {
+     "season": 1976,
+     "kind": "expansion",
+     "from": null,
+     "to": {
+      "city": "Seattle",
+      "name": "Seahawks",
+      "abbreviation": "SEA",
+      "league": "NFL",
+      "conference": "NFC",
+      "division": "NFC West"
+     },
+     "note": "NFL franchise awarded June 4, 1974; first season 1976 in the NFC West (one season only).",
+     "sources": [
+      "https://www.profootballhof.com/teams/seattle-seahawks/team-history/",
+      "https://www.buccaneers.com/news/series-history-buccaneers-seahawks-18129237",
+      "https://en.wikipedia.org/wiki/1976_NFL_season",
+      "https://www.pro-football-reference.com/years/1976/",
+      "https://www.pro-football-reference.com/teams/sea/"
+     ]
+    },
+    {
+     "season": 1977,
+     "kind": "realignment",
+     "from": {
+      "city": "Seattle",
+      "name": "Seahawks",
+      "abbreviation": "SEA",
+      "league": "NFL",
+      "conference": "NFC",
+      "division": "NFC West"
+     },
+     "to": {
+      "city": "Seattle",
+      "name": "Seahawks",
+      "abbreviation": "SEA",
+      "league": "NFL",
+      "conference": "AFC",
+      "division": "AFC West"
+     },
+     "note": "Swapped with Tampa Bay after one season, as set in the 1976 expansion plan, so both expansion teams played each other twice and every other club once in their first two seasons (reason: Wikipedia cross-check).",
+     "sources": [
+      "https://www.profootballhof.com/teams/seattle-seahawks/team-history/",
+      "https://www.buccaneers.com/news/series-history-buccaneers-seahawks-18129237",
+      "https://en.wikipedia.org/wiki/History_of_the_Seattle_Seahawks",
+      "https://www.pro-football-reference.com/years/1976/",
+      "https://www.pro-football-reference.com/years/1977/",
+      "https://www.pro-football-reference.com/teams/sea/"
+     ]
+    },
+    {
+     "season": 2002,
+     "kind": "realignment",
+     "from": {
+      "city": "Seattle",
+      "name": "Seahawks",
+      "abbreviation": "SEA",
+      "league": "NFL",
+      "conference": "AFC",
+      "division": "AFC West"
+     },
+     "to": {
+      "city": "Seattle",
+      "name": "Seahawks",
+      "abbreviation": "SEA",
+      "league": "NFL",
+      "conference": "NFC",
+      "division": "NFC West"
+     },
+     "note": "2002 realignment into eight four-team divisions, approved by the owners May 22, 2001. Seattle was the only club to change conferences.",
+     "sources": [
+      "https://www.espn.com/nfl/news/2001/0522/1202816.html",
+      "https://www.seahawks.com/news/on-this-date-nfl-owners-vote-for-realignment",
+      "https://www.pro-football-reference.com/years/2001/",
+      "https://www.pro-football-reference.com/years/2002/",
+      "https://www.pro-football-reference.com/teams/sea/"
+     ]
+    }
+   ]
+  },
+  {
+   "franchise_id": "steelers",
+   "pfr_code": "pit",
+   "pfr_page": "https://www.pro-football-reference.com/teams/pit/",
+   "identities": [
+    {
+     "first_season": 1970,
+     "last_season": 2001,
+     "city": "Pittsburgh",
+     "name": "Steelers",
+     "abbreviation": "PIT",
+     "conference": "AFC",
+     "division": "AFC Central"
+    },
+    {
+     "first_season": 2002,
+     "last_season": 2025,
+     "city": "Pittsburgh",
+     "name": "Steelers",
+     "abbreviation": "PIT",
+     "conference": "AFC",
+     "division": "AFC North"
+    }
+   ],
+   "events": [
+    {
+     "season": 1970,
+     "kind": "merger_realignment",
+     "from": {
+      "city": "Pittsburgh",
+      "name": "Steelers",
+      "abbreviation": "PIT",
+      "league": "NFL",
+      "conference": null,
+      "division": "Century"
+     },
+     "to": {
+      "city": "Pittsburgh",
+      "name": "Steelers",
+      "abbreviation": "PIT",
+      "league": "NFL",
+      "conference": "AFC",
+      "division": "AFC Central"
+     },
+     "note": "AFL-NFL merger in effect: placed in the AFC Central (1969: NFL Century division). One of the three NFL clubs moved into the AFC.",
+     "sources": [
+      "https://www.profootballhof.com/teams/indianapolis-colts/team-history/",
+      "https://en.wikipedia.org/wiki/1970_NFL_season",
+      "https://www.pro-football-reference.com/years/1969/",
+      "https://www.pro-football-reference.com/years/1970/",
+      "https://www.pro-football-reference.com/teams/pit/"
+     ]
+    },
+    {
+     "season": 2002,
+     "kind": "realignment",
+     "from": {
+      "city": "Pittsburgh",
+      "name": "Steelers",
+      "abbreviation": "PIT",
+      "league": "NFL",
+      "conference": "AFC",
+      "division": "AFC Central"
+     },
+     "to": {
+      "city": "Pittsburgh",
+      "name": "Steelers",
+      "abbreviation": "PIT",
+      "league": "NFL",
+      "conference": "AFC",
+      "division": "AFC North"
+     },
+     "note": "2002 realignment into eight four-team divisions, approved by the owners May 22, 2001.",
+     "sources": [
+      "https://www.espn.com/nfl/news/2001/0522/1202816.html",
+      "https://www.seahawks.com/news/on-this-date-nfl-owners-vote-for-realignment",
+      "https://www.pro-football-reference.com/years/2001/",
+      "https://www.pro-football-reference.com/years/2002/",
+      "https://www.pro-football-reference.com/teams/pit/"
+     ]
+    }
+   ]
+  },
+  {
+   "franchise_id": "texans",
+   "pfr_code": "htx",
+   "pfr_page": "https://www.pro-football-reference.com/teams/htx/",
+   "identities": [
+    {
+     "first_season": 2002,
+     "last_season": 2025,
+     "city": "Houston",
+     "name": "Texans",
+     "abbreviation": "HOU",
+     "conference": "AFC",
+     "division": "AFC South"
+    }
+   ],
+   "events": [
+    {
+     "season": 2002,
+     "kind": "expansion",
+     "from": null,
+     "to": {
+      "city": "Houston",
+      "name": "Texans",
+      "abbreviation": "HOU",
+      "league": "NFL",
+      "conference": "AFC",
+      "division": "AFC South"
+     },
+     "note": "Owners voted 29-0 on October 6, 1999 to award the expansion franchise to Bob McNair (HOF); first season 2002, in the new AFC South.",
+     "sources": [
+      "https://www.profootballhof.com/teams/houston-texans/team-history/",
+      "https://www.espn.com/nfl/news/2001/0522/1202816.html",
+      "https://www.pro-football-reference.com/years/2002/",
+      "https://www.pro-football-reference.com/teams/htx/"
+     ]
+    }
+   ]
+  },
+  {
+   "franchise_id": "vikings",
+   "pfr_code": "min",
+   "pfr_page": "https://www.pro-football-reference.com/teams/min/",
+   "identities": [
+    {
+     "first_season": 1970,
+     "last_season": 2001,
+     "city": "Minnesota",
+     "name": "Vikings",
+     "abbreviation": "MIN",
+     "conference": "NFC",
+     "division": "NFC Central"
+    },
+    {
+     "first_season": 2002,
+     "last_season": 2025,
+     "city": "Minnesota",
+     "name": "Vikings",
+     "abbreviation": "MIN",
+     "conference": "NFC",
+     "division": "NFC North"
+    }
+   ],
+   "events": [
+    {
+     "season": 1970,
+     "kind": "merger_realignment",
+     "from": {
+      "city": "Minnesota",
+      "name": "Vikings",
+      "abbreviation": "MIN",
+      "league": "NFL",
+      "conference": null,
+      "division": "Central"
+     },
+     "to": {
+      "city": "Minnesota",
+      "name": "Vikings",
+      "abbreviation": "MIN",
+      "league": "NFL",
+      "conference": "NFC",
+      "division": "NFC Central"
+     },
+     "note": "AFL-NFL merger in effect: placed in the NFC Central (1969: NFL Central division).",
+     "sources": [
+      "https://www.profootballhof.com/teams/indianapolis-colts/team-history/",
+      "https://en.wikipedia.org/wiki/1970_NFL_season",
+      "https://www.pro-football-reference.com/years/1969/",
+      "https://www.pro-football-reference.com/years/1970/",
+      "https://www.pro-football-reference.com/teams/min/"
+     ]
+    },
+    {
+     "season": 2002,
+     "kind": "realignment",
+     "from": {
+      "city": "Minnesota",
+      "name": "Vikings",
+      "abbreviation": "MIN",
+      "league": "NFL",
+      "conference": "NFC",
+      "division": "NFC Central"
+     },
+     "to": {
+      "city": "Minnesota",
+      "name": "Vikings",
+      "abbreviation": "MIN",
+      "league": "NFL",
+      "conference": "NFC",
+      "division": "NFC North"
+     },
+     "note": "2002 realignment into eight four-team divisions, approved by the owners May 22, 2001.",
+     "sources": [
+      "https://www.espn.com/nfl/news/2001/0522/1202816.html",
+      "https://www.seahawks.com/news/on-this-date-nfl-owners-vote-for-realignment",
+      "https://www.pro-football-reference.com/years/2001/",
+      "https://www.pro-football-reference.com/years/2002/",
+      "https://www.pro-football-reference.com/teams/min/"
+     ]
+    }
+   ]
+  },
+  {
+   "franchise_id": "washington",
+   "pfr_code": "was",
+   "pfr_page": "https://www.pro-football-reference.com/teams/was/",
+   "identities": [
+    {
+     "first_season": 1970,
+     "last_season": 2019,
+     "city": "Washington",
+     "name": "Redskins",
+     "abbreviation": "WAS",
+     "conference": "NFC",
+     "division": "NFC East"
+    },
+    {
+     "first_season": 2020,
+     "last_season": 2021,
+     "city": "Washington",
+     "name": "Football Team",
+     "abbreviation": "WAS",
+     "conference": "NFC",
+     "division": "NFC East"
+    },
+    {
+     "first_season": 2022,
+     "last_season": 2025,
+     "city": "Washington",
+     "name": "Commanders",
+     "abbreviation": "WAS",
+     "conference": "NFC",
+     "division": "NFC East"
+    }
+   ],
+   "events": [
+    {
+     "season": 1970,
+     "kind": "merger_realignment",
+     "from": {
+      "city": "Washington",
+      "name": "Redskins",
+      "abbreviation": "WAS",
+      "league": "NFL",
+      "conference": null,
+      "division": "Capitol"
+     },
+     "to": {
+      "city": "Washington",
+      "name": "Redskins",
+      "abbreviation": "WAS",
+      "league": "NFL",
+      "conference": "NFC",
+      "division": "NFC East"
+     },
+     "note": "AFL-NFL merger in effect: placed in the NFC East (1969: NFL Capitol division).",
+     "sources": [
+      "https://www.profootballhof.com/teams/indianapolis-colts/team-history/",
+      "https://en.wikipedia.org/wiki/1970_NFL_season",
+      "https://www.pro-football-reference.com/years/1969/",
+      "https://www.pro-football-reference.com/years/1970/",
+      "https://www.pro-football-reference.com/teams/was/"
+     ]
+    },
+    {
+     "season": 2020,
+     "kind": "rename",
+     "from": {
+      "city": "Washington",
+      "name": "Redskins",
+      "abbreviation": "WAS",
+      "league": "NFL",
+      "conference": "NFC",
+      "division": "NFC East"
+     },
+     "to": {
+      "city": "Washington",
+      "name": "Football Team",
+      "abbreviation": "WAS",
+      "league": "NFL",
+      "conference": "NFC",
+      "division": "NFC East"
+     },
+     "note": "After dropping the Redskins name the team played as the Washington Football Team (Boston Globe, July 23, 2020: the name for the 2020 season); NFL.com says it spent two seasons under that name.",
+     "sources": [
+      "https://www.profootballhof.com/teams/washington-commanders/team-history/",
+      "https://www.bostonglobe.com/2020/07/23/sports/this-nfl-season-call-it-washington-football-team",
+      "https://www.nfl.com/news/washington-commanders-new-team-name",
+      "https://www.pro-football-reference.com/years/2019/",
+      "https://www.pro-football-reference.com/years/2020/",
+      "https://www.pro-football-reference.com/teams/was/"
+     ]
+    },
+    {
+     "season": 2022,
+     "kind": "rename",
+     "from": {
+      "city": "Washington",
+      "name": "Football Team",
+      "abbreviation": "WAS",
+      "league": "NFL",
+      "conference": "NFC",
+      "division": "NFC East"
+     },
+     "to": {
+      "city": "Washington",
+      "name": "Commanders",
+      "abbreviation": "WAS",
+      "league": "NFL",
+      "conference": "NFC",
+      "division": "NFC East"
+     },
+     "note": "Renamed the Washington Commanders, unveiled February 2, 2022.",
+     "sources": [
+      "https://www.nfl.com/news/washington-commanders-new-team-name",
+      "https://www.profootballhof.com/teams/washington-commanders/team-history/",
+      "https://www.pro-football-reference.com/years/2021/",
+      "https://www.pro-football-reference.com/years/2022/",
+      "https://www.pro-football-reference.com/teams/was/"
+     ]
+    }
+   ]
+  }
+ ]
+}

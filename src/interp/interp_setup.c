@@ -17,6 +17,12 @@
 extern const uint32_t g_nfl2k5_func_ranges[][2];
 extern const unsigned g_nfl2k5_func_range_count;
 extern ptrdiff_t xbox_GetMemoryOffset(void);
+/* Bumped whenever more functions are marked: the interpreter's per-thread
+ * native callee cache drops what it learned (x86_interp.c). */
+extern volatile long g_interp_dirty_gen;
+
+static uint8_t *g_base;   /* the converted executable, for nfl2k5_interp_code_changed */
+static size_t g_base_len;
 
 static uint32_t rd32le(const uint8_t *p) { return (uint32_t)p[0] | (uint32_t)p[1] << 8 | (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24; }
 
@@ -71,14 +77,75 @@ unsigned nfl2k5_interp_setup(const uint8_t *base, size_t base_len)
             }
         }
         if (dirty) {
+            /* NFL2K5_INTERP_SKIP=lo-hi[,lo-hi...] (hex VAs, diagnostics): functions starting
+             * there keep the retail native code -- for bisecting a pack-only fault. */
+            const char *sk = getenv("NFL2K5_INTERP_SKIP");
+            int skip = 0;
+            while (sk && *sk && !skip) {
+                char *e;
+                uint32_t lo = (uint32_t)strtoul(sk, &e, 16), hi = lo;
+                if (*e == '-') hi = (uint32_t)strtoul(e + 1, &e, 16);
+                skip = start >= lo && start <= hi;
+                sk = *e == ',' ? e + 1 : NULL;
+            }
+            if (skip) continue;
+            if (getenv("NFL2K5_INTERP_LIST")) fprintf(stderr, "[INTERP] dirty %08X-%08X\n", start, end);
             g_interp_dirty_bits[start >> 3] |= (uint8_t)(1u << (start & 7));
             marked++;
         }
     }
     g_interp_active = 1;
+    g_interp_dirty_gen++;
+    /* kept for nfl2k5_interp_code_changed (the caller frees its buffer) */
+    g_base = (uint8_t *)malloc(base_len);
+    if (g_base) { memcpy(g_base, base, base_len); g_base_len = base_len; }
     fprintf(stderr, "[INTERP] %u of %u converted functions differ in this executable and will be interpreted\n",
             marked, g_nfl2k5_func_range_count);
     return marked;
+}
+
+/* Hand-written native overrides (recomp_lookup_manual in src/recomp_manual.c)
+ * replace retail functions the analysis missed or that model hardware. They
+ * have no gate: a pack that rewrites one of those functions (SOFTDRINK v0.6.1
+ * replaced the I/O worker at 0x0004D810 and its jump table) would otherwise
+ * still run the retail C version on the pack's state -- the worker aborted on
+ * a state its table did not hold (0xC0000409 during boot). Nonzero when the
+ * pack's bytes at `va` differ from the converted executable's: the start of
+ * the function (its converted range when there is one, else 32 bytes; the
+ * entry is where packs hook) and so the override must yield to the
+ * interpreter. Results are cached (one 64-bit store per entry, so threads can
+ * share the table without a lock). */
+static uint64_t g_changed_cache[512];
+
+int nfl2k5_interp_code_changed(uint32_t va)
+{
+    const uint8_t *mem;
+    uint32_t n = 32, h = (va * 2654435761u) >> 23;   /* 9 bits */
+    int changed = 0;
+    if (!g_interp_active || !g_base) return 0;
+    for (unsigned probe = 0; probe < 8; probe++) {
+        uint64_t e = g_changed_cache[(h + probe) & 511];
+        if (!e) break;
+        if ((uint32_t)(e >> 32) == va) return (int)(e & 1);
+    }
+    for (unsigned i = 0; i < g_nfl2k5_func_range_count; i++)
+        if (g_nfl2k5_func_ranges[i][0] == va && g_nfl2k5_func_ranges[i][1] > va) {
+            n = g_nfl2k5_func_ranges[i][1] - va;
+            break;
+        }
+    mem = (const uint8_t *)xbox_GetMemoryOffset();
+    for (uint32_t k = 0; k < n; k++) {
+        long off = xbe_offset(g_base, g_base_len, va + k);
+        if (off < 0) { if (k == 0) changed = 1; break; }   /* not in the base image at all */
+        if (g_base[off] != mem[va + k]) { changed = 1; break; }
+    }
+    for (unsigned probe = 0; probe < 8; probe++) {
+        uint64_t *slot = &g_changed_cache[(h + probe) & 511];
+        if (!*slot || (uint32_t)(*slot >> 32) == va) { *slot = (uint64_t)va << 32 | 2u | (uint64_t)changed; break; }
+    }
+    if (changed)
+        fprintf(stderr, "[INTERP] the pack changed 0x%08X, which has a hand-written native version: interpreting the pack's code\n", va);
+    return changed;
 }
 
 /* Diagnostics (NFL2K5_INTERP_FORCE): mark every converted function starting
@@ -101,6 +168,7 @@ unsigned nfl2k5_interp_force(uint32_t lo, uint32_t hi)
         marked++;
     }
     g_interp_active = 1;
+    g_interp_dirty_gen++;
     return marked;
 }
 
@@ -126,9 +194,34 @@ uint32_t nfl2k5_interp_mark_va(uint32_t va)
             if (va >= start && va < end) {
                 g_interp_dirty_bits[start >> 3] |= (uint8_t)(1u << (start & 7));
                 g_interp_active = 1;
+                g_interp_dirty_gen++;
                 found = start;
             }
         }
         return found;
     }
+}
+
+/* Native versions of a known pack's hottest changed functions. Last in this
+ * file: the generated code's header defines the register names as macros. */
+#include "pack_native_gen.inc.c"
+
+/* Fills va/fn with the entries whose guarded guest bytes match the bytes they
+ * were generated from (FNV-1a, tools/gen-pack-natives.py). Returns how many. */
+int nfl2k5_pack_natives_init(uint32_t *va, void (**fn)(void), int max)
+{
+    const uint8_t *mem = (const uint8_t *)xbox_GetMemoryOffset();
+    int n = 0;
+    for (unsigned i = 0; i < sizeof s_pack_native_table / sizeof s_pack_native_table[0] && n < max; i++) {
+        uint32_t h = 2166136261u;
+        for (int g = 0; g < s_pack_native_table[i].nguard; g++)
+            for (uint32_t a = s_pack_native_table[i].guard[g][0]; a < s_pack_native_table[i].guard[g][1]; a++)
+                h = (h ^ mem[a]) * 16777619u;
+        if (h != s_pack_native_table[i].hash) continue;
+        va[n] = s_pack_native_table[i].va;
+        fn[n] = s_pack_native_table[i].fn;
+        n++;
+    }
+    if (n) fprintf(stderr, "[INTERP] %d native pack function(s) in use\n", n);
+    return n;
 }

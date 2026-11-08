@@ -1,0 +1,8 @@
+{
+  "manifest_version": 1,
+  "id": "sandbox",
+  "kind": "feature",
+  "name": "Sandbox",
+  "version": "0.1.0",
+  "description": "Optional Situation-derived scene editor. Controller first."
+}

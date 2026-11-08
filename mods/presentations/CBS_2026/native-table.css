@@ -1,0 +1,25 @@
+/* Exact native table contents in the CBS navy / silver / dot family.
+   No claim is made that this is a reference-measured CBS halftime board. */
+#cbs-native-table {position:absolute;left:320px;bottom:218px;width:1280px;z-index:75;pointer-events:none;opacity:0;transform:translateY(8px);transition:opacity 200ms ease,transform 200ms ease;filter:drop-shadow(0 3px 5px #0009);}
+#cbs-native-table[hidden] {display:none!important;}
+#cbs-native-table.on {opacity:1;transform:none;}
+#cbs-native-table.out {transition-duration:160ms;}
+#cbs-native-table[data-motion="reduced"] {transition:none;transform:none;}
+.cbs-nt-plate {position:relative;padding:0 26px 18px;border-top:1px solid #e1edf68c;border-bottom:3px solid #8fa6bd;background:linear-gradient(110deg,#17395bf8,#101f34f5 70%,#09121ff5);overflow:hidden;color:white;}
+.cbs-nt-plate::before {content:'';position:absolute;inset:0;background-image:radial-gradient(circle,#0005 .8px,transparent 1.1px);background-size:4px 4px;pointer-events:none;}
+.cbs-nt-plate::after {content:'';position:absolute;left:0;top:0;bottom:0;width:4px;background:linear-gradient(#e1ebf2,#8ca5bc);}
+.cbs-nt-title {position:relative;display:flex;align-items:center;justify-content:space-between;gap:26px;min-height:66px;padding:11px 0;border-bottom:1px solid #b6cce44d;font:700 34px/42px "CBS Preview Bold",Arial,sans-serif;}
+.cbs-nt-title span {min-width:0;white-space:pre-wrap;overflow-wrap:anywhere;}
+.cbs-nt-title img {flex:0 0 205px;width:205px;height:30px;object-fit:contain;}
+.cbs-nt-eye {position:absolute;right:30px;bottom:-10px;width:200px;height:120px;opacity:.035;pointer-events:none;}
+#cbs-native-table table {position:relative;table-layout:fixed;width:100%;border-collapse:collapse;font-family:"CBS Preview Bold",Arial,sans-serif;font-variant-numeric:tabular-nums;}
+#cbs-native-table col:first-child {width:52%;}
+#cbs-native-table[data-columns="2"] col:first-child {width:60%;}
+#cbs-native-table th,#cbs-native-table td {padding:10px 18px;white-space:pre-wrap;overflow-wrap:anywhere;vertical-align:middle;text-align:center;}
+#cbs-native-table thead th {height:51px;border-bottom:1px solid #a5bed957;color:#cfdeeb;font-size:26px;line-height:32px;font-weight:700;}
+#cbs-native-table tbody th,#cbs-native-table tbody td {height:50px;border-bottom:1px solid #9cb4ce29;font-weight:700;}
+#cbs-native-table tbody th {font-size:27px;line-height:32px;color:#e2eaf2;}
+#cbs-native-table tbody td {font-size:32px;line-height:34px;color:#fff;}
+#cbs-native-table tr>*:first-child {text-align:left;padding-left:0;}
+#cbs-native-table tr>*+* {border-left:1px solid #a4bbd227;}
+#cbs-native-table tbody tr:last-child>* {border-bottom:0;}

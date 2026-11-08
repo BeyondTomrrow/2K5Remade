@@ -785909,6 +785909,8 @@ loc_00150BFA: ;
 loc_00150C01: ;
     edx = eax;
     ecx = 0xAA2870;
+    /* NFL2K5-GENPATCH:PRESENTATION_POPUP_TEXT_COLOR */
+    { extern uint32_t nfl2k5_presentation_native_text_color(uint32_t color); edx = nfl2k5_presentation_native_text_color(edx); }
     PUSH32(esp, 0x00150C0Du); RECOMP_ABI_CALL(0x00046B50u, sub_00046B50); /* call 0x00046B50 */
 
 loc_00150C0D: ;

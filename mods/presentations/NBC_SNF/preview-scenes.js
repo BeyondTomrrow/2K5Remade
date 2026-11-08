@@ -7,7 +7,7 @@
   document.body.style.background = params.get('background') === 'transparent' ? 'transparent' : '#23382b';
   var sample = { valid:true, gameStatus:'in_progress', quarter:1, gameClock:564, playClock:25, possession:'home', downDistanceText:'1ST & 10',
     context:{scorebugVisible:true,playSelection:false,paused:false},
-    away:{abbreviation:'DAL',city:'Dallas',name:'Cowboys',record:'0-0',score:7,timeouts:3},
+    away:{abbreviation:'DAL',city:'Dallas',name:'Cowboys',record:'0-0',score:21,timeouts:3},
     home:{abbreviation:'TB',city:'Tampa Bay',name:'Buccaneers',record:'0-0',score:14,timeouts:2} };
   var brady = { name:'T. BRADY', fullName:'Tom Brady', position:'QB', kind:0, number:12, portrait:'assets/preview/brady-2004.png',
     completions:32,attempts:50,passingYards:379,passingTouchdowns:4,interceptions:2 };
@@ -55,9 +55,26 @@
     event('PLAYER_FACT',{team:'home',caption:'CAREER',text:'Has a career total of 27 interceptions.',duration:4.35,
       player:{fullName:'Jessie Bates',position:'SS',number:3}});
   }
+  function lastSeason() {
+    /* Exact visible values from the supplied native Kyle Pitts capture.
+       This fixture checks formatting; the live card owns its actual data. */
+    pregameBase('warmup');
+    event('PLAYER_FACT',{team:'home',source:'native',nativeVisible:true,caption:'LAST SEASON',category:'Receiving',duration:4.35,
+      player:{fullName:'Kyle Pitts',position:'TE',number:8},
+      columns:[{label:'Rec',value:'88'},{label:'Yds',value:'928'},{label:'Avg',value:'10.5'},{label:'TD',value:'5'}]});
+  }
   function coinToss() {
     pregameBase('coin_toss');event('COIN_TOSS',{team:'away',source:'native',text:'Chiefs choose heads.'});
     later(2000,function(){event('COIN_TOSS',{team:'away',source:'native',text:'Chiefs will defend the north goal.'});});
+    later(5600,function(){event('COIN_TOSS_HIDE');});
+    later(6100,function(){sample.phase=2;sample.quarter=1;sample.gameStatus='in_progress';sample.context.pregameStage='kickoff';sample.context.scorebugVisible=true;sample.downDistanceText='KICKOFF';state();});
+  }
+  function coinTossChoices() {
+    pregameBase('coin_toss');
+    event('COIN_TOSS',{team:'home',source:'native',nativeVisible:true,text:'Falcons will defend.',
+      choices:[{text:'North',selected:true,button:'Z'},{text:'South',selected:false}]});
+    later(2000,function(){event('COIN_TOSS',{team:'home',source:'native',nativeVisible:true,text:'Falcons will defend.',
+      choices:[{text:'North',selected:false},{text:'South',selected:true,button:'Z'}]});});
     later(5600,function(){event('COIN_TOSS_HIDE');});
     later(6100,function(){sample.phase=2;sample.quarter=1;sample.gameStatus='in_progress';sample.context.pregameStage='kickoff';sample.context.scorebugVisible=true;sample.downDistanceText='KICKOFF';state();});
   }
@@ -85,6 +102,14 @@
     event('TEAM_STATS',{teamData:{abbreviation:'NE',primaryColor:'#002244'},title:'PASS DISTRIBUTION',duration:7,columns:['REC','YDS','TD'],
       rows:[{label:'Troy Brown',values:[4,93,1]},{label:'David Givens',values:[3,46,0]},{label:'Daniel Graham',values:[2,19,0]}]});
   }
+  function periodBreak(ended,kind) {
+    /* Mirror the native bridge's state-first, event-bundle ordering. */
+    sample.quarter=ended+1;sample.gameClock=900;sample.playClock=-1;
+    sample.possession=null;sample.context.scorebugVisible=false;state();
+    event('QUARTER_ENDED',{quarter:ended});
+    if(kind)event(kind);
+    event('QUARTER_STARTED',{quarter:ended+1});
+  }
   if (scene === 'reference') {
     document.body.style.background='#212121'; bug.style.setProperty('--bug-scale','1');bug.style.setProperty('--bug-x','413px');bug.style.setProperty('--bug-y','90px');
     // Inspection overrides are confined to the reference fixture. They
@@ -100,7 +125,7 @@
   }
   if (scene === 'away-ball') { sample.possession='away';sample.downDistanceText='4TH & INCHES'; }
   if (scene === 'intro') introSetup();
-  if (scene === 'career-fact' || scene === 'coin-toss') pregameBase('crowd');
+  if (scene === 'career-fact' || scene === 'last-season' || scene === 'coin-toss' || scene === 'coin-toss-choices') pregameBase('crowd');
   state();
   later(600,function () {
     switch(scene) {
@@ -113,7 +138,9 @@
       case 'player-feature': feature(); break;
       case 'intro': intro(); break;
       case 'career-fact': careerFact(); break;
+      case 'last-season': lastSeason(); break;
       case 'coin-toss': coinToss(); break;
+      case 'coin-toss-choices': coinTossChoices(); break;
       case 'player-profile': profile(false); break;
       case 'profile-receiver': profile(true); break;
       case 'watermark': break;
@@ -124,10 +151,12 @@
       case 'extra-point': score('EXTRA_POINT',1); break;
       case 'flag': event('PENALTY'); break;
       case 'timeout': event('TIMEOUT'); break;
-      case 'quarter': event('QUARTER_ENDED',{quarter:1}); break;
-      case 'halftime': event('HALFTIME'); break;
-      case 'final': event('GAME_ENDED'); break;
+      case 'quarter': periodBreak(1); break;
+      case 'halftime': periodBreak(2,'HALFTIME'); break;
+      case 'overtime': periodBreak(4,'OVERTIME'); break;
+      case 'final': sample.quarter=4;sample.gameClock=0;sample.gameStatus='final';sample.context.scorebugVisible=false;state();event('GAME_ENDED');break;
       case 'replay-wipe': event('REPLAY_STARTED'); break;
+      case 'replay-return': event('REPLAY_ENDED'); break;
       case 'showcase':
         qb(); later(6500,receiver); later(13000,feature); later(21000,lineup);
         later(30000,function(){score('TOUCHDOWN',6);});later(41200,function(){event('PENALTY');});

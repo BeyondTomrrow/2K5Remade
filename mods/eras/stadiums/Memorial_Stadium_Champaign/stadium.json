@@ -1,0 +1,13 @@
+{
+  "name": "MEMORIAL STADIUM CHAMPAIGN",
+  "display": "Memorial Stadium",
+  "location": "Champaign, IL",
+  "code": "s73",
+  "clone": "Chicago Field",
+  "host": "Royal Arena",
+  "capacity": 70904,
+  "indoor": 0,
+  "grass": 1,
+  "nfl": "Bears 2002",
+  "source": "NCAA Football 07 Memorial Stadium, Champaign (STAD.SRES 48, ILLINO); tools/eras/stadiums/ncaa_stadiums.py"
+}

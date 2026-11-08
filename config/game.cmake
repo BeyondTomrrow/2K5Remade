@@ -7,6 +7,15 @@ set(NFL2K5_LOCALS_DIR "${PROJECT_SOURCE_DIR}/build/gen-locals" CACHE PATH "Regis
 # code, in which every function keeps the guest registers it uses in locals
 # instead of thread-local globals. tools/build.ps1 writes it.
 option(NFL2K5_REG_LOCALS "Compile the generated code with guest registers in locals" ON)
+# Every release build. A clean checkout has neither and used to build anyway: mod
+# packs then ran the retail code (Android test25-29), and the game the slower
+# generated code. NFL2K5_REG_LOCALS=OFF is the mod-pack build's own choice.
+if(NOT EXISTS "${PROJECT_SOURCE_DIR}/analysis/disasm/functions.json")
+  message(FATAL_ERROR "analysis/disasm/functions.json is missing: mod packs would run the wrong code. Copy analysis/ into this tree.")
+endif()
+if(NFL2K5_REG_LOCALS AND NOT EXISTS "${NFL2K5_LOCALS_DIR}/recomp_0000.c")
+  message(FATAL_ERROR "${NFL2K5_LOCALS_DIR} is missing: run python tools/gen-reg-locals.py first.")
+endif()
 if(NFL2K5_REG_LOCALS AND EXISTS "${NFL2K5_LOCALS_DIR}/recomp_0000.c")
   file(GLOB NFL2K5_GENERATED CONFIGURE_DEPENDS "${NFL2K5_LOCALS_DIR}/*.c")
 else()
@@ -16,7 +25,7 @@ if(NOT NFL2K5_GENERATED)
   message(FATAL_ERROR "Run tools/analyze.ps1 -Recompile before building the game.")
 endif()
 if(WIN32)
-add_executable(NFL2K5 WIN32 src/main.c src/recomp_manual.c src/nfl2k5_input_hle.c src/nfl2k5_controls.c src/nfl2k5_controller_setup.c src/nfl2k5_controller_art.cpp src/nfl2k5_texture_packs.cpp src/nfl2k5_teams.c src/nfl2k5_team_files.c src/nfl2k5_video_menu.c src/nfl2k5_mod_packs.c src/nfl2k5_presentation.cpp src/nfl2k5_local_music.cpp src/nfl2k5_save_library.cpp src/nfl2k5_discord.cpp src/interp/x86_interp.c src/interp/interp_setup.c "${CMAKE_BINARY_DIR}/generated/nfl2k5_func_ranges.c" external/xemu-src/util/miniz/miniz.c src/nfl2k5_wma_encode.cpp src/presentation/webview2_host.cpp src/presentation/portraits.cpp src/nfl2k5.rc src/nfl2k5.manifest ${NFL2K5_GENERATED})
+add_executable(NFL2K5 WIN32 src/main.c src/recomp_manual.c src/nfl2k5_input_hle.c src/nfl2k5_controls.c src/nfl2k5_controller_setup.c src/nfl2k5_controller_art.cpp src/nfl2k5_texture_packs.cpp src/nfl2k5_teams.c src/nfl2k5_team_files.c src/nfl2k5_eras_capture.c src/nfl2k5_eras.c src/nfl2k5_eras_menu.c src/nfl2k5_eras_launch.c src/nfl2k5_eras_office.c src/nfl2k5_eras_draftshow.c src/nfl2k5_eras_playoffs.c src/nfl2k5_eras_awards.c src/nfl2k5_eras_rollover.c src/nfl2k5_eras_depth.c src/nfl2k5_eras_sheets.c src/nfl2k5_eras_draft.c src/nfl2k5_eras_draft_sheets.c src/nfl2k5_eras_draft_room.c src/nfl2k5_eras_module.c src/nfl2k5_coach_mode.c src/nfl2k5_broadcast_cam.c src/nfl2k5_ballscan.c src/nfl2k5_moment_audio.c src/nfl2k5_plugin_host.c src/nfl2k5_json.c src/nfl2k5_walk_diag.c src/nfl2k5_video_menu.c src/nfl2k5_exit_menu.c src/nfl2k5_mycareer_home.c src/nfl2k5_mycareer_models.c src/nfl2k5_mycareer_hud.c src/nfl2k5_mycareer_crib.cpp src/nfl2k5_mod_packs.c src/nfl2k5_pack_install.c src/nfl2k5_presentation.cpp src/nfl2k5_local_music.cpp src/nfl2k5_save_library.cpp src/nfl2k5_discord.cpp src/interp/x86_interp.c src/interp/interp_setup.c "${CMAKE_BINARY_DIR}/generated/nfl2k5_func_ranges.c" external/xemu-src/util/miniz/miniz.c src/nfl2k5_wma_encode.cpp src/presentation/webview2_host.cpp src/presentation/portraits.cpp src/nfl2k5.rc src/nfl2k5.manifest ${NFL2K5_GENERATED})
 target_include_directories(NFL2K5 PRIVATE "${NFL2K5_GEN_DIR}" src external/xemu-src/util/miniz)
 # HTML presentation host (src/presentation): WebView2 SDK headers and static
 # loader. The engine itself is the WebView2 runtime that ships with Windows.
@@ -36,27 +45,44 @@ else()
   # ---- POSIX (Linux) -------------------------------------------------------
   # Same game sources minus the Windows-only presentation renderer
   # (Direct2D/DirectWrite/Media Foundation/XAudio2), which is replaced by
-  # no-op stubs until it is ported. src/platform/posix supplies <windows.h>.
+  # no-op stubs on Linux until it is ported (Android compiles it, see below).
+  # src/platform/posix supplies <windows.h>.
   set(NFL2K5_FUNC_RANGES "${CMAKE_BINARY_DIR}/generated/nfl2k5_func_ranges.c")
-  if(EXISTS "${PROJECT_SOURCE_DIR}/analysis/disasm/functions.json")
-    find_package(Python3 REQUIRED COMPONENTS Interpreter)
-    execute_process(COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tools/gen-func-ranges.py"
-                            "${PROJECT_SOURCE_DIR}/analysis" "${NFL2K5_FUNC_RANGES}"
-                    COMMAND_ERROR_IS_FATAL ANY)
-  elseif(NOT EXISTS "${NFL2K5_FUNC_RANGES}")
-    message(WARNING "analysis/ not found: mod-pack interpreter ranges are empty (retail runs unaffected)")
-    file(WRITE "${NFL2K5_FUNC_RANGES}" "#include <stdint.h>\nconst uint32_t g_nfl2k5_func_ranges[1][2] = {{0, 0}};\nconst unsigned g_nfl2k5_func_range_count = 0;\n")
-  endif()
+  find_package(Python3 REQUIRED COMPONENTS Interpreter)
+  execute_process(COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tools/gen-func-ranges.py"
+                          "${PROJECT_SOURCE_DIR}/analysis" "${NFL2K5_FUNC_RANGES}"
+                  COMMAND_ERROR_IS_FATAL ANY)
   find_package(OpenSSL REQUIRED)
-  add_executable(NFL2K5 src/main.c src/recomp_manual.c src/nfl2k5_input_hle.c src/nfl2k5_controls.c
+  if(ANDROID)
+    # SDL's Java activity (android/app) loads the game as libmain.so.
+    macro(nfl2k5_add_target name)
+      add_library(${name} SHARED ${ARGN})
+      set_target_properties(${name} PROPERTIES OUTPUT_NAME main)
+    endmacro()
+  else()
+    macro(nfl2k5_add_target name)
+      add_executable(${name} ${ARGN})
+    endmacro()
+  endif()
+  nfl2k5_add_target(NFL2K5 src/main.c src/recomp_manual.c src/nfl2k5_input_hle.c src/nfl2k5_controls.c
     src/nfl2k5_controller_setup.c src/nfl2k5_controller_art.cpp src/nfl2k5_texture_packs.cpp src/nfl2k5_teams.c
-    src/nfl2k5_team_files.c src/nfl2k5_video_menu.c src/nfl2k5_mod_packs.c src/nfl2k5_local_music.cpp
+    src/nfl2k5_team_files.c src/nfl2k5_video_menu.c src/nfl2k5_mod_packs.c src/nfl2k5_pack_install.c src/nfl2k5_local_music.cpp
     src/nfl2k5_save_library.cpp src/nfl2k5_discord.cpp src/interp/x86_interp.c src/interp/interp_setup.c
     "${NFL2K5_FUNC_RANGES}" external/xemu-src/util/miniz/miniz.c src/nfl2k5_wma_encode.cpp
     src/presentation/webview2_host.cpp src/presentation/portraits.cpp
-    src/platform/posix/win32_game_compat.c src/platform/posix/stb_impl.c src/platform/posix/presentation_stub.cpp
+    src/platform/posix/win32_game_compat.c src/platform/posix/stb_impl.c
+    # features merged from the pre-SDL3 build (2026-10-29)
+    src/nfl2k5_eras_capture.c src/nfl2k5_eras.c src/nfl2k5_eras_menu.c src/nfl2k5_eras_launch.c src/nfl2k5_eras_office.c src/nfl2k5_eras_draftshow.c src/nfl2k5_eras_playoffs.c src/nfl2k5_eras_awards.c src/nfl2k5_eras_rollover.c src/nfl2k5_eras_depth.c src/nfl2k5_eras_sheets.c src/nfl2k5_eras_draft.c src/nfl2k5_eras_draft_sheets.c src/nfl2k5_eras_draft_room.c src/nfl2k5_eras_module.c src/nfl2k5_coach_mode.c src/nfl2k5_broadcast_cam.c src/nfl2k5_ballscan.c src/nfl2k5_moment_audio.c src/nfl2k5_plugin_host.c src/nfl2k5_json.c src/nfl2k5_walk_diag.c src/nfl2k5_exit_menu.c src/nfl2k5_mycareer_home.c src/nfl2k5_mycareer_models.c src/nfl2k5_mycareer_hud.c src/nfl2k5_sandbox.cpp src/nfl2k5_sandbox_menu.c src/nfl2k5_sandbox_world.c src/nfl2k5_sandbox_actors.c src/nfl2k5_sandbox_pose.c src/nfl2k5_sandbox_ui.cpp
     ${NFL2K5_GENERATED})
   target_include_directories(NFL2K5 PRIVATE src/platform/posix "${NFL2K5_GEN_DIR}" src external/xemu-src/util/miniz)
+  # Broadcast presentation: the real one on Android (HTML packages through
+  # the Android PresentationHost, NDK media decode, SDL3 playback; linked
+  # with mediandk below), the no-op stand-in on Linux until it is ported.
+  if(ANDROID)
+    target_sources(NFL2K5 PRIVATE src/nfl2k5_presentation.cpp)
+  else()
+    target_sources(NFL2K5 PRIVATE src/platform/posix/presentation_stub.cpp)
+  endif()
 endif()
 # The XBE the generated code came from (empty: retail). A pack build runs that
 # XBE and finds its installed pack by this hash (src/main.c).
@@ -82,9 +108,15 @@ option(NFL2K5_FORCE_UNBLOCK_TASK42200 "EXPERIMENTAL: force the async task submit
 option(NFL2K5_FORCE_UNBLOCK_STATE9_READY "EXPERIMENTAL: force the frontend state-9 archive/font readiness bit to appear set once its tick-based wait times out (see PROJECT_STATUS.md, 2026-09-21) -- the actual disc-read submission (sub_000439B8) is never reached by anything, root cause not found this session; this only lets the state machine proceed, the underlying data still never loads" ${_nfl2k5_unblock_default})
 option(NFL2K5_FORCE_UNBLOCK_33660_DRAIN "EXPERIMENTAL: force sub_00033660's MEM32(esi+8) drain-wait (called from inside the GPU wait, sub_00028DE0) to succeed after 200 retries (see PROJECT_STATUS.md, 2026-09-22) -- live cdb attaches show this field frozen at 1 across tens of thousands of retries; the real clearing site was not found this session" ${_nfl2k5_unblock_default})
 option(NFL2K5_FORCE_UNBLOCK_NETPOLL "EXPERIMENTAL: force sub_00045E60's network hardware/socket readiness poll (sub_00484EAB/B6, called from XNetStartup) to a nonzero status after 50 retries (see PROJECT_STATUS.md, 2026-09-22) -- there is no real network hardware behind this poll in this recompiler, so it never resolves on its own; a new, consistently-reproducing stall discovered after updating the xboxrecomp toolchain" ${_nfl2k5_unblock_default})
+option(NFL2K5_EMBED_SOURCE_ROOT "Compile the source tree's path in as the fallback game folder (developer builds); OFF for releases" ON)
+if(NFL2K5_EMBED_SOURCE_ROOT)
+  set(_nfl2k5_root_define "${PROJECT_SOURCE_DIR}")
+else()
+  set(_nfl2k5_root_define ".")
+endif()
 target_compile_definitions(NFL2K5 PRIVATE
   $<$<BOOL:${WIN32}>:WIN32_LEAN_AND_MEAN> $<$<BOOL:${WIN32}>:NOMINMAX> $<$<BOOL:${WIN32}>:_CRT_SECURE_NO_WARNINGS>
-  NFL2K5_PROJECT_ROOT="${PROJECT_SOURCE_DIR}"
+  NFL2K5_PROJECT_ROOT="${_nfl2k5_root_define}"
   RECOMP_ICALL_FEEDBACK
   $<$<BOOL:${NFL2K5_ABI_CHECK}>:RECOMP_ABI_CHECK>
   $<$<BOOL:${NFL2K5_COVERAGE}>:RECOMP_COVERAGE>
@@ -99,13 +131,19 @@ target_compile_definitions(NFL2K5 PRIVATE
 option(NFL2K5_OPTIMIZE "Optimize generated code after startup is working" OFF)
 if(WIN32)
 target_link_libraries(NFL2K5 PRIVATE xboxrecomp d3d11 dxgi dxguid xinput winmm dbghelp bcrypt)
+target_sources(NFL2K5 PRIVATE src/nfl2k5_sandbox.cpp src/nfl2k5_sandbox_menu.c
+  src/nfl2k5_sandbox_world.c src/nfl2k5_sandbox_actors.c src/nfl2k5_sandbox_pose.c src/nfl2k5_sandbox_ui.cpp)
 target_compile_options(NFL2K5 PRIVATE /bigobj /Zi /FS)
 if(NOT NFL2K5_OPTIMIZE)
   target_compile_options(NFL2K5 PRIVATE /Od)
 endif()
-target_link_options(NFL2K5 PRIVATE /DEBUG /LARGEADDRESSAWARE /STACK:16777216)
+target_link_options(NFL2K5 PRIVATE /DEBUG /LARGEADDRESSAWARE /STACK:16777216 /PDBALTPATH:%_PDB%)   # PDBALTPATH: only the .pdb file name in the exe, not the build path
 else()
   target_link_libraries(NFL2K5 PRIVATE xboxrecomp OpenSSL::Crypto)
+  if(ANDROID)
+    target_link_libraries(NFL2K5 PRIVATE log android mediandk)
+    target_sources(NFL2K5 PRIVATE src/platform/android/xiso_extract.c src/platform/android/touch_pad.c src/platform/android/android_settings.c)   # unpacks the player's disc image
+  endif()
   # Optimisation level for the game target (recompiled code included).
   # GCC spends its time parsing the 220 MB of generated C, not optimising
   # it: the largest file (30 MB) takes ~30 s and ~2 GB of RAM at -O1 and -O2

@@ -20,20 +20,45 @@
  *
  * Test switches: NFL2K5_PRES_TEST=1 draws the bug with made-up state
  * everywhere; NFL2K5_PRES_EVENT=<animation> replays that animation every few
- * seconds; NFL2K5_PRES_LOG=1 logs the raw match state. */
+ * seconds; NFL2K5_PRES_LOG=1 logs the raw match state.
+ *
+ * Android (2026-10-30): HTML packages only (the JSON-layout renderer is
+ * Direct2D and stays Windows-only; those packages are not listed). Decoding
+ * is the NDK media API, playback is SDL3 audio behind a small XAudio2-shaped
+ * shim (below), so the music/voice/commentary code is the same on both. The
+ * pregame open video is not played there. */
+#ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>
 #include <d2d1.h>
 #include <dwrite.h>
 #include <wincodec.h>
+#else
+#include <windows.h>          /* src/platform/posix compat layer */
+#endif
 #include "nfl2k5_broadcast.h"
 #include "nfl2k5_presentation.h"
+#include "nfl2k5_sandbox.h"
+#include "nfl2k5_sandbox_ui.h"
 #include "presentation/presentation_host.h"
+#ifdef _WIN32
 #include <mfapi.h>
 #include <mfidl.h>
 #include <mfreadwrite.h>
 #include <xaudio2.h>
+#else
+#include <SDL3/SDL.h>
+#include <sys/uio.h>
+#include <unistd.h>
+#if defined(__ANDROID__)
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <media/NdkMediaCodec.h>
+#include <media/NdkMediaExtractor.h>
+#include <media/NdkMediaFormat.h>
+#endif
+#endif
 #include <algorithm>
 #include <atomic>
 #include <cmath>
@@ -47,6 +72,7 @@
 #include <thread>
 #include <vector>
 
+#ifdef _WIN32
 #pragma comment(lib, "d2d1.lib")
 #pragma comment(lib, "dwrite.lib")
 #pragma comment(lib, "windowscodecs.lib")
@@ -55,11 +81,158 @@
 #pragma comment(lib, "mfuuid.lib")
 #pragma comment(lib, "xaudio2.lib")
 #pragma comment(lib, "ole32.lib")
+#else
+/* ======================================================================
+ * Non-Windows stand-ins
+ *
+ * D2D1_COLOR_F is the colour type of team.json/presentation.json values
+ * (the HTML path serialises it), so it stays without Direct2D.
+ *
+ * The XAudio2 subset this file uses (one engine, a mastering voice for the
+ * mute switch, source voices playing one 48 kHz stereo 16-bit buffer, once
+ * or looped) on SDL3: each source voice is an SDL audio stream on its own
+ * logical device, fed from the buffer by SDL's get-callback, so position,
+ * loop and end of buffer behave like XAudio2's. COM init is a no-op.
+ * ====================================================================== */
+struct D2D1_COLOR_F { float r, g, b, a; };
+namespace D2D1 {
+static inline D2D1_COLOR_F ColorF(float r, float g, float b, float a = 1.0f) { return D2D1_COLOR_F{ r, g, b, a }; }
+}
+
+typedef uint32_t UINT32;
+typedef uint64_t UINT64;
+#define COINIT_MULTITHREADED 0
+static inline HRESULT CoInitializeEx(void *, DWORD) { return S_OK; }
+static inline void CoUninitialize() {}
+
+#define XAUDIO2_DEFAULT_PROCESSOR     0x1u
+#define XAUDIO2_END_OF_STREAM         0x40u
+#define XAUDIO2_LOOP_INFINITE         255u
+#define XAUDIO2_VOICE_NOSAMPLESPLAYED 0x0100u
+struct XAUDIO2_BUFFER {
+    UINT32 Flags, AudioBytes;
+    const BYTE *pAudioData;
+    UINT32 PlayBegin, PlayLength, LoopBegin, LoopLength, LoopCount;
+    void *pContext;
+};
+struct XAUDIO2_VOICE_STATE {
+    void *pCurrentBufferContext;
+    UINT32 BuffersQueued;
+    UINT64 SamplesPlayed;
+};
+
+struct IXAudio2MasteringVoice {
+    std::atomic<float> vol{ 1.0f };
+    HRESULT SetVolume(float v) { vol = v; return S_OK; }
+};
+
+struct IXAudio2SourceVoice {
+    SDL_AudioStream *stream = nullptr;
+    IXAudio2MasteringVoice *master = nullptr;
+    /* Guarded by the stream's lock (SDL runs the callback holding it). */
+    const uint8_t *data = nullptr;
+    size_t bytes = 0, pos = 0;
+    bool loop = false, ended = false;
+    uint64_t fed = 0;                   /* bytes handed to SDL since the buffer was submitted */
+    float vol = 1.0f;
+
+    static void SDLCALL feed(void *user, SDL_AudioStream *s, int additional, int)
+    {
+        IXAudio2SourceVoice *v = (IXAudio2SourceVoice *)user;
+        while (additional > 0 && v->data && v->bytes) {
+            if (v->pos >= v->bytes) {
+                if (!v->loop) break;
+                v->pos = 0;
+            }
+            int n = (int)std::min<size_t>((size_t)additional, v->bytes - v->pos);
+            SDL_PutAudioStreamData(s, v->data + v->pos, n);
+            v->pos += (size_t)n; v->fed += (uint64_t)n; additional -= n;
+        }
+        if (v->data && !v->loop && v->pos >= v->bytes && !v->ended) {
+            v->ended = true;
+            SDL_FlushAudioStream(s);    /* the resampler's held-back tail plays out, so the queue empties */
+        }
+    }
+    HRESULT SubmitSourceBuffer(const XAUDIO2_BUFFER *b)
+    {
+        SDL_LockAudioStream(stream);
+        data = b->pAudioData; bytes = b->AudioBytes & ~3u; pos = 0; fed = 0;
+        loop = b->LoopCount == XAUDIO2_LOOP_INFINITE;
+        ended = false;
+        SDL_UnlockAudioStream(stream);
+        return S_OK;
+    }
+    HRESULT SetVolume(float v)
+    {
+        vol = v;
+        SDL_SetAudioStreamGain(stream, v * (master ? master->vol.load() : 1.0f));
+        return S_OK;
+    }
+    HRESULT Start(UINT32 = 0) { SetVolume(vol); SDL_ResumeAudioStreamDevice(stream); return S_OK; }
+    HRESULT Stop(UINT32 = 0) { SDL_PauseAudioStreamDevice(stream); return S_OK; }
+    HRESULT FlushSourceBuffers()
+    {
+        SDL_LockAudioStream(stream);
+        data = nullptr; bytes = pos = 0; fed = 0; ended = false;
+        SDL_ClearAudioStream(stream);
+        SDL_UnlockAudioStream(stream);
+        return S_OK;
+    }
+    /* BuffersQueued drops to 0 once the buffer ran out and SDL has played what
+     * it was given; SamplesPlayed is what was fed minus what still waits. */
+    void GetState(XAUDIO2_VOICE_STATE *vs, UINT32 = 0)
+    {
+        SDL_LockAudioStream(stream);
+        int queued = SDL_GetAudioStreamQueued(stream);
+        if (queued < 0) queued = 0;
+        vs->pCurrentBufferContext = nullptr;
+        vs->BuffersQueued = data && !(ended && queued == 0) ? 1u : 0u;
+        vs->SamplesPlayed = (fed > (uint64_t)queued ? fed - (uint64_t)queued : 0) / 4u;
+        SDL_UnlockAudioStream(stream);
+    }
+    void DestroyVoice()
+    {
+        if (stream) SDL_DestroyAudioStream(stream);
+        delete this;
+    }
+};
+
+struct IXAudio2 {
+    IXAudio2MasteringVoice master;
+    HRESULT CreateMasteringVoice(IXAudio2MasteringVoice **out) { *out = &master; return S_OK; }
+    HRESULT CreateSourceVoice(IXAudio2SourceVoice **out, const WAVEFORMATEX *wf)
+    {
+        *out = nullptr;
+        if (!SDL_WasInit(SDL_INIT_AUDIO) && !SDL_InitSubSystem(SDL_INIT_AUDIO)) return E_FAIL;
+        SDL_AudioSpec spec;
+        SDL_zero(spec);
+        spec.format = SDL_AUDIO_S16;
+        spec.channels = wf->nChannels;
+        spec.freq = (int)wf->nSamplesPerSec;
+        IXAudio2SourceVoice *v = new IXAudio2SourceVoice;
+        v->master = &master;
+        v->stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, IXAudio2SourceVoice::feed, v);
+        if (!v->stream) {
+            fprintf(stderr, "[PRES] audio: SDL_OpenAudioDeviceStream failed: %s\n", SDL_GetError());
+            delete v;
+            return E_FAIL;
+        }
+        *out = v;                       /* opened paused, like a voice before Start */
+        return S_OK;
+    }
+};
+
+static inline HRESULT XAudio2Create(IXAudio2 **out, UINT32, UINT32)
+{
+    *out = new IXAudio2;
+    return S_OK;
+}
+#endif
 
 extern "C" {
 extern ptrdiff_t g_xbox_mem_offset;
 typedef struct { int bb_w, bb_h; float game_x, game_y, game_w, game_h; } XboxHudFrame;
-typedef struct { const void *pixels; int w, h, stride, x, y, changed, dw, dh; void *shared; } XboxHudImage;
+typedef struct { const void *pixels; int w, h, stride, x, y, changed, dw, dh; void *shared; int dirty_y0, dirty_y1; const unsigned char *dirty_rows; } XboxHudImage;
 /* Set by the presenter when it cannot open a shared HUD texture: use pixels. */
 extern "C" int xbox_hud_shared_failed;
 typedef int (*XboxHudCallback)(const XboxHudFrame *f, XboxHudImage *img);
@@ -69,6 +242,7 @@ void xbox_AudioMuteGameMusic(int mute);
 void xbox_AudioSetCommentaryGain(float gain);
 void nfl2k5_input_press_a(unsigned ms);
 float xbox_AudioGameLevel(void);
+void xbox_PresentRecord(int seconds);
 void xbox_AudioSetCaptureMix(void (*mix)(int16_t *stereo, int frames));
 }
 
@@ -215,7 +389,7 @@ static bool load_json(const std::string &path, JVal &out)
     if (text.size() >= 3 && (unsigned char)text[0] == 0xEF && (unsigned char)text[1] == 0xBB && (unsigned char)text[2] == 0xBF) {
         text.erase(0, 3);
     } else if (text.size() >= 2 && (unsigned char)text[0] == 0xFF && (unsigned char)text[1] == 0xFE) {
-        const wchar_t *w = (const wchar_t *)(text.data() + 2);
+        const WCHAR *w = (const WCHAR *)(text.data() + 2);   /* UTF-16 units (wchar_t is 4 bytes off Windows) */
         int wn = (int)((text.size() - 2) / 2);
         int n = WideCharToMultiByte(CP_UTF8, 0, w, wn, nullptr, 0, nullptr, nullptr);
         std::string u8((size_t)(n > 0 ? n : 0), '\0');
@@ -232,6 +406,7 @@ static bool load_json(const std::string &path, JVal &out)
     return true;
 }
 
+#ifdef _WIN32
 static std::wstring widen(const std::string &s)
 {
     int n = MultiByteToWideChar(CP_UTF8, 0, s.c_str(), (int)s.size(), nullptr, 0);
@@ -245,6 +420,14 @@ static bool file_exists(const std::string &p)
     DWORD a = GetFileAttributesW(widen(p).c_str());
     return a != INVALID_FILE_ATTRIBUTES && !(a & FILE_ATTRIBUTE_DIRECTORY);
 }
+#else
+/* UTF-8 paths throughout; the compat layer turns '\\' into '/'. */
+static bool file_exists(const std::string &p)
+{
+    DWORD a = GetFileAttributesA(p.c_str());
+    return a != INVALID_FILE_ATTRIBUTES && !(a & FILE_ATTRIBUTE_DIRECTORY);
+}
+#endif
 
 static std::string upper(std::string s) { for (auto &c : s) c = (char)toupper((unsigned char)c); return s; }
 
@@ -275,12 +458,26 @@ static bool guest_va_ok(uint32_t va)
 static bool gread(uint32_t va, void *out, size_t n)
 {
     if (!guest_va_ok(va)) return false;
+#ifndef _WIN32
+    /* No structured exceptions here. Guest RAM (64 MB) and the contiguous
+     * window at 0x80000000 are always backed: a plain copy. Anything else
+     * goes through process_vm_readv, which fails on an unmapped page
+     * instead of faulting. */
+    {
+        uint32_t low = va & 0x7FFFFFFFu;
+        void *host = (void *)((uintptr_t)va + g_xbox_mem_offset);
+        if ((uint64_t)low + n <= 0x04000000u) { memcpy(out, host, n); return true; }
+        struct iovec l = { out, n }, r = { host, n };
+        return process_vm_readv(getpid(), &l, 1, &r, 1, 0) == (ssize_t)n;
+    }
+#else
     __try {
         memcpy(out, (const void *)((uintptr_t)va + g_xbox_mem_offset), n);
         return true;
     } __except (EXCEPTION_EXECUTE_HANDLER) {
         return false;
     }
+#endif
 }
 
 static uint32_t rd32(uint32_t va) { uint32_t v = 0; gread(va, &v, 4); return v; }
@@ -290,6 +487,7 @@ struct TeamState { int score = 0, timeouts = 0; std::string abbr; };
 struct GameState {
     bool valid = false;
     int period = 0, phase = -1, down = 0, poss = 0, play_clock = -1;   /* poss: 0 none, 1 away, 2 home */
+    int flow_state = -1; /* E602B8: actual title flow, 0x0A is game over */
     float clock = 0, period_len = 0, ball = 0, line = 0;
     TeamState t[2];                                     /* 0 away, 1 home */
 };
@@ -311,6 +509,8 @@ static std::string read_team_code(uint32_t va)
     return out;
 }
 
+static void eras_side_abbr(int side, std::string &abbr);   /* M9, below the team lookup */
+
 static bool read_state(GameState &g)
 {
     g = GameState();
@@ -320,6 +520,8 @@ static bool read_state(GameState &g)
     g.period = (int)rd32(0x00E602C4u);
     g.period_len = rdf(0x00E602B0u);
     g.phase = (int)rd32(0x00E602B4u);
+    uint32_t flow = rd32(0x00E602B8u);
+    if (flow < 26u) g.flow_state = (int)flow;
     /* Period 0 is the pregame show: the match is loaded, the clock set. */
     if (g.period < 0 || g.period > 12 || !(g.clock >= 0.0f && g.clock < 4000.0f)) return false;
     for (int s = 0; s < 2; s++) {
@@ -328,6 +530,7 @@ static bool read_state(GameState &g)
         g.t[s].score = (int)rd32(sc);
         g.t[s].timeouts = (int)rd32(sc + 4);
         g.t[s].abbr = read_team_code(k_playbook_name[s]);
+        eras_side_abbr(s, g.t[s].abbr);     /* M9: an Eras game names its staged teams, never the playbook's 2004 club */
         if (g.t[s].score < 0 || g.t[s].score > 250 || g.t[s].timeouts < 0 || g.t[s].timeouts > 9) return false;
     }
     uint32_t p = rd32(0x00E60280u);
@@ -347,6 +550,19 @@ static bool read_state(GameState &g)
         g.play_clock = (int)std::ceil(play_seconds);
     g.valid = true;
     return true;
+}
+
+/* The automatic-replay screen owns a stopped match clock. Raw AFA078 can
+ * survive a screen pop, so it is insufficient evidence on its own.
+ * sub_6E390 increments the top index BEFORE storing the descriptor. */
+static bool native_replay_active(const GameState &g)
+{
+    if (!g.valid) return false;
+    uint32_t phase = rd32(0x00AFA078u), count = rd32(0x00A84C18u);
+    if (phase < 1 || phase > 5 || !count || count >= 32) return false;
+    for (uint32_t i = 0; i <= count; ++i)
+        if (rd32(0x00A84B18u + i * 8u) == 0x004E3F38u) return true;
+    return false;
 }
 
 /* ======================================================================
@@ -371,6 +587,7 @@ static std::map<std::string, TeamInfo> s_teams;   /* by upper-case abbreviation 
 
 static void load_teams()
 {
+#ifdef _WIN32
     WIN32_FIND_DATAW fd;
     HANDLE h = FindFirstFileW(L"mods\\teams\\*", &fd);
     if (h == INVALID_HANDLE_VALUE) return;
@@ -378,6 +595,14 @@ static void load_teams()
         if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) || fd.cFileName[0] == L'.') continue;
         char dir8[MAX_PATH];
         WideCharToMultiByte(CP_UTF8, 0, fd.cFileName, -1, dir8, sizeof dir8, nullptr, nullptr);
+#else
+    WIN32_FIND_DATAA fd;
+    HANDLE h = FindFirstFileA("mods/teams/*", &fd);
+    if (h == INVALID_HANDLE_VALUE) return;
+    do {
+        if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) || fd.cFileName[0] == '.') continue;
+        const char *dir8 = fd.cFileName;
+#endif
         std::string dir = std::string("mods/teams/") + dir8;
         JVal j;
         if (!load_json(dir + "/team.json", j)) continue;
@@ -398,13 +623,125 @@ static void load_teams()
         s_teams[upper(dir8)] = t;
         if (const JVal *al = j.get("aliases"))
             for (auto &a : al->a) if (a.t == JVal::Str) s_teams[upper(a.s)] = t;
+#ifdef _WIN32
     } while (FindNextFileW(h, &fd));
+#else
+    } while (FindNextFileA(h, &fd));
+#endif
     FindClose(h);
     fprintf(stderr, "[PRES] %zu team entries from mods/teams\n", s_teams.size());
 }
 
+/* ======================================================================
+ * My NFL Eras identity (M9, docs/eras/results/M9-era-looks.md)
+ *
+ * While an Eras game is launched (src/nfl2k5_eras_launch.c calls
+ * nfl2k5_presentation_eras_begin / _end), each side's team comes from
+ *   teams\<season>\<eras id>\team.json (+ logos\scorebug.png) of the Eras roots
+ * keyed by the staged Eras team of that side, never by the 2004 abbreviation
+ * the playbook name carries (BAL is the Colts there, HOU the Oilers). The
+ * Presentation API gets season / decade / week, and the Eras presentations.ini
+ * may pick a package for the season; the user's own selection is put back at
+ * the end and is never saved over. Outside Eras nothing here is used.
+ * ====================================================================== */
+struct ErasPres {
+    bool on = false;
+    int season = 0, week = 0;
+    std::string id[2];
+    TeamInfo team[2];          /* [AWAY], [HOME] */
+    std::string playbook[2];   /* what the playbook name said (logged once) */
+    bool logged = false;
+};
+static std::mutex s_eras_lock;
+static ErasPres s_eras;
+static std::atomic<int> s_eras_on{ 0 };
+
+/* The pack roots (src/nfl2k5_plugin_host.c): generated first, then the pack; '/' separators here.
+ * None while no module is on, so nothing is mapped or found then. */
+extern "C" int nfl2k5_pack_root_count(void);
+extern "C" char *nfl2k5_pack_root_path(int i, const char *rel, char *out, size_t n);
+static std::string eras_root_rel(int i, const std::string &rel)
+{
+    char p[MAX_PATH];
+    std::string s = nfl2k5_pack_root_path(i, rel.c_str(), p, sizeof p);
+    for (char &c : s) if (c == '\\') c = '/';
+    return s;
+}
+/* The folder served as https://erateams.local/: the first root with a teams folder
+ * (the logos the asset builder made); "" when there is none. */
+static std::string eras_teams_root_find()
+{
+    for (int r = 0; r < nfl2k5_pack_root_count(); r++) {
+        std::string d = eras_root_rel(r, "teams");
+        if (GetFileAttributesA(d.c_str()) != INVALID_FILE_ATTRIBUTES) return d;
+    }
+    return "";
+}
+static const std::string &eras_teams_root()
+{
+    static const std::string root = eras_teams_root_find();   /* once: the roots are fixed at boot */
+    return root;
+}
+
+static bool eras_team_load(int season, const std::string &id, TeamInfo &t)
+{
+    std::string rel = "teams/" + std::to_string(season) + "/" + id, dir;
+    JVal j;
+    t = TeamInfo();
+    for (int r = 0; r < nfl2k5_pack_root_count() && dir.empty(); r++)
+        if (file_exists(eras_root_rel(r, rel + "/team.json"))) dir = eras_root_rel(r, rel);
+    if (dir.empty() || !load_json(dir + "/team.json", j)) return false;
+    t.abbr = j.str("abbreviation", id.c_str());
+    t.city = j.str("city");
+    t.name = j.str("name", t.abbr.c_str());
+    t.record = j.str("record");
+    if (const JVal *c = j.get("colors")) {
+        parse_hex(c->str("primary"), t.primary);
+        parse_hex(c->str("secondary"), t.secondary);
+        parse_hex(c->str("text", "#FFFFFF"), t.text);
+    }
+    std::string logo = "logos/scorebug.png";
+    if (const JVal *l = j.get("logos")) logo = l->str("scorebug", logo.c_str());
+    std::string served = eras_teams_root();     /* the logo from the served folder (built art) first */
+    if (!served.empty() && file_exists(served + "/" + std::to_string(season) + "/" + id + "/" + logo))
+        t.logo = served + "/" + std::to_string(season) + "/" + id + "/" + logo;
+    else if (file_exists(dir + "/" + logo)) t.logo = dir + "/" + logo;
+    return true;
+}
+
+static void eras_side_abbr(int side, std::string &abbr)
+{
+    if (!s_eras_on.load()) return;
+    std::lock_guard<std::mutex> lock(s_eras_lock);
+    if (!s_eras.on || s_eras.team[side].abbr.empty()) return;
+    if (!s_eras.logged && !abbr.empty()) {
+        s_eras.playbook[side] = abbr;
+        if (!s_eras.playbook[AWAY].empty() && !s_eras.playbook[HOME].empty()) {
+            s_eras.logged = true;
+            fprintf(stderr, "[PRES] eras: playbook codes away %s / home %s -> Eras %s (%s %s) / %s (%s %s)\n",
+                    s_eras.playbook[AWAY].c_str(), s_eras.playbook[HOME].c_str(),
+                    s_eras.id[AWAY].c_str(), s_eras.team[AWAY].city.c_str(), s_eras.team[AWAY].name.c_str(),
+                    s_eras.id[HOME].c_str(), s_eras.team[HOME].city.c_str(), s_eras.team[HOME].name.c_str());
+        }
+    }
+    abbr = s_eras.team[side].abbr;
+}
+
+/* The Eras team whose (Eras) abbreviation this is, while an Eras game runs. */
+static bool eras_team_info(const std::string &abbr, TeamInfo &out)
+{
+    if (!s_eras_on.load()) return false;
+    std::lock_guard<std::mutex> lock(s_eras_lock);
+    if (!s_eras.on) return false;
+    for (int s = 0; s < 2; s++)
+        if (!s_eras.team[s].abbr.empty() && upper(s_eras.team[s].abbr) == upper(abbr)) { out = s_eras.team[s]; return true; }
+    return false;
+}
+
 static TeamInfo team_info(const std::string &abbr)
 {
+    TeamInfo eras;
+    if (eras_team_info(abbr, eras)) return eras;
     auto it = s_teams.find(upper(abbr));
     if (it != s_teams.end()) return it->second;
     TeamInfo t;
@@ -471,6 +808,20 @@ struct Package {
     bool replaces_lineup = false;
     bool replaces_player_cards = false;
     bool replaces_pregame_cards = false;
+    bool replaces_period_boards = false;
+    bool period_boards_ack = false;
+    bool replay_wipes_ack = false;
+    bool review_cards_ack = false;
+    bool camera_marks_ack = false;
+    bool notice_cards_ack = false;
+    bool native_tables_ack = false;
+    bool lineup_cards_ack = false;
+    bool timeout_boards_ack = false;
+    /* Explicit paint-acknowledged replacement. Packages without this flag
+     * retain the legacy player-card behavior. */
+    bool player_cards_ack = false;
+    bool drive_qb_cards = false;    /* presentation policy; original cards stay intact */
+    bool live_stat_cards = false;   /* bounded current-match player/team snapshots */
     /* mod.json "canvas": { "fit": "fill_width" }: the page is as wide as the
      * game picture (e.g. 2580x1080 on 21:9) instead of a centred 16:9
      * canvas, so full-width graphics reach the screen edges. */
@@ -480,13 +831,23 @@ struct Package {
 static std::vector<Package> s_pkgs;           /* [0] is the game's own ESPN presentation */
 static std::atomic<int> s_sel_pkg{ 0 }, s_sel_intro{ 1 }, s_sel_outro{ 1 }, s_sel_anim{ 1 }, s_sel_vol{ 8 };
 static void pregame_replacement_reset();
+static void player_card_replacement_reset();
+static void period_board_replacement_reset();
 static std::atomic<int> s_sel_commentary{ 0 };
-static std::string s_commentary_dir = "E:\\cfbsound";
+#ifdef _WIN32
+static std::string s_commentary_dir;                 /* none until presentation.ini names one (commentary_dir) */
+#else
+static std::string s_commentary_dir = "cfbsound";      /* under the game root (NFL2K5_ROOT) */
+#endif
 
 /* The package may carry its fonts. Registering them privately makes the
- * broadcast reproducible without installing anything into Windows. */
+ * broadcast reproducible without installing anything into Windows.
+ * Elsewhere nothing to do: only HTML packages, whose pages load their own. */
 static void register_package_fonts(const Package &p)
 {
+#ifndef _WIN32
+    (void)p;
+#else
     std::wstring mask = widen(p.dir + "/fonts/*.ttf");
     WIN32_FIND_DATAW fd;
     HANDLE h = FindFirstFileW(mask.c_str(), &fd);
@@ -498,6 +859,7 @@ static void register_package_fonts(const Package &p)
         if (added) fprintf(stderr, "[PRES] private font %ls\n", fd.cFileName);
     } while (FindNextFileW(h, &fd));
     FindClose(h);
+#endif
 }
 
 static void load_packages()
@@ -505,6 +867,7 @@ static void load_packages()
     Package def;
     def.name = "ESPN (Original)";
     s_pkgs.push_back(def);
+#ifdef _WIN32
     WIN32_FIND_DATAW fd;
     HANDLE h = FindFirstFileW(L"mods\\presentations\\*", &fd);
     if (h == INVALID_HANDLE_VALUE) return;
@@ -512,6 +875,14 @@ static void load_packages()
         if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) || fd.cFileName[0] == L'.') continue;
         char dir8[MAX_PATH];
         WideCharToMultiByte(CP_UTF8, 0, fd.cFileName, -1, dir8, sizeof dir8, nullptr, nullptr);
+#else
+    WIN32_FIND_DATAA fd;
+    HANDLE h = FindFirstFileA("mods/presentations/*", &fd);
+    if (h == INVALID_HANDLE_VALUE) return;
+    do {
+        if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) || fd.cFileName[0] == '.') continue;
+        const char *dir8 = fd.cFileName;
+#endif
         if (dir8[0] == '_') continue;     /* shared folders such as _runtime */
         Package p;
         p.dir = std::string("mods/presentations/") + dir8;
@@ -522,12 +893,24 @@ static void load_packages()
             if (!p.root.flag("enabled", true)) continue;
             p.html = true;
             p.entry = p.root.str("entry", "index.html");
+            p.player_cards_ack = p.root.flag("player_cards_ack", false);
+            p.period_boards_ack = p.root.flag("period_boards_ack", false);
+            p.replay_wipes_ack = p.root.flag("replay_wipes_ack", false);
+            p.review_cards_ack = p.root.flag("review_cards_ack", false);
+            p.camera_marks_ack = p.root.flag("camera_marks_ack", false);
+            p.notice_cards_ack = p.root.flag("notice_cards_ack", false);
+            p.native_tables_ack = p.root.flag("native_tables_ack", false);
+            p.lineup_cards_ack = p.root.flag("lineup_cards_ack", false);
+            p.timeout_boards_ack = p.root.flag("timeout_boards_ack", false);
+            p.drive_qb_cards = p.root.flag("drive_qb_cards", false);
+            p.live_stat_cards = p.root.flag("live_stat_cards", false);
             if (const JVal *r = p.root.get("replaces"))
                 for (auto &v : r->a)
                     if (v.t == JVal::Str) {
                         if (v.s == "lineup") p.replaces_lineup = true;
                         if (v.s == "player_cards") p.replaces_player_cards = true;
                         if (v.s == "pregame_cards") p.replaces_pregame_cards = true;
+                        if (v.s == "period_boards") p.replaces_period_boards = true;
                     }
             if (const JVal *c = p.root.get("canvas")) {
                 p.canvas_w = (int)c->num("width", 1920);
@@ -539,6 +922,13 @@ static void load_packages()
                 continue;
             }
         }
+#ifndef _WIN32
+        /* The JSON-layout renderer is Direct2D: not available here. */
+        if (!p.html) {
+            fprintf(stderr, "[PRES] package %s: JSON layout (presentation.json) is Windows-only, skipped\n", dir8);
+            continue;
+        }
+#endif
         p.name = p.root.str("name", dir8);
         if (const JVal *m = p.root.get("music")) {
             for (int k = 0; k < 2; k++)
@@ -553,12 +943,22 @@ static void load_packages()
                 p.name.c_str(), p.html ? "html" : "json", p.intro.size(), p.outro.size());
         register_package_fonts(p);
         s_pkgs.push_back(std::move(p));
+#ifdef _WIN32
     } while (FindNextFileW(h, &fd));
+#else
+    } while (FindNextFileA(h, &fd));
+#endif
     FindClose(h);
 }
 
 static const char *k_ini = "mods\\presentation.ini";
 extern "C" char *xbox_user_path(const char *rel, char *out, size_t n);   /* per-user folder (kernel_path.c) */
+
+/* M9: the player's own selection while an Eras game uses the package from
+ * mods\eras\presentations.ini (-1: no Eras package is on). Saved settings
+ * always carry the player's own selection. */
+static std::atomic<int> s_eras_saved_pkg{ -1 };
+static int s_eras_saved_intro = 1, s_eras_saved_outro = 1;
 
 static void save_settings()
 {
@@ -566,10 +966,12 @@ static void save_settings()
     FILE *f = fopen(xbox_user_path(k_ini, ipath, sizeof ipath), "w");
     if (!f) return;
     int pk = s_sel_pkg;
+    int intro = s_sel_intro, outro = s_sel_outro;
+    if (s_eras_saved_pkg >= 0) { pk = s_eras_saved_pkg; intro = s_eras_saved_intro; outro = s_eras_saved_outro; }
     fprintf(f, "; Broadcast presentation (Coach Match Up > Presentation edits this)\n");
     fprintf(f, "package = %s\nintro = %d\noutro = %d\nanimations = %d\ntheme_volume = %d\ncustom_commentary = %d\ncommentary_dir = %s\n",
             pk > 0 && pk < (int)s_pkgs.size() ? s_pkgs[pk].name.c_str() : "ESPN (Original)",
-            (int)s_sel_intro, (int)s_sel_outro, (int)s_sel_anim, (int)s_sel_vol * 10,
+            intro, outro, (int)s_sel_anim, (int)s_sel_vol * 10,
             (int)s_sel_commentary, s_commentary_dir.c_str());
     fclose(f);
 }
@@ -669,6 +1071,7 @@ extern "C" void nfl2k5_pres_set(int what, int v)
     switch (what) {
     case 0:
         pregame_replacement_reset();
+        s_eras_saved_pkg = -1;     /* M9: the player's own pick replaces an Eras package and is saved */
         s_sel_pkg = v;
         s_sel_intro = std::min(1, nfl2k5_pres_values(1) - 1);    /* first theme of the new package */
         s_sel_outro = std::min(1, nfl2k5_pres_values(2) - 1);
@@ -680,6 +1083,114 @@ extern "C" void nfl2k5_pres_set(int what, int v)
     case 5: s_sel_commentary = v; break;
     }
     save_settings();
+}
+
+/* ---- M9: My NFL Eras package choice and identity ----------------------- */
+
+/* presentations.ini of the Eras roots: "<season> = pkg", "<first>-<last> = pkg" or
+ * "<decade>s = pkg"; the most specific key wins. The package is named by its
+ * folder under mods\presentations or by its display name. -1 = none installed. */
+static int eras_ini_package(int season, std::string &why)
+{
+    FILE *f = nullptr;
+    for (int r = 0; r < nfl2k5_pack_root_count() && !f; r++) f = fopen(eras_root_rel(r, "presentations.ini").c_str(), "r");
+    char line[512];
+    int best = -1, best_rank = 0;
+    if (!f) { why = "no Eras presentations.ini"; return -1; }
+    why = "no line for the season";
+    while (fgets(line, sizeof line, f)) {
+        char key[64], val[400];
+        if (line[0] == ';' || line[0] == '#' || line[0] == '[') continue;
+        if (sscanf(line, " %63[^= \t] = %399[^\r\n;]", key, val) != 2) continue;
+        std::string v = val;
+        while (!v.empty() && (v.back() == ' ' || v.back() == '\t')) v.pop_back();
+        int a = 0, b = 0, rank = 0;
+        char tail[8] = "";
+        if (sscanf(key, "%d-%d", &a, &b) == 2) rank = season >= a && season <= b ? 2 : 0;
+        else if (sscanf(key, "%d%7s", &a, tail) == 2 && (tail[0] == 's' || tail[0] == 'S') && !tail[1]) rank = season / 10 * 10 == a ? 1 : 0;
+        else if (sscanf(key, "%d", &a) == 1 && std::to_string(a) == key) rank = season == a ? 3 : 0;
+        if (rank <= best_rank) continue;
+        int found = -1;
+        for (size_t i = 1; i < s_pkgs.size(); i++) {
+            const std::string &d = s_pkgs[i].dir;
+            std::string folder = d.substr(d.find_last_of('/') + 1);
+            if (_stricmp(folder.c_str(), v.c_str()) == 0 || _stricmp(s_pkgs[i].name.c_str(), v.c_str()) == 0) { found = (int)i; break; }
+        }
+        if (found < 0) { why = "package '" + v + "' (" + key + ") is not installed"; continue; }
+        best = found; best_rank = rank; why = std::string(key) + " = " + v;
+    }
+    fclose(f);
+    return best;
+}
+
+extern "C" void nfl2k5_presentation_eras_begin(int season, int week, const char *home_id, const char *away_id)
+{
+    ErasPres e;
+    e.on = true;
+    e.season = season;
+    e.week = week;
+    e.id[HOME] = home_id ? home_id : "";
+    e.id[AWAY] = away_id ? away_id : "";
+    for (int s = 0; s < 2; s++)
+        if (!eras_team_load(season, e.id[s], e.team[s]))
+            fprintf(stderr, "[PRES] eras: no teams/%d/%s/team.json in the Eras roots; the %s side uses the normal lookup\n",
+                    season, e.id[s].c_str(), s == AWAY ? "away" : "home");
+    {
+        std::lock_guard<std::mutex> lock(s_eras_lock);
+        s_eras = e;
+    }
+    s_eras_on = 1;
+    std::string why;
+    int pk = eras_ini_package(season, why);
+    if (pk > 0 && pk != s_sel_pkg) {
+        if (s_eras_saved_pkg < 0) {
+            s_eras_saved_pkg = (int)s_sel_pkg;
+            s_eras_saved_intro = s_sel_intro;
+            s_eras_saved_outro = s_sel_outro;
+        }
+        pregame_replacement_reset();
+        s_sel_pkg = pk;
+        s_sel_intro = std::min(1, nfl2k5_pres_values(1) - 1);
+        s_sel_outro = std::min(1, nfl2k5_pres_values(2) - 1);
+    }
+    fprintf(stderr, "[PRES] eras game: season %d week %d, away %s (%s %s, logo %s), home %s (%s %s, logo %s); package \"%s\" (%s)\n",
+            season, week, e.id[AWAY].c_str(), e.team[AWAY].city.c_str(), e.team[AWAY].name.c_str(),
+            e.team[AWAY].logo.empty() ? "none" : e.team[AWAY].logo.c_str(),
+            e.id[HOME].c_str(), e.team[HOME].city.c_str(), e.team[HOME].name.c_str(),
+            e.team[HOME].logo.empty() ? "none" : e.team[HOME].logo.c_str(),
+            nfl2k5_pres_package_name(s_sel_pkg), pk > 0 ? why.c_str() : ("player's selection kept: " + why).c_str());
+}
+
+extern "C" void nfl2k5_presentation_eras_end(void)
+{
+    if (!s_eras_on.load()) return;
+    s_eras_on = 0;
+    {
+        std::lock_guard<std::mutex> lock(s_eras_lock);
+        s_eras = ErasPres();
+    }
+    int saved = s_eras_saved_pkg.exchange(-1);
+    if (saved >= 0) {
+        pregame_replacement_reset();
+        s_sel_pkg = saved;
+        s_sel_intro = s_eras_saved_intro;
+        s_sel_outro = s_eras_saved_outro;
+    }
+    fprintf(stderr, "[PRES] eras game over: normal team lookup; package \"%s\"%s\n",
+            nfl2k5_pres_package_name(s_sel_pkg), saved >= 0 ? " (the player's selection again)" : "");
+}
+
+/* season / decade / week for the Presentation API (null outside an Eras game) */
+static std::string eras_api_fields()
+{
+    int season = 0, week = 0;
+    if (s_eras_on.load()) {
+        std::lock_guard<std::mutex> lock(s_eras_lock);
+        if (s_eras.on) { season = s_eras.season; week = s_eras.week; }
+    }
+    if (!season) return ",\"league\":null,\"season\":null,\"decade\":null,\"week\":null";
+    return ",\"league\":\"eras\",\"season\":" + std::to_string(season) + ",\"decade\":\"" + std::to_string(season / 10 * 10) +
+           "s\",\"week\":" + (week > 0 ? std::to_string(week) : std::string("null"));
 }
 
 /* ======================================================================
@@ -712,6 +1223,7 @@ static double now_s()
     return (double)t.QuadPart / (double)f.QuadPart;
 }
 
+#ifdef _WIN32
 /* MF_SOURCE_READER_ENABLE_AUDIO_PROCESSING (Windows 8+; the SDK hides it
  * behind the project's older target version): lets the reader resample. */
 static const GUID k_mf_audio_processing =
@@ -763,6 +1275,133 @@ static bool decode_mp3(const std::string &path, std::vector<int16_t> &out)
     attr->Release();
     return ok;
 }
+#elif defined(__ANDROID__)
+/* The same result as the Media Foundation reader above (48 kHz stereo
+ * 16-bit, interleaved) from the NDK media API: AMediaExtractor finds the
+ * first audio track (MP3, AAC/MP4, WAV, OGG...), AMediaCodec decodes it,
+ * then the channels are mapped to stereo and the rate converted here. */
+static bool decode_mp3(const std::string &path, std::vector<int16_t> &out)
+{
+    out.clear();
+    int fd = open(path.c_str(), O_RDONLY | O_CLOEXEC);
+    if (fd < 0) return false;
+    struct stat st;
+    if (fstat(fd, &st) != 0) { close(fd); return false; }
+    AMediaExtractor *ex = AMediaExtractor_new();
+    AMediaCodec *codec = nullptr;
+    int rate = 0, chans = 0, encoding = 2;            /* 2: ENCODING_PCM_16BIT, 4: ENCODING_PCM_FLOAT */
+    std::vector<int16_t> src;                         /* decoded, interleaved, source rate/channels */
+    if (AMediaExtractor_setDataSourceFd(ex, fd, 0, (off64_t)st.st_size) == AMEDIA_OK) {
+        size_t tracks = AMediaExtractor_getTrackCount(ex);
+        for (size_t i = 0; i < tracks && !codec; i++) {
+            AMediaFormat *fmt = AMediaExtractor_getTrackFormat(ex, i);
+            const char *mime = nullptr;
+            if (AMediaFormat_getString(fmt, AMEDIAFORMAT_KEY_MIME, &mime) && mime && !strncmp(mime, "audio/", 6)) {
+                AMediaFormat_getInt32(fmt, AMEDIAFORMAT_KEY_SAMPLE_RATE, &rate);
+                AMediaFormat_getInt32(fmt, AMEDIAFORMAT_KEY_CHANNEL_COUNT, &chans);
+                AMediaExtractor_selectTrack(ex, i);
+                codec = AMediaCodec_createDecoderByType(mime);
+                if (codec && AMediaCodec_configure(codec, fmt, nullptr, nullptr, 0) != AMEDIA_OK) {
+                    AMediaCodec_delete(codec);
+                    codec = nullptr;
+                }
+            }
+            AMediaFormat_delete(fmt);
+        }
+    }
+    if (codec && AMediaCodec_start(codec) == AMEDIA_OK) {
+        bool in_eos = false, out_eos = false;
+        int idle = 0;
+        while (!out_eos && idle < 2000) {
+            if (!in_eos) {
+                ssize_t ib = AMediaCodec_dequeueInputBuffer(codec, 5000);
+                if (ib >= 0) {
+                    size_t cap = 0;
+                    uint8_t *buf = AMediaCodec_getInputBuffer(codec, (size_t)ib, &cap);
+                    ssize_t n = buf ? AMediaExtractor_readSampleData(ex, buf, cap) : -1;
+                    if (n < 0) {
+                        AMediaCodec_queueInputBuffer(codec, (size_t)ib, 0, 0, 0, AMEDIACODEC_BUFFER_FLAG_END_OF_STREAM);
+                        in_eos = true;
+                    } else {
+                        AMediaCodec_queueInputBuffer(codec, (size_t)ib, 0, (size_t)n,
+                                                     (uint64_t)std::max<int64_t>(0, AMediaExtractor_getSampleTime(ex)), 0);
+                        AMediaExtractor_advance(ex);
+                    }
+                }
+            }
+            AMediaCodecBufferInfo info;
+            ssize_t ob = AMediaCodec_dequeueOutputBuffer(codec, &info, 5000);
+            if (ob >= 0) {
+                idle = 0;
+                size_t cap = 0;
+                uint8_t *buf = AMediaCodec_getOutputBuffer(codec, (size_t)ob, &cap);
+                if (buf && info.size > 0 && (size_t)info.offset + (size_t)info.size <= cap) {
+                    const uint8_t *p = buf + info.offset;
+                    size_t at = src.size();
+                    if (encoding == 4) {
+                        size_t n = (size_t)info.size / 4;
+                        src.resize(at + n);
+                        for (size_t k = 0; k < n; k++) {
+                            float f;
+                            memcpy(&f, p + k * 4, 4);
+                            f = f > 1.0f ? 1.0f : f < -1.0f ? -1.0f : f;
+                            src[at + k] = (int16_t)lrintf(f * 32767.0f);
+                        }
+                    } else {
+                        src.resize(at + (size_t)info.size / 2);
+                        memcpy(&src[at], p, (size_t)info.size & ~(size_t)1);
+                    }
+                }
+                if (info.flags & AMEDIACODEC_BUFFER_FLAG_END_OF_STREAM) out_eos = true;
+                AMediaCodec_releaseOutputBuffer(codec, (size_t)ob, false);
+            } else if (ob == AMEDIACODEC_INFO_OUTPUT_FORMAT_CHANGED) {
+                AMediaFormat *fmt = AMediaCodec_getOutputFormat(codec);
+                AMediaFormat_getInt32(fmt, AMEDIAFORMAT_KEY_SAMPLE_RATE, &rate);
+                AMediaFormat_getInt32(fmt, AMEDIAFORMAT_KEY_CHANNEL_COUNT, &chans);
+                AMediaFormat_getInt32(fmt, AMEDIAFORMAT_KEY_PCM_ENCODING, &encoding);
+                AMediaFormat_delete(fmt);
+            } else if (ob == AMEDIACODEC_INFO_TRY_AGAIN_LATER) {
+                if (in_eos) idle++;                   /* a decoder that never flags the end */
+            }
+        }
+        AMediaCodec_stop(codec);
+    }
+    if (codec) AMediaCodec_delete(codec);
+    AMediaExtractor_delete(ex);
+    close(fd);
+    if (src.empty() || rate <= 0 || chans <= 0) return false;
+
+    /* Channels: mono doubled; more than two keep front left/right. */
+    size_t frames = src.size() / (size_t)chans;
+    std::vector<int16_t> st2(frames * 2);
+    for (size_t i = 0; i < frames; i++) {
+        st2[i * 2] = src[i * chans];
+        st2[i * 2 + 1] = src[i * chans + (chans > 1 ? 1 : 0)];
+    }
+    if (rate == 48000) { out.swap(st2); return true; }
+    /* Rate: 4-point cubic (Catmull-Rom) interpolation to 48 kHz. */
+    size_t n_out = (size_t)((double)frames * 48000.0 / rate);
+    double step = (double)rate / 48000.0;
+    out.resize(n_out * 2);
+    for (size_t i = 0; i < n_out; i++) {
+        double x = i * step;
+        size_t k = (size_t)x;
+        float t = (float)(x - (double)k);
+        for (int c = 0; c < 2; c++) {
+            auto at = [&](ptrdiff_t j) -> float {
+                j = j < 0 ? 0 : j >= (ptrdiff_t)frames ? (ptrdiff_t)frames - 1 : j;
+                return (float)st2[(size_t)j * 2 + c];
+            };
+            float p0 = at((ptrdiff_t)k - 1), p1 = at((ptrdiff_t)k), p2 = at((ptrdiff_t)k + 1), p3 = at((ptrdiff_t)k + 2);
+            float v = p1 + 0.5f * t * (p2 - p0 + t * (2.0f * p0 - 5.0f * p1 + 4.0f * p2 - p3 + t * (3.0f * (p1 - p2) + p3 - p0)));
+            out[i * 2 + c] = (int16_t)(v > 32767.0f ? 32767 : v < -32768.0f ? -32768 : (int)lrintf(v));
+        }
+    }
+    return !out.empty();
+}
+#else
+static bool decode_mp3(const std::string &, std::vector<int16_t> &out) { out.clear(); return false; }
+#endif
 
 /* ======================================================================
  * Optional situation commentary
@@ -793,6 +1432,7 @@ static std::string s_commentary_test;
 static std::atomic<ULONGLONG> s_commentary_pass_serial{ 0 };
 static std::atomic<DWORD> s_commentary_last_pass_tick{ 0 };
 
+#ifdef _WIN32
 static std::string narrow(const std::wstring &w)
 {
     if (w.empty()) return "";
@@ -801,12 +1441,27 @@ static std::string narrow(const std::wstring &w)
     WideCharToMultiByte(CP_UTF8, 0, w.c_str(), (int)w.size(), &s[0], n, nullptr, nullptr);
     return s;
 }
+#endif
 
 static DWORD WINAPI commentary_index_thread(void *)
 {
+#ifndef _WIN32
+    std::string dir = s_commentary_dir;
+    for (char &ch : dir) if (ch == '\\') ch = '/';
+    WIN32_FIND_DATAA fd;
+    HANDLE h = FindFirstFileA((dir + "/*.wav").c_str(), &fd);
+    std::vector<CommentaryClip> found;
+    if (h != INVALID_HANDLE_VALUE) {
+        do {
+            if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
+            found.push_back({ dir + "/" + fd.cFileName, upper(fd.cFileName) });
+        } while (FindNextFileA(h, &fd));
+        FindClose(h);
+    }
+#else
     std::wstring dir = widen(s_commentary_dir), mask = dir + L"\\*.wav";
     WIN32_FIND_DATAW fd;
-    HANDLE h = FindFirstFileW(mask.c_str(), &fd);
+    HANDLE h = dir.empty() ? INVALID_HANDLE_VALUE : FindFirstFileW(mask.c_str(), &fd);
     std::vector<CommentaryClip> found;
     if (h != INVALID_HANDLE_VALUE) {
         do {
@@ -816,6 +1471,7 @@ static DWORD WINAPI commentary_index_thread(void *)
         } while (FindNextFileW(h, &fd));
         FindClose(h);
     }
+#endif
     size_t count = 0;
     {
         std::lock_guard<std::mutex> g(s_commentary.lock);
@@ -887,6 +1543,7 @@ static void commentary_play(const std::string &path, const std::string &key)
             s_commentary.state = 0;
             return;
         }
+        if (getenv("RECOMP_AUDIO_MUTE")) s_commentary.master->SetVolume(0.0f);   /* background test runs */
         WAVEFORMATEX wf = {};
         wf.wFormatTag = WAVE_FORMAT_PCM; wf.nChannels = 2; wf.nSamplesPerSec = 48000;
         wf.wBitsPerSample = 16; wf.nBlockAlign = 4; wf.nAvgBytesPerSec = 48000 * 4;
@@ -906,6 +1563,23 @@ static void commentary_play(const std::string &path, const std::string &key)
         fprintf(stderr, "[COMMENTARY] playing %s (%.1f s)\n", key.c_str(),
                 s_commentary.pcm.size() / 96000.0);
     }).detach();
+}
+
+/* One-shot clip playback for the ESPN 25th Anniversary moment audio
+ * (src/nfl2k5_moment_audio.c). Reuses the self-contained XAudio2 voice above;
+ * it runs in the menus where the in-match situation commentary is idle. */
+extern "C" void nfl2k5_moment_audio_stop(void)
+{
+    std::lock_guard<std::mutex> g(s_commentary.lock);
+    ++s_commentary.generation;                 /* invalidate any in-flight decode */
+    if (s_commentary.voice) { s_commentary.voice->Stop(); s_commentary.voice->FlushSourceBuffers(); }
+    s_commentary.state = 0;
+}
+extern "C" void nfl2k5_moment_audio_play(const char *utf8_path)
+{
+    if (!utf8_path || !*utf8_path) return;
+    nfl2k5_moment_audio_stop();                /* interrupt a prior clip, allow replay */
+    commentary_play(std::string(utf8_path), std::string("MOMENT"));
 }
 
 /* marker2 may be null, or it may narrow a broad family such as POST + INT. */
@@ -1039,6 +1713,10 @@ static void commentary_tick(const GameState &g, bool match_active)
 static void music_stop_now()
 {
     std::lock_guard<std::mutex> g(s_music.lock);
+    /* A decode runs on a detached worker. Invalidate it before destroying the
+     * current voice so a quarter/halftime transition cannot resurrect an old
+     * theme after the new presentation state has taken ownership. */
+    ++s_music.generation;
     if (s_music.voice) { s_music.voice->Stop(); s_music.voice->FlushSourceBuffers(); s_music.voice->DestroyVoice(); s_music.voice = nullptr; }
     s_music.state = 0;
     xbox_AudioSetGameGain(1.0f);
@@ -1064,6 +1742,7 @@ static void music_play(const std::string &path, float volume, float duck, float 
         if (!s_music.xa) {
             if (FAILED(XAudio2Create(&s_music.xa, 0, XAUDIO2_DEFAULT_PROCESSOR)) ||
                 FAILED(s_music.xa->CreateMasteringVoice(&s_music.master))) { s_music.state = 0; return; }
+            if (getenv("RECOMP_AUDIO_MUTE")) s_music.master->SetVolume(0.0f);       /* background test runs */
         }
         WAVEFORMATEX wf = {};
         wf.wFormatTag = WAVE_FORMAT_PCM; wf.nChannels = 2; wf.nSamplesPerSec = 48000;
@@ -1136,10 +1815,161 @@ static void music_tick()
 }
 
 /* RECOMP_AUDIO_WAV recordings get the theme too (apu_xaudio2.c tap). */
+/* Front-end voice clips (My NFL Eras draft show, docs/eras/results/M11-draftshow.md): four
+ * channels (a chime's tail can ring under the call; channel 3 is the show's looping music bed,
+ * M12), each one clip at a time, decoded by Media Foundation to 48 kHz stereo and played on this
+ * file's own XAudio2 engine; mixed into the RECOMP_AUDIO_WAV / video-clip recordings like the
+ * theme. The caller ducks the game's own audio (menu music) with nfl2k5_presentation_voice_duck,
+ * and a channel's level (the bed under the call) with nfl2k5_presentation_voice_gain. */
+#define VOICE_CHANNELS 4
+struct VoiceChannel {
+    IXAudio2SourceVoice *voice = nullptr;
+    std::vector<int16_t> pcm;
+    size_t cap_pos = 0;
+    float vol = 1.0f;
+    bool loop = false;                    /* the whole clip again and again (the bed) */
+    std::atomic<int> state{ 0 };          /* 0 idle, 1 decoding, 2 playing */
+    std::atomic<int> generation{ 0 };
+    double length = 0;
+};
+static struct {
+    std::mutex lock;
+    IXAudio2 *xa = nullptr;
+    IXAudio2MasteringVoice *master = nullptr;
+    VoiceChannel ch[VOICE_CHANNELS];
+} s_voice;
+
+static void voice_release_locked(VoiceChannel &c)
+{
+    if (c.voice) { c.voice->Stop(); c.voice->FlushSourceBuffers(); c.voice->DestroyVoice(); c.voice = nullptr; }
+    c.pcm.clear();
+    c.cap_pos = 0;
+}
+
+/* ch < 0: every channel */
+extern "C" void nfl2k5_presentation_voice_stop(int ch)
+{
+    std::lock_guard<std::mutex> g(s_voice.lock);
+    for (int i = 0; i < VOICE_CHANNELS; i++)
+        if (ch < 0 || ch == i) { ++s_voice.ch[i].generation; voice_release_locked(s_voice.ch[i]); s_voice.ch[i].state = 0; }
+}
+
+/* Starts decoding and playing `path` (WAV or MP3) on channel `ch` at `volume`; 0, or -1.
+ * loop: the clip repeats without a break until stopped (XAudio2 loops the one buffer; the
+ * recording copy wraps the same way). */
+extern "C" int nfl2k5_presentation_voice_play_ex(int ch, const char *path, float volume, int loop)
+{
+    if (!path || !*path || ch < 0 || ch >= VOICE_CHANNELS) return -1;
+    nfl2k5_presentation_voice_stop(ch);
+    VoiceChannel &c = s_voice.ch[ch];
+    int gen = ++c.generation;
+    c.state = 1;
+    c.loop = loop != 0;
+    std::string p = path;
+    std::thread([p, gen, volume, ch, loop]() {
+        std::vector<int16_t> pcm;
+        CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+        bool ok = decode_mp3(p, pcm);
+        CoUninitialize();
+        std::lock_guard<std::mutex> g(s_voice.lock);
+        VoiceChannel &c = s_voice.ch[ch];
+        if (gen != c.generation) return;
+        if (!ok) { fprintf(stderr, "[PRES] voice: could not decode %s\n", p.c_str()); c.state = 0; return; }
+        if (!s_voice.xa) {
+            if (FAILED(XAudio2Create(&s_voice.xa, 0, XAUDIO2_DEFAULT_PROCESSOR)) ||
+                FAILED(s_voice.xa->CreateMasteringVoice(&s_voice.master))) { c.state = 0; return; }
+            if (getenv("RECOMP_AUDIO_MUTE")) s_voice.master->SetVolume(0.0f);   /* background tests: still recorded */
+        }
+        WAVEFORMATEX wf = {};
+        wf.wFormatTag = WAVE_FORMAT_PCM; wf.nChannels = 2; wf.nSamplesPerSec = 48000;
+        wf.wBitsPerSample = 16; wf.nBlockAlign = 4; wf.nAvgBytesPerSec = 48000 * 4;
+        if (FAILED(s_voice.xa->CreateSourceVoice(&c.voice, &wf))) { c.state = 0; return; }
+        c.pcm.swap(pcm);
+        XAUDIO2_BUFFER b = {};
+        b.AudioBytes = (UINT32)(c.pcm.size() * 2);
+        b.pAudioData = (const BYTE *)c.pcm.data();
+        b.Flags = XAUDIO2_END_OF_STREAM;
+        if (loop) { b.LoopBegin = 0; b.LoopLength = 0; b.LoopCount = XAUDIO2_LOOP_INFINITE; }
+        c.voice->SubmitSourceBuffer(&b);
+        c.vol = volume;
+        c.voice->SetVolume(volume);
+        c.cap_pos = 0;
+        c.length = c.pcm.size() / 96000.0;
+        c.voice->Start();
+        c.state = 2;
+        fprintf(stderr, "[PRES] voice t=%lu ch %d playing %s (%.2f s, volume %.2f%s)\n", GetTickCount(), ch, p.c_str(), c.length, volume,
+                loop ? ", looping" : "");
+    }).detach();
+    return 0;
+}
+
+extern "C" int nfl2k5_presentation_voice_play(int ch, const char *path, float volume)
+{
+    return nfl2k5_presentation_voice_play_ex(ch, path, volume, 0);
+}
+
+/* The channel's level now (speakers and the recording copy): the caller ramps it. */
+extern "C" void nfl2k5_presentation_voice_gain(int ch, float gain)
+{
+    if (ch < 0 || ch >= VOICE_CHANNELS) return;
+    std::lock_guard<std::mutex> g(s_voice.lock);
+    VoiceChannel &c = s_voice.ch[ch];
+    gain = gain < 0.0f ? 0.0f : gain > 4.0f ? 4.0f : gain;
+    if (c.vol == gain) return;
+    c.vol = gain;
+    if (c.voice && c.state == 2) c.voice->SetVolume(gain);
+}
+
+/* 0 idle (finished), 1 decoding, 2 playing; elapsed / length in seconds while playing. */
+extern "C" int nfl2k5_presentation_voice_state(int ch, double *elapsed, double *length)
+{
+    if (ch < 0 || ch >= VOICE_CHANNELS) return 0;
+    std::lock_guard<std::mutex> g(s_voice.lock);
+    VoiceChannel &c = s_voice.ch[ch];
+    if (c.state == 2 && c.voice) {
+        XAUDIO2_VOICE_STATE vs;
+        c.voice->GetState(&vs, 0);
+        if (vs.BuffersQueued == 0) {
+            fprintf(stderr, "[PRES] voice t=%lu ch %d finished (%.2f s)\n", GetTickCount(), ch, c.length);
+            /* the recording copy keeps its samples until the capture has mixed them all */
+            c.voice->DestroyVoice(); c.voice = nullptr;
+            c.state = 0;
+        } else {
+            if (elapsed) *elapsed = vs.SamplesPlayed / 48000.0;
+            if (length) *length = c.length;
+        }
+    }
+    return c.state;
+}
+
+/* The game's own audio (menu music, effects) under the voice: 1 = full. */
+extern "C" void nfl2k5_presentation_voice_duck(float gain)
+{
+    xbox_AudioSetGameGain(gain < 0.0f ? 0.0f : gain > 1.0f ? 1.0f : gain);
+}
+
+/* Runs on the audio thread for every 5.3 ms block (the audio report ring
+ * records it always, AUDIO-REPORT-HOTKEY-20261022), so it never waits: a
+ * lock held elsewhere (a voice being created or destroyed) skips the mix for
+ * that block instead of stalling the speakers. */
 static void capture_mix(int16_t *buf, int frames)
 {
-    std::lock_guard<std::mutex> g(s_music.lock);
-    if (!s_music.voice || s_music.state < 2) return;
+    {
+        std::unique_lock<std::mutex> gv(s_voice.lock, std::try_to_lock);
+        if (gv.owns_lock())
+        for (auto &c : s_voice.ch) {
+            if (c.pcm.empty() || c.state == 1) continue;
+            float v = c.vol;
+            for (int i = 0; i < frames * 2 && c.cap_pos < c.pcm.size(); i++, c.cap_pos++) {
+                int x = buf[i] + (int)(c.pcm[c.cap_pos] * v);
+                buf[i] = (int16_t)(x > 32767 ? 32767 : x < -32768 ? -32768 : x);
+                if (c.loop && c.cap_pos + 1 >= c.pcm.size() && c.voice) c.cap_pos = (size_t)-1;   /* wraps to 0 */
+            }
+            if (c.cap_pos >= c.pcm.size() && !c.voice) { c.pcm.clear(); c.cap_pos = 0; }
+        }
+    }
+    std::unique_lock<std::mutex> g(s_music.lock, std::try_to_lock);
+    if (!g.owns_lock() || !s_music.voice || s_music.state < 2) return;
     float v = s_music.cur_vol;
     for (int i = 0; i < frames * 2 && s_music.cap_pos < s_music.pcm.size(); i++, s_music.cap_pos++) {
         int x = buf[i] + (int)(s_music.pcm[s_music.cap_pos] * v);
@@ -1153,8 +1983,19 @@ static void capture_mix(int16_t *buf, int frames)
  * Media Foundation on a thread in real time to BGRA frames; shown full screen
  * through the HUD layer; its audio plays through the theme voice.
  * ====================================================================== */
+#ifdef _WIN32
 static const GUID k_mf_advanced_video =
     { 0x0f81da2c, 0xb537, 0x4672, { 0xa8, 0xb2, 0xa6, 0x81, 0xb1, 0x73, 0x07, 0xa3 } };
+static bool video_skip(const std::string &) { return false; }
+#else
+/* No video decode here: a package's open is skipped (its audio too), once logged. */
+static bool video_skip(const std::string &path)
+{
+    static bool logged;
+    if (!logged) { logged = true; fprintf(stderr, "[PRES] pregame video is Windows-only, skipped: %s\n", path.c_str()); }
+    return true;
+}
+#endif
 
 struct Video {
     std::mutex lock;
@@ -1165,6 +2006,9 @@ struct Video {
     std::atomic<int> generation{ 0 };
 } s_video;
 
+#ifndef _WIN32
+static void video_play(const std::string &) {}     /* never reached: video_skip */
+#else
 static void video_thread(std::string path, int gen)
 {
     CoInitializeEx(nullptr, COINIT_MULTITHREADED);
@@ -1234,6 +2078,7 @@ static void video_play(const std::string &path)
     s_video.state = 1;
     std::thread(video_thread, path, gen).detach();
 }
+#endif
 
 /* ======================================================================
  * Events
@@ -1261,6 +2106,9 @@ struct Event {
     double requested_duration = 0;
     PlayerIdentity player_identity;
     int photo_id = -1;
+    uint32_t native_card_token = 0, native_card_generation = 0;
+    int native_card_package = -1;
+    std::string live_extra;         /* copied, validity-aware snapshot payload */
 };
 struct ActiveAnim { Event ev; const JVal *def = nullptr; double t0 = 0, duration = 0; };
 
@@ -1272,11 +2120,19 @@ static bool s_anim_on;
 struct LiveQbSample {
     PlayerStat player;
     uint64_t revision = 0;
+    /* Stamped by the existing guest-side sample call. HTML's early return
+     * skips the JSON presenter's cache-reset service, so ACK replacements
+     * must prove the sample belongs to the current clock and both rosters. */
+    uint32_t clock_object = 0, roster[2] = { 0, 0 };
+    std::string abbr[2];
 };
 static std::mutex s_live_qb_lock;
 static LiveQbSample s_live_qb[2];
 static PlayerIdentity s_live_qb_identity[2];
 static uint64_t s_live_qb_revision;
+static std::atomic<uint64_t> s_live_qb_epoch{ 1 };
+static void player_card_request(uint32_t kind, const std::string &title,
+        const GameState &g, const PlayerStat &player, const PlayerIdentity &identity);
 /* The following lifecycle state belongs exclusively to the HUD thread. */
 static Event s_live_qb_event;
 static uint64_t s_live_qb_display_revision;
@@ -1290,6 +2146,137 @@ static void queue_event(Event ev)
 {
     std::lock_guard<std::mutex> lock(s_queue_lock);
     s_queue.push_back(std::move(ev));
+}
+
+/* The guest collector publishes immutable scope-0 records. These callbacks
+ * neither read guest RAM nor call the title. Only the HUD consumes the copies
+ * and chooses a broadcast opportunity. Unknown fields stay absent, and sacks
+ * retain the title's half credits. Other packages do not pay the sample cost. */
+struct LiveStatCandidate {
+    Nfl2k5LivePlayerSample sample{};
+    uint64_t queued_at = 0;
+    int priority = 0;
+};
+static std::mutex s_live_stats_lock;
+static std::map<uint32_t, Nfl2k5LivePlayerSample> s_live_players;
+static Nfl2k5LiveTeamSample s_live_teams[2]{};
+static std::vector<LiveStatCandidate> s_live_candidates;
+static uint64_t s_live_stats_epoch = 1;
+static uint64_t s_live_insert_after = 0; /* HUD-owned spacing, includes QB inserts */
+
+static bool presentation_trace_enabled()
+{
+    static const bool enabled = [] {
+        const char *value = getenv("NFL2K5_PRESENTATION_TRACE");
+        return value && *value && strcmp(value, "0");
+    }();
+    return enabled;
+}
+
+extern "C" int nfl2k5_broadcast_live_stats_enabled(void)
+{
+    int pk = s_sel_pkg.load();
+    return pk > 0 && pk < (int)s_pkgs.size() && s_pkgs[pk].html && s_pkgs[pk].live_stat_cards;
+}
+
+static bool live_owner_equal(const Nfl2k5LiveStatOwner &a, const Nfl2k5LiveStatOwner &b)
+{
+    return a.scope == 0 && b.scope == 0 && a.clock_object == b.clock_object &&
+        a.rosters[0] == b.rosters[0] && a.rosters[1] == b.rosters[1] &&
+        !strncmp(a.abbreviations[0], b.abbreviations[0], sizeof a.abbreviations[0]) &&
+        !strncmp(a.abbreviations[1], b.abbreviations[1], sizeof a.abbreviations[1]);
+}
+
+static bool live_value(uint64_t mask, const double *values, int field, double &out)
+{
+    if (!(mask & NFL2K5_LIVE_FIELD_BIT(field)) || !std::isfinite(values[field])) return false;
+    out = values[field]; return true;
+}
+
+static bool live_increased(const Nfl2k5LivePlayerSample &a,
+        const Nfl2k5LivePlayerSample &b, int field)
+{
+    double before, after;
+    if (!live_value(b.valid_fields, b.values, field, after)) return false;
+    /* Some position-specific stat blocks are allocated lazily. A previously
+     * unavailable counter becoming a real positive value is also a useful
+     * broadcast snapshot. This does NOT assert that its unknown old value
+     * was zero, synthesize a play event, or change the reported statistics. */
+    return live_value(a.valid_fields, a.values, field, before) ? after > before : after > 0;
+}
+
+extern "C" void nfl2k5_broadcast_live_player_sample(const Nfl2k5LivePlayerSample *sample)
+{
+    if (!sample || sample->side < 0 || sample->side > 1 || sample->owner.scope ||
+        !sample->owner.clock_object || !sample->player_record || !sample->name[0]) return;
+    std::lock_guard<std::mutex> lock(s_live_stats_lock);
+    auto found = s_live_players.find(sample->player_record);
+    int priority = 0;
+    if (found != s_live_players.end() && live_owner_equal(found->second.owner, sample->owner)) {
+        const auto &old = found->second;
+        if (presentation_trace_enabled() && live_increased(old, *sample, NFL2K5_LIVE_SACKS)) {
+            double before = 0, after = 0;
+            bool known = live_value(old.valid_fields, old.values, NFL2K5_LIVE_SACKS, before);
+            live_value(sample->valid_fields, sample->values, NFL2K5_LIVE_SACKS, after);
+            fprintf(stderr, "[SACK-CREDIT] t=%llu clock=%08X rosters=%08X/%08X period=%u player=%08X "
+                    "side=%d name='%s' previousKnown=%u previous=%.1f current=%.1f sampled=%llu\n",
+                    (unsigned long long)GetTickCount64(), sample->owner.clock_object,
+                    sample->owner.rosters[0], sample->owner.rosters[1], sample->owner.period,
+                    sample->player_record, sample->side, sample->full_name, (unsigned)known,
+                    before, after, (unsigned long long)sample->owner.sampled_at_ms);
+        }
+        if (sample->native_position == 7 || sample->native_position == 8)
+            priority = live_increased(old, *sample, NFL2K5_LIVE_RUSH_ATTEMPTS) ? 2 : 0;
+        else if (sample->native_position == 3 || sample->native_position == 9)
+            priority = live_increased(old, *sample, NFL2K5_LIVE_RECEPTIONS) ? 3 : 0;
+        else if (sample->native_position == 4 || sample->native_position == 5 ||
+                 sample->native_position == 6 || sample->native_position == 10 ||
+                 sample->native_position == 11 || sample->native_position == 15 || sample->native_position == 16) {
+            if (live_increased(old, *sample, NFL2K5_LIVE_DEF_INTERCEPTIONS)) priority = 8;
+            else if (live_increased(old, *sample, NFL2K5_LIVE_SACKS)) priority = 7;
+            else if (live_increased(old, *sample, NFL2K5_LIVE_TACKLES)) priority = 1;
+        }
+    }
+    s_live_players[sample->player_record] = *sample;
+    /* Multiple refreshes replace a pending player's payload rather than
+     * queueing a stale card for every changed field. Baselines never trigger. */
+    for (auto &pending : s_live_candidates)
+        if (pending.sample.player_record == sample->player_record &&
+            live_owner_equal(pending.sample.owner, sample->owner)) {
+            pending.sample = *sample;
+            if (priority) {
+                bool expired = sample->owner.sampled_at_ms > pending.queued_at &&
+                    sample->owner.sampled_at_ms - pending.queued_at > 25000u;
+                pending.priority = expired ? priority : std::max(pending.priority, priority);
+                pending.queued_at = sample->owner.sampled_at_ms;
+            }
+            return;
+        }
+    if (priority) {
+        if (s_live_candidates.size() >= 12) s_live_candidates.erase(s_live_candidates.begin());
+        s_live_candidates.push_back({ *sample, sample->owner.sampled_at_ms, priority });
+    }
+    if (s_live_players.size() > 160) { /* bounded even across roster replacement */
+        s_live_players.clear(); s_live_candidates.clear(); ++s_live_stats_epoch;
+    }
+}
+
+extern "C" void nfl2k5_broadcast_live_team_sample(const Nfl2k5LiveTeamSample *sample)
+{
+    if (!sample || sample->side < 0 || sample->side > 1 || sample->owner.scope ||
+        !sample->owner.clock_object || !sample->stat_block) return;
+    std::lock_guard<std::mutex> lock(s_live_stats_lock);
+    s_live_teams[sample->side] = *sample;
+    if (sample->time_of_possession_unit != NFL2K5_TOP_SECONDS)
+        s_live_teams[sample->side].valid_fields &= ~NFL2K5_LIVE_FIELD_BIT(NFL2K5_LIVE_TIME_OF_POSSESSION);
+}
+
+extern "C" void nfl2k5_broadcast_live_stats_reset(void)
+{
+    std::lock_guard<std::mutex> lock(s_live_stats_lock);
+    s_live_players.clear(); s_live_candidates.clear();
+    s_live_teams[0] = Nfl2k5LiveTeamSample(); s_live_teams[1] = Nfl2k5LiveTeamSample();
+    ++s_live_stats_epoch;
 }
 
 static bool pop_event(Event &ev)
@@ -1419,10 +2406,24 @@ extern "C" void nfl2k5_broadcast_live_qb_sample(const Nfl2k5PlayerStat *s, int t
         return;
     PlayerStat next = copy_player_stat(*s);
     if (next.name.empty()) return;
+    GameState sample_state;
+    uint32_t sample_clock = 0, sample_roster[2] = { 0, 0 };
+    std::string sample_abbr[2];
+    if (read_state(sample_state) && sample_state.valid) {
+        sample_clock = rd32(0x00E6028Cu);
+        for (int side = AWAY; side <= HOME; ++side) {
+            sample_roster[side] = rd32(k_team_obj[side] + 0x1Cu);
+            sample_abbr[side] = upper(sample_state.t[side].abbr);
+        }
+    }
     bool pass_attempt = false, complete = false, intercepted = false, pass_td = false;
     {
         std::lock_guard<std::mutex> lock(s_live_qb_lock);
         LiveQbSample &sample = s_live_qb[team];
+        sample.clock_object = sample_clock;
+        for (int side = AWAY; side <= HOME; ++side) {
+            sample.roster[side] = sample_roster[side]; sample.abbr[side] = sample_abbr[side];
+        }
         PlayerIdentity &identity = s_live_qb_identity[team];
         if (sample.revision && sample.player.name != next.name) identity = PlayerIdentity();
         if (s->full_name && *s->full_name) identity.name = s->full_name;
@@ -1463,6 +2464,7 @@ extern "C" void nfl2k5_broadcast_live_qb_sample(const Nfl2k5PlayerStat *s, int t
 extern "C" void nfl2k5_broadcast_live_qb_reset(void)
 {
     std::lock_guard<std::mutex> lock(s_live_qb_lock);
+    ++s_live_qb_epoch;
     s_live_qb[AWAY] = LiveQbSample();
     s_live_qb[HOME] = LiveQbSample();
     s_live_qb_identity[AWAY] = PlayerIdentity();
@@ -1495,6 +2497,17 @@ extern "C" int nfl2k5_presentation_playercard(uint32_t kind, const char *native_
         identity = s_live_qb_identity[side];
     }
     if (!g.valid || !sample.revision || sample.player.name.empty()) return 0;
+    if (s_pkgs[k].player_cards_ack) {
+        if (!sample.clock_object || sample.clock_object != rd32(0x00E6028Cu)) return 0;
+        for (int side = AWAY; side <= HOME; ++side)
+            if (!sample.roster[side] || sample.roster[side] != rd32(k_team_obj[side] + 0x1Cu) ||
+                sample.abbr[side] != upper(g.t[side].abbr)) return 0;
+        /* This is a script/configuration object, not a proven active slot.
+         * Copy the request and preserve native timing until a real slot is
+         * bound and its page has acknowledged a painted replacement. */
+        player_card_request(kind, folded, g, sample.player, identity);
+        return 0;
+    }
     Event ev;
     ev.name = "player_stat";
     ev.team = side;
@@ -1553,6 +2566,12 @@ static void service_live_qb(const GameState &g, bool visible, const JVal *anims)
 /* ======================================================================
  * Rendering
  * ====================================================================== */
+#ifndef _WIN32
+/* JSON-layout packages are not loaded off Windows (load_packages): the
+ * renderer never starts and nothing is drawn. */
+struct Renderer { int w = 0, h = 0; } R;
+static bool renderer_init() { return false; }
+#else
 struct Renderer {
     ID2D1Factory *d2d = nullptr;
     IDWriteFactory *dw = nullptr;
@@ -1631,6 +2650,7 @@ static IDWriteTextFormat *text_format(const std::string &family, float size, int
     R.formats[key] = f;
     return f;
 }
+#endif
 
 /* Values a template or colour can name. */
 struct Ctx {
@@ -1677,8 +2697,20 @@ static std::string ball_position(const GameState &g)
 
 static bool is_final(const GameState &g)
 {
-    if (g.t[0].score == g.t[1].score) return false;
-    return g.period >= 4 && g.clock <= 0.0f;
+    /* sub_000AF260 dispatches state 0x0A through sub_000AED90, then the
+     * caller publishes E602B8. A zero period clock can still precede an
+     * untimed down/PAT; an OT final can have time left, and ties are valid.
+     * Source and runtime proof: RESULT-CAPTURE.md sections2.4 and8.1. */
+    return g.valid && g.period >= 1 && g.flow_state == 0x0A;
+}
+
+static bool period_ending(const GameState &g)
+{
+    /* sub_000B8A00 enters 0x09 for halftime or 0x15 for other period
+     * presentations, after the title has resolved pending PAT/untimed
+     * downs. Do not infer this from a zero clock while play is live. */
+    return g.valid && g.period >= 1 && g.period <= 12 && g.clock <= 0.0f &&
+        (g.flow_state == 0x09 || g.flow_state == 0x15);
 }
 
 static std::string var(const Ctx &c, const std::string &name)
@@ -1847,6 +2879,7 @@ static bool slot_rect(const Ctx &c, const std::string &at, float r[4])
     return true;
 }
 
+#ifdef _WIN32
 /* Draw one element (units; the render target's transform maps them). */
 static void draw_element(const Ctx &c, const JVal &e, float alpha, float dx, float dy, float clip_w_frac)
 {
@@ -1975,6 +3008,7 @@ static void draw_element(const Ctx &c, const JVal &e, float alpha, float dx, flo
     }
     if (clipped) rt->PopAxisAlignedClip();
 }
+#endif
 
 static float motion_ease(float p, const std::string &name)
 {
@@ -2041,6 +3075,7 @@ static MotionPose motion_pose(const JVal &L, double local)
     return prev;
 }
 
+#ifdef _WIN32
 static void draw_layer(const Ctx &c, const JVal &L, double t, double duration)
 {
     double start = L.num("start", 0), end = L.num("end", duration);
@@ -2102,6 +3137,7 @@ static void draw_layer(const Ctx &c, const JVal &L, double t, double duration)
     if (crop_y) R.rt->PopAxisAlignedClip();
     R.rt->SetTransform(old);
 }
+#endif
 
 /* ======================================================================
  * Frame logic (presenter thread)
@@ -2113,6 +3149,18 @@ static std::atomic<DWORD> s_native_tick{ 0 };
  * is refreshed only by observable match activity (the native bug, a live
  * clock change, play selection, or the in-game pause controller). */
 static std::atomic<DWORD> s_match_tick{ 0 };
+/* Authoritative successful match-initialization/exit boundaries. The
+ * presentation clock alone cannot distinguish a quiet camera from a menu.
+ * 0: no lifecycle observation yet;1: initialized;2: original exit called. */
+static std::atomic<int> s_native_match_lifecycle{0};
+extern "C" void nfl2k5_presentation_match_lifecycle(int entered)
+{
+    nfl2k5_sandbox_match_lifecycle(entered);
+    s_native_match_lifecycle = entered ? 1 : 2;
+    if (!entered) s_match_tick = 0;
+    fprintf(stderr, "[PRES-MATCH] native-%s t=%llu\n", entered ? "initialized" : "exit",
+        (unsigned long long)GetTickCount64());
+}
 static int s_loaded_pkg = -1;
 static GameState s_prev;
 static bool s_prev_valid;
@@ -2174,7 +3222,7 @@ static bool s_text_hidden;
 /* Called by the game right after its scorebug update (SCOREBUG_NATIVE_HOOK). */
 extern "C" void nfl2k5_scorebug_hide(void)
 {
-    if (!custom_active() && s_text_hidden) {
+    if (!custom_active() && !nfl2k5_sandbox_hide_hud() && s_text_hidden) {
         static const uint32_t k_text_colors2[] = {
             0xA95894, 0xA95898, 0xA958BC, 0xA958C0, 0xA958E4, 0xA958E8, 0xA9590C, 0xA95910,
             0xA95934, 0xA95938, 0xA95958, 0xA95990, 0xA959D8, 0xA95A48, 0xA95AB8, 0xA95B28,
@@ -2185,7 +3233,7 @@ extern "C" void nfl2k5_scorebug_hide(void)
         }
         s_text_hidden = false;
     }
-    if (custom_active()) {
+    if (custom_active() || nfl2k5_sandbox_hide_hud()) {
         uint32_t scene = rd32(0x00A95528u), n = scene ? rd32(scene + 0x1C) : 0, arr = scene ? rd32(scene + 0x20) : 0;
         for (uint32_t i = 0; arr && i < n && i < 256; i++) {
             uint32_t fl = rd32(arr + i * 0x80u + 8u);
@@ -2330,7 +3378,7 @@ static void music_logic(const GameState &g, bool native_on)
             played_this_load = true;
             const JVal *pv = pkg->root.get("pregame_video");
             std::string vfile = pv ? pv->str("file") : "";
-            if (!vfile.empty() && file_exists(pkg->dir + "/" + vfile)) {
+            if (!vfile.empty() && file_exists(pkg->dir + "/" + vfile) && !video_skip(pkg->dir + "/" + vfile)) {
                 std::string path = pkg->dir + "/" + vfile;
                 float v0 = s_sel_vol / 10.0f;
                 video_play(path);
@@ -2429,14 +3477,31 @@ static std::string json_color(const D2D1_COLOR_F &c)
 /* mods/teams/SF/logos/scorebug.png -> https://teams.local/SF/logos/scorebug.png */
 static std::string team_asset_url(const std::string &path)
 {
-    const std::string prefix = "mods/teams/";
+    const std::string prefix = "mods/teams/", eras = eras_teams_root() + "/";
     if (path.compare(0, prefix.size(), prefix) == 0) return "https://teams.local/" + path.substr(prefix.size());
+    /* M9: <Eras teams root>/1980/colts/logos/scorebug.png -> https://erateams.local/1980/colts/logos/scorebug.png */
+    if (eras.size() > 1 && path.compare(0, eras.size(), eras) == 0) return "https://erateams.local/" + path.substr(eras.size());
     return "";
 }
 
 static const char *side_name(int side) { return side == AWAY ? "away" : "home"; }
 
-struct HtmlContext { bool scorebug_visible, play_selection, paused, native_scorebug; };
+struct HtmlContext { bool scorebug_visible, play_selection, paused, native_scorebug; bool replay_active = false; };
+
+static bool native_pause_active(void)
+{
+    /* AC7444 covers navigation_pause_notitle, but the actual in-match pause
+     * and challenge menus use the main FSM without setting that latch.
+     * A84C18 is an inclusive top index; stale slots above it are not live. */
+    if (rd32(0x00AC7444u)) return true;
+    uint32_t top = rd32(0x00A84C18u);
+    if (top >= 32u) return false;
+    for (uint32_t i = 0; i <= top; ++i) {
+        uint32_t descriptor = rd32(0x00A84B18u + i * 8u);
+        if (descriptor == 0x004E9078u || descriptor == 0x0052DC20u) return true;
+    }
+    return false;
+}
 
 /* The original overall accessor is sampled on the guest popup/script path.
  * The presenter only consumes these owned strings and roster identities. */
@@ -2454,6 +3519,91 @@ static bool fresh_pregame(const GameState &g)
            g.t[AWAY].score == 0 && g.t[HOME].score == 0 &&
            std::isfinite(g.period_len) && g.period_len > 0.0f && g.period_len < 4000.0f &&
            std::isfinite(g.clock) && std::fabs(g.clock - g.period_len) <= 0.1f;
+}
+
+/* A retained clock/team global is not a match identity. Bind the camera
+ * evidence to the clock and both currently loaded roster objects, and expose
+ * that same identity to the page so a new same-team match clears old owners. */
+static std::string native_match_identity(const GameState &g)
+{
+    if (!g.valid) return "";
+    uint32_t clock = rd32(0x00E6028Cu), roster[2] = { 0, 0 };
+    std::string abbr[2];
+    if (!clock || !guest_va_ok(clock)) return "";
+    for (int side = AWAY; side <= HOME; ++side) {
+        uint8_t count = 0;
+        roster[side] = rd32(k_team_obj[side] + 0x1Cu);
+        abbr[side] = upper(team_info(g.t[side].abbr).abbr);
+        if (!roster[side] || !guest_va_ok(roster[side]) || abbr[side].empty() ||
+            !gread(roster[side] + 0x11Cu, &count, sizeof count) || !count || count > 71)
+            return "";
+    }
+    return std::to_string(clock) + ":" + std::to_string(roster[AWAY]) + ":" +
+        std::to_string(roster[HOME]) + ":" + abbr[AWAY] + ":" + abbr[HOME];
+}
+
+static bool pregame_scene_filename(uint32_t descriptor, std::string &name)
+{
+    uint32_t text = rd32(descriptor);
+    name.clear();
+    if (!text || !guest_va_ok(text)) return false;
+    for (unsigned i = 0; i < 64; ++i) {
+        uint16_t c = 0;
+        if (!gread(text + i * 2u, &c, sizeof c)) return false;
+        if (!c) return !name.empty();
+        if (c < 32 || c > 126) return false;
+        name += (char)c;
+    }
+    return false;
+}
+
+static const char *native_pregame_stage(const GameState &g, const HtmlContext &cx,
+                                      const std::string &match)
+{
+    static std::string owner;
+    static bool crowd_seen;
+    if (match.empty() || match != owner) { owner = match; crowd_seen = false; }
+    if (!g.valid || cx.play_selection || cx.paused) { crowd_seen = false; return nullptr; }
+    if (g.period >= 1 && g.phase == 2) { crowd_seen = false; return "kickoff"; }
+    if (s_coin_toss_native_active.load()) { crowd_seen = false; return "coin_toss"; }
+    if (match.empty() || !fresh_pregame(g)) { crowd_seen = false; return nullptr; }
+
+    /* sub_00083870 renders the FIRST of exactly two slots whose bit value 4
+     * is set. Loaded slots (bit 2) are not the camera currently on screen.
+     * Validate the instance's own descriptor before trusting its ID: modified
+     * discs may use the same numeric slot for another animation. */
+    for (unsigned channel = 0; channel < 2; ++channel) {
+        uint32_t slot = 0x00B607F0u + channel * 0x100u;
+        if (!(rd32(slot) & 4u)) continue;
+        uint32_t id = rd32(slot + 0x10u), instance = rd32(slot + 0x18u);
+        if (rd32(slot + 0xF0u) != 3u || !instance || !guest_va_ok(instance) || id > 1023u)
+            return nullptr;
+        uint32_t descriptor = 0x004FB398u + id * 12u;
+        if (rd32(instance + 0x0Cu) != descriptor) return nullptr;
+        std::string filename;
+        if (!pregame_scene_filename(descriptor, filename)) return nullptr;
+        bool crowd = id == 179u && filename == "eb004_%s.iff";
+        if (id >= 89u && id <= 120u && filename.size() == 17u &&
+            filename.compare(0, 8, "crowdhat") == 0 &&
+            filename[8] >= '0' && filename[8] <= '9' &&
+            filename[9] >= '0' && filename[9] <= '9' &&
+            filename.compare(10, 7, "_%s.iff") == 0) crowd = true;
+        if (crowd) { crowd_seen = true; return "crowd"; }
+        /* Hardware captures and the matching script trace prove these two
+         * warmups: es448 is the away-player bench exchange; a331def is the
+         * home defensive player's midfield stretch. No unseen ID range is
+         * classified, and warmup must follow real crowd evidence this match. */
+        if (crowd_seen && ((id == 359u && filename == "es448_%s.iff") ||
+                           (id == 17u && filename == "a331def_%s.iff"))) return "warmup";
+        bool coin = (id == 67u && filename == "cointossloop_%s.iff") ||
+            (id == 68u && filename == "cointossflip_%s.iff") ||
+            (id == 69u && filename == "fpcoinloophome_%s.iff") ||
+            (id == 70u && filename == "fpcoinfliphome_%s.iff") ||
+            (id == 303u && filename == "cointossshake_%s.iff");
+        if (coin) { crowd_seen = false; return "coin_toss"; }
+        return nullptr;
+    }
+    return nullptr;
 }
 
 extern "C" void nfl2k5_presentation_featured_players(uint32_t clock_object,
@@ -2508,9 +3658,35 @@ static std::string featured_players_json(const GameState &g, int side)
     return "[" + s_featured.player[side] + "]";
 }
 
+/* A game HUD element (the MyCareer stat bar, src/nfl2k5_mycareer_hud.c) is using the top-right
+ * corner: context.cornerClaimed tells packages to clear their corner bug. Claimed by a call each
+ * frame the element draws; it lapses 250 ms after the last one. */
+static std::atomic<unsigned long long> s_corner_claim_ms{ 0 };
+static std::atomic<float> s_corner_right{ 0.0f };
+/* The page itself reports where its corner bug ends ("NFL2K5_CORNER_RIGHT:<share of the page
+ * width>", NBC SNF and CBS): its CSS decides, e.g. a fill_width page keeps it in a 16:9 area. */
+static std::atomic<float> s_corner_page{ 0.0f };
+static void corner_page_message(const std::string &message)
+{
+    static const char k[] = "NFL2K5_CORNER_RIGHT:";
+    if (message.compare(0, sizeof k - 1, k) == 0) {
+        float v = (float)atof(message.c_str() + sizeof k - 1);
+        if (v > 0.3f && v <= 1.0f) s_corner_page.store(v);
+    }
+}
+extern "C" float nfl2k5_presentation_corner_right(void) { return s_corner_right.load(); }
+extern "C" void nfl2k5_presentation_corner_claim(void) { s_corner_claim_ms.store(GetTickCount64()); }
+static bool corner_claimed(void)
+{
+    unsigned long long t = s_corner_claim_ms.load();
+    return t && GetTickCount64() - t < 250u;
+}
+
 static std::string html_state_json(const GameState &g, const HtmlContext &cx)
 {
     std::string j = "{\"apiVersion\":1";
+    std::string match = native_match_identity(g);
+    j += ",\"matchId\":" + (match.empty() ? std::string("null") : json_str(match));
     j += ",\"valid\":" + std::string(g.valid ? "true" : "false");
     const char *status = !g.valid ? "inactive" : g.period == 0 ? "pregame" : is_final(g) ? "final" : "in_progress";
     j += ",\"gameStatus\":" + json_str(status);
@@ -2532,6 +3708,7 @@ static std::string html_state_json(const GameState &g, const HtmlContext &cx)
     j += ",\"side\":null,\"text\":" + json_str(ball_position(g)) + "}";
     j += ",\"redZone\":null";
     j += ",\"possession\":" + (g.poss == 1 ? std::string("\"away\"") : g.poss == 2 ? std::string("\"home\"") : std::string("null"));
+    j += eras_api_fields();   /* M9: league, season, decade, week */
     for (int side = 0; side < 2; side++) {
         TeamInfo t = team_info(g.t[side].abbr);
         j += ",\"" + std::string(side_name(side)) + "\":{";
@@ -2548,9 +3725,12 @@ static std::string html_state_json(const GameState &g, const HtmlContext &cx)
     j += ",\"context\":{\"scorebugVisible\":" + std::string(cx.scorebug_visible ? "true" : "false");
     j += ",\"playSelection\":" + std::string(cx.play_selection ? "true" : "false");
     j += ",\"paused\":" + std::string(cx.paused ? "true" : "false");
+    j += ",\"replayActive\":" + std::string(cx.replay_active ? "true" : "false");
+    j += ",\"animationsEnabled\":" + std::string(s_sel_anim.load() ? "true" : "false");
     j += ",\"nativeScorebug\":" + std::string(cx.native_scorebug ? "true" : "false");
-    const char *pregame_stage = !g.valid ? nullptr : g.period >= 1 && g.phase == 2 ? "kickoff" :
-                                s_coin_toss_native_active.load() ? "coin_toss" : nullptr;
+    j += ",\"periodEnding\":" + std::string(period_ending(g) ? "true" : "false");
+    j += ",\"cornerClaimed\":" + std::string(corner_claimed() ? "true" : "false");
+    const char *pregame_stage = native_pregame_stage(g, cx, match);
     j += ",\"pregameStage\":" + (pregame_stage ? json_str(pregame_stage) : std::string("null"));
     j += ",\"flag\":" + std::string(GetTickCount64() < s_flag_until ? "true" : "false") + "}";
     return j + "}";
@@ -2603,6 +3783,39 @@ static std::string html_player_extra(const PlayerStat &p, const PlayerIdentity &
     return j;
 }
 
+static std::string live_fields_json(uint64_t mask, const double *values)
+{
+    static const char *names[NFL2K5_LIVE_FIELD_COUNT] = {
+        "completions", "attempts", "passingYards", "passingTouchdowns", "interceptions",
+        "carries", "rushingYards", "rushingTouchdowns", "receptions", "receivingYards",
+        "receivingTouchdowns", "tackles", "sacks", "defensiveInterceptions",
+        "fieldGoalsMade", "fieldGoalsAttempted", "longestFieldGoal", "firstDowns",
+        "possessions", "totalYards", "timeOfPossession", "forcedFumbles", "fumblesRecovered",
+        "tacklesForLoss", "longestRush", "longestReception", "longestPass", "turnovers",
+        "penalties", "passingYardsAllowed", "rushingYardsAllowed", "totalYardsAllowed"
+    };
+    std::string j;
+    for (int i = 0; i < NFL2K5_LIVE_FIELD_COUNT; ++i) {
+        double value;
+        if (!live_value(mask, values, i, value)) continue;
+        char number[48]; snprintf(number, sizeof number, "%.6g", value);
+        j += "," + json_str(names[i]) + ":" + number;
+    }
+    return j;
+}
+
+static std::string live_player_extra(const Nfl2k5LivePlayerSample &p)
+{
+    int kind = p.native_position == 7 || p.native_position == 8 ? NFL2K5_STAT_RB :
+               p.native_position == 3 || p.native_position == 9 ? NFL2K5_STAT_RECEIVER : NFL2K5_STAT_DEFENSE;
+    std::string j = ",\"source\":\"game\",\"scope\":\"this_game\",\"displaySeconds\":6,\"player\":{";
+    j += "\"kind\":" + std::to_string(kind) + ",\"name\":" + json_str(p.name);
+    j += ",\"fullName\":" + json_str(p.full_name) + ",\"position\":" + json_str(p.position);
+    j += ",\"number\":" + (p.jersey_number < 0 ? std::string("null") : std::to_string(p.jersey_number));
+    j += ",\"portrait\":" + json_str(p.photo_id < 0 ? "" : nfl2k5_portrait_url(p.photo_id));
+    return j + live_fields_json(p.valid_fields, p.values) + "}";
+}
+
 /* The JSON renderer's event names -> Presentation API names. Quarter
  * boundaries are derived from state instead (html_state_events). */
 static const char *html_event_name(const std::string &n)
@@ -2616,7 +3829,11 @@ static const char *html_event_name(const std::string &n)
         { "turnover", "TURNOVER" }, { "sack", "SACK" }, { "injury", "INJURY" },
         { "replay_begin", "REPLAY_STARTED" }, { "replay_end", "REPLAY_ENDED" },
         { "game_start", "GAME_STARTED" }, { "drive_start", "DRIVE_STARTED" }, { "player_stat", "PLAYER_STAT" },
+        { "player_stat_hide", "PLAYER_STAT_HIDE" },
         { "player_feature", "PLAYER_FEATURE" },
+        { "live_player_stat", "PLAYER_STAT" },
+        { "team_stat", "TEAM_STAT" },
+        { "possession_stat", "POSSESSION_STAT" },
     };
     for (auto &m : map) if (n == m.first) return m.second;
     return nullptr;     /* end_q1/end_q3/halftime/quarter_start: from state */
@@ -2706,26 +3923,1272 @@ struct PendingPopupEvent {
     int side = -1;
     uint32_t clock_object = 0, roster[2] = { 0, 0 };
     std::string abbr[2];
+    uint64_t queued_at = 0;
+    uint32_t period_token = 0, period_generation = 0;
+    int period_package = -1;
+    uint32_t replay_token = 0, replay_generation = 0;
+    int replay_package = -1;
+    uint32_t review_token = 0, review_generation = 0;
+    int review_package = -1;
+    uint32_t camera_token = 0, camera_generation = 0;
+    int camera_package = -1;
+    uint32_t notice_token = 0, notice_generation = 0;
+    int notice_package = -1;
+    uint32_t table_token = 0, table_generation = 0;
+    int table_package = -1;
+    uint32_t lineup_token = 0, lineup_generation = 0;
+    int lineup_package = -1;
+    uint32_t timeout_token = 0, timeout_generation = 0;
+    int timeout_package = -1;
 };
 static std::vector<PendingPopupEvent> s_popup_events;
 
 enum { PREGAME_COIN = 0, PREGAME_FACT = 1 };
-/* Sole enable point: leave false until the post-crowd camera cue and a
- * verified visual-only native hook are proved, retaining layout/update/choice callbacks.
- * Draft source must not draw SNF cards over still-visible native artwork. */
-static constexpr bool k_native_pregame_draw_hook_ready = false;
+/* The popup renderer now keeps its update/layout/choice callbacks and only
+ * zeroes outgoing artwork alpha after the page paints an owned replacement.
+ * Card replacement does not require the separate matchup-intro camera cue. */
+static constexpr bool k_native_pregame_draw_hook_ready = true;
 struct NativePregameOwner {
-    bool active = false, acknowledged = false;
+    bool active = false, acknowledged = false, closing = false;
     uint32_t token = 0, generation = 0, clock_object = 0, layout = 0, player = 0;
-    uint32_t roster[2] = { 0, 0 }, rows = 0, columns = 0;
+    uint32_t roster[2] = { 0, 0 }, rows = 0, columns = 0, subtype = 0;
     int package = -1, slot = -1, side = -1;
-    std::string abbr[2], title, message, full_name;
+    std::string abbr[2], title, message, full_name, choices, subject;
     std::vector<std::string> cells;
 };
 static std::mutex s_pregame_owner_lock;
 static NativePregameOwner s_pregame_owner[2];
 static std::atomic<uint32_t> s_pregame_token{ 0 }, s_pregame_host_generation{ 1 };
 static std::atomic<int> s_pregame_host_package{ -1 }, s_pregame_page_permitted{ 0 };
+static std::atomic<DWORD> s_native_card_tick{ 0 };
+
+/* Player-card requests originate in a one-shot script hook. Ownership is
+ * acquired only later, from an actual active popup slot. The WebView thread
+ * may acknowledge this copied record, but never touches guest memory. */
+struct NativePlayerCardOwner {
+    bool pending = false, bound = false, queued = false, delivered = false, acknowledged = false, closing = false;
+    uint32_t token = 0, generation = 0, clock_object = 0, ctx = 0, layout = 0, kind = 0;
+    uint32_t roster[2] = { 0, 0 };
+    int package = -1, side = -1;
+    uint64_t requested_at = 0;
+    std::string title, abbr[2];
+    PlayerStat player;
+    PlayerIdentity identity;
+};
+static std::mutex s_player_card_lock;
+static NativePlayerCardOwner s_player_card_owner;
+static std::atomic<uint32_t> s_player_card_token{ 0 };
+static std::atomic<int> s_player_card_host_package{ -1 }, s_player_card_page_permitted{ 0 };
+static std::string gtext(uint32_t va, int max);
+
+static std::string player_card_fold(std::string value)
+{
+    std::transform(value.begin(), value.end(), value.begin(),
+            [](unsigned char c) { return (char)tolower(c); });
+    return value;
+}
+
+static Event player_card_event(const NativePlayerCardOwner &owner, bool hide)
+{
+    Event ev;
+    ev.name = hide ? "player_stat_hide" : "player_stat";
+    ev.team = owner.side; ev.player = owner.player; ev.player_identity = owner.identity;
+    ev.requested_duration = 6.0;
+    ev.native_card_token = owner.token; ev.native_card_generation = owner.generation;
+    ev.native_card_package = owner.package;
+    return ev;
+}
+
+static void player_card_release(const char *reason, bool notify = true, uint32_t expected_token = 0)
+{
+    NativePlayerCardOwner old;
+    {
+        std::lock_guard<std::mutex> lock(s_player_card_lock);
+        if (expected_token && s_player_card_owner.token != expected_token) return;
+        old = std::move(s_player_card_owner);
+        s_player_card_owner = NativePlayerCardOwner();
+    }
+    if (old.pending && old.token) {
+        if (notify && old.bound) queue_event(player_card_event(old, true));
+        fprintf(stderr, "[PLAYER-CARD] release token=%u slot=%08X bound=%d reason=%s\n",
+                old.token, old.ctx, (int)old.bound, reason);
+    }
+}
+
+static void player_card_replacement_reset()
+{
+    s_player_card_page_permitted = 0;
+    s_player_card_host_package = -1;
+    player_card_release("page-reset", false);
+}
+
+static void player_card_request(uint32_t kind, const std::string &title,
+        const GameState &g, const PlayerStat &player, const PlayerIdentity &identity)
+{
+    NativePlayerCardOwner owner;
+    owner.pending = true; owner.kind = kind; owner.title = title;
+    do { owner.token = ++s_player_card_token; } while (!owner.token);
+    owner.package = s_sel_pkg.load(); owner.generation = s_pregame_host_generation.load();
+    owner.clock_object = rd32(0x00E6028Cu); owner.side = g.poss - 1;
+    owner.player = player; owner.identity = identity; owner.requested_at = GetTickCount64();
+    for (int side = AWAY; side <= HOME; ++side) {
+        owner.roster[side] = rd32(k_team_obj[side] + 0x1Cu);
+        owner.abbr[side] = upper(g.t[side].abbr);
+    }
+    player_card_release("new-request");
+    std::lock_guard<std::mutex> lock(s_player_card_lock);
+    s_player_card_owner = std::move(owner);
+}
+
+/* Called only by existing native/HUD paths, never by a page callback. */
+static bool player_card_matches(const NativePlayerCardOwner &owner, const GameState &g)
+{
+    if (!g.valid || !owner.pending || !owner.clock_object ||
+        owner.clock_object != rd32(0x00E6028Cu)) return false;
+    for (int side = AWAY; side <= HOME; ++side)
+        if (!owner.roster[side] || owner.roster[side] != rd32(k_team_obj[side] + 0x1Cu) ||
+            owner.abbr[side] != upper(g.t[side].abbr)) return false;
+    if (!owner.bound) return true;
+    if ((owner.ctx != 0x00B61B50u && owner.ctx != 0x00B62A70u) || !owner.layout ||
+        rd32(owner.ctx + 4u) != 1 || (!owner.closing && rd32(owner.ctx + 0xCu) != 0) ||
+        rd32(owner.ctx + 0x48u) != owner.layout ||
+        player_card_fold(gtext(owner.ctx + 0x4Cu, 64)) != owner.title) return false;
+    return true;
+}
+
+static bool player_card_package_current(const NativePlayerCardOwner &owner)
+{
+    int pk = s_sel_pkg.load();
+    return owner.package == pk && pk == s_player_card_host_package.load() &&
+        owner.generation == s_pregame_host_generation.load() &&
+        pk > 0 && pk < (int)s_pkgs.size() && s_pkgs[pk].html &&
+        s_pkgs[pk].replaces_player_cards && s_pkgs[pk].player_cards_ack;
+}
+
+/* Both observers can see one native player popup. The specialized live
+ * player-stat owner binds first in native_popup_frame; do not paint a second
+ * generic fact over that same instance. No other slot/player is excluded. */
+static bool player_card_precedes_fact(uint32_t ctx)
+{
+    std::lock_guard<std::mutex> lock(s_player_card_lock);
+    const auto &owner = s_player_card_owner;
+    return owner.pending && owner.bound && !owner.closing && owner.ctx == ctx &&
+        player_card_package_current(owner);
+}
+
+static void player_card_frame(uint32_t ctx)
+{
+    if (ctx != 0x00B61B50u && ctx != 0x00B62A70u) return;
+    {
+        std::lock_guard<std::mutex> lock(s_player_card_lock);
+        if (!s_player_card_owner.pending) return;
+    }
+    GameState g;
+    if (!read_state(g)) return;
+    Event delivery;
+    bool send = false, stale = false;
+    uint32_t stale_token = 0;
+    const char *stale_reason = "ownership-changed";
+    {
+        std::lock_guard<std::mutex> lock(s_player_card_lock);
+        auto &owner = s_player_card_owner;
+        if (!owner.pending) return;
+        if (!player_card_package_current(owner) || !player_card_matches(owner, g) ||
+            (!owner.bound && GetTickCount64() - owner.requested_at > 10000u)) {
+            stale = true; stale_token = owner.token;
+            stale_reason = !player_card_package_current(owner) ? "page-not-ready-or-changed" :
+                !player_card_matches(owner, g) ? "slot-or-match-changed" : "unbound-timeout";
+        } else if (!owner.bound) {
+            /* +48 is the actual slot's layout selector, not a guest pointer.
+             * No other title or partially populated slot is substituted. */
+            if (rd32(ctx + 4u) != 1 || rd32(ctx + 0xCu) != 0 || !rd32(ctx + 0x48u) ||
+                player_card_fold(gtext(ctx + 0x4Cu, 64)) != owner.title) return;
+            owner.ctx = ctx; owner.layout = rd32(ctx + 0x48u); owner.bound = true;
+            fprintf(stderr, "[PLAYER-CARD] bind token=%u slot=%08X layout=%08X kind=%u\n",
+                    owner.token, owner.ctx, owner.layout, owner.kind);
+        }
+        if (!stale && owner.bound && !owner.closing && s_player_card_page_permitted.load() &&
+            !owner.queued && !owner.delivered) {
+            owner.queued = true; delivery = player_card_event(owner, false); send = true;
+        }
+    }
+    if (stale) player_card_release(stale_reason, true, stale_token);
+    else if (send) queue_event(std::move(delivery));
+}
+
+static void player_card_hud_context(const GameState &g, const HtmlContext &cx)
+{
+    int pk = s_sel_pkg.load();
+    bool permitted = pk == s_player_card_host_package.load() && pk > 0 && pk < (int)s_pkgs.size() &&
+        s_pkgs[pk].html && s_pkgs[pk].replaces_player_cards && s_pkgs[pk].player_cards_ack &&
+        g.valid && cx.scorebug_visible && !cx.play_selection && !cx.paused && !is_final(g) && !period_ending(g);
+    s_player_card_page_permitted = permitted ? 1 : 0;
+    Event hide;
+    bool send_hide = false, stale = false;
+    uint32_t stale_token = 0;
+    const char *stale_reason = "ownership-changed";
+    {
+        std::lock_guard<std::mutex> lock(s_player_card_lock);
+        auto &owner = s_player_card_owner;
+        if (!owner.pending) return;
+        stale = !player_card_package_current(owner) || !player_card_matches(owner, g) ||
+            (!owner.bound && GetTickCount64() - owner.requested_at > 10000u);
+        if (stale) {
+            stale_token = owner.token;
+            stale_reason = !player_card_package_current(owner) ? "page-not-ready-or-changed" :
+                !player_card_matches(owner, g) ? "slot-or-match-changed" : "unbound-timeout";
+        }
+        if (!stale && !permitted) {
+            if (owner.bound && (owner.delivered || owner.queued)) {
+                hide = player_card_event(owner, true); send_hide = true;
+            }
+            owner.acknowledged = owner.delivered = owner.queued = false;
+        }
+    }
+    if (stale) player_card_release(stale_reason, true, stale_token);
+    else if (send_hide) queue_event(std::move(hide));
+}
+
+static bool player_card_event_current(const Event &event, const GameState &g)
+{
+    if (!event.native_card_token) return true;
+    if (event.native_card_package != s_sel_pkg.load() ||
+        event.native_card_package != s_player_card_host_package.load() ||
+        event.native_card_generation != s_pregame_host_generation.load()) return false;
+    if (event.name == "player_stat_hide") return true;
+    std::lock_guard<std::mutex> lock(s_player_card_lock);
+    auto &owner = s_player_card_owner;
+    if (owner.token != event.native_card_token || !owner.bound ||
+        !player_card_package_current(owner)) return false;
+    owner.queued = false;
+    if (owner.closing || !s_player_card_page_permitted.load() || !player_card_matches(owner, g)) return false;
+    owner.delivered = true;
+    return true;
+}
+
+static void player_card_page_message(int package, uint32_t generation, const std::string &message)
+{
+    const char *show = "NFL2K5_PLAYER_CARD_SHOW:", *hide = "NFL2K5_PLAYER_CARD_HIDE:";
+    bool visible;
+    size_t prefix;
+    if (message.compare(0, strlen(show), show) == 0) { visible = true; prefix = strlen(show); }
+    else if (message.compare(0, strlen(hide), hide) == 0) { visible = false; prefix = strlen(hide); }
+    else return;
+    if (message.size() <= prefix || message.size() - prefix > 10 ||
+        package != s_sel_pkg.load() || package != s_player_card_host_package.load() ||
+        generation != s_pregame_host_generation.load()) return;
+    uint64_t value = 0;
+    for (size_t i = prefix; i < message.size(); ++i) {
+        unsigned char c = (unsigned char)message[i];
+        if (c < '0' || c > '9') return;
+        value = value * 10u + c - '0';
+    }
+    if (!value || value > UINT32_MAX || message.substr(prefix) != std::to_string(value)) return;
+    /* Host-owned flags only: no guest reads, writes, waits or callbacks. */
+    std::lock_guard<std::mutex> lock(s_player_card_lock);
+    auto &owner = s_player_card_owner;
+    if (owner.bound && owner.token == (uint32_t)value && owner.package == package &&
+        owner.generation == generation && owner.delivered && !owner.closing) {
+        bool acknowledged = visible && s_player_card_page_permitted.load();
+        if (acknowledged && !owner.acknowledged)
+            fprintf(stderr, "[PLAYER-CARD] show token=%u slot=%08X\n", owner.token, owner.ctx);
+        owner.acknowledged = acknowledged;
+    }
+}
+
+static int player_card_draw_replaced(uint32_t ctx)
+{
+    if (!s_player_card_page_permitted.load() ||
+        (ctx != 0x00B61B50u && ctx != 0x00B62A70u)) return 0;
+    GameState g;
+    if (!read_state(g)) return 0;
+    std::lock_guard<std::mutex> lock(s_player_card_lock);
+    const auto &owner = s_player_card_owner;
+    return owner.bound && owner.ctx == ctx && owner.acknowledged &&
+        player_card_package_current(owner) && player_card_matches(owner, g) ? 1 : 0;
+}
+
+static void player_card_slot_closed(int slot)
+{
+    Event hide;
+    bool notify = false;
+    {
+        std::lock_guard<std::mutex> lock(s_player_card_lock);
+        auto &owner = s_player_card_owner;
+        if (slot >= 0 && slot < 2 && owner.bound && !owner.closing &&
+            owner.ctx == 0x00B61B50u + (uint32_t)slot * 0xF20u) {
+            /* Preserve native artwork suppression through its own close
+             * animation. A page's exit-complete HIDE must not resurrect it. */
+            owner.closing = true; hide = player_card_event(owner, true); notify = true;
+        }
+    }
+    if (notify) queue_event(std::move(hide));
+}
+
+/* One verified, actual layout19 camera annotation, separate from replay's
+ * transition owner. The CBS page replaces only its artwork with the already
+ * painted network corner. No arbitrary scene, string or request is hidden. */
+struct NativeCameraMarkOwner {
+    bool active = false, queued = false, delivered = false, acknowledged = false, closing = false;
+    uint32_t token = 0, generation = 0, ctx = 0, resource = 0, scene = 0, callback = 0;
+    uint32_t clock = 0, rosters[2]{};
+    int package = -1, slot = -1;
+};
+static std::mutex s_camera_mark_lock;
+static NativeCameraMarkOwner s_camera_mark_owner;
+static std::atomic<uint32_t> s_camera_mark_token{0};
+static std::atomic<int> s_camera_mark_host_package{-1}, s_camera_mark_page_permitted{0};
+
+static bool camera_mark_catalog_matches()
+{
+    uint32_t base = rd32(0x00BE5214u);
+    return base == 0x00AAD180u && rd32(base + 19u * 0x6Cu) == 0x00E86400u &&
+        rd32(base + 19u * 0x6Cu + 4u) == 0x00E861A8u &&
+        gtext(0x00E86400u, 16) == "skycam" && gtext(0x00E861A8u, 16) == "OVERLAY";
+}
+
+static bool camera_mark_package_current(const NativeCameraMarkOwner &o)
+{
+    int pk = s_sel_pkg.load();
+    return o.package == pk && pk == s_camera_mark_host_package.load() &&
+        o.generation == s_pregame_host_generation.load() && pk > 0 && pk < (int)s_pkgs.size() &&
+        s_pkgs[pk].html && s_pkgs[pk].camera_marks_ack;
+}
+
+static bool camera_mark_record_matches(const NativeCameraMarkOwner &o, const GameState &g)
+{
+    if (!o.active || !g.valid || !native_replay_active(g) || o.slot < 0 || o.slot > 1 ||
+        o.ctx != 0x00B61B50u + (uint32_t)o.slot * 0xF20u ||
+        !o.clock || o.clock != rd32(0x00E6028Cu) || !camera_mark_catalog_matches() ||
+        rd32(o.ctx) != (uint32_t)o.slot || rd32(o.ctx + 4u) != 1 ||
+        (!o.closing && rd32(o.ctx + 0xCu) != 0) || rd32(o.ctx + 0x48u) != 19 ||
+        rd32(o.ctx + 0xF08u) != 0 || rd32(o.ctx + 0xF1Cu) != 1 || rd32(o.ctx + 0x1D8u) != 5 ||
+        !o.resource || !o.scene || rd32(o.ctx + 0x1DCu) != o.resource || rd32(o.resource) != o.scene ||
+        rd32(o.ctx + 0xF14u) != o.callback || rd32(o.ctx + 0x40u) != 0 ||
+        rd32(o.ctx + 0x228u) != 0 || rd32(o.ctx + 0xEF4u) != 0 ||
+        !gtext(o.ctx + 0x4Cu, 64).empty() || !gtext(o.ctx + 0xCCu, 128).empty()) return false;
+    for (int s = 0; s < 2; ++s)
+        if (!o.rosters[s] || o.rosters[s] != rd32(k_team_obj[s] + 0x1Cu)) return false;
+    return true;
+}
+
+static void camera_mark_event(const NativeCameraMarkOwner &o, bool hide)
+{
+    PendingPopupEvent ev;
+    ev.name = hide ? "CAMERA_MARK_HIDE" : "CAMERA_MARK_SHOW";
+    ev.camera_token = o.token; ev.camera_generation = o.generation; ev.camera_package = o.package;
+    ev.extra = ",\"source\":\"native\",\"nativeVisible\":" + std::string(hide ? "false" : "true") +
+        ",\"nativeCameraToken\":" + json_str(std::to_string(o.token));
+    std::lock_guard<std::mutex> lock(s_popup_lock);
+    s_popup_events.push_back(std::move(ev));
+}
+
+static void camera_mark_release(const char *reason, bool notify = true)
+{
+    NativeCameraMarkOwner old;
+    { std::lock_guard<std::mutex> lock(s_camera_mark_lock); old = s_camera_mark_owner; s_camera_mark_owner = {}; }
+    if (!old.active) return;
+    if (notify && (old.queued || old.delivered)) camera_mark_event(old, true);
+    fprintf(stderr, "[CAMERA-MARK] release token=%u reason=%s\n", old.token, reason);
+}
+
+static void camera_mark_frame(uint32_t ctx)
+{
+    int slot = ctx == 0x00B61B50u ? 0 : ctx == 0x00B62A70u ? 1 : -1;
+    int pk = s_sel_pkg.load();
+    if (slot < 0 || pk != s_camera_mark_host_package.load() || pk <= 0 || pk >= (int)s_pkgs.size() ||
+        !s_pkgs[pk].html || !s_pkgs[pk].camera_marks_ack ||
+        rd32(ctx + 4u) != 1 || rd32(ctx + 0xCu) != 0 || rd32(ctx + 0x48u) != 19 ||
+        rd32(ctx + 0xF08u) != 0 || rd32(ctx + 0xF1Cu) != 1 || rd32(ctx + 0x1D8u) != 5) return;
+    GameState g; if (!read_state(g) || !g.valid || !native_replay_active(g)) return;
+    NativeCameraMarkOwner o;
+    o.active = true; o.ctx = ctx; o.slot = slot; o.package = pk;
+    o.generation = s_pregame_host_generation.load(); o.resource = rd32(ctx + 0x1DCu);
+    o.scene = o.resource ? rd32(o.resource) : 0; o.callback = rd32(ctx + 0xF14u);
+    o.clock = rd32(0x00E6028Cu);
+    for (int s = 0; s < 2; ++s) o.rosters[s] = rd32(k_team_obj[s] + 0x1Cu);
+    if (!camera_mark_record_matches(o, g)) {
+        /* One actual-instance diagnostic, never interpret subtype0's stale
+         * row/column storage as a table and never hide meaningful payload. */
+        static std::string last_rejected;
+        std::string key = std::to_string(ctx) + ":" + std::to_string(o.clock) + ":" +
+            std::to_string(o.resource) + ":" + std::to_string(o.scene) + ":" + std::to_string(o.generation);
+        if (key != last_rejected) {
+            last_rejected = key;
+            fprintf(stderr, "[CAMERA-MARK] native-only ctx=%08X subjects=%u subtype=%u cells=%u callback=%08X resource=%08X scene=%08X\n",
+                ctx, rd32(ctx + 0x40u), rd32(ctx + 0x228u), rd32(ctx + 0xEF4u), o.callback, o.resource, o.scene);
+        }
+        return;
+    }
+    { std::lock_guard<std::mutex> lock(s_camera_mark_lock);
+      const auto &old = s_camera_mark_owner;
+      if (old.active && old.ctx == ctx && camera_mark_package_current(old) && camera_mark_record_matches(old, g)) return; }
+    camera_mark_release("next-native-instance");
+    do { o.token = ++s_camera_mark_token; } while (!o.token);
+    { std::lock_guard<std::mutex> lock(s_camera_mark_lock); s_camera_mark_owner = o; }
+    fprintf(stderr, "[CAMERA-MARK] accepted t=%llu token=%u ctx=%08X layout=19 subjects=0 subtype=0 cells=0 callback=%08X resource=%08X scene=%08X\n",
+        (unsigned long long)GetTickCount64(), o.token, ctx, o.callback, o.resource, o.scene);
+}
+
+static void camera_mark_slot_closing(int slot)
+{
+    NativeCameraMarkOwner old;
+    { std::lock_guard<std::mutex> lock(s_camera_mark_lock); auto &o = s_camera_mark_owner;
+      if (!o.active || o.closing || o.slot != slot) return;
+      o.closing = true; old = o; }
+    camera_mark_event(old, true);
+}
+
+static void camera_mark_hud_context(const GameState &g, const HtmlContext &cx)
+{
+    s_camera_mark_page_permitted = g.valid && native_replay_active(g) && !cx.paused && !cx.play_selection ? 1 : 0;
+    bool stale = false; NativeCameraMarkOwner delivery;
+    { std::lock_guard<std::mutex> lock(s_camera_mark_lock); auto &o = s_camera_mark_owner;
+      if (!o.active) return;
+      stale = !s_camera_mark_page_permitted.load() || !camera_mark_package_current(o) || !camera_mark_record_matches(o, g);
+      if (!stale && !o.closing && !o.queued && !o.delivered) { o.queued = true; delivery = o; } }
+    if (stale) camera_mark_release("slot-match-replay-page-or-context-changed");
+    else if (delivery.active) camera_mark_event(delivery, false);
+}
+
+static bool camera_mark_event_current(const PendingPopupEvent &ev, const GameState &g)
+{
+    if (!ev.camera_token) return true;
+    if (ev.camera_package != s_sel_pkg.load() || ev.camera_package != s_camera_mark_host_package.load() ||
+        ev.camera_generation != s_pregame_host_generation.load()) return false;
+    if (ev.name == "CAMERA_MARK_HIDE") return true;
+    std::lock_guard<std::mutex> lock(s_camera_mark_lock); auto &o = s_camera_mark_owner;
+    if (o.token != ev.camera_token || !camera_mark_package_current(o)) return false;
+    o.queued = false;
+    if (o.closing || !s_camera_mark_page_permitted.load() || !camera_mark_record_matches(o, g)) return false;
+    o.delivered = true; return true;
+}
+
+static void camera_mark_page_message(int package, uint32_t generation, const std::string &message)
+{
+    const char *show = "NFL2K5_CAMERA_MARK_SHOW:", *hide = "NFL2K5_CAMERA_MARK_HIDE:";
+    bool visible; size_t prefix;
+    if (message.compare(0, strlen(show), show) == 0) { visible = true; prefix = strlen(show); }
+    else if (message.compare(0, strlen(hide), hide) == 0) { visible = false; prefix = strlen(hide); }
+    else return;
+    if (message.size() <= prefix || message.size() - prefix > 10 || package != s_sel_pkg.load() ||
+        package != s_camera_mark_host_package.load() || generation != s_pregame_host_generation.load()) return;
+    uint64_t token = 0;
+    for (size_t i = prefix; i < message.size(); ++i) {
+        unsigned char c = (unsigned char)message[i]; if (c < '0' || c > '9') return;
+        token = token * 10 + c - '0';
+    }
+    if (!token || token > UINT32_MAX || message.substr(prefix) != std::to_string(token)) return;
+    /* WebView thread: copied host flags only; never guest RAM/code/waits. */
+    std::lock_guard<std::mutex> lock(s_camera_mark_lock); auto &o = s_camera_mark_owner;
+    if (!o.active || o.token != token || o.package != package || o.generation != generation || !o.delivered || o.closing) return;
+    bool acknowledged = visible && s_camera_mark_page_permitted.load();
+    if (o.acknowledged != acknowledged)
+        fprintf(stderr, "[CAMERA-MARK] page t=%llu token=%u visible=%u\n", (unsigned long long)GetTickCount64(), o.token, (unsigned)acknowledged);
+    o.acknowledged = acknowledged;
+}
+
+static int camera_mark_draw_replaced(uint32_t ctx)
+{
+    if (!s_camera_mark_page_permitted.load()) return 0;
+    {
+        std::lock_guard<std::mutex> lock(s_camera_mark_lock);
+        if (!s_camera_mark_owner.active || s_camera_mark_owner.ctx != ctx || !s_camera_mark_owner.acknowledged) return 0;
+    }
+    GameState g; if (!read_state(g)) return 0;
+    std::lock_guard<std::mutex> lock(s_camera_mark_lock); const auto &o = s_camera_mark_owner;
+    return o.ctx == ctx && o.acknowledged && camera_mark_package_current(o) && camera_mark_record_matches(o, g) ? 1 : 0;
+}
+
+static void camera_mark_replacement_reset()
+{
+    s_camera_mark_page_permitted = 0; s_camera_mark_host_package = -1;
+    camera_mark_release("page-reset", false);
+}
+
+static std::string native_confirm_prompt();
+/* Shared layout14 notices have their own typed payload/choice ownership.
+ * Keep this independent from coin toss and challenge verdict handlers. */
+#include "presentation/native_notice.inc.cpp"
+#include "presentation/native_table.inc.cpp"
+#include "presentation/native_lineup.inc.cpp"
+#include "presentation/native_timeout_board.inc.cpp"
+
+/* Challenge/review and ruling constructors share layout14 with unrelated
+ * coin-toss artwork. Only their SUCCESSFULLY ACCEPTED slots/callbacks are
+ * eligible. A title string or a pre-acceptance8ACF0 request is insufficient. */
+struct NativeReviewOwner {
+    bool active = false, queued = false, delivered = false, acknowledged = false, closing = false;
+    uint32_t token = 0, generation = 0, ctx = 0, callback = 0, clock = 0, rosters[2]{};
+    int package = -1, slot = -1;
+    bool ruling = false;
+    std::string heading, message, reason;
+};
+static std::mutex s_review_lock;
+static NativeReviewOwner s_review_owner;
+static std::atomic<uint32_t> s_review_token{0};
+static std::atomic<int> s_review_host_package{-1}, s_review_page_permitted{0};
+
+static bool review_package_current(const NativeReviewOwner &o)
+{
+    int pk = s_sel_pkg.load();
+    return o.package == pk && pk == s_review_host_package.load() &&
+        o.generation == s_pregame_host_generation.load() && pk > 0 && pk < (int)s_pkgs.size() &&
+        s_pkgs[pk].html && s_pkgs[pk].review_cards_ack;
+}
+
+static bool review_record_matches(const NativeReviewOwner &o, const GameState &g)
+{
+    if (!o.active || !g.valid || o.slot < 0 || o.slot > 1 ||
+        o.ctx != 0x00B61B50u + (uint32_t)o.slot * 0xF20u ||
+        o.clock != rd32(0x00E6028Cu) || rd32(o.ctx) != (uint32_t)o.slot ||
+        rd32(o.ctx + 4u) != 1 || rd32(o.ctx + 0x48u) != 14 ||
+        rd32(o.ctx + 0x228u) != 2 || rd32(o.ctx + 0x230u) != 1 ||
+        rd32(o.ctx + 0x234u) != 0 || rd32(o.ctx + 0x2B8u) != 1 || rd32(o.ctx + 0x458u) != 1 ||
+        rd32(o.ctx + 0xF14u) != o.callback ||
+        o.callback != (o.ruling ? 0x00117300u : 0x001172F0u) ||
+        gtext(o.ctx + 0x4Cu, 64) != o.heading || gtext(o.ctx + 0xCCu, 128) != o.message ||
+        gtext(o.ctx + 0x238u, 64) != o.reason) return false;
+    for (int s = 0; s < 2; ++s)
+        if (!o.rosters[s] || o.rosters[s] != rd32(k_team_obj[s] + 0x1Cu)) return false;
+    return true;
+}
+
+static void review_event(const NativeReviewOwner &o, bool hide)
+{
+    PendingPopupEvent ev;
+    ev.name = hide ? "REVIEW_HIDE" : "REVIEW_SHOW";
+    ev.review_token = o.token; ev.review_generation = o.generation; ev.review_package = o.package;
+    ev.extra = ",\"source\":\"native\",\"nativeVisible\":" + std::string(hide ? "false" : "true") +
+        ",\"nativeReviewToken\":" + json_str(std::to_string(o.token)) +
+        ",\"heading\":" + json_str(o.heading) + ",\"message\":" + json_str(o.message) +
+        ",\"reason\":" + json_str(o.reason) + ",\"reviewStage\":" + json_str(o.ruling ? "ruling" : "review");
+    std::lock_guard<std::mutex> lock(s_popup_lock);
+    s_popup_events.push_back(std::move(ev));
+}
+
+static void review_release(const char *reason, bool notify = true)
+{
+    NativeReviewOwner old;
+    { std::lock_guard<std::mutex> lock(s_review_lock); old = s_review_owner; s_review_owner = {}; }
+    if (!old.active) return;
+    if (notify && (old.queued || old.delivered)) review_event(old, true);
+    fprintf(stderr, "[REVIEW-CARD] release token=%u reason=%s\n", old.token, reason);
+}
+
+extern "C" void nfl2k5_presentation_review_accepted(int slot, unsigned ruling)
+{
+    if (slot < 0 || slot > 1 || ruling > 1) return; /* EAX=-1 means rejected */
+    int pk = s_sel_pkg.load();
+    if (pk != s_review_host_package.load() || pk <= 0 || pk >= (int)s_pkgs.size() ||
+        !s_pkgs[pk].html || !s_pkgs[pk].review_cards_ack) return;
+    NativeReviewOwner o;
+    o.active = true; o.slot = slot; o.ruling = ruling != 0;
+    o.ctx = 0x00B61B50u + (uint32_t)slot * 0xF20u;
+    o.callback = o.ruling ? 0x00117300u : 0x001172F0u;
+    o.clock = rd32(0x00E6028Cu); o.package = pk; o.generation = s_pregame_host_generation.load();
+    for (int s = 0; s < 2; ++s) o.rosters[s] = rd32(k_team_obj[s] + 0x1Cu);
+    o.heading = gtext(o.ctx + 0x4Cu, 64); o.message = gtext(o.ctx + 0xCCu, 128);
+    o.reason = gtext(o.ctx + 0x238u, 64);
+    GameState g;
+    if (o.heading.empty() || o.message.empty() || !read_state(g) || !review_record_matches(o, g) ||
+        rd32(o.ctx + 0xCu) || rd32(0x00BA4E78u) != (uint32_t)slot ||
+        rd32(0x00BA4E78u + 0xF14u) != o.callback ||
+        gtext(0x00BA4E78u + 0x4Cu, 64) != o.heading ||
+        gtext(0x00BA4E78u + 0xCCu, 128) != o.message ||
+        gtext(0x00BA4E78u + 0x238u, 64) != o.reason) return;
+    review_release("next-native-instance");
+    do { o.token = ++s_review_token; } while (!o.token);
+    { std::lock_guard<std::mutex> lock(s_review_lock); s_review_owner = o; }
+    if (getenv("NFL2K5_REC")) xbox_PresentRecord(8);
+    fprintf(stderr, "[REVIEW-CARD] accepted t=%llu token=%u slot=%d callback=%08X stage=%s heading='%s' message='%s' reason='%s'\n",
+        (unsigned long long)GetTickCount64(), o.token, slot, o.callback, o.ruling ? "ruling" : "review",
+        o.heading.c_str(), o.message.c_str(), o.reason.c_str());
+}
+
+static void review_slot_closing(int slot)
+{
+    NativeReviewOwner old;
+    { std::lock_guard<std::mutex> lock(s_review_lock);
+      auto &o = s_review_owner;
+      if (!o.active || o.closing || o.slot != slot) return;
+      o.closing = true; old = o; }
+    review_event(old, true);
+}
+
+static void review_hud_context(const GameState &g, const HtmlContext &cx)
+{
+    s_review_page_permitted = g.valid && !cx.paused && !cx.play_selection ? 1 : 0;
+    bool stale = false; NativeReviewOwner delivery;
+    { std::lock_guard<std::mutex> lock(s_review_lock);
+      auto &o = s_review_owner;
+      if (!o.active) return;
+      stale = !s_review_page_permitted.load() || !review_package_current(o) || !review_record_matches(o, g);
+      if (!stale && !o.closing && !o.queued && !o.delivered) { o.queued = true; delivery = o; } }
+    if (stale) review_release("slot-match-page-or-context-changed");
+    else if (delivery.active) review_event(delivery, false);
+}
+
+static bool review_event_current(const PendingPopupEvent &ev, const GameState &g)
+{
+    if (!ev.review_token) return true;
+    if (ev.review_package != s_sel_pkg.load() || ev.review_package != s_review_host_package.load() ||
+        ev.review_generation != s_pregame_host_generation.load()) return false;
+    if (ev.name == "REVIEW_HIDE") return true;
+    std::lock_guard<std::mutex> lock(s_review_lock);
+    auto &o = s_review_owner;
+    if (o.token != ev.review_token || !review_package_current(o)) return false;
+    o.queued = false;
+    if (o.closing || !s_review_page_permitted.load() || !review_record_matches(o, g)) return false;
+    o.delivered = true; return true;
+}
+
+static void review_page_message(int package, uint32_t generation, const std::string &message)
+{
+    const char *show = "NFL2K5_REVIEW_SHOW:", *hide = "NFL2K5_REVIEW_HIDE:";
+    bool visible; size_t prefix;
+    if (message.compare(0, strlen(show), show) == 0) { visible = true; prefix = strlen(show); }
+    else if (message.compare(0, strlen(hide), hide) == 0) { visible = false; prefix = strlen(hide); }
+    else return;
+    if (message.size() <= prefix || message.size() - prefix > 10 || package != s_sel_pkg.load() ||
+        package != s_review_host_package.load() || generation != s_pregame_host_generation.load()) return;
+    uint64_t token = 0;
+    for (size_t i = prefix; i < message.size(); ++i) {
+        unsigned char c = message[i]; if (c < '0' || c > '9') return;
+        token = token * 10 + c - '0';
+    }
+    if (!token || token > UINT32_MAX || message.substr(prefix) != std::to_string(token)) return;
+    /* Browser thread: copied fields only. Closing owners retain suppression
+     * until native cleanup; a temporary replay defer HIDE revokes live ACK. */
+    std::lock_guard<std::mutex> lock(s_review_lock);
+    auto &o = s_review_owner;
+    if (!o.active || o.token != token || o.package != package || o.generation != generation || !o.delivered) return;
+    if (o.closing) return;
+    o.acknowledged = visible && s_review_page_permitted.load();
+    fprintf(stderr, "[REVIEW-CARD] page t=%llu token=%u visible=%u\n",
+        (unsigned long long)GetTickCount64(), o.token, (unsigned)o.acknowledged);
+}
+
+static int review_draw_replaced(uint32_t ctx)
+{
+    if (!s_review_page_permitted.load() || rd32(ctx + 0xF1Cu) != 1) return 0;
+    GameState g; if (!read_state(g)) return 0;
+    std::lock_guard<std::mutex> lock(s_review_lock);
+    const auto &o = s_review_owner;
+    return o.ctx == ctx && o.acknowledged && review_package_current(o) && review_record_matches(o, g) ? 1 : 0;
+}
+
+static void review_replacement_reset()
+{
+    s_review_page_permitted = 0; s_review_host_package = -1;
+    review_release("page-reset", false);
+}
+
+/* The original 'endofqrt' board is popup layout 7, not every quarter event
+ * and not the similarly timed kind-0 caption or kind-28 halftime transition.
+ * Its native text callback (1C07B0) reads the current period. Snapshot that
+ * value and literal caption at the first active draw: the title can
+ * increment it during the board's own lifetime. */
+struct NativePeriodBoardOwner {
+    bool active = false, queued = false, delivered = false, acknowledged = false, closing = false;
+    uint32_t token = 0, generation = 0, clock_object = 0, ctx = 0, roster[2] = { 0, 0 };
+    int package = -1, quarter = 0;
+    std::string title, abbr[2], native_caption, presentation_kind;
+};
+static std::mutex s_period_board_lock;
+static NativePeriodBoardOwner s_period_board_owner;
+static std::atomic<uint32_t> s_period_board_token{ 0 };
+static std::atomic<int> s_period_board_host_package{ -1 }, s_period_board_page_permitted{ 0 };
+
+/* Read-only counterpart of 1C07B0's caption branches. Final is selected by
+ * the real flow, HALF by the raw clock float (not the rounded display API).
+ * Read the actual retail literals; unexpected/localized text stays native. */
+static bool period_board_caption(NativePeriodBoardOwner &owner)
+{
+    uint32_t period = rd32(0x00E602C4u), flow = rd32(0x00E602B8u), address = 0;
+    if (period < 1 || period > 255) return false;
+    owner.quarter = (int)period;
+    std::string expected;
+    owner.presentation_kind = "quarter_end";
+    if (flow == 0x0Au || flow == 0x19u) {
+        address = 0x00E85A28u; expected = "Final"; owner.presentation_kind = "final";
+    } else if (period == 1) { address = 0x00E85A34u; expected = "1st"; }
+    else if (period == 2) {
+        float raw_clock = 0;
+        uint32_t clock = rd32(0x00E6028Cu);
+        if (!clock || !gread(clock + 0x10u, &raw_clock, sizeof raw_clock)) return false;
+        if (raw_clock == 0.0f) { address = 0x00E85A3Cu; expected = "HALF"; owner.presentation_kind = "halftime"; }
+        else { address = 0x00E85A48u; expected = "2nd"; }
+    } else if (period == 3) { address = 0x00E85A50u; expected = "3rd"; }
+    else if (period == 4) { address = 0x00E85A58u; expected = "4th"; }
+    else if (period == 5) { address = 0x00E85A60u; expected = "OT"; owner.presentation_kind = "overtime"; }
+    else {
+        if (gtext(0x00E85A68u, 16) != "OT%d") return false;
+        owner.native_caption = "OT" + std::to_string(period - 4u);
+        owner.presentation_kind = "overtime";
+        return true;
+    }
+    owner.native_caption = gtext(address, 16);
+    return owner.native_caption == expected;
+}
+
+static bool period_board_package_current(const NativePeriodBoardOwner &owner)
+{
+    int pk = s_sel_pkg.load();
+    return owner.package == pk && pk == s_period_board_host_package.load() &&
+        owner.generation == s_pregame_host_generation.load() &&
+        pk > 0 && pk < (int)s_pkgs.size() && s_pkgs[pk].html &&
+        s_pkgs[pk].replaces_period_boards && s_pkgs[pk].period_boards_ack;
+}
+
+static bool period_board_matches(const NativePeriodBoardOwner &owner, const GameState &g)
+{
+    if (!owner.active || !g.valid || !owner.clock_object ||
+        owner.clock_object != rd32(0x00E6028Cu) || owner.ctx != 0x00B62A70u ||
+        rd32(owner.ctx + 4u) != 1 || rd32(owner.ctx + 0x48u) != 7 ||
+        (!owner.closing && rd32(owner.ctx + 0xCu) != 0) ||
+        (owner.closing && rd32(owner.ctx + 0xCu) == 0) ||
+        gtext(owner.ctx + 0x4Cu, 64) != owner.title) return false;
+    for (int side = AWAY; side <= HOME; ++side)
+        if (!owner.roster[side] || owner.roster[side] != rd32(k_team_obj[side] + 0x1Cu) ||
+            owner.abbr[side] != upper(g.t[side].abbr)) return false;
+    return true;
+}
+
+static void period_board_event(const NativePeriodBoardOwner &owner, bool hide)
+{
+    if (!owner.active || !owner.token) return;
+    PendingPopupEvent ev;
+    ev.name = hide ? "PERIOD_BOARD_HIDE" : "PERIOD_BOARD_SHOW";
+    ev.period_token = owner.token; ev.period_generation = owner.generation; ev.period_package = owner.package;
+    ev.extra = ",\"source\":\"native\",\"nativeVisible\":" + std::string(hide ? "false" : "true") +
+        ",\"nativePeriodToken\":" + json_str(std::to_string(owner.token)) +
+        ",\"quarter\":" + std::to_string(owner.quarter) +
+        ",\"nativeCaption\":" + json_str(owner.native_caption) +
+        ",\"presentationKind\":" + json_str(owner.presentation_kind);
+    std::lock_guard<std::mutex> lock(s_popup_lock);
+    s_popup_events.push_back(std::move(ev));
+}
+
+static void period_board_release(const char *reason, bool notify = true, uint32_t expected = 0)
+{
+    NativePeriodBoardOwner old;
+    {
+        std::lock_guard<std::mutex> lock(s_period_board_lock);
+        if (expected && expected != s_period_board_owner.token) return;
+        old = std::move(s_period_board_owner); s_period_board_owner = NativePeriodBoardOwner();
+    }
+    if (!old.active) return;
+    if (notify && (old.queued || old.delivered)) period_board_event(old, true);
+    fprintf(stderr, "[PERIOD-BOARD] release token=%u quarter=%d reason=%s\n", old.token, old.quarter, reason);
+}
+
+static void period_board_replacement_reset()
+{
+    s_period_board_page_permitted = 0; s_period_board_host_package = -1;
+    period_board_release("page-reset", false);
+}
+
+static void period_board_frame(uint32_t ctx)
+{
+    if (ctx != 0x00B62A70u || rd32(ctx + 4u) != 1 || rd32(ctx + 0x48u) != 7) return;
+    int pk = s_sel_pkg.load();
+    if (pk <= 0 || pk >= (int)s_pkgs.size() || !s_pkgs[pk].html ||
+        !s_pkgs[pk].replaces_period_boards || !s_pkgs[pk].period_boards_ack ||
+        pk != s_period_board_host_package.load()) return;
+    GameState g;
+    if (!read_state(g) || !g.valid) return;
+    uint32_t stale = 0;
+    {
+        std::lock_guard<std::mutex> lock(s_period_board_lock);
+        const auto &owner = s_period_board_owner;
+        if (owner.active && (!period_board_package_current(owner) || !period_board_matches(owner, g))) stale = owner.token;
+    }
+    if (stale) period_board_release("slot-reopened-or-owner-changed", true, stale);
+    NativePeriodBoardOwner delivery;
+    {
+        std::lock_guard<std::mutex> lock(s_period_board_lock);
+        auto &owner = s_period_board_owner;
+        if (owner.active && (!period_board_package_current(owner) || !period_board_matches(owner, g))) return;
+        if (!owner.active) {
+            if (rd32(ctx + 0xCu) || !period_board_caption(owner)) return;
+            owner.active = true; owner.ctx = ctx;
+            do { owner.token = ++s_period_board_token; } while (!owner.token);
+            owner.package = pk; owner.generation = s_pregame_host_generation.load();
+            owner.clock_object = rd32(0x00E6028Cu); owner.title = gtext(ctx + 0x4Cu, 64);
+            for (int side = AWAY; side <= HOME; ++side) {
+                owner.roster[side] = rd32(k_team_obj[side] + 0x1Cu);
+                owner.abbr[side] = upper(g.t[side].abbr);
+            }
+            if (!period_board_matches(owner, g)) { owner = NativePeriodBoardOwner(); return; }
+            fprintf(stderr, "[PERIOD-BOARD] bind t=%llu token=%u slot=%08X layout=7 quarter=%d flow=%d caption='%s' kind=%s\n",
+                    (unsigned long long)GetTickCount64(), owner.token, ctx, owner.quarter, g.flow_state,
+                    owner.native_caption.c_str(), owner.presentation_kind.c_str());
+        }
+        if (!owner.closing && !owner.queued && !owner.delivered && s_period_board_page_permitted.load()) {
+            owner.queued = true; delivery = owner;
+        }
+    }
+    if (delivery.active) period_board_event(delivery, false);
+}
+
+static void period_board_hud_context(const GameState &g, const HtmlContext &cx)
+{
+    int pk = s_sel_pkg.load();
+    bool permitted = pk == s_period_board_host_package.load() && g.valid &&
+        !cx.paused && !cx.play_selection;
+    s_period_board_page_permitted = permitted ? 1 : 0;
+    uint32_t release = 0;
+    {
+        std::lock_guard<std::mutex> lock(s_period_board_lock);
+        const auto &owner = s_period_board_owner;
+        if (owner.active && (!permitted || !period_board_package_current(owner) || !period_board_matches(owner, g)))
+            release = owner.token;
+    }
+    if (release) period_board_release("slot-page-or-match-changed", true, release);
+}
+
+static bool period_board_event_current(const PendingPopupEvent &ev, const GameState &g)
+{
+    if (!ev.period_token) return true;
+    if (ev.period_package != s_sel_pkg.load() || ev.period_package != s_period_board_host_package.load() ||
+        ev.period_generation != s_pregame_host_generation.load()) return false;
+    if (ev.name == "PERIOD_BOARD_HIDE") return true;
+    std::lock_guard<std::mutex> lock(s_period_board_lock);
+    auto &owner = s_period_board_owner;
+    if (owner.token != ev.period_token || !period_board_package_current(owner)) return false;
+    owner.queued = false;
+    if (owner.closing || !s_period_board_page_permitted.load() || !period_board_matches(owner, g)) return false;
+    owner.delivered = true;
+    return true;
+}
+
+static void period_board_page_message(int package, uint32_t generation, const std::string &message)
+{
+    const char *show = "NFL2K5_PERIOD_BOARD_SHOW:", *hide = "NFL2K5_PERIOD_BOARD_HIDE:";
+    bool visible;
+    size_t prefix;
+    if (message.compare(0, strlen(show), show) == 0) { visible = true; prefix = strlen(show); }
+    else if (message.compare(0, strlen(hide), hide) == 0) { visible = false; prefix = strlen(hide); }
+    else return;
+    if (message.size() <= prefix || message.size() - prefix > 10 || package != s_sel_pkg.load() ||
+        package != s_period_board_host_package.load() || generation != s_pregame_host_generation.load()) return;
+    uint64_t value = 0;
+    for (size_t i = prefix; i < message.size(); ++i) {
+        unsigned char c = (unsigned char)message[i];
+        if (c < '0' || c > '9') return;
+        value = value * 10u + c - '0';
+    }
+    if (!value || value > UINT32_MAX || message.substr(prefix) != std::to_string(value)) return;
+    /* Browser thread: copied ownership flags only, no guest access. */
+    std::lock_guard<std::mutex> lock(s_period_board_lock);
+    auto &owner = s_period_board_owner;
+    if (owner.active && owner.token == (uint32_t)value && owner.package == package &&
+        owner.generation == generation && owner.delivered && !owner.closing) {
+        bool acknowledged = visible && s_period_board_page_permitted.load();
+        if (acknowledged && !owner.acknowledged)
+            fprintf(stderr, "[PERIOD-BOARD] show t=%llu token=%u slot=%08X quarter=%d\n",
+                    (unsigned long long)GetTickCount64(), owner.token, owner.ctx, owner.quarter);
+        owner.acknowledged = acknowledged;
+    }
+}
+
+static int period_board_draw_replaced(uint32_t ctx)
+{
+    if (ctx != 0x00B62A70u || !s_period_board_page_permitted.load()) return 0;
+    GameState g;
+    if (!read_state(g)) return 0;
+    std::lock_guard<std::mutex> lock(s_period_board_lock);
+    const auto &owner = s_period_board_owner;
+    return owner.ctx == ctx && owner.acknowledged && period_board_package_current(owner) &&
+        period_board_matches(owner, g) ? 1 : 0;
+}
+
+static void period_board_slot_closed(int slot)
+{
+    if (slot != 1) return;
+    NativePeriodBoardOwner old;
+    {
+        std::lock_guard<std::mutex> lock(s_period_board_lock);
+        auto &owner = s_period_board_owner;
+        if (!owner.active || owner.closing) return;
+        owner.closing = true; old = owner;
+    }
+    /* Keep acknowledged draw suppression through the native close animation;
+     * its updates, timeout and original close callback still run normally. */
+    period_board_event(old, true);
+}
+
+/* Automatic replay: a private transition record, never a generic scene or
+ * football clock. The page only acknowledges copied tokens. All guest
+ * observations/visual-clock service stay in the original guest callbacks.
+ * Original midpoint tests, actor changes, completion and cleanup still run.
+ * A missing page returns to the original transition within a bounded time. */
+struct NativeReplayOwner {
+    bool active = false, returning = false, delivered = false, ready = false;
+    bool awaiting_page = false;
+    bool start_sent = false, painted = false, covered = false, handed = false, done = false, failed = false;
+    uint32_t token = 0, generation = 0, clock = 0, roster[2]{};
+    uint32_t resource = 0, scene = 0, draw = 0, init = 0;
+    int package = -1;
+    float midpoint = 0, end = 0, speed = 0;
+    uint64_t created_at = 0, painted_at = 0, handed_at = 0;
+};
+static std::mutex s_replay_lock;
+static NativeReplayOwner s_replay_owner;
+static std::atomic<uint32_t> s_replay_token{0};
+static std::atomic<int> s_replay_host_package{-1};
+
+static bool replay_package_current(const NativeReplayOwner &o)
+{
+    int pk = s_sel_pkg.load();
+    return s_sel_anim.load() && o.package == pk && pk > 0 && pk < (int)s_pkgs.size() &&
+        s_pkgs[pk].html && s_pkgs[pk].replay_wipes_ack &&
+        (o.awaiting_page || (pk == s_replay_host_package.load() && o.generation == s_pregame_host_generation.load()));
+}
+
+static bool replay_record_current(const NativeReplayOwner &o, const GameState &g)
+{
+    uint32_t phase = rd32(0x00AFA078u);
+    return o.active && replay_package_current(o) && native_replay_active(g) &&
+        !native_pause_active() && !rd32(0x00B38C30u) &&
+        (o.returning ? phase == 4 || phase == 5 : phase == 1 || phase == 2) &&
+        o.clock == rd32(0x00E6028Cu) && o.roster[0] == rd32(k_team_obj[0] + 0x1Cu) &&
+        o.roster[1] == rd32(k_team_obj[1] + 0x1Cu) &&
+        o.resource == rd32(0x00AFA07Cu) && o.scene == rd32(0x00AFA080u) &&
+        o.draw == rd32(0x00AFA09Cu) && o.init == rd32(0x00AFA0A0u) &&
+        o.midpoint == rdf(0x00AFA08Cu) && o.end == rdf(0x00AFA090u) && o.speed == rdf(0x00AFA094u);
+}
+
+static void replay_owner_event(const NativeReplayOwner &o, const char *name)
+{
+    PendingPopupEvent ev;
+    ev.name = name; ev.replay_token = o.token; ev.replay_generation = o.generation; ev.replay_package = o.package;
+    ev.extra = ",\"source\":\"native_automatic_replay\",\"replayToken\":" + json_str(std::to_string(o.token)) +
+        ",\"direction\":" + json_str(o.returning ? "out" : "in");
+    std::lock_guard<std::mutex> lock(s_popup_lock);
+    s_popup_events.push_back(std::move(ev));
+}
+
+static void replay_release(const char *reason, bool notify = true)
+{
+    NativeReplayOwner old;
+    { std::lock_guard<std::mutex> lock(s_replay_lock); old = s_replay_owner; s_replay_owner = {}; }
+    if (!old.active) return;
+    if (notify) replay_owner_event(old, "NATIVE_REPLAY_CANCEL");
+    fprintf(stderr, "[REPLAY-OWNER] release t=%llu token=%u reason=%s painted=%u covered=%u handed=%u done=%u\n",
+        (unsigned long long)GetTickCount64(), old.token, reason, (unsigned)old.painted,
+        (unsigned)old.covered, (unsigned)old.handed, (unsigned)old.done);
+}
+
+static void replay_begin(unsigned returning)
+{
+    replay_release("next-transition");
+    int pk = s_sel_pkg.load();
+    if (pk <= 0 || pk >= (int)s_pkgs.size() ||
+        !s_pkgs[pk].html || !s_pkgs[pk].replay_wipes_ack) return;
+    GameState g;
+    if (!read_state(g)) return;
+    NativeReplayOwner o;
+    o.active = true; o.returning = returning != 0; o.package = pk;
+    o.awaiting_page = pk != s_replay_host_package.load();
+    o.generation = s_pregame_host_generation.load(); o.clock = rd32(0x00E6028Cu);
+    for (int s = 0; s < 2; ++s) o.roster[s] = rd32(k_team_obj[s] + 0x1Cu);
+    o.resource = rd32(0x00AFA07Cu); o.scene = rd32(0x00AFA080u);
+    o.draw = rd32(0x00AFA09Cu); o.init = rd32(0x00AFA0A0u);
+    o.midpoint = rdf(0x00AFA08Cu); o.end = rdf(0x00AFA090u); o.speed = rdf(0x00AFA094u);
+    /* Unsupported records retain original art/timing. Null resources are
+     * valid initialized native transitions; their timing still matters. */
+    if (!std::isfinite(o.midpoint) || !std::isfinite(o.end) || !std::isfinite(o.speed) ||
+        o.midpoint <= 0 || o.end <= o.midpoint || o.end > 10 || o.speed <= 0 ||
+        fabsf(rdf(0x00AFA098u)) > 0.001f || !replay_record_current(o, g)) return;
+    do { o.token = ++s_replay_token; } while (!o.token);
+    o.created_at = GetTickCount64();
+    { std::lock_guard<std::mutex> lock(s_replay_lock); s_replay_owner = o; }
+    if (!o.awaiting_page) replay_owner_event(o, "NATIVE_REPLAY_PREPARE");
+    fprintf(stderr, "[REPLAY-OWNER] prepare t=%llu token=%u direction=%s resource=%08X scene=%08X mid=%.6f end=%.6f\n",
+        (unsigned long long)o.created_at, o.token, o.returning ? "out" : "in", o.resource, o.scene, o.midpoint, o.end);
+}
+
+static bool replay_event_current(const PendingPopupEvent &ev, const GameState &g)
+{
+    if (!ev.replay_token) return true;
+    if (ev.replay_package != s_sel_pkg.load() || ev.replay_package != s_replay_host_package.load() ||
+        ev.replay_generation != s_pregame_host_generation.load()) return false;
+    if (ev.name == "NATIVE_REPLAY_CANCEL") return true;
+    std::lock_guard<std::mutex> lock(s_replay_lock);
+    auto &o = s_replay_owner;
+    if (o.token != ev.replay_token || !replay_record_current(o, g)) return false;
+    if (ev.name == "NATIVE_REPLAY_PREPARE") o.delivered = true;
+    return true;
+}
+
+static void replay_page_message(int package, uint32_t generation, const std::string &message)
+{
+    const char *prefix = "NFL2K5_REPLAY_";
+    if (message.compare(0, strlen(prefix), prefix) || package != s_sel_pkg.load() ||
+        package != s_replay_host_package.load() || generation != s_pregame_host_generation.load()) return;
+    size_t colon = message.find(':', strlen(prefix));
+    if (colon == std::string::npos || message.size() <= colon + 1 || message.size() - colon - 1 > 10) return;
+    uint64_t token = 0;
+    for (size_t i = colon + 1; i < message.size(); ++i) {
+        unsigned char c = message[i]; if (c < '0' || c > '9') return;
+        token = token * 10 + c - '0';
+    }
+    if (!token || token > UINT32_MAX || message.substr(colon + 1) != std::to_string(token)) return;
+    std::string action = message.substr(strlen(prefix), colon - strlen(prefix));
+    /* UI callback: no guest reads, writes, calls or waiting. */
+    std::lock_guard<std::mutex> lock(s_replay_lock);
+    auto &o = s_replay_owner;
+    if (!o.active || o.token != token || o.package != package || o.generation != generation || !o.delivered) return;
+    if (action == "READY") o.ready = true;
+    else if (action == "START" && o.start_sent && !o.painted) { o.painted = true; o.painted_at = GetTickCount64(); }
+    else if (action == "COVER" && o.painted) o.covered = true;
+    else if (action == "DONE" && o.handed) o.done = true;
+    else if (action == "CANCEL") o.failed = true;
+    else return;
+    fprintf(stderr, "[REPLAY-OWNER] page t=%llu token=%u action=%s\n",
+        (unsigned long long)GetTickCount64(), o.token, action.c_str());
+}
+
+extern "C" float nfl2k5_presentation_replay_delta(float original_delta)
+{
+    GameState g;
+    if (!std::isfinite(original_delta) || original_delta < 0 || !read_state(g)) return original_delta;
+    bool release = false; float result = original_delta;
+    {
+        std::lock_guard<std::mutex> lock(s_replay_lock);
+        auto &o = s_replay_owner;
+        if (!o.active) return original_delta;
+        uint64_t now = GetTickCount64();
+        release = !replay_record_current(o, g) || o.failed || now - o.created_at > 4500u ||
+            (!o.painted && now - o.created_at > 750u);
+        if (!release) {
+            if (o.ready && !o.start_sent) { o.start_sent = true; replay_owner_event(o, "NATIVE_REPLAY_START"); }
+            result = 0; /* only the copied visual transition clock waits */
+            if (o.painted) {
+                const float epsilon = std::min(0.0001f, (o.end - o.midpoint) * 0.01f);
+                float target, cover_ms = o.returning ? 40.0f : 880.0f;
+                if (!o.handed) {
+                    float elapsed = (float)(now - o.painted_at);
+                    target = o.covered ? o.midpoint + epsilon :
+                        std::min(o.midpoint - epsilon, o.midpoint * elapsed / cover_ms);
+                } else {
+                    float elapsed = (float)(now - o.handed_at);
+                    target = o.done ? o.end + epsilon : std::min(o.end - epsilon,
+                        o.midpoint + (o.end - o.midpoint) * elapsed / (1050.0f - cover_ms));
+                }
+                result = std::max(0.0f, (target - rdf(0x00AFA098u)) / o.speed);
+            }
+        }
+    }
+    if (release) replay_release("record-context-page-or-watchdog");
+    return result;
+}
+
+extern "C" int nfl2k5_presentation_replay_draw_replaced(void)
+{
+    GameState g;
+    if (!read_state(g)) return 0;
+    std::lock_guard<std::mutex> lock(s_replay_lock);
+    auto &o = s_replay_owner;
+    return o.painted && !o.failed && GetTickCount64() - o.created_at <= 4500u && replay_record_current(o, g) ? 1 : 0;
+}
+
+extern "C" void nfl2k5_presentation_replay_handoff(void)
+{
+    GameState g;
+    if (!read_state(g)) return;
+    std::lock_guard<std::mutex> lock(s_replay_lock);
+    auto &o = s_replay_owner;
+    if (!o.active || !o.painted || !o.covered || o.handed || !replay_record_current(o, g)) return;
+    o.handed = true; o.handed_at = GetTickCount64();
+    replay_owner_event(o, "NATIVE_REPLAY_HANDOFF");
+    fprintf(stderr, "[REPLAY-OWNER] camera t=%llu token=%u direction=%s\n",
+        (unsigned long long)o.handed_at, o.token, o.returning ? "out" : "in");
+}
+
+static void replay_hud_context(const GameState &g, const HtmlContext &cx)
+{
+    bool stale;
+    { std::lock_guard<std::mutex> lock(s_replay_lock);
+      auto &o = s_replay_owner;
+      stale = o.active && (cx.paused || cx.play_selection || !replay_record_current(o, g));
+      if (!stale && o.active && o.awaiting_page && o.package == s_replay_host_package.load()) {
+          o.awaiting_page = false; o.generation = s_pregame_host_generation.load();
+          replay_owner_event(o, "NATIVE_REPLAY_PREPARE");
+      } }
+    if (stale) replay_release("screen-or-context-ended");
+}
+
+static void replay_page_reset()
+{
+    s_replay_host_package = -1;
+    bool retain;
+    { std::lock_guard<std::mutex> lock(s_replay_lock);
+      const auto &o = s_replay_owner;
+      /* A just-initialized entrance can itself be the reason html_hud is
+       * starting the page. Keep its copied seed across that initial reset;
+       * it has not hidden original art, and still has the750ms watchdog. */
+      retain = o.active && o.awaiting_page && o.package == s_sel_pkg.load() &&
+          GetTickCount64() - o.created_at <= 750u; }
+    if (!retain) replay_release("page-reset", false);
+}
+
+/* Optional presentation policy, independent of replacing ESPN's cards.
+ * Keep the drive ledger outside HtmlPresentation so browser recreation on
+ * a quiet camera cut cannot repeatedly announce the same quarterback. */
+static void html_drive_qb_card(const GameState &g, const HtmlContext &cx)
+{
+    struct Owner {
+        std::string match;
+        int package = -1, side = -1;
+        uint64_t epoch = 0, eligible_since = 0;
+        bool pending = false;
+    };
+    static Owner owner;             /* HUD thread only */
+    int pk = s_sel_pkg.load();
+    if (pk <= 0 || pk >= (int)s_pkgs.size() || !s_pkgs[pk].drive_qb_cards ||
+        !g.valid || g.period <= 0 || is_final(g)) {
+        owner = Owner();
+        return;
+    }
+    std::string match = native_match_identity(g);
+    uint64_t epoch = s_live_qb_epoch.load();
+    if (owner.package != pk || owner.match != match || owner.epoch != epoch) {
+        owner = Owner(); owner.package = pk; owner.match = match; owner.epoch = epoch;
+    }
+    if (match.empty() || g.poss < 1 || g.poss > 2) {
+        owner.eligible_since = 0;
+        return;
+    }
+    int side = g.poss - 1;
+    if (owner.side != side) {
+        owner.side = side; owner.pending = true; owner.eligible_since = 0;
+    }
+    if (!owner.pending) return;
+    if (GetTickCount64() < s_live_insert_after) return;
+    /* The title's visible bug is required, not just a retained phase 4.
+     * Leave native popups and play selection unobscured. */
+    if (g.phase != 4 || period_ending(g) || !cx.native_scorebug || !cx.scorebug_visible ||
+        cx.paused || cx.play_selection || rd32(0x00B61B54u) || rd32(0x00B62A74u)) {
+        owner.eligible_since = 0;
+        return;
+    }
+    uint64_t now = GetTickCount64();
+    if (!owner.eligible_since) owner.eligible_since = now;
+    if (now - owner.eligible_since < 1200u) return;
+    LiveQbSample sample;
+    PlayerIdentity identity;
+    {
+        std::lock_guard<std::mutex> lock(s_live_qb_lock);
+        if (owner.epoch != s_live_qb_epoch.load()) return;
+        sample = s_live_qb[side]; identity = s_live_qb_identity[side];
+    }
+    if (!sample.revision || sample.player.name.empty() || !sample.clock_object ||
+        sample.clock_object != rd32(0x00E6028Cu)) return;
+    for (int s = AWAY; s <= HOME; ++s)
+        if (!sample.roster[s] || sample.roster[s] != rd32(k_team_obj[s] + 0x1Cu) ||
+            sample.abbr[s] != upper(g.t[s].abbr)) return;
+    Event ev;
+    ev.name = "player_stat"; ev.team = side; ev.player = sample.player;
+    ev.player_identity = identity; ev.requested_duration = 6.0;
+    queue_event(std::move(ev));
+    s_live_insert_after = now + 10500u;
+    owner.pending = false;
+    fprintf(stderr, "[PRES-QB] drive side=%d %s %d/%d %d YDS TD=%d INT=%d\n",
+        side, sample.player.name.c_str(), sample.player.completions, sample.player.attempts,
+        sample.player.passing_yards, sample.player.passing_touchdowns, sample.player.interceptions);
+}
+
+static bool live_owner_current(const Nfl2k5LiveStatOwner &owner, const GameState &g, uint64_t now)
+{
+    if (owner.scope || !owner.clock_object || owner.clock_object != rd32(0x00E6028Cu) ||
+        owner.period != (uint32_t)g.period || owner.sampled_at_ms > now ||
+        now - owner.sampled_at_ms > 15000u) return false;
+    for (int s = AWAY; s <= HOME; ++s)
+        if (!owner.rosters[s] || owner.rosters[s] != rd32(k_team_obj[s] + 0x1Cu) ||
+            upper(owner.abbreviations[s]) != upper(read_team_code(k_playbook_name[s]))) return false;
+    return true;
+}
+
+/* Broadcast policy only: carry/catch/tackle/sack/INT deltas create candidates.
+ * They wait for the real scorebug and clear native popup slots, and expire if
+ * the camera never returns. This does not manufacture title callbacks or
+ * replace historical ESPN cards with current-game figures. */
+static void html_live_stat_cards(const GameState &g, const HtmlContext &cx)
+{
+    struct Policy {
+        uint64_t epoch = 0, eligible_since = 0, team_due = 0;
+        std::string match;
+        int package = -1, possession = -1;
+        unsigned team_category = 0;
+        bool team_pending = false;
+    };
+    static Policy policy;
+    uint64_t now = GetTickCount64();
+    if (!nfl2k5_broadcast_live_stats_enabled() || !g.valid || g.period <= 0 || is_final(g)) {
+        policy = Policy(); return;
+    }
+    Nfl2k5LiveTeamSample teams[2];
+    std::vector<LiveStatCandidate> candidates;
+    uint64_t epoch;
+    {
+        std::lock_guard<std::mutex> lock(s_live_stats_lock);
+        epoch = s_live_stats_epoch;
+        teams[0] = s_live_teams[0]; teams[1] = s_live_teams[1];
+        candidates = s_live_candidates;
+    }
+    std::string match = native_match_identity(g);
+    int pk = s_sel_pkg.load();
+    if (policy.epoch != epoch || policy.package != pk || policy.match != match) {
+        policy = Policy(); policy.epoch = epoch; policy.package = pk; policy.match = match;
+        policy.team_due = now + 45000u;
+    }
+    int side = g.poss >= 1 && g.poss <= 2 ? g.poss - 1 : -1;
+    bool teams_ok = live_owner_current(teams[0].owner, g, now) &&
+        live_owner_current(teams[1].owner, g, now);
+    policy.possession = side;
+    if (now >= policy.team_due) policy.team_pending = true;
+    if (g.phase != 4 || period_ending(g) || !cx.native_scorebug || !cx.scorebug_visible || cx.paused ||
+        cx.play_selection || rd32(0x00B61B54u) || rd32(0x00B62A74u)) {
+        policy.eligible_since = 0; return;
+    }
+    if (!policy.eligible_since) policy.eligible_since = now;
+    if (now < s_live_insert_after || now - policy.eligible_since < 1200u) return;
+
+    auto best = candidates.end();
+    for (auto it = candidates.begin(); it != candidates.end(); ++it) {
+        if (now < it->queued_at || now - it->queued_at > 25000u ||
+            !live_owner_current(it->sample.owner, g, now)) continue;
+        if (best == candidates.end() || it->priority > best->priority ||
+            (it->priority == best->priority && it->queued_at > best->queued_at)) best = it;
+    }
+    if (best != candidates.end() && !(policy.team_pending && teams_ok)) {
+        Event ev; ev.name = "live_player_stat"; ev.team = best->sample.side;
+        ev.live_extra = live_player_extra(best->sample); queue_event(std::move(ev));
+        fprintf(stderr, "[PRES-LIVE] player side=%d position=%s name=%s priority=%d source=scope0\n",
+            best->sample.side, best->sample.position, best->sample.name, best->priority);
+        std::lock_guard<std::mutex> lock(s_live_stats_lock);
+        s_live_candidates.erase(std::remove_if(s_live_candidates.begin(), s_live_candidates.end(),
+            [&](const LiveStatCandidate &c) { return c.queued_at <= best->queued_at; }), s_live_candidates.end());
+        s_live_insert_after = now + 10500u; return;
+    }
+    if (teams_ok && policy.team_pending) {
+        Event ev; ev.name = "team_stat"; ev.team = side;
+        static const char *categories[] = { "yardage", "defense", "possession" };
+        ev.live_extra = ",\"source\":\"game\",\"scope\":\"this_game\",\"category\":" +
+            json_str(categories[policy.team_category++ % 3]) + ",\"displaySeconds\":8,\"teams\":{";
+        for (int s = AWAY; s <= HOME; ++s) {
+            ev.live_extra += (s ? "," : "") + json_str(side_name(s)) + ":{\"scope\":\"this_game\"" +
+                live_fields_json(teams[s].valid_fields, teams[s].values) + "}";
+        }
+        ev.live_extra += "}"; queue_event(std::move(ev));
+        policy.team_pending = false; policy.team_due = now + 90000u;
+        s_live_insert_after = now + 12500u;
+        fprintf(stderr, "[PRES-LIVE] team comparison scope0 TOP=seconds\n");
+    }
+}
 
 extern "C" int nfl2k5_presentation_pregame_metadata_needed(void)
 {
@@ -2734,7 +5197,7 @@ extern "C" int nfl2k5_presentation_pregame_metadata_needed(void)
     if (pk != s_pregame_host_package.load() || pk <= 0 || pk >= (int)s_pkgs.size() ||
         !s_pkgs[pk].html || !s_pkgs[pk].replaces_pregame_cards) return 0;
     GameState g;
-    return read_state(g) && fresh_pregame(g) ? 1 : 0;
+    return read_state(g) && g.valid ? 1 : 0;
 }
 
 static void pregame_clear_owners()
@@ -2749,8 +5212,19 @@ static void pregame_replacement_reset()
     s_pregame_page_permitted = 0;
     s_pregame_host_package = -1;
     ++s_pregame_host_generation;
+    player_card_replacement_reset();
+    period_board_replacement_reset();
+    camera_mark_replacement_reset();
+    native_notice_reset();
+    native_table_reset();
+    native_lineup_reset();
+    native_timeout_reset();
+    review_replacement_reset();
+    replay_page_reset();
     pregame_clear_owners();
 }
+
+static std::string gtext(uint32_t va, int max);
 
 static uint32_t pregame_begin_owner(int kind, uint32_t ctx, int slot,
         const GameState &g, int side, const std::string &title, const std::string &message,
@@ -2764,6 +5238,8 @@ static uint32_t pregame_begin_owner(int kind, uint32_t ctx, int slot,
     owner.layout = rd32(ctx + 0x48u);
     if (kind == PREGAME_FACT) {
         owner.rows = rd32(ctx + 0x22Cu); owner.columns = rd32(ctx + 0x230u);
+        owner.subtype = rd32(ctx + 0x228u);
+        owner.subject = gtext(ctx + 0x4Cu, 64);
     }
     owner.clock_object = rd32(0x00E6028Cu);
     for (int s = AWAY; s <= HOME; ++s) {
@@ -2772,16 +5248,22 @@ static uint32_t pregame_begin_owner(int kind, uint32_t ctx, int slot,
     }
     owner.package = s_sel_pkg.load(); owner.generation = s_pregame_host_generation.load();
     int pk = owner.package;
-    if (k_native_pregame_draw_hook_ready && side >= AWAY && side <= HOME && fresh_pregame(g) && owner.layout &&
+    if (k_native_pregame_draw_hook_ready && g.valid && owner.layout &&
         s_pregame_page_permitted.load() && s_pregame_host_package.load() == pk &&
         pk > 0 && pk < (int)s_pkgs.size() && s_pkgs[pk].html && s_pkgs[pk].replaces_pregame_cards) {
         do { owner.token = ++s_pregame_token; } while (!owner.token);
     }
     uint32_t token = owner.token;
-    std::lock_guard<std::mutex> lock(s_pregame_owner_lock);
-    s_pregame_owner[PREGAME_COIN] = NativePregameOwner();
-    s_pregame_owner[PREGAME_FACT] = NativePregameOwner();
-    s_pregame_owner[kind] = std::move(owner);
+    {
+        std::lock_guard<std::mutex> lock(s_pregame_owner_lock);
+        s_pregame_owner[PREGAME_COIN] = NativePregameOwner();
+        s_pregame_owner[PREGAME_FACT] = NativePregameOwner();
+        s_pregame_owner[kind] = std::move(owner);
+    }
+    if (token && presentation_trace_enabled())
+        fprintf(stderr, "[PREGAME-CARD] bound t=%llu token=%u kind=%d slot=%d layout=%u title='%s'\n",
+            (unsigned long long)GetTickCount64(), token, kind, slot, rd32(ctx + 0x48u), title.c_str());
+    if (token && kind == PREGAME_COIN && presentation_trace_enabled() && getenv("NFL2K5_REC")) xbox_PresentRecord(8);
     return token;
 }
 
@@ -2792,11 +5274,14 @@ static void pregame_page_message(int package, uint32_t generation, const std::st
 {
     if (package != s_sel_pkg.load() || package != s_pregame_host_package.load() ||
         generation != s_pregame_host_generation.load()) return;
-    const char *show = "SNF_PREGAME_SHOW:", *hide = "SNF_PREGAME_HIDE:";
+    const char *show = "NFL2K5_PREGAME_SHOW:", *hide = "NFL2K5_PREGAME_HIDE:";
+    const char *legacy_show = "SNF_PREGAME_SHOW:", *legacy_hide = "SNF_PREGAME_HIDE:";
     bool visible;
     size_t prefix;
     if (message.compare(0, strlen(show), show) == 0) { visible = true; prefix = strlen(show); }
     else if (message.compare(0, strlen(hide), hide) == 0) { visible = false; prefix = strlen(hide); }
+    else if (message.compare(0, strlen(legacy_show), legacy_show) == 0) { visible = true; prefix = strlen(legacy_show); }
+    else if (message.compare(0, strlen(legacy_hide), legacy_hide) == 0) { visible = false; prefix = strlen(legacy_hide); }
     else return;
     if (message.size() <= prefix || message.size() - prefix > 10) return;
     uint64_t value = 0;
@@ -2805,32 +5290,90 @@ static void pregame_page_message(int package, uint32_t generation, const std::st
         if (ch < '0' || ch > '9') return;
         value = value * 10u + ch - '0';
     }
-    if (!value || value > UINT32_MAX) return;
+    if (!value || value > UINT32_MAX || message.substr(prefix) != std::to_string(value)) return;
     std::lock_guard<std::mutex> lock(s_pregame_owner_lock);
     for (auto &owner : s_pregame_owner)
         if (owner.active && owner.token == (uint32_t)value && owner.package == package &&
             owner.generation == generation)
-            owner.acknowledged = visible && s_pregame_page_permitted.load();
+            if (visible || !owner.closing) {
+                bool before = owner.acknowledged;
+                owner.acknowledged = visible && s_pregame_page_permitted.load();
+                if (before != owner.acknowledged && presentation_trace_enabled())
+                    fprintf(stderr, "[PREGAME-CARD] page t=%llu token=%u visible=%u\n",
+                        (unsigned long long)GetTickCount64(), owner.token, (unsigned)owner.acknowledged);
+            }
 }
 
 static int coin_toss_team(const GameState &g, const std::string &message);
+extern "C" int nfl2k5_controls_style(void);
+extern "C" int nfl2k5_controls_key(int game_button);
+
+static std::string native_confirm_prompt()
+{
+    int style = nfl2k5_controls_style();
+    if (style == 1) return "\xC3\x97"; /* PlayStation Cross */
+    if (style != 2) return "A";
+    UINT key = (UINT)nfl2k5_controls_key(0);
+    if (!key) return "";
+#ifndef _WIN32
+    /* No keyboard layout API here: Win32 virtual keys for letters and digits are their ASCII. */
+    return (key >= '0' && key <= '9') || (key >= 'A' && key <= 'Z') ? std::string(1, (char)key) : "";
+#else
+    UINT character = MapVirtualKeyA(key, MAPVK_VK_TO_CHAR) & 0xFFFFu;
+    if (character >= 32 && character < 127) return std::string(1, (char)character);
+    char label[64];
+    return GetKeyNameTextA((LONG)(MapVirtualKeyA(key, MAPVK_VK_TO_VSC) << 16), label, sizeof label) ? label : "";
+#endif
+}
+
+static std::string native_coin_choices(uint32_t ctx)
+{
+    uint32_t count = rd32(ctx + 0x230u), selected = rd32(ctx + 0x22Cu);
+    if (!count || count > 3) return "[]";
+    std::string button = count > 1 && rdf(ctx + 8u) >= 1.0e30f ? native_confirm_prompt() : "";
+    std::string result = "[";
+    for (uint32_t i = 0; i < count; ++i) {
+        std::string text = gtext(ctx + 0x238u + i * 0x228u, 64);
+        if (text.empty()) return "[]";
+        if (i) result += ",";
+        result += "{\"text\":" + json_str(text) + ",\"selected\":" + (i == selected ? "true" : "false");
+        if (i == selected && !button.empty()) result += ",\"button\":" + json_str(button);
+        result += "}";
+    }
+    return result + "]";
+}
+
+static bool native_coin_show_ready(uint32_t ctx, int slot)
+{
+    return slot >= 0 && slot < 2 && ctx == 0x00B61B50u + (uint32_t)slot * 0xF20u &&
+        rd32(ctx) == (uint32_t)slot && rd32(ctx + 4u) == 1 && !rd32(ctx + 0xCu) &&
+        rd32(ctx + 0x48u) == 14 && rd32(ctx + 0x1D8u) == 5 && rd32(ctx + 0xF1Cu) == 1;
+}
 
 extern "C" void nfl2k5_presentation_coin_toss(const char *title, const char *message,
                                              float timeout, int slot, int what, uint32_t ctx)
 {
     if (!title || upper(title) != "COIN TOSS" || (what != 0 && what != 1)) return;
+    /* The legacy request-entry diagnostic also calls this function. A request
+     * may be rejected or resolved by the CPU before ever reaching a draw.
+     * Only the actual accepted, ready slot can publish visible metadata. */
+    if (what == 0 && (!native_coin_show_ready(ctx, slot) ||
+        gtext(ctx + 0x4Cu, 64) != title || gtext(ctx + 0xCCu, 128) != (message ? message : ""))) return;
     PendingPopupEvent ev;
     if (what == 1) {
+        uint32_t closing_token = 0;
         {
             std::lock_guard<std::mutex> lock(s_pregame_owner_lock);
             auto &owner = s_pregame_owner[PREGAME_COIN];
             if (owner.active && (owner.title != title || owner.message != (message ? message : "") ||
                 (owner.slot >= 0 && owner.slot != slot))) return;
-            owner = NativePregameOwner();
+            owner.closing = true;
+            if (owner.active) closing_token = owner.token;
         }
         if (!s_coin_toss_native_active.exchange(0)) return; /* native fade has two close calls */
         ev.name = "COIN_TOSS_HIDE";
         ev.extra = ",\"source\":\"native\",\"nativeVisible\":false,\"slot\":" + std::to_string(slot);
+        if (closing_token) ev.extra += ",\"replacementToken\":" + std::to_string(closing_token);
     } else {
         s_coin_toss_native_active = 1;
         s_coin_toss = 1;
@@ -2847,11 +5390,33 @@ extern "C" void nfl2k5_presentation_coin_toss(const char *title, const char *mes
         ev.extra = ",\"title\":" + json_str(title) + ",\"text\":" + json_str(ev.message) +
                    ",\"duration\":" + duration + ",\"source\":\"native\",\"nativeVisible\":true" +
                    ",\"slot\":" + std::to_string(slot);
+        std::string choices = ctx ? native_coin_choices(ctx) : "[]";
+        ev.extra += ",\"choices\":" + choices;
         GameState g;
         if (ctx && read_state(g) && g.valid) {
+            ev.side = coin_toss_team(g, ev.message);
+            bool unchanged = false;
+            uint32_t old_token = 0;
+            {
+                std::lock_guard<std::mutex> lock(s_pregame_owner_lock);
+                auto &owner = s_pregame_owner[PREGAME_COIN];
+                unchanged = owner.active && !owner.closing && owner.title == title &&
+                    owner.message == ev.message && owner.layout == rd32(ctx + 0x48u) &&
+                    owner.clock_object == rd32(0x00E6028Cu);
+                if (unchanged) {
+                    if (owner.choices == choices) return;
+                    owner.choices = choices; old_token = owner.token;
+                }
+            }
+            if (unchanged) {
+                if (old_token) ev.extra += ",\"replacementToken\":" + std::to_string(old_token);
+            } else {
             uint32_t token = pregame_begin_owner(PREGAME_COIN, ctx, slot, g,
-                    coin_toss_team(g, ev.message), title, ev.message);
+                    ev.side, title, ev.message);
             if (token) ev.extra += ",\"replacementToken\":" + std::to_string(token);
+            std::lock_guard<std::mutex> lock(s_pregame_owner_lock);
+            s_pregame_owner[PREGAME_COIN].choices = choices;
+            }
         }
     }
     if (!nfl2k5_presentation_pregame_metadata_needed()) return;
@@ -2888,10 +5453,16 @@ extern "C" void nfl2k5_presentation_popup_text(const char *title, const char *te
     auto value_after = [&](const char *label, bool time) -> std::string {
         for (size_t i = 0; i + 1 < tok.size(); i++)
             if (upper(tok[i]) == label)
-                for (size_t k = i + 1; k < tok.size() && k < i + 6; k++) {
+                for (size_t k = i + 1; k < tok.size(); k++) {
                     const std::string &v = tok[k];
-                    bool ok = !v.empty();
-                    for (char ch : v) if (!(isdigit((unsigned char)ch) || (time && ch == ':') || ch == '-')) ok = false;
+                    std::string next = upper(v);
+                    if (next == "PLAYS" || next == "YARDS" || next == "TIME") break;
+                    bool ok = !v.empty(); size_t colon = v.find(':');
+                    for (size_t n = 0; n < v.size(); ++n)
+                        if (!isdigit((unsigned char)v[n]) && !(time && v[n] == ':' && n == colon) &&
+                            !(label == std::string("YARDS") && n == 0 && v[n] == '-')) ok = false;
+                    if (time && (colon == std::string::npos || !colon || colon + 3 != v.size() ||
+                        atoi(v.substr(colon + 1).c_str()) > 59)) ok = false;
                     if (ok) return v;
                 }
         return "";
@@ -2911,9 +5482,19 @@ extern "C" void nfl2k5_presentation_popup_text(const char *title, const char *te
     }
     std::string j = ",\"drive\":{\"plays\":" + (plays.empty() ? std::string("null") : plays) +
                     ",\"yards\":" + (yards.empty() ? std::string("null") : yards) +
-                    ",\"timeOfPossession\":" + std::to_string(secs) + ",\"source\":\"game\"}";
+                    ",\"timeOfPossession\":" + (time.empty() ? std::string("null") : std::to_string(secs)) + ",\"source\":\"game\"}";
     std::lock_guard<std::mutex> lock(s_popup_lock);
-    s_popup_events.push_back({ "DRIVE_SUMMARY", j, "", true });
+    PendingPopupEvent ev; ev.name = "DRIVE_SUMMARY"; ev.extra = j; ev.drive = true;
+    GameState g;
+    if (read_state(g) && g.valid) {
+        ev.side = g.poss ? g.poss - 1 : -1;
+        ev.clock_object = rd32(0x00E6028Cu);
+        for (int s = AWAY; s <= HOME; ++s) {
+            ev.roster[s] = rd32(k_team_obj[s] + 0x1Cu); ev.abbr[s] = upper(team_info(g.t[s].abbr).abbr);
+        }
+    }
+    ev.queued_at = GetTickCount64();
+    s_popup_events.push_back(std::move(ev));
 }
 
 /* The game's after-kickoff lineup ticker (sub_000FFBA0; gen patch
@@ -2963,30 +5544,214 @@ static std::string grel_text(uint32_t field)
 }
 
 static std::atomic<int> s_player_fact_native_active{ 0 };
+extern "C" void xbox_PresentRecord(int seconds);
+
+extern "C" void nfl2k5_presentation_replay_observe(unsigned phase, uint32_t guest_pc)
+{
+    if (phase == 0 || phase == 3 || phase == 7) replay_release(phase == 7 ? "native-menu-diversion" : "native-transition-complete");
+    if (!presentation_trace_enabled()) return;
+    /* State 1 is stored before sub_000116F0 initializes the transition.
+     * Its previous pointer must not be mistaken for the new entrance. */
+    const uint32_t transition = 0x00AFA07Cu;
+    uint32_t resource = phase == 1 ? 0 : rd32(transition);
+    uint32_t timing[4] = { 0, 0, 0, 0 };
+    /* AFA07C is the copied timing structure itself, not a pointer to it.
+     * Its first field is a resource in the contiguous pool. Do not read
+     * timing from that resource header or treat unread fields as real zeros. */
+    bool valid = phase != 1 && gread(transition + 0x10u, timing, sizeof timing);
+    GameState g;
+    read_state(g);
+    fprintf(stderr, "[REPLAY-FSM] t=%llu pc=%08X phase=%u raw=%u period=%d flow=%d "
+            "clock=%08X transition=%08X resource=%08X timingValid=%u midpoint=%08X end=%08X speed=%08X current=%08X "
+            "record=%08X replayActors=%u mode=%u pop=%u popup=%u/%u\n",
+            (unsigned long long)GetTickCount64(), guest_pc, phase, rd32(0x00AFA078u),
+            g.period, g.flow_state, rd32(0x00E6028Cu), transition, resource, (unsigned)valid,
+            timing[0], timing[1], timing[2], timing[3],
+            rd32(0x00B25DD0u), rd32(0x00AFA010u), rd32(0x00AF9B94u), rd32(0x00B347E0u),
+            rd32(0x00B61B54u), rd32(0x00B62A74u));
+}
+
+extern "C" void nfl2k5_presentation_replay_ready(unsigned returning, uint32_t guest_pc)
+{
+    replay_begin(returning);
+    if (!presentation_trace_enabled()) return;
+    if (getenv("NFL2K5_REC")) xbox_PresentRecord(8);
+    uint32_t fields[12]{};
+    bool readable = gread(0x00AFA07Cu, fields, sizeof fields);
+    float timing[4]{};
+    memcpy(timing, fields + 4, sizeof timing);
+    GameState g;
+    read_state(g);
+    fprintf(stderr, "[REPLAY-READY] t=%llu pc=%08X direction=%s raw=%u readable=%u clock=%08X period=%d flow=%d "
+            "record=00AFA07C resource=%08X scene=%08X midpoint=%.6f end=%.6f speed=%.6f current=%.6f "
+            "drawCallback=%08X initCallback=%08X source=%08X selected=%08X\n",
+            (unsigned long long)GetTickCount64(), guest_pc, returning ? "out" : "in",
+            rd32(0x00AFA078u), (unsigned)readable, rd32(0x00E6028Cu), g.period, g.flow_state,
+            fields[0], fields[1], timing[0], timing[1], timing[2], timing[3], fields[8], fields[9],
+            rd32(0x00AFA0ACu), rd32(0x00B25E24u));
+}
+
+struct NativeActorCandidate {
+    uint32_t record = 0;
+    int side = -1, position = -1;
+    std::string name;
+};
+
+/* A unique current-roster member proves identity, not who received credit. */
+static NativeActorCandidate native_player_candidate(uint32_t record)
+{
+    NativeActorCandidate out;
+    if (!guest_va_ok(record)) return out;
+    for (int side = AWAY; side <= HOME; ++side) {
+        uint32_t roster = rd32(k_team_obj[side] + 0x1Cu);
+        uint8_t count = 0;
+        if (!roster || !gread(roster + 0x11Cu, &count, sizeof count) || !count || count > 71) return {};
+        for (unsigned index = 0; index < count; ++index)
+            if (rd32(roster + index * 4u) == record) {
+                if (out.side != -1) return {};
+                out.side = side; out.record = record;
+            }
+    }
+    if (out.side < 0) return out;
+    uint8_t position = 0xFF;
+    if (!gread(record + 0x35u, &position, sizeof position) || position > 16) return {};
+    std::string first = grel_text(record + 0x10u), last = grel_text(record + 0x14u);
+    if (first.empty() || last.empty()) return {};
+    out.name = first + " " + last; out.position = position;
+    return out;
+}
+
+static NativeActorCandidate native_actor_candidate(uint32_t actor)
+{
+    return guest_va_ok(actor) ? native_player_candidate(rd32(actor + 0x3Cu)) : NativeActorCandidate();
+}
+
+extern "C" void nfl2k5_presentation_sack_event_record(uint32_t record, uint32_t guest_pc)
+{
+    if (!presentation_trace_enabled() || rd32(record) != 0x15u) return;
+    auto a = native_player_candidate(rd32(record + 0x20u));
+    auto b = native_player_candidate(rd32(record + 0x24u));
+    fprintf(stderr, "[SACK-EVENT] t=%llu pc=%08X accepted=1 clock=%08X record=%08X nativeTime=%.6f "
+            "playerA=%08X sideA=%d nameA='%s' playerB=%08X sideB=%d nameB='%s' subtype=%u scalar=%.6f selected=%08X\n",
+            (unsigned long long)GetTickCount64(), guest_pc, rd32(0x00E6028Cu), record, rdf(record + 4u),
+            a.record, a.side, a.name.c_str(), b.record, b.side, b.name.c_str(),
+            rd32(record + 0x30u), rdf(record + 0x34u), rd32(0x00B25E24u));
+}
+
+extern "C" void nfl2k5_presentation_sack_observe(uint32_t actor_a, uint32_t actor_b, uint32_t guest_pc)
+{
+    if (!presentation_trace_enabled()) return;
+    static std::atomic<unsigned> count{ 0 };
+    if (++count > 128) return;
+    GameState g;
+    if (!read_state(g) || !g.valid) return;
+    auto a = native_actor_candidate(actor_a), b = native_actor_candidate(actor_b);
+    uint32_t result = rd32(0x00E602D4u), down = rd32(0x00E602ECu);
+    fprintf(stderr, "[SACK-DECISION] t=%llu pc=%08X clock=%08X rosters=%08X/%08X period=%d seconds=%.3f flow=%d "
+            "result=%08X sack=%u down=%08X poss=%d actorA=%08X playerA=%08X sideA=%d posA=%d nameA='%s' "
+            "actorB=%08X playerB=%08X sideB=%d posB=%d nameB='%s' selected=%08X\n",
+            (unsigned long long)GetTickCount64(), guest_pc, rd32(0x00E6028Cu),
+            rd32(k_team_obj[0] + 0x1Cu), rd32(k_team_obj[1] + 0x1Cu), g.period, g.clock, g.flow_state,
+            result, result ? rd32(result + 0x94u) : 0, down, g.poss,
+            actor_a, a.record, a.side, a.position, a.name.c_str(), actor_b, b.record, b.side, b.position,
+            b.name.c_str(), rd32(0x00B25E24u));
+}
+
+extern "C" void nfl2k5_presentation_selected_player(unsigned selector, uint32_t record, uint32_t guest_pc)
+{
+    if (!presentation_trace_enabled()) return;
+    auto player = native_player_candidate(record);
+    fprintf(stderr, "[NATIVE-SUBJECT] t=%llu pc=%08X selector=%u clock=%08X rosters=%08X/%08X period=%u "
+            "record=%08X valid=%u side=%d position=%d name='%s' selected=%08X\n",
+            (unsigned long long)GetTickCount64(), guest_pc, selector, rd32(0x00E6028Cu),
+            rd32(k_team_obj[0] + 0x1Cu), rd32(k_team_obj[1] + 0x1Cu), rd32(0x00E602C4u),
+            record, (unsigned)!player.name.empty(), player.side, player.position, player.name.c_str(),
+            rd32(0x00B25E24u));
+}
+
+static std::string native_player_caption(uint32_t ctx)
+{
+    if (rd32(ctx + 0x48u) != 1) return gtext(ctx + 0x4Cu, 64);
+    /* Layout 1's text callback, sub_001C0A90, supplies the season rail
+     * independently of the stat subject at +4C. Copy its native selector;
+     * neither the prose nor the selected player's position defines it. */
+    if (rd32(0x00B72E84u))
+        return gtext((int32_t)rd32(0x00E602C4u) >= 4 ? 0x00E85B14u : 0x00E85B20u, 64);
+    uint32_t selector = rd32(ctx + 0xF18u);
+    return selector < 6 ? gtext(rd32(0x00AAD168u + selector * 4u), 64) : "";
+}
+
+static bool native_player_cell(uint32_t ctx, uint32_t index, std::string &text)
+{
+    /* sub_001BEE40 accepts inline text (0) or a UTF16 pointer (1). A
+     * pointer's bytes are never a label, even if they happen to be ASCII. */
+    uint32_t cell = ctx + 0x234u + index * 0x88u;
+    uint32_t type = rd32(cell), source = cell + 8u;
+    if (type == 1) source = rd32(source);
+    else if (type != 0) return false;
+    uint16_t first = 0;
+    if (!source || !gread(source, &first, sizeof first)) return false;
+    text = first ? gtext(source, 64) : "";
+    return !first || !text.empty();
+}
 
 extern "C" void nfl2k5_presentation_player_fact_hide(int slot)
 {
+    camera_mark_slot_closing(slot);
+    native_notice_slot_closing(slot);
+    native_table_slot_closing(slot);
+    review_slot_closing(slot);
+    period_board_slot_closed(slot);
+    player_card_slot_closed(slot);
     if (slot != 1 || !s_player_fact_native_active.exchange(0)) return;
+    uint32_t closing_token = 0;
     {
         std::lock_guard<std::mutex> lock(s_pregame_owner_lock);
-        s_pregame_owner[PREGAME_FACT] = NativePregameOwner();
+        s_pregame_owner[PREGAME_FACT].closing = true;
+        closing_token = s_pregame_owner[PREGAME_FACT].token;
     }
     PendingPopupEvent ev;
     ev.name = "PLAYER_FACT_HIDE";
     ev.extra = ",\"source\":\"native\",\"nativeVisible\":false,\"slot\":1";
+    if (closing_token) ev.extra += ",\"replacementToken\":" + std::to_string(closing_token);
     std::lock_guard<std::mutex> lock(s_popup_lock);
     s_popup_events.push_back(std::move(ev));
 }
 
 extern "C" void nfl2k5_presentation_player_fact(uint32_t ctx)
 {
+    static std::string last_diagnostic;
+    std::string diagnostic;
+    if (ctx && getenv("NFL2K5_DIAG_SNF_CARDS")) {
+        diagnostic = std::to_string(rd32(ctx + 0x14u)) + "|" + native_player_caption(ctx);
+        for (unsigned i = 0; i < std::min(rd32(ctx + 0xEF4u), 24u); ++i) {
+            std::string cell;
+            diagnostic += "|" + (native_player_cell(ctx, i, cell) ? cell : "<unavailable>");
+        }
+    }
+    if (!diagnostic.empty() && diagnostic != last_diagnostic) {
+        last_diagnostic = diagnostic;
+        fprintf(stderr, "[SNF-CARD] ctx=%08X kind=%u player=%08X columns=%u rows=%u cells=%u title='%s' caption='%s' selector=%u message='%s' types=%u/%u\n",
+                ctx, rd32(ctx + 0x48u), rd32(ctx + 0x14u), rd32(ctx + 0x22Cu),
+                rd32(ctx + 0x230u), rd32(ctx + 0xEF4u), gtext(ctx + 0x4Cu, 64).c_str(),
+                native_player_caption(ctx).c_str(), rd32(ctx + 0xF18u),
+                gtext(ctx + 0xCCu, 128).c_str(), rd32(ctx + 0x10u), rd32(ctx + 0x228u));
+        for (unsigned i = 0; i < std::min(rd32(ctx + 0xEF4u), 24u); ++i) {
+            std::string cell;
+            bool resolved = native_player_cell(ctx, i, cell);
+            fprintf(stderr, "[SNF-CARD] cell[%u] type=%u '%s'\n", i,
+                    rd32(ctx + 0x234u + i * 0x88u), resolved ? cell.c_str() : "<unavailable>");
+        }
+    }
     if (!nfl2k5_presentation_pregame_metadata_needed()) return;
     GameState g;
     /* sub_001C16B0 identifies a single-player table with these exact fields.
      * The selected player at +0x14 owns its fact; no cached QB is substituted. */
-    if (!ctx || !read_state(g) || !fresh_pregame(g) ||
-        rd32(ctx) != 1 || rd32(ctx + 0x10u) != 1 || rd32(ctx + 0x48u) != 1 ||
-        rd32(ctx + 0x228u) != 1) return;
+    uint32_t subtype = ctx ? rd32(ctx + 0x228u) : 0;
+    if (ctx != 0x00B62A70u || rd32(ctx + 0x1D8u) != 5 || rd32(ctx + 0xF1Cu) != 1 ||
+        rd32(ctx + 0xCu) || player_card_precedes_fact(ctx) || !read_state(g) || !g.valid ||
+        rd32(ctx) != 1 || rd32(ctx + 0x40u) != 1 || rd32(ctx + 0x10u) != 1 ||
+        (subtype != 1 && subtype != 3)) return;
     uint32_t player = rd32(ctx + 0x14u);
     if (!player) return;
     int side = -1;
@@ -3017,28 +5782,54 @@ extern "C" void nfl2k5_presentation_player_fact(uint32_t ctx)
      * Copy the actual formatted strings rather than calculating career totals. */
     uint32_t rows = rd32(ctx + 0x22Cu), columns = rd32(ctx + 0x230u);
     uint32_t cells = rd32(ctx + 0xEF4u);
-    if (!rows || !columns || rows > 24 || columns > 24 || !cells || cells > 24 ||
-        (uint64_t)rows * columns != cells) return;
-    std::string caption, text;
+    if (subtype == 1 && (!rows || !columns || rows > 24 || columns > 24 || !cells || cells > 24 ||
+        (uint64_t)rows * columns != cells)) return;
+    if (subtype == 1 && rows == 2 && columns == 2) return; /* Axis convention not yet established. */
+    std::string caption = native_player_caption(ctx), subject = gtext(ctx + 0x4Cu, 64), text, columns_json;
     std::vector<std::string> native_cells;
-    for (uint32_t i = 0; i < cells; ++i) {
-        uint16_t native_cell[64];
-        if (!gread(ctx + 0x23Cu + i * 0x88u, native_cell, sizeof native_cell)) return;
-        if (!native_cell[0]) { native_cells.push_back(""); continue; }
-        std::string cell = gtext(ctx + 0x23Cu + i * 0x88u, 64);
-        if (cell.empty()) return;
+    if (subtype == 3) {
+        /* BD9E0 draws this inline UTF-16 prose at +230. +22C is its
+         * character count, not table dimensions or an indirect pointer. */
+        if (!rows || rows > 1600) return;
+        text = gtext(ctx + 0x230u, 1600);
+        if (text.empty()) return;
+    }
+    for (uint32_t i = 0; subtype == 1 && i < cells; ++i) {
+        std::string cell;
+        if (!native_player_cell(ctx, i, cell)) return;
         native_cells.push_back(cell);
-        std::string folded = upper(cell);
-        if (folded == "CAREER" || folded.compare(0, 7, "CAREER ") == 0) {
-            if (!caption.empty()) return;
-            caption = cell.substr(0, 6);
-            if (cell.size() > 7) text += (text.empty() ? "" : " ") + cell.substr(7);
-        } else if (cell != full_name) {
+        if (!cell.empty() && cell != full_name) {
             if (text.size() + cell.size() + 1 > 1024) return;
             text += (text.empty() ? "" : " ") + cell;
         }
     }
-    if (caption.empty() || text.empty()) return;
+    /* The first dimension (+22C, locally 'rows') is the native column
+     * count. Player cards use both a pair in each row (Kyle Pitts: Rec,88,
+     * Yds,928,Avg,10.5,TD,5) and a label row followed by a value row.
+     * sub_0025F8B0 indexes column + column_count * row. */
+    if (subtype == 1 && ((rows == 2 && columns <= 8) || (columns == 2 && rows <= 8))) {
+        uint32_t stat_count = rows == 2 ? columns : rows;
+        columns_json = "[";
+        for (uint32_t i = 0; i < stat_count; ++i) {
+            uint32_t label = rows == 2 ? i * 2u : i;
+            uint32_t value = rows == 2 ? i * 2u + 1u : rows + i;
+            if (native_cells[label].empty() || native_cells[value].empty()) return;
+            if (i) columns_json += ",";
+            columns_json += "{\"label\":" + json_str(native_cells[label]) +
+                ",\"value\":" + json_str(native_cells[value]) + "}";
+        }
+        columns_json += "]";
+        text.clear();
+    }
+    if (text.empty() && columns_json.empty()) return;
+    {
+        std::lock_guard<std::mutex> lock(s_pregame_owner_lock);
+        const auto &owner = s_pregame_owner[PREGAME_FACT];
+        if (owner.active && !owner.closing && owner.player == player && owner.cells == native_cells &&
+            owner.subtype == subtype && (subtype != 3 || owner.message == text) &&
+            owner.layout == rd32(ctx + 0x48u) && owner.title == caption && owner.subject == subject &&
+            owner.clock_object == rd32(0x00E6028Cu) && owner.package == s_sel_pkg.load()) return;
+    }
     float timeout = -1.0f;
     gread(ctx + 8u, &timeout, sizeof timeout);
     std::string duration = "null";
@@ -3053,27 +5844,64 @@ extern "C" void nfl2k5_presentation_player_fact(uint32_t ctx)
     }
     ev.extra = ",\"caption\":" + json_str(caption) + ",\"text\":" + json_str(text) +
         ",\"duration\":" + duration + ",\"source\":\"native\",\"nativeVisible\":true,\"slot\":1" +
+        ",\"phase\":" + std::to_string(g.phase) +
         ",\"player\":{\"id\":" + std::to_string(player) + ",\"name\":" + json_str(full_name) +
         ",\"fullName\":" + json_str(full_name) + ",\"position\":" + json_str(pos) +
         ",\"number\":" + std::to_string(number) + ",\"photoId\":" + std::to_string(photo) +
         ",\"portrait\":" + json_str(nfl2k5_portrait_url(photo)) + "}";
+    if (!subject.empty() && subject != caption) ev.extra += ",\"category\":" + json_str(subject);
+    if (!columns_json.empty()) ev.extra += ",\"columns\":" + columns_json;
     uint32_t token = pregame_begin_owner(PREGAME_FACT, ctx, 1, g, side,
             caption, text, player, full_name, native_cells);
     if (token) ev.extra += ",\"replacementToken\":" + std::to_string(token);
     s_player_fact_native_active = 1;
+    if (getenv("NFL2K5_DIAG_SNF_CARDS") && getenv("NFL2K5_REC")) xbox_PresentRecord(8);
     std::lock_guard<std::mutex> lock(s_popup_lock);
     s_popup_events.push_back(std::move(ev));
 }
 
+extern "C" void nfl2k5_presentation_native_popup_frame(uint32_t ctx)
+{
+    camera_mark_frame(ctx);
+    native_notice_frame(ctx);
+    native_table_frame(ctx);
+    period_board_frame(ctx);
+    player_card_frame(ctx);
+    if ((ctx != 0x00B61B50u && ctx != 0x00B62A70u) ||
+        rd32(ctx + 4u) != 1 || rd32(ctx + 0xCu) != 0) return;
+    bool coin = upper(gtext(ctx + 0x4Cu, 64)) == "COIN TOSS";
+    bool player = rd32(ctx) == 1 && rd32(ctx + 0x10u) == 1;
+    GameState g;
+    /* A slot being rendered is fresh match activity even before the first
+     * scorebug. This pulse cannot come from a retained clock or menu popup. */
+    if ((coin || player) && rd32(0x00A9288Cu) != 0 && read_state(g) && g.valid)
+        s_native_card_tick = GetTickCount();
+    if (!nfl2k5_presentation_pregame_metadata_needed()) return;
+    if (coin) {
+        float timeout = -1.0f;
+        gread(ctx + 8u, &timeout, sizeof timeout);
+        std::string title = gtext(ctx + 0x4Cu, 64), message = gtext(ctx + 0xCCu, 128);
+        nfl2k5_presentation_coin_toss(title.c_str(), message.c_str(), timeout, (int)rd32(ctx), 0, ctx);
+    } else if (rd32(ctx) == 1) {
+        nfl2k5_presentation_player_fact(ctx);
+    }
+}
+
 extern "C" int nfl2k5_presentation_pregame_draw_replaced(uint32_t ctx)
 {
+    if (camera_mark_draw_replaced(ctx)) return 1;
+    if (native_notice_draw_replaced(ctx)) return 1;
+    if (native_table_draw_replaced(ctx)) return 1;
+    if (review_draw_replaced(ctx)) return 1;
+    if (period_board_draw_replaced(ctx)) return 1;
+    if (player_card_draw_replaced(ctx)) return 1;
     if (!k_native_pregame_draw_hook_ready) return 0;
     /* Only the two actual native slots can be queried. This read-only
      * function does not bypass layout readiness or native update callbacks. */
     int slot = ctx == 0x00B61B50u ? 0 : ctx == 0x00B62A70u ? 1 : -1;
     GameState g;
-    if (slot < 0 || !s_pregame_page_permitted.load() || !read_state(g) || !fresh_pregame(g) ||
-        rd32(ctx + 4u) != 1 || rd32(ctx + 0xCu) != 0) return 0;
+    if (slot < 0 || !s_pregame_page_permitted.load() || !read_state(g) || !g.valid ||
+        rd32(ctx + 4u) != 1) return 0;
     int pk = s_sel_pkg.load();
     uint32_t generation = s_pregame_host_generation.load();
     if (pk != s_pregame_host_package.load() || pk <= 0 || pk >= (int)s_pkgs.size() ||
@@ -3085,7 +5913,7 @@ extern "C" int nfl2k5_presentation_pregame_draw_replaced(uint32_t ctx)
             owner.generation != generation || (owner.slot >= 0 && owner.slot != slot) ||
             !owner.layout || owner.layout != rd32(ctx + 0x48u) ||
             owner.clock_object != rd32(0x00E6028Cu)) continue;
-        bool owned = owner.side >= AWAY && owner.side <= HOME;
+        bool owned = kind == PREGAME_COIN || (owner.side >= AWAY && owner.side <= HOME);
         for (int s = AWAY; s <= HOME && owned; ++s)
             owned = owner.roster[s] == rd32(k_team_obj[s] + 0x1Cu) &&
                     owner.abbr[s] == upper(team_info(g.t[s].abbr).abbr);
@@ -3094,16 +5922,20 @@ extern "C" int nfl2k5_presentation_pregame_draw_replaced(uint32_t ctx)
             if (gtext(ctx + 0x4Cu, 64) != owner.title ||
                 gtext(ctx + 0xCCu, 128) != owner.message) continue;
         } else {
-            if (slot != 1 || rd32(ctx + 0x10u) != 1 || rd32(ctx + 0x228u) != 1 ||
+            if (slot != 1 || rd32(ctx + 0x40u) != 1 || rd32(ctx + 0x10u) != 1 || rd32(ctx + 0x228u) != owner.subtype ||
                 rd32(ctx + 0x14u) != owner.player || rd32(ctx + 0x22Cu) != owner.rows ||
-                rd32(ctx + 0x230u) != owner.columns || rd32(ctx + 0xEF4u) != owner.cells.size() ||
+                rd32(ctx + 0x230u) != owner.columns || (owner.subtype == 1 && rd32(ctx + 0xEF4u) != owner.cells.size()) ||
                 grel_text(owner.player + 0x10u) + " " + grel_text(owner.player + 0x14u) != owner.full_name)
                 continue;
+            if (native_player_caption(ctx) != owner.title || gtext(ctx + 0x4Cu, 64) != owner.subject) continue;
+            if (owner.subtype == 3 && gtext(ctx + 0x230u, 1600) != owner.message) continue;
             bool cells_match = true;
-            for (size_t i = 0; i < owner.cells.size(); ++i)
-                if (gtext(ctx + 0x23Cu + (uint32_t)i * 0x88u, 64) != owner.cells[i]) {
+            for (size_t i = 0; i < owner.cells.size(); ++i) {
+                std::string cell;
+                if (!native_player_cell(ctx, (uint32_t)i, cell) || cell != owner.cells[i]) {
                     cells_match = false; break;
                 }
+            }
             if (!cells_match) continue;
         }
         owner.slot = slot; /* Resolve auto-selected coin slot by exact payload. */
@@ -3112,8 +5944,28 @@ extern "C" int nfl2k5_presentation_pregame_draw_replaced(uint32_t ctx)
     return 0;
 }
 
+/* Scene text supplies its own alpha independently of the mesh/layout
+ * alpha. Scope only the existing BCE50->1513D0 draw; a nested draw inherits
+ * suppression, while another guest thread has an independent stack. */
+static thread_local std::vector<unsigned char> s_native_popup_text_scope;
+
+extern "C" void nfl2k5_presentation_native_text_begin(uint32_t ctx)
+{
+    bool inherited = !s_native_popup_text_scope.empty() && s_native_popup_text_scope.back();
+    s_native_popup_text_scope.push_back(inherited || nfl2k5_presentation_pregame_draw_replaced(ctx) ? 1 : 0);
+}
+
+extern "C" void nfl2k5_presentation_native_text_end(void)
+{
+    if (!s_native_popup_text_scope.empty()) s_native_popup_text_scope.pop_back();
+}
+
+extern "C" uint32_t nfl2k5_presentation_native_text_color(uint32_t argb)
+{
+    return !s_native_popup_text_scope.empty() && s_native_popup_text_scope.back() ? argb & 0x00FFFFFFu : argb;
+}
+
 extern "C" void nfl2k5_portraits_warm(void);
-extern "C" void xbox_PresentRecord(int seconds);   /* nv2a_gpu_present.inc.c, video clips */
 static std::mutex s_lineup_lock;
 struct PendingLineup {
     bool offense = false;
@@ -3141,6 +5993,15 @@ extern "C" int nfl2k5_lineup_active(void)
     DWORD until = s_lineup_until;
     return until && (int32_t)(until - GetTickCount()) > 0;
 }
+
+/* Read-only observer and draw-only policy for the actual queued ticker.
+ * The original show/update/camera/close routines always continue. */
+extern "C" void nfl2k5_presentation_lineup_frame(uint32_t ctx) { native_lineup_frame(ctx); }
+extern "C" int nfl2k5_presentation_lineup_draw_replaced(uint32_t ctx) { return native_lineup_draw_replaced(ctx); }
+extern "C" void nfl2k5_presentation_lineup_hide(uint32_t completed) { native_lineup_hide(completed); }
+extern "C" void nfl2k5_presentation_timeout_accepted(uint32_t team) { native_timeout_accepted(team); }
+extern "C" void nfl2k5_presentation_timeout_bug_frame(int visible) { native_timeout_bug_frame(visible); }
+extern "C" void nfl2k5_presentation_timeout_committed(void) { native_timeout_committed(); }
 
 extern "C" void nfl2k5_lineup_ticker(uint32_t sp)
 {
@@ -3175,6 +6036,7 @@ extern "C" void nfl2k5_lineup_ticker(uint32_t sp)
                    ",\"portrait\":" + json_str(nfl2k5_portrait_url(photo)) + "}";
     }
     fprintf(stderr, "[PRES] lineup %s: %s\n", offense ? "offense" : "defense", players.c_str());
+    native_lineup_snapshot(sp, players, (unsigned)n);
     if (n) xbox_PresentRecord(36);        /* NFL2K5_REC=<prefix>: record the intro (11 x 2.6 s) */
     if (n && nfl2k5_lineup_hide_native())  /* the package plays it: keep the game's cards out of its way */
         s_lineup_until = GetTickCount() + (DWORD)n * 2600u + 1500u;
@@ -3184,9 +6046,16 @@ extern "C" void nfl2k5_lineup_ticker(uint32_t sp)
 }
 
 /* Generic events that follow from two consecutive states. */
-static void html_state_events(const GameState &p, const GameState &g)
+static void html_state_events(const GameState &p, const GameState &g, const HtmlContext &cx)
 {
     drive_update(p, g);
+    /* Establish the match before its owned cards. A host first started by
+     * a live player card must not clear that card with GAME_STARTED after
+     * delivering it in the same frame. */
+    if (g.valid && !s_html.started_game && g.period >= 1) {
+        s_html.started_game = true;
+        html_post(html_event_json("GAME_STARTED", -1));
+    }
     {
         /* LINEUP: offense = the team with the ball, defense = the other. */
         std::vector<PendingLineup> pending;
@@ -3197,6 +6066,7 @@ static void html_state_events(const GameState &p, const GameState &g)
                 std::lock_guard<std::mutex> ql(s_live_qb_lock);
                 s_live_qb_identity[side] = l.quarterback;
             }
+            if (!s_pkgs[s_sel_pkg.load()].lineup_cards_ack)
             html_post(html_event_json("LINEUP", side, std::string(",\"unit\":\"") + (l.offense ? "offense" : "defense") +
                                       "\",\"players\":[" + l.players + "]"));
         }
@@ -3205,14 +6075,32 @@ static void html_state_events(const GameState &p, const GameState &g)
         std::vector<PendingPopupEvent> pending;
         { std::lock_guard<std::mutex> lock(s_popup_lock); pending.swap(s_popup_events); }
         for (auto &ev : pending) {
-            if (ev.name == "PLAYER_FACT") {
-                bool owned = fresh_pregame(g) && ev.clock_object == rd32(0x00E6028Cu);
+            if (!camera_mark_event_current(ev, g)) continue;
+            if (!native_notice_event_current(ev, g)) continue;
+            if (!native_table_event_current(ev, g)) continue;
+            if (!native_lineup_event_current(ev, g)) continue;
+            if (!native_timeout_event_current(ev, g)) continue;
+            if (!review_event_current(ev, g)) continue;
+            if (!replay_event_current(ev, g)) continue;
+            if (!period_board_event_current(ev, g)) continue;
+            bool cbs_drive = ev.drive && nfl2k5_broadcast_live_stats_enabled();
+            if (ev.name == "PLAYER_FACT" || cbs_drive) {
+                bool owned = g.valid && ev.clock_object == rd32(0x00E6028Cu);
                 for (int s = AWAY; s <= HOME && owned; ++s)
                     owned = ev.roster[s] == rd32(k_team_obj[s] + 0x1Cu) &&
                             ev.abbr[s] == upper(team_info(g.t[s].abbr).abbr);
                 if (!owned) continue;
             }
-            int side = ev.drive ? (s_drive.side >= 0 ? s_drive.side : -1) :
+            if (cbs_drive) {
+                if (GetTickCount64() - ev.queued_at > 30000u) continue;
+                if (!cx.scorebug_visible || cx.paused || cx.play_selection || period_ending(g) ||
+                    rd32(0x00B61B54u) || rd32(0x00B62A74u) || GetTickCount64() < s_live_insert_after) {
+                    std::lock_guard<std::mutex> lock(s_popup_lock);
+                    s_popup_events.push_back(std::move(ev)); continue;
+                }
+                s_live_insert_after = GetTickCount64() + 10500u;
+            }
+            int side = cbs_drive ? ev.side : ev.drive ? (s_drive.side >= 0 ? s_drive.side : -1) :
                        ev.side >= AWAY && ev.side <= HOME ? ev.side :
                        g.valid ? coin_toss_team(g, ev.message) : -1;
             html_post(html_event_json(ev.name.c_str(), side, ev.extra));
@@ -3220,7 +6108,7 @@ static void html_state_events(const GameState &p, const GameState &g)
     }
     /* Teardown/kickoff invalidates stale ownership without inventing a
      * native close event. COIN_TOSS_HIDE comes only from the close hook. */
-    if (!g.valid || (g.period >= 1 && g.phase != 0)) {
+    if (!g.valid) {
         s_coin_toss_native_active = 0;
         s_player_fact_native_active = 0;
         pregame_clear_owners();
@@ -3228,10 +6116,6 @@ static void html_state_events(const GameState &p, const GameState &g)
         s_featured = FeaturedRosterSnapshot();
     }
     if (!g.valid) return;
-    if (!s_html.started_game && g.period >= 1) {
-        s_html.started_game = true;
-        html_post(html_event_json("GAME_STARTED", -1));
-    }
     if (!s_html.prev_valid) return;
     for (int s = 0; s < 2; s++)
         if (g.t[s].score != p.t[s].score)
@@ -3278,6 +6162,12 @@ static int html_hud(const XboxHudFrame *f, XboxHudImage *img, const GameState &g
      * shown size that stays well off the current scale for a second
      * restarts the page at the right one. */
     float want_scale = std::max(1.0f, std::min(2.0f, dh / pkg.canvas_h));
+#if defined(__ANDROID__)
+    /* Battery: the page rasterises about 960 px wide at any screen size. The
+     * surface is then smaller than the shown rectangle; img->w/h are the
+     * surface's and img->dw/dh the rectangle's, so the presenter scales it. */
+    want_scale = 960.0f / (float)cw;
+#endif
     static double scale_off_since;
     if (s_html.package == pk && (fabsf(want_scale - s_html.scale) > 0.2f || abs(cw - s_html.canvas_w) > 8)) {
         if (!scale_off_since) scale_off_since = now_s();
@@ -3290,6 +6180,7 @@ static int html_hud(const XboxHudFrame *f, XboxHudImage *img, const GameState &g
         c.entry = pkg.entry;
         c.root_dir = "mods/presentations";
         c.teams_dir = "mods/teams";
+        c.eras_teams_dir = eras_teams_root();   /* M9: https://erateams.local/ ("" = not mapped) */
         c.portraits_dir = nfl2k5_portraits_dir();
         nfl2k5_portraits_warm();
         c.canvas_width = cw;
@@ -3297,13 +6188,35 @@ static int html_hud(const XboxHudFrame *f, XboxHudImage *img, const GameState &g
         c.canvas_height = pkg.canvas_h;
         c.raster_scale = want_scale;
         s_html.scale = want_scale;
-        if (pkg.replaces_pregame_cards) {
+        if (pkg.replaces_pregame_cards || (pkg.replaces_player_cards && pkg.player_cards_ack) ||
+            (pkg.replaces_period_boards && pkg.period_boards_ack) || pkg.replay_wipes_ack || pkg.review_cards_ack || pkg.camera_marks_ack || pkg.notice_cards_ack || pkg.native_tables_ack || pkg.lineup_cards_ack || pkg.timeout_boards_ack) {
             uint32_t generation = s_pregame_host_generation.load();
-            s_pregame_host_package = pk;
+            if (pkg.replaces_pregame_cards) s_pregame_host_package = pk;
+            if (pkg.replaces_player_cards && pkg.player_cards_ack) s_player_card_host_package = pk;
+            if (pkg.replaces_period_boards && pkg.period_boards_ack) s_period_board_host_package = pk;
+            if (pkg.replay_wipes_ack) s_replay_host_package = pk;
+            if (pkg.review_cards_ack) s_review_host_package = pk;
+            if (pkg.camera_marks_ack) s_camera_mark_host_package = pk;
+            if (pkg.notice_cards_ack) s_notice_host_package = pk;
+            if (pkg.native_tables_ack) s_native_table_host_package = pk;
+            if (pkg.lineup_cards_ack) s_native_lineup_host_package = pk;
+            if (pkg.timeout_boards_ack) s_native_timeout_host_package = pk;
             c.on_page_message = [pk, generation](const std::string &message) {
+                camera_mark_page_message(pk, generation, message);
+                native_notice_page_message(pk, generation, message);
+                native_table_page_message(pk, generation, message);
+                native_lineup_page_message(pk, generation, message);
+                native_timeout_page_message(pk, generation, message);
+                review_page_message(pk, generation, message);
+                replay_page_message(pk, generation, message);
+                player_card_page_message(pk, generation, message);
+                period_board_page_message(pk, generation, message);
                 pregame_page_message(pk, generation, message);
+                corner_page_message(message);
             };
         }
+        if (!c.on_page_message) c.on_page_message = [](const std::string &message) { corner_page_message(message); };
+        s_corner_page.store(0.0f);
         s_html.host = nfl2k5::create_webview2_presentation_host();
         s_html.host->start(c);
         s_html.package = pk;
@@ -3312,7 +6225,16 @@ static int html_hud(const XboxHudFrame *f, XboxHudImage *img, const GameState &g
         fprintf(stderr, "[HTMLPRES] package \"%s\" at raster scale %.2f\n", pkg.name.c_str(), c.raster_scale);
     }
 
-    bool page_permitted = fresh_pregame(g) && !cx.play_selection && !cx.paused;
+    bool page_permitted = g.valid && !cx.play_selection && !cx.paused;
+    player_card_hud_context(g, cx);
+    period_board_hud_context(g, cx);
+    replay_hud_context(g, cx);
+    camera_mark_hud_context(g, cx);
+    native_notice_hud_context(g, cx);
+    native_table_hud_context(g, cx);
+    native_lineup_hud_context(g, cx);
+    native_timeout_hud_context(g, cx);
+    review_hud_context(g, cx);
     s_pregame_page_permitted = page_permitted ? 1 : 0;
     if (!page_permitted) pregame_clear_owners();
 
@@ -3346,7 +6268,9 @@ static int html_hud(const XboxHudFrame *f, XboxHudImage *img, const GameState &g
         }
     }
 
-    html_state_events(s_html.prev, g);
+    html_state_events(s_html.prev, g, cx);
+    html_drive_qb_card(g, cx);
+    html_live_stat_cards(g, cx);
     s_html.prev = g;
     s_html.prev_valid = g.valid;
 
@@ -3357,13 +6281,19 @@ static int html_hud(const XboxHudFrame *f, XboxHudImage *img, const GameState &g
     Event ev;
     while (pop_event(ev))
         if (const char *name = html_event_name(ev.name)) {
+            if (!player_card_event_current(ev, g)) continue;
             std::string extra;
-            if (ev.name == "touchdown") extra = drive_json(g, ev.team, true);
+            if (!ev.live_extra.empty()) extra = ev.live_extra;
+            else if (ev.name == "touchdown") extra = drive_json(g, ev.team, true);
             else if (ev.name == "field_goal") extra = drive_json(g, ev.team, false);
             else if (ev.name == "player_stat" || ev.name == "player_feature") {
                 extra = html_player_extra(ev.player, ev.player_identity, ev.photo_id);
                 if (std::isfinite(ev.requested_duration) && ev.requested_duration > 0)
                     extra += ",\"displaySeconds\":" + std::to_string(ev.requested_duration);
+            }
+            if (ev.native_card_token) {
+                extra += ",\"nativeCardToken\":" + json_str(std::to_string(ev.native_card_token));
+                if (ev.name == "player_stat") extra += ",\"nativeCardOwned\":true";
             }
             html_post(html_event_json(name, ev.team, extra));
         }
@@ -3378,7 +6308,141 @@ static int html_hud(const XboxHudFrame *f, XboxHudImage *img, const GameState &g
         img->shared = shared.handle;
         img->pixels = shared.handle;          /* non-null: "there is an image" */
     } else {
-        if (!s_html.host->acquire_surface(surf)) return 0;
+        if (!s_html.host->acquire_surface(surf)) {
+#ifdef NFL2K5_UWP
+            /* UWP/Xbox: a package the EdgeHTML WebView cannot run (or no
+             * WebView at all) goes back to the native scorebug for this
+             * session; the reason is in the log. */
+            std::string why = s_html.host->status();
+            if (why.compare(0, 6, "error:") == 0 || why.compare(0, 11, "unavailable") == 0) {
+                fprintf(stderr, "[HTMLPRES] \"%s\": %s -- using the native scorebug\n", pkg.name.c_str(), why.c_str());
+                html_stop();
+                s_sel_pkg = 0;
+            }
+#endif
+            return 0;
+        }
+        img->pixels = surf.pixels;
+    }
+    img->w = surf.width; img->h = surf.height; img->stride = surf.stride;
+    img->x = (int)lroundf(f->game_x + (gw - dw) / 2);
+    img->y = (int)lroundf(f->game_y + (gh - dh) / 2);
+    img->dw = (int)lroundf(dw); img->dh = (int)lroundf(dh);
+    img->changed = surf.serial != shown;
+    /* The corner bug's right edge (64 of the 1920-px page in, NBC SNF and CBS), as a share of the
+     * game picture's width, for HUD elements that take its place (nfl2k5_presentation_corner_right). */
+    if (gw > 0 && cw > 0) {
+        float page = s_corner_page.load();
+        if (page <= 0.0f) page = 1.0f - 64.0f / (float)cw;             /* not reported: 64 px in */
+        s_corner_right.store(((gw - dw) / 2 + dw * page) / gw);
+    }
+    img->dirty_y0 = surf.dirty_y0; img->dirty_y1 = surf.dirty_y1;   /* only these rows are uploaded */
+    img->dirty_rows = surf.dirty_rows;
+    shown = surf.serial;
+    return 1;
+}
+
+/* Front-end card mode (My NFL Eras draft show, docs/eras/results/M11-draftshow.md): a page the
+ * game starts on demand outside a match, with events posted from C. Its own host, separate
+ * from the match package's; the match gate above is not involved. Any thread may call
+ * begin/end/post; the host is driven from the HUD callback. */
+static struct {
+    std::mutex lock;
+    bool want = false;
+    std::string root, dir, entry;
+    std::vector<std::string> events;
+    unsigned gen = 0;
+} s_fe;
+static std::unique_ptr<nfl2k5::PresentationHost> s_fe_host;
+static unsigned s_fe_host_gen;
+static float s_fe_scale;
+
+extern "C" void nfl2k5_presentation_frontend_begin(const char *root_dir, const char *package_dir, const char *entry)
+{
+    std::lock_guard<std::mutex> g(s_fe.lock);
+    s_fe.want = true;
+    s_fe.root = root_dir ? root_dir : "";
+    s_fe.dir = package_dir ? package_dir : "";
+    s_fe.entry = entry && *entry ? entry : "index.html";
+    s_fe.events.clear();
+    s_fe.gen++;
+    fprintf(stderr, "[HTMLPRES] front-end page requested: %s/%s\n", s_fe.dir.c_str(), s_fe.entry.c_str());
+}
+
+extern "C" void nfl2k5_presentation_frontend_end(void)
+{
+    std::lock_guard<std::mutex> g(s_fe.lock);
+    if (s_fe.want) fprintf(stderr, "[HTMLPRES] front-end page released\n");
+    s_fe.want = false;
+    s_fe.events.clear();
+}
+
+/* One Presentation API event object, e.g. {"name":"DRAFT_PICK","pick":1,...}. Queued until the
+ * page's host exists, then delivered in order. */
+extern "C" void nfl2k5_presentation_post_json(const char *json)
+{
+    if (!json || !*json) return;
+    std::lock_guard<std::mutex> g(s_fe.lock);
+    if (!s_fe.want) return;
+    if (s_fe.events.size() < 256) s_fe.events.push_back(json);
+    if (s_log) fprintf(stderr, "[HTMLPRES] front-end event %s\n", json);
+}
+
+static int frontend_hud(const XboxHudFrame *f, XboxHudImage *img)
+{
+    bool want;
+    std::string root, dir, entry;
+    std::vector<std::string> events;
+    unsigned gen;
+    {
+        std::lock_guard<std::mutex> g(s_fe.lock);
+        want = s_fe.want;
+        gen = s_fe.gen;
+        if (want) { root = s_fe.root; dir = s_fe.dir; entry = s_fe.entry; }
+    }
+    if (!want || (s_fe_host && s_fe_host_gen != gen)) {
+        if (s_fe_host) {
+            s_fe_host->stop();
+            s_fe_host.reset();
+            fprintf(stderr, "[HTMLPRES] front-end host stopped\n");
+        }
+        if (!want) return 0;
+    }
+    float gw = f->game_w, gh = f->game_h;
+    float dh = std::min(gh, gw * 1080.0f / 1920.0f), dw = dh * 1920.0f / 1080.0f;
+    if (!s_fe_host) {
+        nfl2k5::PresentationHostConfig c;
+        c.root_dir = root;
+        c.package_dir = dir;
+        c.entry = entry;
+        c.eras_teams_dir = eras_teams_root();
+        c.canvas_width = 1920;
+        c.canvas_height = 1080;
+#if defined(__ANDROID__)
+        c.raster_scale = s_fe_scale = 960.0f / 1920.0f;    /* about 960 px wide, scaled up by dw/dh (html_hud) */
+#else
+        c.raster_scale = s_fe_scale = std::max(1.0f, std::min(2.0f, dh / 1080.0f));
+#endif
+        s_fe_host = nfl2k5::create_webview2_presentation_host();
+        s_fe_host->start(c);
+        s_fe_host_gen = gen;
+        fprintf(stderr, "[HTMLPRES] front-end host started: %s/%s at raster scale %.2f\n", dir.c_str(), entry.c_str(), c.raster_scale);
+    }
+    {
+        std::lock_guard<std::mutex> g(s_fe.lock);
+        events.swap(s_fe.events);
+    }
+    for (auto &e : events) s_fe_host->post_event(e);
+    nfl2k5::PresentationSurface surf;
+    nfl2k5::PresentationSharedSurface shared;
+    static uint64_t shown;
+    if (!xbox_hud_shared_failed && s_fe_host->acquire_shared(shared)) {
+        surf.width = shared.width; surf.height = shared.height;
+        surf.stride = shared.width * 4; surf.serial = shared.serial;
+        img->shared = shared.handle;
+        img->pixels = shared.handle;
+    } else {
+        if (!s_fe_host->acquire_surface(surf)) return 0;
         img->pixels = surf.pixels;
     }
     img->w = surf.width; img->h = surf.height; img->stride = surf.stride;
@@ -3396,11 +6460,23 @@ static int hud_callback(const XboxHudFrame *f, XboxHudImage *img)
     float dt = (float)std::min(0.1, s_last_t ? t - s_last_t : 0.0);
     s_last_t = t;
     music_tick();
+    nfl2k5_sandbox_ui_viewport(f->game_x,f->game_y,f->game_w,f->game_h);
+    nfl2k5_sandbox_ui_tick();
+    if (nfl2k5_sandbox_active()) {
+        const uint8_t *pixels = nullptr; int w=0,h=0,stride=0;
+        if (!nfl2k5_sandbox_ui_surface(&pixels,&w,&h,&stride)) return 0;
+        memset(img,0,sizeof *img);
+        img->pixels=pixels;img->w=w;img->h=h;img->stride=stride;
+        img->x=(int)f->game_x;img->y=(int)f->game_y;
+        img->dw=(int)f->game_w;img->dh=(int)f->game_h;img->changed=1;
+        return 1;
+    }
+    if (frontend_hud(f, img)) return 1;
 
     GameState g;
     read_state(g);
     if (s_test) {
-        g.valid = true; g.period = 1; g.clock = 791; g.period_len = 900; g.phase = 4; g.down = 1;
+        g.valid = true; g.period = 1; g.clock = 791; g.period_len = 900; g.phase = 4; g.down = 1; g.flow_state = 0x0E;
         g.ball = 0; g.line = 914.4f; g.poss = 2;
         g.t[0].score = 0; g.t[0].timeouts = 3; g.t[0].abbr = "KC";
         g.t[1].score = 0; g.t[1].timeouts = 3; g.t[1].abbr = "NE";
@@ -3463,11 +6539,10 @@ static int hud_callback(const XboxHudFrame *f, XboxHudImage *img)
      * visible and transition states.  The stock ESPN bug is part of that
      * screen, but modern broadcast bugs should leave the play cards clear. */
     bool playcall_on = rd32(0x00B38C30u) != 0;
-    /* navigation_pause_notitle's enter (sub_00278310) sets AC7444;
-     * its leave (sub_00270600) clears it, and sub_00270BA0 exposes the
-     * same value. Gamecast is a nested pause screen, so a retained phase 4
-     * is not sufficient evidence of a live camera. */
-    bool pause_on = rd32(0x00AC7444u) != 0;
+    /* Include the actual match pause and nested challenge menu; a retained
+     * phase 4 and a clear frontend navigation latch do not mean live play. */
+    bool pause_on = native_pause_active();
+    bool replay_on = native_replay_active(g);
     if (playcall_on) native_on = false;
     if (s_test) native_on = true;
 
@@ -3486,9 +6561,15 @@ static int hud_callback(const XboxHudFrame *f, XboxHudImage *img)
         (fabsf(g.clock - activity_prev_clock) > 0.01f ||
          (g.play_clock >= 0 && activity_prev_play_clock >= 0 &&
           g.play_clock != activity_prev_play_clock));
-    if (g.valid && (native_on || playcall_on || pause_on || clock_moved || s_test))
+    bool native_card_on = s_native_card_tick.load() && activity_now - s_native_card_tick.load() < 300;
+    /* The match-loading controller is zero in the front end. Keep the
+     * verified fresh pregame's page warm across camera pans between cards,
+     * instead of paying browser startup after each 2.5-second quiet gap. */
+    bool pregame_on = fresh_pregame(g) && rd32(0x00A9288Cu) != 0;
+    bool native_match_on = s_native_match_lifecycle.load() == 1;
+    if (g.valid && (pregame_on || native_on || native_card_on || playcall_on || pause_on || replay_on || native_match_on || clock_moved || s_test))
         s_match_tick = activity_now;
-    if (!g.valid) s_match_tick = 0;
+    if (!g.valid || s_native_match_lifecycle.load() == 2) s_match_tick = 0;
     activity_prev_valid = g.valid;
     activity_prev_clock = g.clock;
     activity_prev_play_clock = g.play_clock;
@@ -3558,16 +6639,22 @@ static int hud_callback(const XboxHudFrame *f, XboxHudImage *img)
     /* Presentation HTML belongs to an active match.  Starting its WebView in
      * the title/front-end path kept an overlay process alive before gameplay
      * and made Press Start contend with presentation startup. */
-    if (match_active && custom_active() && s_pkgs[s_sel_pkg].html) {
+    static int no_html = -1;            /* NFL2K5_NO_HTML=1: no HTML package (performance A/B) */
+    if (no_html < 0) no_html = getenv("NFL2K5_NO_HTML") != nullptr;
+    if (match_active && custom_active() && s_pkgs[s_sel_pkg].html && !no_html) {
         HtmlContext cx;
         cx.play_selection = playcall_on;
         cx.paused = pause_on;
+        cx.replay_active = replay_on;
         cx.native_scorebug = native_on;
-        cx.scorebug_visible = match_active && g.valid && !playcall_on && !pause_on && (g.phase == 4 || native_on);
+        cx.scorebug_visible = match_active && g.valid && !playcall_on && !pause_on && !replay_on && (g.phase == 4 || native_on);
         return html_hud(f, img, g, cx);
     }
     if (s_html.host) html_stop();       /* switched back to a JSON package or ESPN */
     if (!custom_active() || !renderer_init()) return 0;
+#ifndef _WIN32
+    return 0;                           /* JSON-layout renderer: Windows only (never reached) */
+#else
     const Package &pkg = s_pkgs[s_sel_pkg];
     const JVal *sb = pkg.root.get("scorebug");
     if (!sb) return 0;
@@ -3584,7 +6671,7 @@ static int hud_callback(const XboxHudFrame *f, XboxHudImage *img)
      * is not raised consistently by NFL 2K5's live scrimmage cameras. FOX
      * therefore follows verified live game phase too, while the play-call
      * controller remains the authoritative hide signal. */
-    bool fox_live = match_active && g.valid && !playcall_on && !pause_on && (g.phase == 4 || native_on);
+    bool fox_live = match_active && g.valid && !playcall_on && !pause_on && !replay_on && (g.phase == 4 || native_on);
     update_bug_lifecycle(sb, fox_live, dt);
 
     /* Next animation. */
@@ -3715,6 +6802,7 @@ static int hud_callback(const XboxHudFrame *f, XboxHudImage *img)
     img->x = X; img->y = Y;
     img->changed = changed;
     return 1;
+#endif
 }
 
 /* Called once at startup (nfl2k5_video_menu_install). */
@@ -3725,14 +6813,20 @@ static int in_match(void)
     /* The play-call cards and pause screens are 4:3 panels: drawn at F = 1
      * they fill the picture instead of sitting in a middle strip. */
     GameState g;
-    if (rd32(0x00B38C30u) != 0 || rd32(0x00AC7444u) != 0) return 0;
+    if (rd32(0x00B38C30u) != 0 || native_pause_active()) return 0;
+    /* read_state stays true after an attract demo cut short at the title: every menu then
+     * sat in the 1/F middle strip until the next real match ended. The match screen must be on top. */
+    uint32_t idx = rd32(0x00A84B18u + 0x100u);
+    if (idx < 0x20u && rd32(0x00A84B18u + idx * 8u) != 0x004E7EC0u) return 0;
     return read_state(g) ? 1 : 0;
 }
 
 extern "C" void nfl2k5_presentation_init(void)
 {
     xbox_present_in_match_fn = in_match;
+#ifdef _WIN32
     MFStartup(MF_VERSION, MFSTARTUP_LITE);
+#endif
     load_teams();
     load_packages();
     load_settings();

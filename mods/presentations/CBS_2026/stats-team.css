@@ -1,0 +1,61 @@
+/* Stable source: x175..463,y294..343 at640x360, scaled exactly3x.
+ * The raised YARDS tab spans x299..341,y282..294. The source's typography
+ * is approximated with the existing package sans, not a claimed CBS font.
+ */
+.cbs-team-table {position:absolute;left:525px;top:882px;width:864px;height:147px;color:#fff;font-family:Arial,Helvetica,sans-serif;filter:drop-shadow(0 1px 1px #0007);}
+.cbs-team-title {position:absolute;left:435px;top:-36px;transform:translateX(-50%);height:36px;min-width:126px;padding:0 7px;line-height:36px;font-size:30px;font-weight:700;letter-spacing:-.5px;text-align:center;white-space:nowrap;background:linear-gradient(#f5f6f0,#c9d2c9);color:#111b16;border:1px solid #6a746d;}
+.cbs-team-head,.cbs-team-row {display:grid;grid-template-columns:420px repeat(var(--cbs-team-columns,3),minmax(0,1fr));}
+.cbs-team-head {height:39px;}
+.cbs-team-label-blank {background:transparent;}
+.cbs-team-column-label {height:39px;text-align:center;font-size:24px;line-height:37px;font-weight:400;white-space:nowrap;background:linear-gradient(#161c19ed,#090d0bed);border-top:1px solid #e2e9e52b;letter-spacing:-.2px;}
+.cbs-team-row {height:54px;}
+.cbs-team-identity {position:relative;min-width:0;height:54px;overflow:hidden;background:linear-gradient(#ffffff0c,#00000018),var(--cbs-team-color,#263648);border-top:1px solid #ffffff20;border-bottom:1px solid #0008;}
+.cbs-team-logo {position:absolute;left:0;top:0;width:132px;height:54px;object-fit:contain;filter:drop-shadow(0 1px 1px #0009);}
+.cbs-team-logo[hidden] {display:none;}
+.cbs-team-city {display:block;position:absolute;left:150px;right:4px;top:0;height:54px;line-height:52px;font-size:33px;font-weight:700;letter-spacing:-.1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:0 1px 1px #0007;}
+.cbs-team-value {height:54px;min-width:0;text-align:center;font-size:42px;line-height:52px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:0;background:linear-gradient(#161a1b,#080a0c);border-top:1px solid #ffffff13;border-bottom:1px solid #0008;white-space:nowrap;}
+.cbs-team-unavailable {color:#d0d5d8;}
+/* The stats controller owns this short-lived canvas class. It overrides
+   the usual large-card Eyebar suppression only during the observed handoff. */
+#canvas.cbs-team-opening #eyebar {opacity:1;transform:none;transition:none;animation:cbs-team-oldbug-visibility 1230ms linear both;}
+#canvas.cbs-team-opening #eyebar .live-plate {transform-origin:50% 50%;animation:cbs-team-oldbug-contract 1230ms linear both;}
+#canvas.cbs-team-opening #eyebar .team.away .logo {animation:cbs-team-old-away-logo 1230ms linear both;}
+#canvas.cbs-team-opening #eyebar .team.home .logo {animation:cbs-team-old-home-logo 1230ms linear both;}
+.cbs-team-opener {position:absolute;left:546px;top:873px;width:837px;height:156px;overflow:hidden;pointer-events:none;opacity:0;}
+.cbs-team-opener-plane {position:absolute;top:0;width:420px;height:156px;overflow:hidden;}
+.cbs-team-opener-away {left:0;}
+.cbs-team-opener-home {left:417px;}
+.cbs-team-opener .cbs-team-logo,.cbs-team-opener-contour {position:absolute;left:0;top:-132px;width:420px;height:420px;object-fit:contain;filter:none;}
+.cbs-team-opener .cbs-team-logo {opacity:1;}
+.cbs-team-opener-contour {opacity:0;overflow:visible;}
+.cbs-stat-team.entering .cbs-team-opener {animation:cbs-team-opener-visibility 1230ms linear both;}
+.cbs-stat-team.entering .cbs-team-opener-plane {animation:cbs-team-opener-travel 1230ms linear both;}
+.cbs-stat-team.entering .cbs-team-opener .cbs-team-logo {animation:cbs-team-opener-color 1230ms linear both;}
+.cbs-stat-team.entering .cbs-team-opener-contour {animation:cbs-team-opener-lines 1230ms linear both;}
+.cbs-stat-team.entering .cbs-team-table {animation:cbs-team-table-delay 1230ms steps(1,end) both;}
+.cbs-stat-team.entering .cbs-team-identity {animation:cbs-team-label-reveal 560ms linear 670ms both;}
+.cbs-stat-team.entering .cbs-team-value,.cbs-stat-team.entering .cbs-team-column-label {animation:cbs-team-value-reveal 560ms linear 670ms both;}
+.cbs-stat-team.entering .cbs-team-value:nth-child(3) {animation-name:cbs-team-value-second;}
+.cbs-stat-team.entering .cbs-team-value:nth-child(4) {animation-name:cbs-team-value-third;}
+.cbs-stat-team.entering .cbs-team-column-label:nth-child(3) {animation-name:cbs-team-value-second;}
+.cbs-stat-team.entering .cbs-team-column-label:nth-child(4) {animation-name:cbs-team-value-third;}
+.cbs-stat-team.entering .cbs-team-title {animation:cbs-team-tab-reveal 560ms linear 670ms both;}
+/* Actual source1198.80-1200.03. Logo motion between sparse source samples
+   is interpolation. These are clipped, asset-derived image planes/contours,
+   not CBS's unavailable original animated3D logo meshes. */
+@keyframes cbs-team-opener-visibility {0%,21.9%{opacity:0;}22%,48%{opacity:1;}51.3%,100%{opacity:0;}}
+@keyframes cbs-team-opener-travel {0%,21.9%{transform:translateX(837px);}24.4%,28%{transform:translateX(0);}32.5%{transform:translateX(-8px);}40%{transform:translateX(-24px);}51.3%,100%{transform:translateX(-90px);}}
+@keyframes cbs-team-opener-color {0%,25.2%{opacity:1;}30%,100%{opacity:0;}}
+@keyframes cbs-team-opener-lines {0%,28%{opacity:0;}30%,40%{opacity:.8;}51.3%,100%{opacity:0;}}
+@keyframes cbs-team-table-delay {0%,54.47%{opacity:0;}54.48%,100%{opacity:1;}}
+@keyframes cbs-team-oldbug-visibility {0%,16.2%{opacity:1;}16.3%,100%{opacity:0;}}
+@keyframes cbs-team-oldbug-contract {0%,5.7%{transform:scaleX(1);}16.3%,100%{transform:scaleX(0);}}
+@keyframes cbs-team-old-away-logo {0%{opacity:1;transform:rotateY(0);}7.3%{opacity:.7;transform:rotateY(-78deg);}10.6%,100%{opacity:0;transform:rotateY(-90deg);}}
+@keyframes cbs-team-old-home-logo {0%{opacity:1;transform:rotateY(0);}7.3%{opacity:.7;transform:rotateY(78deg);}10.6%,100%{opacity:0;transform:rotateY(90deg);}}
+@keyframes cbs-team-label-reveal {0%{clip-path:inset(0 100% 0 0);}24%,100%{clip-path:inset(0);}}
+@keyframes cbs-team-value-reveal {0%,23%{clip-path:inset(0 100% 0 0);}47%,100%{clip-path:inset(0);}}
+@keyframes cbs-team-value-second {0%,39%{clip-path:inset(0 100% 0 0);}64%,100%{clip-path:inset(0);}}
+@keyframes cbs-team-value-third {0%,55%{clip-path:inset(0 100% 0 0);}74%,100%{clip-path:inset(0);}}
+@keyframes cbs-team-tab-reveal {0%,76%{clip-path:inset(100% 0 0 0);}100%{clip-path:inset(0);}}
+.cbs-team-possession .cbs-team-column-label {font-size:23px;letter-spacing:-.4px;}
+@media(prefers-reduced-motion:reduce) {html:not([data-preview-motion="full"]) .cbs-team-table,html:not([data-preview-motion="full"]) .cbs-team-table * {animation:none!important;transition:none!important;}html:not([data-preview-motion="full"]) .cbs-team-opener {display:none!important;}}

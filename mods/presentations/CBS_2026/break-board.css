@@ -1,0 +1,29 @@
+/* Legacy CBS crop: local design448x314; its original screen anchor is absent.
+   This adaptation uses x96,y400,w660,h463 in the existing1920x1080 canvas.
+   Entrance200ms / exit180ms are unmeasured readable transitions. */
+#cbs-break-board {position:absolute;left:96px;top:400px;width:660px;height:463px;z-index:76;pointer-events:none;opacity:0;transform:translateY(5px);transition:opacity 200ms ease-out,transform 200ms ease-out;filter:drop-shadow(0 3px 4px #0008);}
+#cbs-break-board[hidden] {display:none!important;}
+#cbs-break-board.on {opacity:1;transform:none;}
+#cbs-break-board.out {transition-duration:180ms;}
+#cbs-break-board[data-motion="reduced"] {transition:none;transform:none;}
+.cbs-bb-design {position:relative;width:448px;height:314px;transform:scale(1.473214285714);transform-origin:0 0;}
+.cbs-bb-body {position:absolute;left:0;top:0;width:444px;height:276px;border-radius:9px;background:linear-gradient(180deg,#7a7f7e 0,#1b2021 2%,#101415 48%,#363e40 51%,#111819 97%,#0b1010);border:3px solid #252a2a;box-shadow:inset 0 1px 2px #e1e4db99,inset 0 -2px 2px #000e,0 1px 2px #000b;}
+.cbs-bb-row {position:absolute;left:6px;width:426px;height:121px;border:2px solid #b8c6c8;border-radius:4px;background:linear-gradient(120deg,#eff2e6 0,#667a85 26%,#d5e0d6 49%,#eef5e8 72%,#65858e 100%);box-shadow:0 0 3px #e4ede1b8,inset 0 1px 1px white,inset 0 -1px 2px #22343c;}
+.cbs-bb-row.away {top:8px;}.cbs-bb-row.home {top:142px;}
+.cbs-bb-row::before,.cbs-bb-row::after {content:'';position:absolute;z-index:5;left:48%;width:13px;height:3px;background:#2c3739;box-shadow:0 0 1px #10191c;}
+.cbs-bb-row::before {top:-2px;}.cbs-bb-row::after {bottom:-2px;left:47%;}
+.cbs-bb-face {position:absolute;inset:3px;border-radius:1px;overflow:hidden;background:linear-gradient(180deg,#ffffff16 0,#0003 45%,#0004 100%),var(--cbs-bb-team,#17345d);border:1px solid #e6f0e9d6;box-shadow:inset 0 0 7px #ecf0e338,inset 0 -3px 6px #0003;}
+.cbs-bb-logo {position:absolute;left:-44px;top:50%;width:300px;height:210px;object-fit:contain;transform:translateY(-50%);filter:drop-shadow(2px 2px 2px #0007);}
+.cbs-bb-gloss {position:absolute;inset:0;pointer-events:none;background:linear-gradient(172deg,#ffffff2e 0,#ffffff0c 35%,transparent 52%,#00000012 85%,#ffffff0d 100%);box-shadow:inset 0 1px 2px #ffffffb3,inset 0 -1px 2px #fff5;}
+.cbs-bb-score {position:absolute;right:-2px;top:-2px;width:90px;height:116px;color:#fff;text-align:center;font:900 100px/119px "CBS Preview Heavy",Arial,sans-serif;font-variant-numeric:tabular-nums;letter-spacing:-2px;text-shadow:0 1px 2px #0006;}
+.cbs-bb-score[data-digits="2"] {right:2px;width:104px;font-size:84px;letter-spacing:-4px;}.cbs-bb-score[data-digits="3"] {right:2px;width:104px;font-size:61px;letter-spacing:-3px;}
+.cbs-bb-footer {position:absolute;left:23px;top:284px;width:392px;height:27px;color:#d2d8d2;text-shadow:0 1px 2px #000c;font-family:Arial,Helvetica,sans-serif;}
+.cbs-bb-brand {position:absolute;left:0;top:0;width:153px;height:27px;}
+/* Crop the existing official navigation SVG to its eye + CBS paths. The
+   SPORTS suffix is outside this viewport; no logo geometry is redrawn. */
+.cbs-bb-cbs {position:absolute;left:0;top:2px;width:86.2px;height:22px;overflow:hidden;}
+.cbs-bb-cbs img {display:block;width:199.528px;height:22px;max-width:none;filter:drop-shadow(0 1px 1px #0008);}
+.cbs-bb-brand>i {position:absolute;left:89px;top:1px;height:25px;width:1.5px;background:#cbd4cc;box-shadow:0 1px 1px #0009;}
+.cbs-bb-nfl {position:absolute;left:99px;top:0;font:700 26px/27px Arial,Helvetica,sans-serif;letter-spacing:-.3px;}
+.cbs-bb-status {position:absolute;left:205px;top:0;width:187px;height:27px;text-align:right;white-space:nowrap;font:700 25px/27px Arial,Helvetica,sans-serif;letter-spacing:-.6px;}
+.cbs-bb-status>i {font-style:normal;}

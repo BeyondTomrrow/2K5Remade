@@ -28666,16 +28666,16 @@ void sub_0003A950(void)
 
 loc_0003A950: ;
     eax = MEM32(ecx + 0x19C);
-    /* NFL2K5-GENPATCH:SAVE_ENUM_CAP_15 */
-    if (ecx == 0x00A7DF38u && eax > 15u) {
+    /* NFL2K5-GENPATCH:SAVE_ENUM_CAP_255 */
+    if (ecx == 0x00A7DF38u && eax > 255u) {
         static int nfl2k5_save_cap_logged;
         if (!nfl2k5_save_cap_logged++) {
             extern int __cdecl fprintf(void *, const char *, ...);
             extern void *__cdecl __acrt_iob_func(unsigned);
             fprintf(__acrt_iob_func(2),
-                    "  [SAVE-LIST] capped %u records to the menu's 15-row capacity\n", eax);
+                    "  [SAVE-LIST] %u saves: the Load/Save list holds 255 (the game's 256-row table)\n", eax);
         }
-        eax = 15u;
+        eax = 255u;
     }
     esp += 4; return; /* ret */
 

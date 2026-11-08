@@ -1,0 +1,12 @@
+{
+  "name": "LA MEMORIAL COLISEUM",
+  "display": "L.A. Memorial Coliseum",
+  "location": "Los Angeles, CA",
+  "code": "s60",
+  "clone": "QUALCOMM STADIUM",
+  "host": "LOCO ARENA",
+  "capacity": 93607,
+  "indoor": 0,
+  "grass": 1,
+  "source": "NCAA Football 07 USC stadium (STADIUMS.DAT 0x600/0x604), tools/eras/stadiums/coliseum_build.py"
+}

@@ -1,0 +1,72 @@
+/* The user-provided Ringside webfonts from E:/122. These declarations are
+ * local to the selected NBC_SNF presentation; they do not replace game fonts.
+ * Keep the scorebug's measured cap heights and widths in scorebug.js.
+ * Condensed Ultra gives the strongest available score/clock contours;
+ * the small record face is independently matched to the reference.
+ * A regular Wide/ExtraWide heavy face was not among the supplied files. */
+@font-face {
+  font-family:"SNF Ringside Compressed Ultra";
+  src:url("fonts/RingsideCompressed-Ultra-TD.woff") format("woff");
+  font-style:normal; font-weight:900; font-display:block;
+}
+@font-face {
+  font-family:"SNF Ringside Compressed Ultra Space";
+  src:url("fonts/RingsideCompressed-Ultra-TD-Space.woff") format("woff");
+  font-style:normal; font-weight:900; font-display:block; unicode-range:U+0020;
+}
+@font-face {
+  font-family:"SNF Ringside Condensed Ultra";
+  src:url("fonts/RingsideCondensed-Ultra-TD.woff") format("woff");
+  font-style:normal; font-weight:900; font-display:block;
+}
+@font-face {
+  font-family:"SNF Ringside Narrow Medium";
+  src:url("fonts/RingsideNarrow-Medium-TD.woff") format("woff");
+  font-style:normal; font-weight:500; font-display:block;
+}
+@font-face {
+  font-family:"SNF Ringside Narrow Screen Medium";
+  src:url("fonts/RingsideNarrowSSm-Medium-TD.woff") format("woff");
+  font-style:normal; font-weight:500; font-display:block;
+}
+@font-face {
+  font-family:"SNF Ringside Wide Black Italic";
+  src:url("fonts/RingsideWide-BlackItalic-TD.woff") format("woff");
+  font-style:italic; font-weight:900; font-display:block;
+}
+
+#bug .abbr, #bug .score, #bug .clock, #bug .quarter .num {
+  font-family:"SNF Ringside Condensed Ultra",sans-serif;
+  font-style:normal; font-weight:900; font-synthesis:none;
+}
+#bug .record {
+  font-family:"SNF Ringside Narrow Medium",sans-serif;
+  font-style:normal; font-weight:500; font-synthesis:none;
+}
+#bug .quarter .ord {
+  font-family:"SNF Ringside Condensed Ultra",sans-serif;
+  font-style:normal; font-weight:900; font-synthesis:none;
+}
+
+/* The supplied Medium is intended for small independent labels. Its
+ * regular weight avoids browser-generated bold or faux italics. */
+#snf-player-fact .pg-stat-label {
+  font-family:"SNF Ringside Narrow Screen Medium",sans-serif;
+  font-style:normal; font-weight:500; font-synthesis:none;
+}
+
+/* Independently compared with the attached THIS DRIVE source. The first
+ * name uses the supplied Medium; the surname and italic caption retain
+ * the closest measured available faces rather than inheriting Ultra. */
+#bug.player-drive .drive-player .first-name {
+  font-family:"SNF Ringside Narrow Medium",sans-serif;
+  font-style:normal; font-weight:500; font-synthesis:none;
+}
+#bug.player-drive .drive-player .last-name {
+  font-family:Arial,sans-serif;
+  font-style:normal; font-weight:700; font-synthesis:none;
+}
+#bug.player-drive .drive-bar .drive-title {
+  font-family:Arial,sans-serif;
+  font-style:italic; font-weight:700; font-synthesis:none;
+}

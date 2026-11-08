@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NBC SNF HTML Scorebug</title>
+  <link rel="stylesheet" href="scorebug.css">
+  <link rel="stylesheet" href="game.css">
+<!-- added by Presentation Studio -->
+<link rel="stylesheet" href="layout.css">
+<style id="nfl2k5-transparent">html, body { background: transparent !important; }</style>
+</head>
+<body>
+  <main class="demo-field">
+    <section id="scorebug" class="snf-scorebug" aria-label="NBC SNF scorebug">
+      <div class="team-panel away-panel">
+        <div class="logo-window away-logo-window">
+          <img class="team-logo away-logo" alt="Away logo">
+          <div class="logo-tint"></div>
+        </div>
+
+        <div class="team-stack away-stack">
+          <div class="team-abbr away-abbr">LAR</div>
+          <div class="team-record away-record">10-6</div>
+        </div>
+
+        <div class="divider away-divider"></div>
+        <div class="score away-score">42</div>
+      </div>
+
+      <div class="clock-pod">
+        <div class="peacock">◖●◗</div>
+        <div class="clock-text">15:00</div>
+        <div class="quarter-text">2ND</div>
+      </div>
+
+      <div class="team-panel home-panel">
+        <div class="score home-score">27</div>
+        <div class="divider home-divider"></div>
+
+        <div class="team-stack home-stack">
+          <div class="team-abbr home-abbr">CIN</div>
+          <div class="team-record home-record">9-7</div>
+        </div>
+
+        <div class="logo-window home-logo-window">
+          <img class="team-logo home-logo" alt="Home logo">
+          <div class="logo-tint"></div>
+        </div>
+      </div>
+
+      <div class="timeout-track away-timeout-track">
+        <span></span><span></span><span></span>
+      </div>
+
+      <div class="timeout-track home-timeout-track">
+        <span></span><span></span><span></span>
+      </div>
+    </section>
+
+    <section class="controls">
+      <button id="swapBtn">Swap Teams</button>
+      <button id="tdAwayBtn">Away TD</button>
+      <button id="tdHomeBtn">Home TD</button>
+      <button id="resetBtn">Reset</button>
+    </section>
+  </main>
+
+  <script src="../_runtime/nfl2k5-presentation.js"></script>
+<script src="scorebug.js"></script>
+<script src="nfl2k5-bridge.js"></script>
+</body>
+</html>

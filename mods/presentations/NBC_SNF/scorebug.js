@@ -19,8 +19,8 @@
     { el: '.home .record', anchor: 'left',   x: 432,   top: 57,   cap: 10,   ref: ['9-7', 29] },
     /* inside the pod (its box starts at 240, 2.5) */
     { el: '.pod .clock',         anchor: 'center', x: 48, top: 36.5, cap: 17,  ref: ['15:00', 76] },
-    { el: '.pod .quarter .num',  anchor: 'right',  x: 43, top: 63,   cap: 15,  ref: ['2', 12.5] },
-    { el: '.pod .quarter .ord',  anchor: 'left',   x: 43,   top: 63.8, cap: 8.7, ref: ['ND', 23], underline: true, underlineOffset: 0 }
+    { el: '.pod .quarter .num',  anchor: 'right',  x: 43, top: 63,   cap: 15,  ref: ['2', 11.5] },
+    { el: '.pod .quarter .ord',  anchor: 'left',   x: 43,   top: 63.8, cap: 8.7, ref: ['ND', 21], underline: true, underlineOffset: 0 }
   ];
 
   var ctx = document.createElement('canvas').getContext('2d');
@@ -32,6 +32,7 @@
   function fit(spec) {
     var el = q(spec.el);
     if (!el) return;
+    if (window.SNFBroadcastGlyphs && window.SNFBroadcastGlyphs.render(el, spec, el.textContent || ' ')) return;
     var capPer = measure(el, 100, spec.ref[0]).actualBoundingBoxAscent / 100;
     var size = spec.cap / capPer;
     var r = measure(el, size, spec.ref[0]);
@@ -104,8 +105,8 @@
     SEA: '#1d4f91', TB: '#d50a0a', TEN: '#4b92db', WAS: '#7a1a1a'
   };
   var missing = {}, missingPlates = {};
-  var latestState = null, matchKey = '', noticeTimer = 0, wipeTimer = 0, flagTimer = 0;
-  var notice = document.getElementById('snf-notice'), wipe = document.getElementById('snf-wipe');
+  var latestState = null, matchKey = '', noticeTimer = 0, flagTimer = 0;
+  var notice = document.getElementById('snf-notice');
   function escapeText(t) { return String(t == null ? '' : t).replace(/[&<>"']/g, function (c) { return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]; }); }
   function teamFor(e) { return e.teamData || (latestState && latestState[e.team]) || null; }
   function rgbaTeam(t) {
@@ -152,15 +153,29 @@
     var el = q(sel);
     if (el && el.textContent !== text) { el.textContent = text; dirty = true; }
   }
+  function scoreText(value) {
+    if (value == null || (typeof value === 'string' && !value.trim())) return '';
+    var score = Number(value);
+    return Number.isFinite(score) && score >= 0 && Math.floor(score) === score ? String(score) : '';
+  }
+  function timeoutCount(value) {
+    if (value == null || (typeof value === 'string' && !value.trim())) return null;
+    var count = Number(value);
+    return Number.isFinite(count) && count >= 0 && count <= 3 && Math.floor(count) === count ? count : null;
+  }
   function setTeam(side, t, prev) {
     bug.style.setProperty('--' + side, color(t));
     setText('.' + side + ' .abbr', code(t) || '---');
     setText('.' + side + ' .record', t.record || '');
-    setText('.' + side + ' .score', t.score == null ? '' : String(t.score));
+    setText('.' + side + ' .score', scoreText(t.score));
     if (prev && prev.score !== t.score && !busy) pop(side);
     setScorebugLogo(side, t);
     var bars = bug.querySelectorAll('.' + side + ' .timeouts i');
-    for (var i = 0; i < bars.length; i++) bars[i].classList.toggle('used', i >= (t.timeouts == null ? 3 : t.timeouts));
+    var timeouts = timeoutCount(t.timeouts);
+    for (var i = 0; i < bars.length; i++) {
+      bars[i].hidden = timeouts == null;
+      bars[i].classList.toggle('used', timeouts != null && i >= timeouts);
+    }
   }
   function pop(side) {
     var el = q('.half.' + side + ' .score');
@@ -168,8 +183,13 @@
   }
 
   function clock(sec) {
-    if (sec == null || sec < 0) return '';
-    var s = Math.ceil(sec);
+    /* The bridge normally supplies seconds, but an unavailable timer may
+       briefly arrive as NaN while a clock object is being replaced. Never
+       turn that into a visible "NaN:NaN" scorebug clock. */
+    if (sec == null) return '';
+    var numeric = Number(sec);
+    if (!Number.isFinite(numeric) || numeric < 0) return '';
+    var s = Math.ceil(numeric);
     return Math.floor(s / 60) + ':' + ('0' + (s % 60)).slice(-2);
   }
   var ORD = { 1: 'ST', 2: 'ND', 3: 'RD', 4: 'TH' };
@@ -380,9 +400,11 @@
   }
 
   /* ---- scoring sequence (touchdown / field goal / safety) ----
-   * split -> neon word -> chrome word -> collapse into the pod -> scoring
-   * drive bar (score ticks up) -> back to the scorebug. ~10.5 s; the
-   * scorebug stays on screen for all of it. */
+   * Designer module 512019f9 begins moving at 1370 ms. Its opening still is
+   * a demonstration lead-in, not an extra wait on the game's score event.
+   * The measured movement lasts ~9.13 s: shaded logo/chrome -> blue ->
+   * bright chrome -> contour contracts into pod -> drive/score roll -> out.
+   * Real logo pixels are used; the original extruded 3D asset is unavailable. */
   var busy = false, timers = [], scoreQueue = [], recentPoints = { away: 0, home: 0 }, lastDrive = null;
   var takeoverEl = q('.takeover');
   function at(ms, fn) { timers.push(setTimeout(fn, ms)); }
@@ -392,57 +414,134 @@
     q('.drive-bar .yds .val').textContent = d && d.yards != null ? String(d.yards) : '–';
     q('.drive-bar .top .val').textContent = d ? fmtTop(d.timeOfPossession) : '–';
   }
-  function scoring(word, side, drive) {
+  function captureScoring(word, side, drive) {
     var s = NFL2K5.state;
-    if (!broadcastLive || !s || !s[side]) return;
-    if (busy) { if (scoreQueue.length < 3) scoreQueue.push([word,side,drive]); return; }
+    if (!s || (side !== 'away' && side !== 'home') || !s.away || !s.home) return null;
+    var finalScore = Number.isFinite(s[side].score) ? Math.round(s[side].score) : null;
+    var points = Number.isFinite(recentPoints[side]) ? Math.round(recentPoints[side]) : 0;
+    recentPoints[side] = 0;
+    /* A queued extra point must not replace the preceding touchdown's
+       captured score. Each queued event owns both scores and its delta. */
+    return { word:word, side:side, drive:drive ? Object.assign({},drive) : null,
+      teams:{away:Object.assign({},s.away),home:Object.assign({},s.home)},
+      finalScore:finalScore, oldScore:finalScore == null ? null : Math.max(0,finalScore - points) };
+  }
+  function scoringSlices() {
+    var carrier = q('.scoring-panels'); carrier.innerHTML = '';
+    ['away','home'].forEach(function (side) {
+      var source = q('.half.' + side);
+      if (!source || typeof source.cloneNode !== 'function') return;
+      var edge = side === 'away' ? 2 : 326, width = 248 / 6;
+      for (var i = 0; i < 6; i++) {
+        var left = edge + i * width, slice = document.createElement('div'), copy = source.cloneNode(true);
+        slice.className = 'scoring-slice'; slice.style.left = left + 'px'; slice.style.width = (width + .3) + 'px';
+        slice.style.setProperty('--drift',(288 - left - width / 2) + 'px');
+        slice.style.setProperty('--slice-delay',((side === 'away' ? 5 - i : i) * 45) + 'ms');
+        copy.classList.add('scoring-copy'); copy.removeAttribute('data-element'); copy.style.left = -left + 'px';
+        copy.querySelectorAll('[data-element]').forEach(function (el) { el.removeAttribute('data-element'); });
+        slice.appendChild(copy); carrier.appendChild(slice);
+      }
+    });
+    bug.classList.toggle('scoring-slices',carrier.children.length > 0);
+  }
+  function scoringLogo(team) {
+    var shaded = q('.scoring-logo-shaded'), light = q('.scoring-logo-source'), src = logoSrc(team), fallback = false;
+    function apply(source) {
+      shaded.setAttribute('src',source); light.setAttribute('href',source);
+      takeoverEl.classList.toggle('no-logo',!source);
+    }
+    shaded.onerror = function () {
+      if (!fallback && team && team.logo && team.logo !== shaded.getAttribute('src')) { fallback = true; apply(team.logo); }
+      else { shaded.onerror = null; apply(''); }
+    };
+    q('.scoring-edge-color').setAttribute('flood-color',color(team)); apply(src);
+  }
+  function scoringWord(word) {
+    var el = q('.big-word');
+    el.innerHTML = Array.from(word).map(function (letter,i) {
+      return '<span class="word-letter" data-letter="' + escapeText(letter) + '" style="--letter:' + i + '">' + escapeText(letter) + '</span>';
+    }).join('');
+    /* The source's TD caps are ~88 px beside a 780 px base bug: 65 px and
+       ~774 px ink width in this package's 576 px coordinate system. This
+       is local scoring text placement, independent of live-bug fitting. */
+    var cap = measure(el,100,'TOUCHDOWN').actualBoundingBoxAscent / 100;
+    if (!(cap > 0)) return;
+    var size = 65 / cap, ref = measure(el,size,'TOUCHDOWN'), fm = measure(el,size,'H');
+    var baseline = (size - (fm.fontBoundingBoxAscent + fm.fontBoundingBoxDescent)) / 2 + fm.fontBoundingBoxAscent;
+    el.style.fontSize = size + 'px'; el.style.top = (113 + 65 - baseline) + 'px';
+    el.style.setProperty('--word-x-scale',774 / (ref.actualBoundingBoxLeft + ref.actualBoundingBoxRight + 8));
+  }
+  function rollScoringScore(sequence) {
+    var el = q('.drive-stack .row.' + sequence.side + ' .pts'), from = sequence.oldScore, to = sequence.finalScore;
+    var count = from != null && to != null ? Math.abs(to - from) : 0;
+    if (!count || count > 24) { at(5380,function () { el.textContent = to == null ? '\u2013' : String(to); }); return; }
+    var direction = to > from ? 1 : -1;
+    for (var i = 1; i <= count; i++) (function (step) {
+      at(5380 + (step - 1) * 500 / Math.max(1,count - 1),function () {
+        el.textContent = String(from + step * direction);
+        el.classList.remove('rolling'); void el.offsetWidth; el.classList.add('rolling');
+      });
+    })(i);
+    at(5990,function () { el.classList.remove('rolling'); });
+  }
+  function clearScoringVisuals() {
+    bug.classList.remove('scoring-sequence','scoring-slices','folding');
+    q('.scoring-panels').innerHTML = ''; takeoverEl.className = 'takeover';
+    ['away','home'].forEach(function (side) { q('.drive-stack .row.' + side + ' .pts').classList.remove('tick','rolling'); });
+  }
+  function scoring(word, side, drive, captured) {
+    if (!broadcastLive) return;
+    var sequence = captured || captureScoring(word,side,drive);
+    if (!sequence) return;
+    if (busy) { if (scoreQueue.length < 3) scoreQueue.push(sequence); return; }
     if (luOn) luEnd();
     clearTimeout(featureTimer); playerFeature.classList.remove('on');
     clearTimeout(qbTimer); qbVisible = false;
     busy = true;
     refreshVisibility();
-    var t = s[side], other = side === 'away' ? 'home' : 'away', finalScore = t.score;
+    var s = sequence.teams, t = s[side];
     bug.classList.remove('player-drive');
+    bug.classList.add('scoring-sequence');
     q('.drive-bar .drive-title').textContent = 'SCORING DRIVE';
     q('.drive-bar .plays .lbl').textContent = 'PLAYS';q('.drive-bar .yds .lbl').textContent = 'YDS';q('.drive-bar .top .lbl').textContent = 'T.O.P';
     bug.style.setProperty('--g', color(t));
-    q('.takeover .big-word').textContent = word;
-    q('.takeover .neon-logo').style.setProperty('--logo', 'url("' + logoSrc(t) + '")');
+    scoringWord(word); scoringLogo(t);
     /* stack: the scoring team's old score first, it ticks up later */
     ['away', 'home'].forEach(function (k) {
       setLogo(q('.drive-stack .row.' + k + ' .logo'), s[k]);
-      var pts = s[k].score - (k === side ? recentPoints[side] : 0);
-      q('.drive-stack .row.' + k + ' .pts').textContent = String(pts);
+      var pts = k === side ? sequence.oldScore : s[k].score;
+      q('.drive-stack .row.' + k + ' .pts').textContent = pts == null ? '\u2013' : String(pts);
     });
-    recentPoints[side] = 0;
     setLogo(q('.drive-bar .drive-logo .logo'), t);
-    showDrive(drive);
+    showDrive(sequence.drive);
     var withDrive = word === 'TOUCHDOWN' || word === 'FIELD GOAL';
+    takeoverEl.style.setProperty('--contract-x',withDrive ? '-288px' : '0px');
 
     pod.classList.add('glow');
+    scoringSlices();
     bug.classList.add('split');
-    at(450, function () { bug.classList.add('wordphase'); takeoverEl.classList.add('on', 'neon'); });
-    at(1500, function () { takeoverEl.classList.add('chrome'); });
-    at(3300, function () { takeoverEl.classList.add('leaving'); });
+    at(630, function () { bug.classList.add('wordphase'); takeoverEl.classList.add('on'); });
+    at(880, function () { q('.scoring-panels').innerHTML = ''; takeoverEl.classList.add('intro-chrome'); });
+    at(1130, function () { takeoverEl.classList.remove('intro-chrome'); takeoverEl.classList.add('blue'); });
+    at(1380, function () { takeoverEl.classList.remove('blue'); takeoverEl.classList.add('chrome'); });
+    at(3630, function () { bug.classList.add('folding'); takeoverEl.classList.add('leaving','contracting'); });
     if (withDrive) {
-      at(3700, function () { takeoverEl.className = 'takeover'; bug.classList.remove('wordphase'); bug.classList.add('compact'); });
-      at(4300, function () { bug.classList.add('stats'); });
-      at(5400, function () {
-        var el = q('.drive-stack .row.' + side + ' .pts');
-        el.textContent = String(finalScore);
-        el.classList.remove('tick'); void el.offsetWidth; el.classList.add('tick');
-      });
-      at(9000, function () { bug.classList.add('closing'); });
-      at(9900, function () { bug.classList.remove('compact', 'stats', 'closing'); pod.classList.remove('glow'); bug.classList.remove('split'); });
-      at(10600, function () { finishScoring(side); });
+      at(4130, function () { takeoverEl.className = 'takeover'; bug.classList.remove('wordphase','folding'); bug.classList.add('compact'); });
+      at(4630, function () { bug.classList.add('stats'); });
+      rollScoringScore(sequence);
+      at(8130, function () { bug.classList.add('closing'); });
+      at(8630, function () { bug.classList.remove('compact','stats','closing'); pod.classList.remove('glow'); });
+      at(8880, function () { bug.classList.remove('split','scoring-slices'); });
+      at(9130, function () { finishScoring(side); });
     } else {
-      at(3700, function () { takeoverEl.className = 'takeover'; bug.classList.remove('wordphase', 'split'); pod.classList.remove('glow'); });
-      at(4300, function () { finishScoring(side); });
+      at(4130, function () { takeoverEl.className = 'takeover'; bug.classList.remove('wordphase','folding','split','scoring-slices'); pod.classList.remove('glow'); });
+      at(4630, function () { finishScoring(side); });
     }
   }
   function finishScoring(side) {
+    clearScoringVisuals();
     busy = false; timers = []; refreshVisibility();
-    var next = scoreQueue.shift(); if (next && broadcastLive) scoring(next[0],next[1],next[2]);
+    var next = scoreQueue.shift(); if (next && broadcastLive) scoring(next.word,next.side,next.drive,next);
   }
   function drivePlayer(e) {
     if (!broadcastLive || busy || luOn || !e.player) return;
@@ -454,13 +553,22 @@
     var image=q('.drive-player .portrait');image.onerror=function(){image.style.visibility='hidden';};image.style.visibility=p.portrait?'':'hidden';if(p.portrait)image.src=p.portrait;else image.removeAttribute('src');
     q('.drive-player .position').textContent=playerCardPosition(p)+(p.number!=null?'\n'+p.number:'');
     var nameParts=(p.fullName||p.name).trim().toUpperCase().split(/\s+/);
-    q('.drive-player .name').innerHTML=escapeText(nameParts.shift())+'<br>'+escapeText(nameParts.join(' '));
+    q('.drive-player .name').innerHTML='<span class="first-name">'+escapeText(nameParts.shift())+'</span><br><strong class="last-name">'+escapeText(nameParts.join(' '))+'</strong>';
     q('.drive-bar .drive-title').textContent=e.caption||'THIS DRIVE';
     var fields=statCells(p);if(playerCardPosition(p)==='QB')fields=[['COMP/ATT',p.completions+'/'+p.attempts],['YDS',p.passingYards],['TD',p.passingTouchdowns]];
     ['plays','yds','top'].forEach(function (key,i){var f=fields[i]||['',''];q('.drive-bar .'+key+' .lbl').textContent=f[0];q('.drive-bar .'+key+' .val').textContent=f[1];});
-    refreshVisibility();at(420,function(){bug.classList.add('compact');});at(1000,function(){bug.classList.add('stats');});
-    at(duration(e,6000),function(){bug.classList.add('closing');});
-    at(duration(e,6000)+900,function(){bug.classList.remove('compact','stats','closing','player-drive','split');finishScoring(e.team);});
+    /* Designer module 5aab110b: first substantial movement at 1030 ms.
+       Its initial still is a demo lead-in, not a delay on a live event.
+       Compact carrier ~720 ms after onset, readable fields ~1700 ms;
+       the exit reverses through the pod before restoring the two halves. */
+    var driveHold=duration(e,4300);
+    refreshVisibility();
+    at(620,function(){if(!bug.classList.contains('closing'))bug.classList.add('compact');});
+    at(1100,function(){if(!bug.classList.contains('closing'))bug.classList.add('stats');});
+    at(driveHold,function(){bug.classList.add('closing');});
+    at(driveHold+520,function(){bug.classList.remove('compact','stats');});
+    at(driveHold+850,function(){bug.classList.remove('split');});
+    at(driveHold+1450,function(){bug.classList.remove('compact','stats','closing','player-drive','split');finishScoring(e.team);});
   }
 
   /* ---- starting lineup ----
@@ -549,11 +657,15 @@
     var extra = window.SNFExtraInserts && window.SNFExtraInserts.active();
     var scene = window.SNFBroadcastScenes && window.SNFBroadcastScenes.active();
     var pregame = window.SNFPregameInserts && window.SNFPregameInserts.active();
-    bug.classList.toggle('off-air', !broadcastLive || featureOn || luOn || extra === 'comparison' || !!scene || !!pregame);
-    qbStat.classList.toggle('on', broadcastLive && qbVisible && !featureOn && !luOn && !busy && !extra && !scene && !pregame);
+    var transition = window.SNFTransitions && window.SNFTransitions.active();
+    bug.classList.toggle('off-air', !broadcastLive || featureOn || luOn || extra === 'comparison' || !!scene || !!pregame || !!transition);
+    qbStat.classList.toggle('on', broadcastLive && qbVisible && !featureOn && !luOn && !busy && !extra && !scene && !pregame && !transition);
     if (!broadcastLive) notice.classList.remove('on');
-    if (!matchActive()) wipe.classList.remove('on');
   }
+  document.addEventListener('snf-transition-change', function () {
+    if (window.SNFTransitions && window.SNFTransitions.active()) resetBroadcast();
+    else refreshVisibility();
+  });
   document.addEventListener('snf-extra-change', refreshVisibility);
   document.addEventListener('snf-pregame-change', function () {
     if(window.SNFPregameInserts&&window.SNFPregameInserts.active())resetBroadcast();else refreshVisibility();
@@ -564,16 +676,16 @@
     if (window.SNFBroadcastScenes && window.SNFBroadcastScenes.active()) resetBroadcast();
     else refreshVisibility();
   });
-  function resetBroadcast(preserveWipe) {
+  function resetBroadcast() {
     timers.forEach(clearTimeout); timers = []; scoreQueue = []; busy = false;
     recentPoints = { away:0, home:0 }; lastDrive = null;
+    clearScoringVisuals();
     bug.classList.remove('split','wordphase','compact','stats','closing','player-drive');
     takeoverEl.className = 'takeover'; pod.classList.remove('glow','flag'); flagUntil = 0;
     clearTimeout(flagTimer); clearTimeout(qbTimer); qbVisible = false; qbStatData = null;
     clearTimeout(featureTimer); playerFeature.classList.remove('on');
     luClear(); luOn = false; lu.classList.remove('on','swap');
     clearTimeout(noticeTimer); notice.classList.remove('on');
-    if (!preserveWipe) { clearTimeout(wipeTimer); wipe.classList.remove('on'); }
     refreshVisibility();
   }
   function showNotice(title, detail, ms) {
@@ -584,17 +696,12 @@
     clearTimeout(noticeTimer); notice.classList.remove('on'); void notice.offsetWidth; notice.classList.add('on');
     noticeTimer = setTimeout(function () { notice.classList.remove('on'); }, ms || 4200);
   }
-  function replayWipe() {
-    if (!matchActive()) return;
-    clearTimeout(wipeTimer); wipe.classList.remove('on'); void wipe.offsetWidth; wipe.classList.add('on');
-    wipeTimer = setTimeout(function () { wipe.classList.remove('on'); }, 1100);
-  }
   NFL2K5.onState(function (s, prev) {
     latestState = s;
     var key = s.away && s.home ? code(s.away) + '|' + code(s.home) : '';
     var changedMatch = key && matchKey && key !== matchKey || prev && s.quarter > 0 && s.quarter < prev.quarter;
     refreshVisibility();
-    if (!broadcastLive || changedMatch) resetBroadcast(!changedMatch && matchActive());
+    if (!broadcastLive || changedMatch) resetBroadcast();
     if (key) matchKey = key;
     if (!s.away || !s.home) return;
     setTeam('away', s.away, prev && prev.away);
@@ -609,10 +716,13 @@
     refreshVisibility();
     var down = niceDown(s.downDistanceText);
     setTab(s.possession, down, !!s.possession && !!down);
-    var pc = s.playClock;
-    clockBox.textContent = pc >= 0 ? String(pc) : '';
-    clockBox.classList.toggle('on', pc >= 0 && !!s.possession);
-    clockBox.classList.toggle('low', pc >= 0 && pc <= 5);
+    /* A clock can disappear while the native timing object is replaced.
+       Keep the overlay off until the bridge has supplied a real value. */
+    var pc = s.playClock == null ? NaN : Number(s.playClock);
+    var hasPlayClock = Number.isFinite(pc) && pc >= 0 && !!s.possession;
+    clockBox.textContent = hasPlayClock ? String(pc) : '';
+    clockBox.classList.toggle('on', hasPlayClock);
+    clockBox.classList.toggle('low', hasPlayClock && pc <= 5);
     updateFlag(broadcastLive && !!cx.flag);
   });
 
@@ -621,15 +731,20 @@
     /* A replay transition can begin while the native scorebug is hidden.
        It still belongs to a valid match; menus and inactive games cannot
        start it. Normal inserts continue to require the live camera. */
-    if (e.name === 'REPLAY_STARTED' || e.name === 'REPLAY_ENDED') { replayWipe(); return; }
+    if (e.name === 'REPLAY_STARTED' || e.name === 'REPLAY_ENDED') return;
+    if (window.SNFTransitions && window.SNFTransitions.active()) return;
     if (e.name === 'MATCHUP_INTRO' || e.name === 'BROADCAST_INTRO' || e.name === 'PLAYER_PROFILE' || e.name === 'PLAYER_BIO' || e.name === 'TIMEOUT') {
       if (matchActive()) resetBroadcast();
       return;
     }
+    if (window.SNFBroadcastScenes && window.SNFBroadcastScenes.active() === 'period-summary') return;
     if (!broadcastLive) return;
     switch (e.name) {
     case 'PLAYER_COMPARISON': case 'TEAM_STATS': resetBroadcast(); break;
-    case 'SCORE_CHANGED': if (e.team) recentPoints[e.team] = (busy ? recentPoints[e.team] : 0) + (e.points || 0); break;
+    case 'SCORE_CHANGED':
+      if ((e.team === 'away' || e.team === 'home') && Number.isFinite(Number(e.points)))
+        recentPoints[e.team] = (busy ? recentPoints[e.team] : 0) + Number(e.points);
+      break;
     case 'TOUCHDOWN': scoring('TOUCHDOWN', e.team, e.drive); break;
     case 'FIELD_GOAL': scoring('FIELD GOAL', e.team, e.drive); break;
     case 'SAFETY': scoring('SAFETY', e.team, null); break;
@@ -655,10 +770,7 @@
     case 'PLAYER_FEATURE': if (broadcastLive) showPlayerFeature(e); break;
     case 'PENALTY': clearTimeout(flagTimer); flagUntil = Date.now() + 8000; updateFlag(true); flagTimer = setTimeout(function () { updateFlag(false); }, 8100); break;
     case 'TWO_MINUTE_WARNING': showNotice('TWO-MINUTE WARNING', '', 4200); break;
-    case 'QUARTER_ENDED': showNotice('END OF ' + (e.quarter || latestState.quarter) + ({1:'ST',2:'ND',3:'RD',4:'TH'}[e.quarter || latestState.quarter] || '') + ' QUARTER', '', 4800); break;
-    case 'HALFTIME': showNotice('HALFTIME', '', 4800); break;
-    case 'OVERTIME': showNotice('OVERTIME', '', 4800); break;
-    case 'GAME_ENDED': showNotice('FINAL', '', 6500); break;
+    case 'QUARTER_ENDED': case 'HALFTIME': case 'OVERTIME': case 'GAME_ENDED': resetBroadcast(); break;
     case 'GAME_STARTED': case 'QUARTER_STARTED': notice.classList.remove('on'); break;
     }
   });

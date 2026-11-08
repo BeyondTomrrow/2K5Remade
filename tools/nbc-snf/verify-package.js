@@ -12,9 +12,11 @@ const vm = require('node:vm');
 const assert = require('node:assert/strict');
 const packageDir = path.resolve(process.argv[2] || path.join(__dirname, '../../mods/presentations/NBC_SNF'));
 const html = fs.readFileSync(path.join(packageDir, 'scorebug.html'), 'utf8');
-const css = ['scorebug.css', 'extra-inserts.css', 'broadcast-scenes.css', 'pregame-inserts.css', 'layout.css'].map(f => fs.readFileSync(path.join(packageDir, f), 'utf8')).join('\n');
+/* inserts.css exists only in packages that split the insert styles out of scorebug.css (SNF_Claude). */
+const css = ['scorebug.css', 'inserts.css', 'extra-inserts.css', 'broadcast-scenes.css', 'pregame-inserts.css', 'layout.css'].filter(f => fs.existsSync(path.join(packageDir, f))).map(f => fs.readFileSync(path.join(packageDir, f), 'utf8')).join('\n');
 const runtime = fs.readFileSync(path.join(packageDir, '../_runtime/nfl2k5-presentation.js'), 'utf8');
 const script = fs.readFileSync(path.join(packageDir, 'scorebug.js'), 'utf8');
+const transitionScript = fs.readFileSync(path.join(packageDir, 'broadcast-transitions.js'), 'utf8');
 const extraScript = fs.readFileSync(path.join(packageDir, 'extra-inserts.js'), 'utf8');
 const broadcastScript = fs.readFileSync(path.join(packageDir, 'broadcast-scenes.js'), 'utf8');
 const pregameScript = fs.readFileSync(path.join(packageDir, 'pregame-inserts.js'), 'utf8');
@@ -49,6 +51,12 @@ class Element {
   get innerHTML() { return this._text; }
   set innerHTML(v) { this.children = []; this._text = ''; parseInto(String(v), this); }
   appendChild(el) { el.parentElement = this; this.children.push(el); return el; }
+  cloneNode(deep = false) {
+    const copy = new Element(this.tagName, { ...this.attributes }); copy._text = this._text;
+    Object.assign(copy.style, this.style); copy.style.properties = { ...this.style.properties };
+    if (deep) for (const child of this.children) copy.appendChild(child.cloneNode(true));
+    return copy;
+  }
   removeAttribute(k) { delete this.attributes[k]; }
   setAttribute(k, v) { this.attributes[k] = String(v); }
   getAttribute(k) { return Object.hasOwn(this.attributes, k) ? this.attributes[k] : null; }
@@ -138,7 +146,9 @@ function createHarness() {
       if (/handler error|script error/.test(String(message))) errors.push(message);
     } } };
   };
-  vm.createContext(sandbox); vm.runInContext(runtime, sandbox, { filename: '_runtime/nfl2k5-presentation.js' }); vm.runInContext(script, sandbox, { filename: 'NBC_SNF/scorebug.js' });
+  vm.createContext(sandbox); vm.runInContext(runtime, sandbox, { filename: '_runtime/nfl2k5-presentation.js' });
+  vm.runInContext(transitionScript, sandbox, { filename: 'NBC_SNF/broadcast-transitions.js' });
+  vm.runInContext(script, sandbox, { filename: 'NBC_SNF/scorebug.js' });
   vm.runInContext(extraScript, sandbox, { filename: 'NBC_SNF/extra-inserts.js' });
   vm.runInContext(broadcastScript, sandbox, { filename: 'NBC_SNF/broadcast-scenes.js' });
   vm.runInContext(pregameScript, sandbox, { filename: 'NBC_SNF/pregame-inserts.js' });
@@ -199,6 +209,8 @@ test('Repeated state and unrelated record changes cannot duplicate clock glyphs 
 test('A clock cleared as unavailable removes its glyphs and rebuilds on return', h => {
   h.state(live({gameClock:900}));checkClock(h,'15:00');
   h.state(live({gameClock:null}));checkClock(h,'');
+  h.state(live({gameClock:NaN}));checkClock(h,'');
+  h.state(live({gameClock:Infinity}));checkClock(h,'');
   h.state(live({gameClock:121,quarter:2}));checkClock(h,'2:01');
   assert.equal(h.el('bug').querySelector('.pod .quarter .num').textContent,'2');h.clean();
 });
@@ -213,6 +225,31 @@ test('Off-air reset and return show the new clock without stale digits or colon 
 });
 test('Initial page is off air before any game data', h => { assert.equal(h.visible('bug'), false); h.clean(); });
 test('Valid live broadcast state reveals the scorebug', h => { h.state(live()); h.advance(20); assert.equal(h.visible('bug'), true); h.clean(); });
+test('Unknown base scores and timeout counts stay blank rather than looking live', h => {
+  h.state(live({away:{...live().away,score:NaN,timeouts:NaN},home:{...live().home,score:Infinity,timeouts:null}}));
+  const bug=h.el('bug');
+  assert.equal(bug.querySelector('.away .score').textContent,'');
+  assert.equal(bug.querySelector('.home .score').textContent,'');
+  for(const mark of bug.querySelectorAll('.timeouts i')) assert.equal(mark.hidden,true);
+  h.state(live({away:{...live().away,score:3.5},home:{...live().home,score:-1}}));
+  assert.equal(bug.querySelector('.away .score').textContent,'');
+  assert.equal(bug.querySelector('.home .score').textContent,'');
+  h.clean();
+});
+test('Unavailable play clocks stay absent rather than rendering invalid bridge values', h => {
+  h.state(live({playClock:Infinity}));
+  const playClock=h.el('bug').querySelector('.playclock');
+  assert.equal(playClock.textContent,'');
+  assert.equal(playClock.classList.contains('on'),false);
+  h.state(live({playClock:'not-a-clock'}));
+  assert.equal(playClock.textContent,'');
+  assert.equal(playClock.classList.contains('on'),false);
+  h.state(live({playClock:5}));
+  assert.equal(playClock.textContent,'5');
+  assert.equal(playClock.classList.contains('on'),true);
+  assert.equal(playClock.classList.contains('low'),true);
+  h.clean();
+});
 test('Invalid state without team objects still hides the scorebug', h => { h.state(live()); h.state({ valid: false, gameStatus: 'inactive', context: { scorebugVisible: false } }); assert.equal(h.visible('bug'), false); h.clean(); });
 test('Invalid state cancels a scoring sequence and its delayed callbacks', h => {
   h.state(live({ home: { ...live().home, score: 6 } })); h.event({ name: 'SCORE_CHANGED', team: 'home', points: 6, score: 6 }); h.event({ name: 'TOUCHDOWN', team: 'home', drive: { plays: 7, yards: 75, timeOfPossession: 200 } }); h.advance(500);
@@ -223,6 +260,72 @@ test('Invalid state cancels a scoring sequence and its delayed callbacks', h => 
 });
 test('Play-selection/menu state hides the scorebug during scoring', h => {
   h.state(live()); h.event({ name: 'TOUCHDOWN', team: 'home' }); h.advance(500); h.state(live({ context: { scorebugVisible: false, playSelection: true } })); assert.equal(h.visible('bug'), false); h.advance(12000); assert.equal(h.visible('bug'), false); h.clean();
+});
+test('Scoring entrance keeps separate shaded, chrome, blue and bright-chrome phases', h => {
+  h.state(live({home:{...live().home,score:48}}));h.event({name:'SCORE_CHANGED',team:'home',points:6});h.event({name:'TOUCHDOWN',team:'home'});
+  const bug=h.el('bug'),takeover=bug.querySelector('.takeover');
+  assert.equal(bug.querySelector('.scoring-panels').children.length,12,'The slices own copies of both live team panels');
+  assert.equal(bug.querySelectorAll('.scoring-panels [data-element]').length,0,'Copied plates must not duplicate editor element identifiers');
+  assert.equal(takeover.classList.contains('on'),false,'The word must not skip the plate collapse');
+  h.advance(630);assert.equal(takeover.classList.contains('on'),true);assert.equal(takeover.classList.contains('intro-chrome'),false);
+  h.advance(250);assert.equal(takeover.classList.contains('intro-chrome'),true);assert.equal(bug.querySelector('.scoring-panels').children.length,0);
+  assert.equal(bug.querySelector('.big-word').textContent,'TOUCHDOWN','Painted word layers must preserve the text once');
+  h.advance(250);assert.equal(takeover.classList.contains('blue'),true);assert.equal(takeover.classList.contains('intro-chrome'),false);
+  h.advance(250);assert.equal(takeover.classList.contains('chrome'),true);assert.equal(takeover.classList.contains('blue'),false);h.clean();
+});
+test('Scoring contours use the actual team image and clear missing-image fallback', h => {
+  h.state(live());h.event({name:'TOUCHDOWN',team:'home'});
+  const bug=h.el('bug'),image=bug.querySelector('.scoring-logo-shaded'),outline=bug.querySelector('.scoring-logo-source');
+  assert.equal(image.src,'assets/logos/LAR.png');assert.equal(outline.getAttribute('href'),image.src);
+  image.onerror();assert.equal(bug.querySelector('.takeover').classList.contains('no-logo'),true);assert.equal(outline.getAttribute('href'),'');
+  h.state({valid:false,context:{scorebugVisible:false}});h.state(live());h.event({name:'FIELD_GOAL',team:'away'});
+  assert.equal(image.src,'assets/logos/SEA.png');assert.equal(outline.getAttribute('href'),image.src);
+  assert.equal(bug.querySelector('.takeover').classList.contains('no-logo'),false);h.clean();
+});
+test('Touchdown rolls only its captured score and ignores a later extra point', h => {
+  h.state(live({home:{...live().home,score:48}}));h.event({name:'SCORE_CHANGED',team:'home',points:6});h.event({name:'TOUCHDOWN',team:'home'});
+  const bug=h.el('bug'),score=bug.querySelector('.drive-stack .row.home .pts');
+  assert.equal(score.textContent,'42');h.advance(4000);
+  assert.equal(bug.querySelector('.takeover').classList.contains('contracting'),true,'The contour must contract before the carrier appears');
+  h.state(live({home:{...live().home,score:49}}));h.event({name:'SCORE_CHANGED',team:'home',points:1});h.event({name:'EXTRA_POINT',team:'home'});
+  h.advance(1130);assert.equal(bug.classList.contains('stats'),true);assert.equal(score.textContent,'42');
+  h.advance(250);assert.equal(score.textContent,'43');h.advance(200);assert.equal(score.textContent,'45');h.advance(300);assert.equal(score.textContent,'48');
+  h.advance(2500);assert.equal(bug.classList.contains('closing'),true);h.advance(250);assert.equal(bug.classList.contains('compact'),false);
+  h.advance(500);assert.equal(bug.classList.contains('scoring-sequence'),true,'The queued extra point takes a fresh sequence after restoration');
+  assert.equal(score.textContent,'48','The extra point owns its own previous score');
+  assert.equal(bug.querySelector('.big-word').textContent,'EXTRA POINT');h.advance(4630);
+  assert.equal(bug.classList.contains('scoring-sequence'),false);assert.equal(bug.querySelector('.half.home .score').textContent,'49');h.clean();
+});
+test('Queued field goals retain their original scores and drive totals across later updates', h => {
+  h.state(live({home:{...live().home,score:6}}));h.event({name:'SCORE_CHANGED',team:'home',points:6});h.event({name:'TOUCHDOWN',team:'home'});h.advance(1000);
+  h.state(live({home:{...live().home,score:9}}));h.event({name:'SCORE_CHANGED',team:'home',points:3});
+  const drive={plays:8,yards:67,timeOfPossession:234};h.event({name:'FIELD_GOAL',team:'home',drive});drive.plays=99;
+  h.state(live({home:{...live().home,score:10}}));h.event({name:'SCORE_CHANGED',team:'home',points:1});h.event({name:'EXTRA_POINT',team:'home'});
+  h.advance(8130);const bug=h.el('bug'),score=bug.querySelector('.drive-stack .row.home .pts');
+  assert.equal(bug.querySelector('.big-word').textContent,'FIELD GOAL');assert.equal(score.textContent,'6');
+  assert.equal(bug.querySelector('.drive-bar .plays .val').textContent,'8');assert.equal(bug.querySelector('.drive-bar .yds .val').textContent,'67');
+  h.advance(5880);assert.equal(score.textContent,'9','The later extra point cannot contaminate a queued field goal');h.clean();
+});
+test('Menu reset clears scoring slices, contour contraction and future score rolls', h => {
+  h.state(live({home:{...live().home,score:6}}));h.event({name:'SCORE_CHANGED',team:'home',points:6});h.event({name:'TOUCHDOWN',team:'home'});h.advance(3700);
+  const bug=h.el('bug');assert.equal(bug.classList.contains('folding'),true);
+  h.state(live({context:{scorebugVisible:false,playSelection:true}}));
+  for(const cls of ['scoring-sequence','scoring-slices','folding','split','wordphase','compact','stats'])assert.equal(bug.classList.contains(cls),false);
+  assert.equal(bug.querySelector('.takeover').className,'takeover');assert.equal(bug.querySelector('.scoring-panels').children.length,0);
+  h.state(live({home:{...live().home,score:14}}));h.advance(20000);
+  assert.equal(bug.querySelector('.half.home .score').textContent,'14');assert.equal(bug.classList.contains('scoring-sequence'),false);h.clean();
+});
+test('A reset during the score roll cancels pending increments and its queued event', h => {
+  h.state(live({home:{...live().home,score:6}}));h.event({name:'SCORE_CHANGED',team:'home',points:6});h.event({name:'TOUCHDOWN',team:'home'});h.advance(5380);
+  const bug=h.el('bug'),score=bug.querySelector('.drive-stack .row.home .pts');assert.equal(score.textContent,'1');
+  h.state(live({home:{...live().home,score:7}}));h.event({name:'SCORE_CHANGED',team:'home',points:1});h.event({name:'EXTRA_POINT',team:'home'});
+  h.state({valid:false,context:{scorebugVisible:false}});assert.equal(score.classList.contains('rolling'),false);h.advance(20000);
+  assert.equal(score.textContent,'1','Canceled score-roll timers must not update the old carrier');
+  h.state(live());assert.equal(bug.classList.contains('scoring-sequence'),false);assert.equal(bug.querySelector('.takeover').className,'takeover');h.clean();
+});
+test('Unavailable scoring totals remain unknown instead of inventing an old score', h => {
+  h.state(live({home:{...live().home,score:null}}));h.event({name:'SCORE_CHANGED',team:'home',points:6});h.event({name:'TOUCHDOWN',team:'home'});
+  const score=h.el('bug').querySelector('.drive-stack .row.home .pts');assert.equal(score.textContent,'\u2013');h.advance(6000);assert.equal(score.textContent,'\u2013');h.clean();
 });
 test('Feature timeout does not restore an expired compact stat', h => {
   h.state(live()); h.event({ name: 'PLAYER_STAT', team: 'home', player }); h.advance(1000); h.event({ name: 'PLAYER_FEATURE', team: 'home', player }); h.advance(7000); assert.equal(h.visible('qb-stat'), false); h.clean();
@@ -249,7 +352,17 @@ test('Drive stat folds out and honors its supplied duration', h => {
   h.state(live()); h.event({ name: 'PLAYER_STAT', team: 'home', placement: 'scorebug', scope: 'drive', duration: 2, player }); h.advance(1200);
   assert.equal(h.el('bug').classList.contains('player-drive'), true); assert.equal(h.el('bug').classList.contains('stats'), true);
   assert.equal(h.el('bug').querySelector('.drive-bar .drive-title').textContent, 'THIS DRIVE'); assert.equal(h.visible('qb-stat'), false);
-  h.advance(1900); assert.equal(h.el('bug').classList.contains('player-drive'), false); assert.equal(h.el('bug').classList.contains('split'), false); h.clean();
+  h.advance(799); assert.equal(h.el('bug').classList.contains('closing'), false, 'The supplied duration owns the hold, not the default demo hold');
+  h.advance(1); assert.equal(h.el('bug').classList.contains('closing'), true, 'Exit starts at the supplied two-second boundary');
+  h.advance(520); assert.equal(h.el('bug').classList.contains('compact'), false, 'The reverse fold returns through the pod');
+  h.advance(930); assert.equal(h.el('bug').classList.contains('player-drive'), false); assert.equal(h.el('bug').classList.contains('split'), false); h.clean();
+});
+test('A short drive duration cannot reveal fields after its exit has begun', h => {
+  h.state(live()); h.event({ name:'PLAYER_STAT', team:'home', placement:'scorebug', duration:.25, player });
+  h.advance(1200); assert.equal(h.el('bug').classList.contains('closing'), true);
+  assert.equal(h.el('bug').classList.contains('compact'), false); assert.equal(h.el('bug').classList.contains('stats'), false);
+  h.state({ valid:false, context:{scorebugVisible:false} }); h.advance(3000);
+  assert.equal(h.visible('bug'), false); assert.equal(h.el('bug').classList.contains('player-drive'), false); h.clean();
 });
 test('Off-air reset cancels drive-stat animation and queued scoring', h => {
   h.state(live()); h.event({ name: 'PLAYER_STAT', team: 'home', scope: 'drive', player }); h.advance(1200); h.event({ name: 'TOUCHDOWN', team: 'home' });
@@ -275,6 +388,68 @@ test('Replay events cannot draw over a paused game or play selection', h => {
     h.state(live({context})); h.event({name:'REPLAY_STARTED'}); assert.equal(h.visible('snf-wipe'),false);
   }
   h.clean();
+});
+test('Replay owns its phase and duplicate notifications do not prolong its wipe', h => {
+  h.state(live());h.event({name:'REPLAY_STARTED'});
+  const wipe=h.el('snf-wipe');
+  assert.equal(wipe.getAttribute('data-phase'),'covering');
+  assert.equal(wipe.getAttribute('aria-hidden'),'false');
+  assert.equal(h.visible('bug'),false);
+  h.advance(440);assert.equal(wipe.getAttribute('data-phase'),'covered');
+  h.event({name:'REPLAY_STARTED'});h.advance(120);
+  assert.equal(wipe.getAttribute('data-phase'),'revealing');
+  h.advance(540);assert.equal(wipe.getAttribute('data-phase'),'hidden');
+  assert.equal(wipe.getAttribute('aria-hidden'),'true');assert.equal(h.visible('bug'),true);h.clean();
+});
+test('Replay return reverses its plane direction and a resumed play cancels all wipe callbacks', h => {
+  h.state(live());h.event({name:'REPLAY_STARTED'});h.advance(200);h.event({name:'REPLAY_ENDED'});
+  const wipe=h.el('snf-wipe');assert.equal(wipe.getAttribute('data-direction'),'out');
+  h.advance(100);h.event({name:'PLAY_STARTED'});assert.equal(h.visible('snf-wipe'),false);
+  h.advance(2000);assert.equal(wipe.getAttribute('data-phase'),'hidden');assert.equal(h.visible('bug'),true);h.clean();
+});
+test('Replay cancels old player cards and refuses inserts until its ownership clears', h => {
+  h.state(live());h.event({name:'PLAYER_STAT',team:'home',player});assert.equal(h.visible('qb-stat'),true);
+  h.event({name:'REPLAY_STARTED'});assert.equal(h.visible('qb-stat'),false);
+  h.event({name:'PLAYER_PROFILE',team:'home',player});h.event({name:'PLAYER_STAT',team:'home',player});
+  assert.equal(h.visible('snf-player-profile'),false);assert.equal(h.visible('qb-stat'),false);
+  h.advance(1200);assert.equal(h.visible('qb-stat'),false);assert.equal(h.visible('bug'),true);h.clean();
+});
+test('Native halftime batch keeps its summary and never presents the next quarter clock as an end clock', h => {
+  h.state(live({quarter:3,gameClock:900,context:{scorebugVisible:false}}));
+  h.event({name:'QUARTER_ENDED',quarter:2});h.event({name:'HALFTIME'});h.event({name:'QUARTER_STARTED',quarter:3});h.advance(0);
+  const summary=h.el('snf-timeout');assert.equal(h.visible('snf-timeout'),true);
+  assert.equal(summary.querySelector('.timeout-title').textContent,'HALFTIME');
+  assert.equal(summary.querySelector('.timeout-clock').textContent,'');h.advance(7000);
+  assert.equal(summary.classList.contains('leaving'),true);h.advance(700);assert.equal(h.visible('snf-timeout'),false);h.clean();
+});
+test('Overtime supersedes end-fourth while only the explicit final event may label the game final', h => {
+  h.state(live({quarter:5,gameClock:900}));h.event({name:'QUARTER_ENDED',quarter:4});
+  h.event({name:'OVERTIME'});h.event({name:'QUARTER_STARTED',quarter:5});h.advance(0);
+  const summary=h.el('snf-timeout');assert.equal(summary.querySelector('.timeout-title').textContent,'OVERTIME');
+  h.event({name:'GAME_ENDED'});h.advance(0);assert.equal(summary.querySelector('.timeout-title').textContent,'FINAL');
+  h.event({name:'QUARTER_ENDED',quarter:4});h.advance(0);assert.equal(summary.querySelector('.timeout-title').textContent,'FINAL');h.clean();
+});
+test('Period summary keeps ownership through its exit and refreshes the actual live scores', h => {
+  h.state(live());h.event({name:'QUARTER_ENDED',quarter:1,duration:1});h.advance(0);
+  const summary=h.el('snf-timeout');assert.equal(h.visible('bug'),false);
+  h.state(live({home:{...live().home,score:7}}));assert.equal(summary.querySelector('.home .timeout-score').textContent,'7');
+  h.advance(1000);assert.equal(summary.classList.contains('leaving'),true);assert.equal(h.visible('bug'),false);
+  h.advance(699);assert.equal(h.visible('bug'),false);h.advance(1);assert.equal(h.visible('bug'),true);h.clean();
+});
+test('Late player inserts cannot compete with a period summary or leak back after its exit', h => {
+  h.state(live());h.event({name:'HALFTIME',duration:1});h.advance(0);
+  h.event({name:'PLAYER_STAT',team:'home',player});h.event({name:'PLAYER_FEATURE',team:'home',player});
+  h.event({name:'TEAM_STATS',teamData:{abbreviation:'LAR'},columns:['YDS'],rows:[{label:'Receiver',values:[0]}]});
+  for(const id of ['qb-stat','player-feature','snf-team-stats'])assert.equal(h.visible(id),false);
+  h.advance(1700);assert.equal(h.visible('bug'),true);
+  for(const id of ['qb-stat','player-feature','snf-team-stats'])assert.equal(h.visible(id),false);h.clean();
+});
+test('Live play and menu cancel queued and visible break summaries without delayed restoration', h => {
+  h.state(live());h.event({name:'HALFTIME'});h.event({name:'PLAY_STARTED'});h.advance(0);
+  assert.equal(h.visible('snf-timeout'),false);
+  h.event({name:'HALFTIME'});h.advance(0);assert.equal(h.visible('snf-timeout'),true);
+  h.state(live({context:{scorebugVisible:false,playSelection:true}}));h.advance(20000);
+  assert.equal(h.visible('snf-timeout'),false);assert.equal(h.visible('bug'),false);h.clean();
 });
 const comparisonEvent = {name:'PLAYER_COMPARISON',duration:2,title:'Comparison',players:[{name:'Player A',position:'WR',number:0},{name:'Player B',position:'RB',number:12}],rows:[{label:'YARDS',values:[0,125]}]};
 test('Comparison owns its identity, preserves zero and restores the scorebug', h => {
@@ -379,18 +554,18 @@ test('Menu and invalid-state transitions cancel timeout and its completion timer
 test('GAME_STARTED waits through crowd shots and shows intro only when warmup begins', h => {
   h.state(pregame('crowd'));h.event({name:'GAME_STARTED',duration:2,venue:'Test Stadium'});
   assert.equal(h.visible('snf-intro'),false);h.advance(10000);assert.equal(h.visible('snf-intro'),false,'A timer must not guess that the crowd shot ended');
-  h.state(pregame('warmup'));assert.equal(h.visible('snf-intro'),true);assert.equal(h.visible('bug'),false);assert.equal(h.visible('snf-watermark'),false);
+  h.state(pregame('warmup'));h.advance(350);assert.equal(h.visible('snf-intro'),true);assert.equal(h.visible('bug'),false);assert.equal(h.visible('snf-watermark'),false);
   assert.equal(h.el('snf-intro').querySelector('.intro-team.away .intro-city').textContent,'SEATTLE');
   assert.equal(h.el('snf-intro').querySelector('.intro-team.home .intro-name').textContent,'RAMS');assert.equal(h.el('snf-intro').querySelector('.intro-venue').textContent,'Test Stadium');
   h.advance(2100);assert.equal(h.visible('snf-intro'),false);h.state(live({context:{scorebugVisible:true,pregameStage:'kickoff'}}));assert.equal(h.visible('bug'),true);assert.equal(h.visible('snf-watermark'),true);h.clean();
 });
 
 test('An authoritative warmup or panning state can open intro without a startup notification', h => {
-  h.state(pregame('panning'));assert.equal(h.visible('snf-intro'),true);h.clean();
+  h.state(pregame('panning'));h.advance(350);assert.equal(h.visible('snf-intro'),true);h.clean();
 });
 
 test('Automatic intro runs once per match despite repeated startup and camera updates', h => {
-  h.state(pregame('crowd'));h.event({name:'GAME_STARTED',duration:1});h.state(pregame('warmup'));h.advance(1100);assert.equal(h.visible('snf-intro'),false);
+  h.state(pregame('crowd'));h.event({name:'GAME_STARTED',duration:1});h.state(pregame('warmup'));h.advance(1450);assert.equal(h.visible('snf-intro'),false);
   h.event({name:'GAME_STARTED',duration:1});h.state(pregame('warmup'));h.state(pregame('panning'));assert.equal(h.visible('snf-intro'),false);h.clean();
 });
 
@@ -407,12 +582,12 @@ test('Unknown period length or unavailable clock cannot authorize a matchup intr
     h.state({valid:false,context:{scorebugVisible:false}});h.state(pregame('warmup',overrides));h.event({name:'GAME_STARTED'});h.event({name:'BROADCAST_INTRO'});h.advance(10000);
     assert.equal(h.visible('snf-intro'),false,'Intro requires an available full game clock: length='+overrides.periodLength+', clock='+overrides.gameClock);
   }
-  h.state({valid:false,context:{scorebugVisible:false}});h.state(pregame('panning',{quarter:0}));assert.equal(h.visible('snf-intro'),true,'Known phase0, quarter0 and full clock remain valid pregame');h.clean();
+  h.state({valid:false,context:{scorebugVisible:false}});h.state(pregame('panning',{quarter:0}));h.advance(350);assert.equal(h.visible('snf-intro'),true,'Known phase0, quarter0 and full clock remain valid pregame');h.clean();
 });
 
 test('Intro cancels older player cards when its warmup camera takes ownership', h => {
   h.state(pregame('crowd',{context:{scorebugVisible:true,pregameStage:'crowd'}}));h.event({name:'PLAYER_FEATURE',team:'home',player,duration:8});
-  h.event({name:'GAME_STARTED',duration:1});assert.equal(h.visible('snf-intro'),false);h.state(pregame('warmup'));
+  h.event({name:'GAME_STARTED',duration:1});assert.equal(h.visible('snf-intro'),false);h.state(pregame('warmup'));h.advance(350);
   assert.equal(h.visible('snf-intro'),true);assert.equal(h.visible('player-feature'),false,'A prior feature must not remain on top of the matchup intro');
   h.advance(1100);assert.equal(h.visible('player-feature'),false,'Old card completion must not restore a stale feature');h.clean();
 });
@@ -426,7 +601,7 @@ test('Fresh-clock GAME_STARTED during kickoff cannot open a pregame intro', h =>
 
 test('Explicit intro events remain restricted to the authorized pregame camera', h => {
   h.state(pregame('crowd'));for(const name of ['MATCHUP_INTRO','BROADCAST_INTRO','PREGAME_INTRO_READY']) { h.event({name});assert.equal(h.visible('snf-intro'),false); }
-  h.state(pregame('warmup'));assert.equal(h.visible('snf-intro'),true);
+  h.state(pregame('warmup'));h.advance(350);assert.equal(h.visible('snf-intro'),true);
   h.state(live());for(const name of ['MATCHUP_INTRO','BROADCAST_INTRO','PREGAME_INTRO_READY']) { h.event({name});assert.equal(h.visible('snf-intro'),false); }h.clean();
 });
 
@@ -438,13 +613,13 @@ test('Skipping from crowd to kickoff discards the pending intro permanently for 
 test('Coin-toss stage clears pending and visible matchup intros', h => {
   h.state(pregame('crowd'));h.event({name:'GAME_STARTED'});h.state(pregame('coin_toss'));assert.equal(h.visible('snf-intro'),false);
   h.state(pregame('warmup'));assert.equal(h.visible('snf-intro'),false,'The toss consumes the intro opportunity');
-  h.state({valid:false,context:{scorebugVisible:false}});h.state(pregame('warmup'));assert.equal(h.visible('snf-intro'),true);h.state(pregame('coin_toss'));assert.equal(h.visible('snf-intro'),false);h.clean();
+  h.state({valid:false,context:{scorebugVisible:false}});h.state(pregame('warmup'));h.advance(350);assert.equal(h.visible('snf-intro'),true);h.state(pregame('coin_toss'));assert.equal(h.visible('snf-intro'),false);h.clean();
 });
 
 test('A new matchup starts its own crowd-to-warmup intro sequence', h => {
-  h.state(pregame('crowd'));h.event({name:'GAME_STARTED',duration:1});h.state(pregame('warmup'));h.advance(1100);
+  h.state(pregame('crowd'));h.event({name:'GAME_STARTED',duration:1});h.state(pregame('warmup'));h.advance(1450);
   const away={...live().away,abbreviation:'DAL',city:'Dallas',name:'Cowboys'};h.state(pregame('crowd',{away}));h.event({name:'GAME_STARTED',duration:1});assert.equal(h.visible('snf-intro'),false);h.state(pregame('panning',{away}));
-  assert.equal(h.visible('snf-intro'),true);assert.equal(h.el('snf-intro').querySelector('.intro-team.away .intro-name').textContent,'COWBOYS');h.clean();
+  h.advance(350);assert.equal(h.visible('snf-intro'),true);assert.equal(h.el('snf-intro').querySelector('.intro-team.away .intro-name').textContent,'COWBOYS');h.clean();
 });
 
 test('Menu cancels pending or active intro without delayed cards leaking back', h => {
@@ -458,7 +633,7 @@ test('Menu cancels pending or active intro without delayed cards leaking back', 
 test('Matchup intro chooses one actual top-rated player per team without quarterback bias', h => {
   const away={...live().away,featuredPlayers:[{fullName:'Away Quarterback',position:'QB',number:7,overall:80,portrait:'https://portraits.local/away-qb.png'},{fullName:'Away Receiver',position:'WR',number:0,overall:97,portrait:'https://portraits.local/away-wr.png'},{fullName:'Unrated Away Star',position:'RB',number:9}]};
   const home={...live().home,featuredPlayers:[{fullName:'Home Runner',position:'RB',number:20,overall:90},{fullName:'Home Kicker',position:'K',number:12,overall:96},{fullName:'Bad Rating',position:'QB',number:1,overall:NaN}]};
-  h.state(pregame('warmup',{away,home}));const intro=h.el('snf-intro');
+  h.state(pregame('warmup',{away,home}));h.advance(350);const intro=h.el('snf-intro');
   assert.deepEqual(intro.querySelectorAll('.intro-team.away .intro-player-name').map(n=>n.textContent.toUpperCase()),['AWAY RECEIVER']);
   assert.deepEqual(intro.querySelectorAll('.intro-team.home .intro-player-name').map(n=>n.textContent.toUpperCase()),['HOME KICKER']);
   assert.match(intro.querySelector('.intro-team.away .intro-player-position').textContent,/WR/);assert.match(intro.querySelector('.intro-team.away .intro-player-position').textContent,/(?:^|\D)0(?:\D|$)/);h.clean();
@@ -467,25 +642,28 @@ test('Matchup intro chooses one actual top-rated player per team without quarter
 test('Equal overall ratings keep roster order and invalid identities never win player selection', h => {
   const away={...live().away,featuredPlayers:[{fullName:'',position:'QB',overall:99},{fullName:'First Tie',position:'WR',number:3,overall:95},{fullName:'Second Tie',position:'QB',number:7,overall:95}]};
   const home={...live().home,featuredPlayers:[{fullName:'Only Valid',position:'TE',overall:0},{fullName:'Infinity Player',position:'WR',overall:Infinity}]};
-  h.state(pregame('warmup',{away,home}));
+  h.state(pregame('warmup',{away,home}));h.advance(350);
   assert.deepEqual(h.el('snf-intro').querySelectorAll('.intro-team.away .intro-player-name').map(n=>n.textContent.toUpperCase()),['FIRST TIE']);
   assert.deepEqual(h.el('snf-intro').querySelectorAll('.intro-team.home .intro-player-name').map(n=>n.textContent.toUpperCase()),['ONLY VALID']);h.clean();
 });
 
 test('Missing player ratings omit featured identities instead of choosing arbitrary roster names', h => {
   h.state(pregame('warmup',{away:{...live().away,featuredPlayers:[{fullName:'Unrated QB',position:'QB'},{fullName:'Unrated Receiver',position:'WR',overall:null}]},home:{...live().home,featuredPlayers:[]}}));
+  h.advance(350);
   const intro=h.el('snf-intro');assert.equal(intro.querySelectorAll('.intro-player-name').filter(n=>n.textContent.trim()).length,0);
   assert.doesNotMatch(intro.textContent,/UNRATED QB|UNRATED RECEIVER/i);h.clean();
 });
 
 test('A rated player without a portrait keeps its real name without borrowing another face', h => {
   h.state(pregame('warmup',{away:{...live().away,featuredPlayers:[{fullName:'Named Leader',position:'RB',number:22,overall:98},{fullName:'Lower Player',position:'QB',number:7,overall:90,portrait:'https://portraits.local/loser.png'}]}}));
+  h.advance(350);
   const team=h.el('snf-intro').querySelector('.intro-team.away');assert.deepEqual(team.querySelectorAll('.intro-player-name').map(n=>n.textContent.toUpperCase()),['NAMED LEADER']);
   assert.equal(team.querySelectorAll('img').filter(n=>!n.classList.contains('intro-logo')&&n.getAttribute('src')).length,0,'A missing portrait must not be guessed or borrowed from a teammate');h.clean();
 });
 
 test('Featured players retain their own supplied renders and cannot come from the opposing team', h => {
   h.state(pregame('warmup',{away:{...live().away,featuredPlayers:[{fullName:'Wrong Team Leader',position:'QB',overall:99,teamAbbreviation:'LAR',portrait:'https://portraits.local/wrong.png'},{fullName:'Right Team Leader',position:'WR',overall:94,teamAbbreviation:'SEA',render:'https://renders.local/right.png',portrait:'https://portraits.local/right.png'}]}}));
+  h.advance(350);
   const team=h.el('snf-intro').querySelector('.intro-team.away');assert.deepEqual(team.querySelectorAll('.intro-player-name').map(n=>n.textContent.toUpperCase()),['RIGHT TEAM LEADER']);
   assert.equal(team.querySelector('.intro-player-portrait').src,'https://renders.local/right.png');assert.doesNotMatch(team.textContent,/WRONG TEAM LEADER/);h.clean();
 });
@@ -493,16 +671,85 @@ test('Featured players retain their own supplied renders and cannot come from th
 const factEvent={name:'PLAYER_FACT',team:'home',player:{fullName:'Test Receiver',position:'WR',number:0,portrait:'https://portraits.local/receiver.png'},caption:'CAREER',text:'Exact native fact: 0 touchdowns in this example.'};
 const tossEvent={name:'COIN_TOSS',team:'away',source:'native',text:'Seattle will receive.'};
 
+test('A warmup state defers intro so its same-frame native fact takes ownership without a title flash', h => {
+  h.useHost();h.state(pregame('crowd'));h.event({name:'GAME_STARTED',duration:2});
+  h.state(pregame('warmup'));assert.equal(h.visible('snf-intro'),false);
+  h.event({...factEvent,source:'native',nativeVisible:true,replacementToken:301,phase:0});
+  h.advance(1000);assert.equal(h.visible('snf-player-fact'),true);assert.equal(h.visible('snf-intro'),false);
+  assert.equal(h.hostMessages.includes('SNF_PREGAME_SHOW:301'),true);h.clean();
+});
+
+test('An unshown matchup can enter after its native fact exits while the proven warmup is still current', h => {
+  h.useHost();h.state(pregame('warmup'));h.event({...factEvent,source:'native',nativeVisible:true,replacementToken:302,phase:0});
+  h.advance(1000);h.event({name:'PLAYER_FACT_HIDE'});
+  h.advance(349);assert.equal(h.visible('snf-player-fact'),true);assert.equal(h.visible('snf-intro'),false);
+  h.advance(1);assert.equal(h.visible('snf-player-fact'),false);assert.equal(h.visible('snf-intro'),false);
+  h.advance(349);assert.equal(h.visible('snf-intro'),false);h.advance(1);assert.equal(h.visible('snf-intro'),true);
+  assert.equal(h.hostMessages.includes('SNF_PREGAME_HIDE:302'),true);h.clean();
+});
+
+test('Repeated warmup states do not restart deferred entry and an unknown camera cancels its timer', h => {
+  h.state(pregame('warmup'));h.advance(200);h.state(pregame('warmup'));h.advance(149);assert.equal(h.visible('snf-intro'),false);
+  h.advance(1);assert.equal(h.visible('snf-intro'),true);
+  h.state({valid:false,context:{scorebugVisible:false}});h.state(pregame('warmup'));h.advance(200);
+  h.state(pregame(null));h.advance(5000);assert.equal(h.visible('snf-intro'),false);
+  h.state(pregame('warmup'));h.advance(350);assert.equal(h.visible('snf-intro'),true);h.clean();
+});
+
+test('Coin toss and kickoff consume a deferred matchup even before it has painted', h => {
+  for(const stage of ['coin_toss','kickoff']) {
+    h.state({valid:false,context:{scorebugVisible:false}});h.state(pregame('warmup'));h.advance(200);
+    h.state(pregame(stage));h.advance(1000);assert.equal(h.visible('snf-intro'),false);
+    h.state(pregame('warmup'));h.advance(1000);assert.equal(h.visible('snf-intro'),false,'A late camera marker cannot revive a consumed intro');
+  }
+  h.clean();
+});
+
+test('Menu and pause cancel deferred entry and native-fact exit cannot revive it', h => {
+  for(const blocked of [{playSelection:true},{paused:true}]) {
+    h.state({valid:false,context:{scorebugVisible:false}});h.state(pregame('warmup'));h.event(factEvent);h.advance(100);
+    h.state(pregame('warmup',{context:{scorebugVisible:false,pregameStage:'warmup',...blocked}}));
+    h.event({name:'PLAYER_FACT_HIDE'});h.advance(2000);assert.equal(h.visible('snf-intro'),false);
+    h.state(pregame('warmup'));h.advance(1000);assert.equal(h.visible('snf-intro'),false,'Leaving a blocked UI cannot reopen the discarded intro');
+  }
+  h.clean();
+});
+
+test('Native match identity separates consecutive games with the same teams', h => {
+  h.state(pregame('warmup',{matchId:'clock1:away1:home1:SEA:LAR'}));h.event({name:'GAME_STARTED',duration:1});h.advance(1500);
+  assert.equal(h.visible('snf-intro'),false);h.state(pregame('warmup',{matchId:'clock2:away2:home2:SEA:LAR'}));
+  h.advance(350);assert.equal(h.visible('snf-intro'),true,'A different loaded clock/roster owner starts its own intro opportunity');h.clean();
+});
+
+test('Owned native live player tables display only in their captured phase and clear for play selection', h => {
+  h.useHost();h.state(live());
+  const event={...factEvent,source:'native',nativeVisible:true,replacementToken:71,phase:4,text:'',caption:'Receiving',columns:[{label:'Rec',value:'0'},{label:'Yds',value:'0'}]};
+  h.event(event);assert.equal(h.visible('snf-player-fact'),true);h.advance(32);
+  assert.equal(h.hostMessages.includes('SNF_PREGAME_SHOW:71'),true);
+  h.state(live({context:{scorebugVisible:false,playSelection:true}}));
+  assert.equal(h.visible('snf-player-fact'),false);
+  h.state(live());h.event({...event,phase:3,replacementToken:72});h.advance(32);
+  assert.equal(h.visible('snf-player-fact'),false);assert.equal(h.hostMessages.includes('SNF_PREGAME_SHOW:72'),false);h.clean();
+});
+
+test('Native coin outcomes without a team keep their exact text and acknowledge a neutral plate', h => {
+  h.useHost();h.state(pregame('coin_toss'));
+  h.event({name:'COIN_TOSS',team:null,source:'native',nativeVisible:true,replacementToken:73,title:'Coin Toss',text:'It is heads.'});
+  assert.equal(h.visible('snf-coin-toss'),true);assert.equal(h.el('snf-coin-toss').querySelector('.pg-toss-text').textContent,'It is heads.');
+  assert.equal(h.el('snf-coin-toss').querySelector('.pg-team-logo').getAttribute('src'),null);
+  h.advance(32);assert.equal(h.hostMessages.includes('SNF_PREGAME_SHOW:73'),true);h.clean();
+});
+
 test('The shipped page loads pregame replacement scripts and styles', h => {
   assert.match(html,/<script[^>]+src=["']pregame-inserts\.js["']/);assert.match(html,/<link[^>]+href=["']pregame-inserts\.css["']/);h.clean();
 });
 
 test('Native player fact owns exact text, identity and jersey zero during warmups', h => {
-  h.state(pregame('warmup'));h.event(factEvent);const card=h.el('snf-player-fact');
+  h.state(pregame('warmup'));h.advance(350);h.event(factEvent);const card=h.el('snf-player-fact');
   assert.equal(h.visible('snf-player-fact'),true);assert.equal(h.visible('snf-intro'),false);assert.equal(card.querySelector('.pg-player-name').textContent,'Test Receiver');assert.equal(card.querySelector('.pg-position').textContent,'WR\n0');
   assert.equal(card.querySelector('.pg-fact-text').textContent,factEvent.text);assert.equal(card.querySelector('.pg-portrait').src,factEvent.player.portrait);
   h.advance(20000);assert.equal(h.visible('snf-player-fact'),true,'Missing native duration must not invent a five-second timeout');h.event({name:'PLAYER_FACT_HIDE'});h.advance(350);assert.equal(h.visible('snf-player-fact'),false);
-  h.state(pregame('panning'));assert.equal(h.visible('snf-intro'),false,'A native card replacement must not reopen the matchup intro');h.clean();
+  h.state(pregame('panning'));h.advance(1000);assert.equal(h.visible('snf-intro'),false,'A native card replacement must not reopen an already-shown matchup intro');h.clean();
 });
 
 test('An explicitly visible native fact may hold in unknown-stage phase-zero pregame without guessing an intro', h => {
@@ -545,6 +792,25 @@ test('Player fact duration and owning hide cancel its delayed completion correct
   assert.equal(h.visible('snf-player-fact'),true);assert.equal(h.el('snf-player-fact').querySelector('.pg-fact-text').textContent,'Replacement fact');h.clean();
 });
 
+test('Painted native facts keep suppression until native close rather than their entry-time estimate', h => {
+  h.useHost();h.state(pregame(null));
+  h.event({...factEvent,source:'native',nativeVisible:true,replacementToken:88,duration:4.35});
+  h.advance(5000);
+  assert.equal(h.visible('snf-player-fact'),true);
+  assert.deepEqual(h.hostMessages,['SNF_PREGAME_SHOW:88'],'The local timeout must not reveal ESPN underneath the SNF exit');
+  h.event({name:'PLAYER_FACT_HIDE'});
+  assert.deepEqual(h.hostMessages,['SNF_PREGAME_SHOW:88','SNF_PREGAME_HIDE:88']);
+  h.advance(350);assert.equal(h.visible('snf-player-fact'),false);h.clean();
+});
+
+test('Painted native toss messages wait for native close even with a finite timeout', h => {
+  h.useHost();h.state(pregame('coin_toss'));
+  h.event({name:'COIN_TOSS',team:'home',source:'native',nativeVisible:true,replacementToken:89,duration:1,text:'Rams choose heads.'});
+  h.advance(2500);assert.equal(h.visible('snf-coin-toss'),true);
+  assert.deepEqual(h.hostMessages,['SNF_PREGAME_SHOW:89']);
+  h.event({name:'COIN_TOSS_HIDE'});h.advance(350);assert.equal(h.visible('snf-coin-toss'),false);h.clean();
+});
+
 test('Player facts fail closed for crowd, toss, kickoff, live gameplay and unknown phase', h => {
   for(const state of [pregame('crowd'),pregame('coin_toss'),pregame('kickoff'),live(),pregame('warmup',{phase:null}),pregame('panning',{phase:undefined})]) {
     h.state(state);h.event(factEvent);assert.equal(h.visible('snf-player-fact'),false);
@@ -561,6 +827,57 @@ test('Player fact text remains literal and absent photo or number are omitted', 
   h.state(pregame('panning'));h.event({...factEvent,text:'Native says <b>0</b> & keeps its punctuation.',player:{fullName:'Test Center',position:'C',number:-1}});
   const card=h.el('snf-player-fact');assert.equal(card.querySelector('.pg-fact-text').textContent,'Native says <b>0</b> & keeps its punctuation.');assert.equal(card.querySelector('.pg-fact-text').children.length,0);
   assert.equal(card.querySelector('.pg-position').textContent,'C');assert.equal(card.querySelector('.pg-portrait').getAttribute('src'),null);assert.equal(card.classList.contains('no-photo'),true);h.clean();
+});
+
+test('Native LAST SEASON tables preserve exact columns, caption and player ownership for every position', h => {
+  h.useHost();h.state(pregame(null));
+  const columns=[{label:'Rec',value:'88'},{label:'Yds',value:'928'},{label:'Avg',value:'10.5'},{label:'TD',value:'5'}];
+  const event={...factEvent,source:'native',nativeVisible:true,replacementToken:61,text:undefined,caption:'LAST SEASON',category:'Receiving',player:{fullName:'Kyle Pitts',position:'TE',number:8},columns};
+  h.event(event);const card=h.el('snf-player-fact');
+  assert.equal(h.visible('snf-player-fact'),true);assert.equal(card.querySelector('.pg-player-name').textContent,'Kyle Pitts');
+  assert.equal(card.querySelector('.pg-caption').textContent,'LAST SEASON');assert.equal(card.querySelector('.pg-fact-text').hidden,true);
+  assert.equal(card.querySelector('.pg-category').textContent,'Receiving');assert.equal(card.querySelector('.pg-category').hidden,false);
+  assert.deepEqual(card.querySelectorAll('.pg-stat-label').map(n=>n.textContent),columns.map(c=>c.label));
+  assert.deepEqual(card.querySelectorAll('.pg-stat-value').map(n=>n.textContent),columns.map(c=>c.value));
+  assert.deepEqual(h.hostMessages,[]);h.advance(32);assert.deepEqual(h.hostMessages,['SNF_PREGAME_SHOW:61']);
+  for(const position of ['QB','RB','WR','CB','K','P','C']) {
+    h.event({...event,player:{fullName:'Exact Native Player',position,number:0},caption:'THIS GAME',columns:[{label:'Exact field',value:'0/0'}]});
+    assert.equal(card.querySelector('.pg-position').textContent,position+'\n0');
+    assert.equal(card.querySelectorAll('.pg-stat-column').length,1);assert.equal(card.querySelector('.pg-stat-value').textContent,'0/0');
+  }
+  h.event({name:'PLAYER_FACT_HIDE'});h.advance(350);assert.equal(card.querySelectorAll('.pg-stat-column').length,0);h.clean();
+});
+
+test('Missing or malformed native table values never claim a replacement or invent a performance', h => {
+  h.useHost();h.state(pregame(null));
+  for(const columns of [[],[{label:'YDS',value:null}],[{label:'YDS',value:Infinity}],[{label:'',value:0}]]) {
+    h.event({...factEvent,text:undefined,source:'native',nativeVisible:true,replacementToken:62,columns});h.advance(32);
+    assert.equal(h.visible('snf-player-fact'),false);assert.deepEqual(h.hostMessages,[]);
+  }
+  h.clean();
+});
+
+test('A table switches to native prose cleanly and never defaults its caption to CAREER', h => {
+  h.state(pregame('warmup'));h.event({...factEvent,text:undefined,caption:undefined,columns:[{label:'Tackles',value:0}]});
+  const card=h.el('snf-player-fact');assert.equal(card.querySelector('.pg-caption').textContent,'');assert.equal(card.querySelector('.pg-stat-value').textContent,'0');
+  h.event(factEvent);assert.equal(card.querySelectorAll('.pg-stat-column').length,0);assert.equal(card.querySelector('.pg-fact-text').hidden,false);
+  assert.equal(card.querySelector('.pg-category').textContent,'');assert.equal(card.querySelector('.pg-category').hidden,true);
+  assert.equal(card.querySelector('.pg-fact-text').textContent,factEvent.text);assert.equal(card.querySelector('.pg-caption').textContent,'CAREER');h.clean();
+});
+
+test('Coin-toss rows retain exact native choice, selection and button strings without owning input', h => {
+  h.useHost();h.state(pregame('coin_toss'));
+  const event={...tossEvent,text:'Falcons will defend.',nativeVisible:true,replacementToken:71,choices:[{text:'North',selected:true,button:'Z'},{text:'South',selected:false}]};
+  h.event(event);const card=h.el('snf-coin-toss');
+  assert.equal(h.visible('snf-coin-toss'),true);assert.equal(card.querySelector('.pg-toss-text').textContent,event.text);
+  assert.deepEqual(card.querySelectorAll('.pg-choice-text').map(n=>n.textContent),['North','South']);
+  assert.equal(card.querySelector('.pg-toss-choice.selected .pg-choice-text').textContent,'North');
+  assert.equal(card.querySelector('.pg-choice-button').textContent,'Z');h.advance(32);assert.deepEqual(h.hostMessages,['SNF_PREGAME_SHOW:71']);
+  h.event({...event,choices:[{text:'North',selected:false},{text:'South',selected:true,button:'Z'}]});
+  assert.equal(card.querySelector('.pg-toss-choice.selected .pg-choice-text').textContent,'South');
+  assert.equal(card.classList.contains('out'),false);assert.equal(h.visible('snf-coin-toss'),true);
+  h.event({...event,choices:undefined});assert.equal(card.querySelectorAll('.pg-toss-choice').length,0);assert.equal(card.querySelector('.pg-toss-choices').hidden,true);
+  h.event({name:'COIN_TOSS_HIDE'});h.advance(350);assert.equal(card.querySelectorAll('.pg-toss-choice').length,0);h.clean();
 });
 
 test('Coin toss displays exact native messages until the owning hide event', h => {

@@ -18,10 +18,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <time.h>
 #include <unistd.h>
+#include <SDL3/SDL.h>
 
 static void fix_path(const char *in, char *out, size_t cap)
 {
@@ -46,6 +48,56 @@ int _snprintf_s(char *buf, size_t size, size_t count, const char *fmt, ...)
     if (n < 0) { buf[0] = 0; return -1; }
     return (size_t)n >= cap ? -1 : n;          /* MSVC returns -1 on truncation */
 }
+
+#undef fopen
+FILE *nfl2k5_fopen(const char *name, const char *mode)
+{
+    char p[1024];
+    size_t i;
+    for (i = 0; name && name[i] && i < sizeof p - 1; i++) p[i] = name[i] == '\\' ? '/' : name[i];
+    p[i] = 0;
+    return fopen(p, mode);
+}
+
+int fopen_s(FILE **f, const char *name, const char *mode)
+{
+    if (!f) return 22;
+    *f = nfl2k5_fopen(name, mode);
+    return *f ? 0 : errno ? errno : 2;
+}
+
+int localtime_s(struct tm *out, const time_t *t)
+{
+    return localtime_r(t, out) ? 0 : 22;
+}
+
+int _vsnprintf_s(char *buf, size_t size, size_t count, const char *fmt, va_list ap)
+{
+    int n;
+    size_t lim = size;
+    if (!buf || !size) return -1;
+    if (count != _TRUNCATE && count + 1 < lim) lim = count + 1;
+    n = vsnprintf(buf, lim, fmt, ap);
+    if (n < 0 || (size_t)n >= lim) return count == _TRUNCATE ? -1 : (buf[0] = 0, -1);
+    return n;
+}
+
+BOOL PostMessageA(HWND w, UINT msg, WPARAM wp, LPARAM lp)
+{
+    (void)w; (void)wp; (void)lp;
+    if (msg == WM_CLOSE) {
+        SDL_Event e;
+        memset(&e, 0, sizeof e);
+        e.type = SDL_EVENT_QUIT;
+        return SDL_PushEvent(&e) ? TRUE : FALSE;
+    }
+    return FALSE;
+}
+
+BOOL GetCursorPos(void *p) { (void)p; return FALSE; }
+BOOL ScreenToClient(HWND w, void *p) { (void)w; (void)p; return FALSE; }
+UINT GetDoubleClickTime(void) { return 500; }
+HWND GetForegroundWindow(void) { return NULL; }
 
 int sprintf_s(char *buf, size_t size, const char *fmt, ...)
 {
@@ -368,4 +420,113 @@ DWORD GetCurrentDirectoryA(DWORD cap, char *out)
     if (n + 1 > cap) return (DWORD)(n + 1);
     memcpy(out, cwd, n + 1);
     return (DWORD)n;
+}
+
+/* ---- Environment ---------------------------------------------------- */
+DWORD GetEnvironmentVariableA(const char *name, char *out, DWORD cap)
+{
+    const char *v = name ? getenv(name) : NULL;
+    size_t n;
+    if (!v) return 0;
+    n = strlen(v);
+    if (!out || n + 1 > cap) return (DWORD)(n + 1);
+    memcpy(out, v, n + 1);
+    return (DWORD)n;
+}
+
+/* ---- INI files (the subset MyCareer home uses: string values by section and key) ----
+ * Lines "[section]" and "key=value"; section and key names compare case-insensitively,
+ * as on Windows. Writing rewrites the file through a temporary and a rename. */
+static int ini_trim(char *s)
+{
+    size_t n = strlen(s);
+    char *b = s;
+    while (n && (s[n - 1] == '\n' || s[n - 1] == '\r' || s[n - 1] == ' ' || s[n - 1] == '\t')) s[--n] = 0;
+    while (*b == ' ' || *b == '\t') b++;
+    if (b != s) memmove(s, b, strlen(b) + 1);
+    return (int)strlen(s);
+}
+
+DWORD GetPrivateProfileStringA(const char *section, const char *key, const char *def, char *out, DWORD cap, const char *file)
+{
+    char path[PATH_MAX], line[1024];
+    int in = 0;
+    FILE *f;
+    if (!out || !cap) return 0;
+    snprintf(out, cap, "%s", def ? def : "");
+    if (!section || !key || !file) return (DWORD)strlen(out);
+    fix_path(file, path, sizeof path);
+    if (!(f = fopen(path, "r"))) return (DWORD)strlen(out);
+    while (fgets(line, sizeof line, f)) {
+        char *eq;
+        ini_trim(line);
+        if (line[0] == '[') {
+            char *e = strchr(line, ']');
+            if (e) *e = 0;
+            in = !strcasecmp(line + 1, section);
+            continue;
+        }
+        if (!in || !(eq = strchr(line, '='))) continue;
+        *eq = 0;
+        ini_trim(line);
+        if (!strcasecmp(line, key)) {
+            char *v = eq + 1;
+            while (*v == ' ' || *v == '\t') v++;
+            snprintf(out, cap, "%s", v);
+            break;
+        }
+    }
+    fclose(f);
+    return (DWORD)strlen(out);
+}
+
+BOOL WritePrivateProfileStringA(const char *section, const char *key, const char *value, const char *file)
+{
+    char path[PATH_MAX], tmp[PATH_MAX + 8], line[1024], name[1024];
+    FILE *in, *out;
+    int cur = 0, found_section = 0, done = 0;
+    if (!section || !file) return FALSE;
+    fix_path(file, path, sizeof path);
+    snprintf(tmp, sizeof tmp, "%s.tmp", path);
+    if (!(out = fopen(tmp, "w"))) return FALSE;
+    if ((in = fopen(path, "r"))) {
+        while (fgets(line, sizeof line, in)) {
+            char *eq;
+            snprintf(name, sizeof name, "%s", line);
+            ini_trim(name);
+            if (name[0] == '[') {
+                char *e = strchr(name, ']');
+                if (cur && !done && key && value) { fprintf(out, "%s=%s\n", key, value); done = 1; }
+                if (e) *e = 0;
+                cur = !strcasecmp(name + 1, section);
+                if (cur) found_section = 1;
+                if (cur && !key) continue;          /* key NULL: the whole section goes */
+                fprintf(out, "%s\n", line[0] ? (ini_trim(line), line) : "");
+                continue;
+            }
+            if (cur && !key) continue;
+            if (cur && key && (eq = strchr(name, '='))) {
+                *eq = 0;
+                ini_trim(name);
+                if (!strcasecmp(name, key)) {
+                    if (value && !done) { fprintf(out, "%s=%s\n", key, value); done = 1; }
+                    continue;                       /* value NULL: the key goes */
+                }
+            }
+            ini_trim(line);
+            fprintf(out, "%s\n", line);
+        }
+        fclose(in);
+    }
+    if (key && value && !done) {
+        if (!found_section) fprintf(out, "[%s]\n", section);
+        else if (!cur) {
+            /* the section was not the last one: append the key under a repeated header */
+            fprintf(out, "[%s]\n", section);
+        }
+        fprintf(out, "%s=%s\n", key, value);
+    }
+    if (fclose(out) != 0) { remove(tmp); return FALSE; }
+    if (rename(tmp, path) != 0) { remove(tmp); return FALSE; }
+    return TRUE;
 }

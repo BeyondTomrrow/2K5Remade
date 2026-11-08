@@ -11,6 +11,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -30,6 +31,32 @@ int strcat_s(char *dst, size_t size, const char *src);
 
 #define _fseeki64 fseeko
 #define _ftelli64 ftello
+int fopen_s(FILE **f, const char *name, const char *mode);
+/* The game names host files with backslashes ("logs\x.txt", "mods\features.ini"),
+ * which on Linux would be one odd file name in the working directory. */
+FILE *nfl2k5_fopen(const char *name, const char *mode);
+#define fopen nfl2k5_fopen
+struct tm;
+int localtime_s(struct tm *out, const time_t *t);
+int _vsnprintf_s(char *buf, size_t size, size_t count, const char *fmt, va_list ap);
+#define sscanf_s sscanf          /* only numeric conversions are used with it */
+
+/* MSVC __declspec(thread) / (noinline) in the merged feature sources */
+#ifndef _MSC_VER
+#define __declspec(x) NFL2K5_DECLSPEC_##x
+#define NFL2K5_DECLSPEC_thread __thread
+#define NFL2K5_DECLSPEC_noinline __attribute__((noinline))
+#endif
+
+/* ---- Window helpers the PC build uses (no-ops without a Win32 window) -- */
+#ifndef WM_CLOSE
+#define WM_CLOSE 0x0010
+#endif
+BOOL PostMessageA(HWND w, UINT msg, WPARAM wp, LPARAM lp);   /* WM_CLOSE: quits through SDL */
+BOOL GetCursorPos(void *p);
+BOOL ScreenToClient(HWND w, void *p);
+UINT GetDoubleClickTime(void);
+HWND GetForegroundWindow(void);
 
 /* ---- File attributes / directory search -------------------------------- */
 #ifndef INVALID_FILE_ATTRIBUTES
@@ -96,6 +123,12 @@ static inline unsigned char _BitScanForward(unsigned long *idx, unsigned long v)
 static inline unsigned char _BitScanReverse(unsigned long *idx, unsigned long v)
 { if (!(uint32_t)v) return 0; *idx = 31ul - (unsigned long)__builtin_clz((uint32_t)v); return 1; }
 DWORD GetCurrentDirectoryA(DWORD cap, char *out);
+
+/* ---- Environment, INI files, 64-bit strtol (MyCareer home) -------------- */
+DWORD GetEnvironmentVariableA(const char *name, char *out, DWORD cap);
+DWORD GetPrivateProfileStringA(const char *section, const char *key, const char *def, char *out, DWORD cap, const char *file);
+BOOL  WritePrivateProfileStringA(const char *section, const char *key, const char *value, const char *file);
+#define _strtoi64 strtoll
 
 #ifdef __cplusplus
 }

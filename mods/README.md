@@ -2,6 +2,21 @@
 
 Everything here is read by the game at startup.
 
+## Mod packs (SOFTDRINK 2K28 and other 2K5 Mod Studio releases)
+
+Put the release's `.2k5patch` file (as downloaded, not unzipped) in
+`mods\patches\` and start the game. The game installs it by itself in the
+background (a few minutes; toasts show progress) into `mods\packs\<pack>\`.
+No Python, no extra tools, the same on PC and Android (on Android a
+`.2k5patch` in the phone's Download folder is found too). A new release of
+the pack you already play, or your first pack, is selected automatically;
+restart the game to play it. Switch packs under Extras > Mods.
+
+Your own clean USA disc files are never changed. `mods\patches\<file>.installed`
+or `.failed` records the result (the log is in `logs\patch-install-*.log`);
+delete the marker to install the file again. A patched `.iso` also works in
+`mods\patches\` on the PC (it needs Python or the bundled installer).
+
 ## Make a scorebug without editing JSON
 
 Open `tools\open-scorebug-studio.ps1`. Scorebug Studio is an offline visual

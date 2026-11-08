@@ -1,0 +1,18 @@
+{
+  "code": "Z1",
+  "base": "08",
+  "city": "San Francisco",
+  "nickname": "Claude",
+  "abbreviation": "CLD",
+  "name": "Claude",
+  "colors": {
+    "primary": "#D97757",
+    "secondary": "#1F1E1D",
+    "text": "#FFFFFF"
+  },
+  "logos": {
+    "scorebug": "logos/scorebug.png"
+  },
+  "aliases": [],
+  "created_with": "NFL2K5-PC Team Creator"
+}

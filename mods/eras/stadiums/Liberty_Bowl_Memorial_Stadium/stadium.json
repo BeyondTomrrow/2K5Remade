@@ -1,0 +1,13 @@
+{
+  "name": "LIBERTY BOWL MEMORIAL STADIUM",
+  "display": "Liberty Bowl Memorial Stadium",
+  "location": "Memphis, TN",
+  "code": "s69",
+  "clone": "Titans Coliseum",
+  "host": "Angry Dog Park",
+  "capacity": 62380,
+  "indoor": 0,
+  "grass": 1,
+  "nfl": "Oilers 1997",
+  "source": "NCAA Football 07 Liberty Bowl Memorial Stadium, bowl dressing (STAD.SRES 158, LIBERT); tools/eras/stadiums/ncaa_stadiums.py"
+}

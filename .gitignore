@@ -8,6 +8,8 @@
 /dependencies/
 /external/*
 !/external/xboxrecomp
+# zstd 1.5.6 (BSD, facebook/zstd lib/ sources): .xbpak data packs (tools/xbpack, kernel_pack.c)
+!/external/zstd
 cmmake-build-debug
 *.xbe
 *.iso
@@ -71,3 +73,35 @@ icall_targets.dump
 controls.ini
 nfl2k5_game.ini
 perf.data
+
+mods/eras/office/files/
+# My NFL Eras: art extracted from the player's disc or supplied by the user (never commit)
+mods/eras/teams/**/*.png
+mods/eras/teams/**/*.jpg
+# My NFL Eras stadium packs: bundles and previews built from the player's NFL 2K5 / NCAA 07 discs (never commit)
+/data/eras/stadiums/
+mods/eras/stadiums/*/files/
+# My NFL Eras: build inputs and derived data that are never committed
+# (community roster saves and ratings, retail-disc dumps, user photos; docs/eras/MOD-PACK-DESIGN.md 8)
+/data/eras/community_rosters/
+/data/eras/ps2_saves/
+/data/eras/ps2_max/
+/data/eras/ps2_psu/
+/data/eras/historic_teams_2k5.json
+/data/eras/runtime/*/rosters/
+/data/eras/runtime/*/depth/
+/data/eras/runtime/*.prev-*/
+mods/eras/offices/*/reference/
+mods/eras/offices/1980s/computer_monitor.png
+# Draft show audio supplied by the user (redistribution not cleared)
+mods/eras/draft/audio/
+# My NFL Eras tools: this PC's folders (tools/eras/eras_settings.py)
+/eras-tools.ini
+# Draft show: poses and jerseys built from the player's disc (tools/eras/draftshow/build-draftshow-pack.py)
+mods/eras/draft/files/
+
+# Android signing keys never go in the repository (android/build_apk.py reads them from outside)
+android/debug.keystore
+android/signing.ini
+*.keystore
+*.jks

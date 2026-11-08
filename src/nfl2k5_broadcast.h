@@ -1,6 +1,8 @@
 #ifndef NFL2K5_BROADCAST_H
 #define NFL2K5_BROADCAST_H
 
+#include <stdint.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -90,6 +92,92 @@ void nfl2k5_broadcast_player_stat(const Nfl2k5PlayerStat *stat, int team);
 void nfl2k5_broadcast_live_qb_sample(const Nfl2k5PlayerStat *stat, int team);
 void nfl2k5_broadcast_live_qb_reset(void);
 int nfl2k5_broadcast_get_state(Nfl2k5BroadcastState *state);
+
+/* Read-only current-match snapshots (scope 0). Values are doubles so the
+ * title's 0.5-sack selector does not lose half credits. Only a set bit proves
+ * a field was read successfully; unset values are NAN, never invented zero.
+ * Indices are this interface's fields, NOT guest selector numbers. */
+typedef enum Nfl2k5LiveStatField {
+    NFL2K5_LIVE_PASS_COMPLETIONS,
+    NFL2K5_LIVE_PASS_ATTEMPTS,
+    NFL2K5_LIVE_PASS_YARDS,
+    NFL2K5_LIVE_PASS_TOUCHDOWNS,
+    NFL2K5_LIVE_PASS_INTERCEPTIONS,
+    NFL2K5_LIVE_RUSH_ATTEMPTS,
+    NFL2K5_LIVE_RUSH_YARDS,
+    NFL2K5_LIVE_RUSH_TOUCHDOWNS,
+    NFL2K5_LIVE_RECEPTIONS,
+    NFL2K5_LIVE_RECEIVE_YARDS,
+    NFL2K5_LIVE_RECEIVE_TOUCHDOWNS,
+    NFL2K5_LIVE_TACKLES,
+    NFL2K5_LIVE_SACKS,
+    NFL2K5_LIVE_DEF_INTERCEPTIONS,
+    NFL2K5_LIVE_FIELD_GOALS_MADE,
+    NFL2K5_LIVE_FIELD_GOALS_ATTEMPTED,
+    NFL2K5_LIVE_LONGEST_FIELD_GOAL,
+    NFL2K5_LIVE_FIRST_DOWNS,
+    NFL2K5_LIVE_POSSESSIONS,
+    NFL2K5_LIVE_TOTAL_YARDS,
+    NFL2K5_LIVE_TIME_OF_POSSESSION,
+    NFL2K5_LIVE_FORCED_FUMBLES,
+    NFL2K5_LIVE_FUMBLES_RECOVERED,
+    NFL2K5_LIVE_TACKLES_FOR_LOSS,
+    NFL2K5_LIVE_LONGEST_RUSH,
+    NFL2K5_LIVE_LONGEST_RECEPTION,
+    NFL2K5_LIVE_LONGEST_PASS,
+    NFL2K5_LIVE_TURNOVERS,
+    NFL2K5_LIVE_PENALTIES,
+    NFL2K5_LIVE_PASS_YARDS_ALLOWED,
+    NFL2K5_LIVE_RUSH_YARDS_ALLOWED,
+    NFL2K5_LIVE_TOTAL_YARDS_ALLOWED,
+    NFL2K5_LIVE_FIELD_COUNT
+} Nfl2k5LiveStatField;
+
+#define NFL2K5_LIVE_FIELD_BIT(field) (UINT64_C(1) << (unsigned)(field))
+
+typedef enum Nfl2k5TimeOfPossessionUnit {
+    NFL2K5_TOP_UNVERIFIED = 0,
+    NFL2K5_TOP_SECONDS = 1
+} Nfl2k5TimeOfPossessionUnit;
+
+typedef struct Nfl2k5LiveStatOwner {
+    uint32_t clock_object;
+    uint32_t rosters[2];       /* away, home: bound team-data records */
+    char abbreviations[2][16]; /* original playbook team code; empty if unreadable */
+    uint32_t scope;            /* always 0: this match, never season/career */
+    uint32_t period;
+    uint64_t sampled_at_ms;    /* GetTickCount64, freshness not football time */
+} Nfl2k5LiveStatOwner;
+
+typedef struct Nfl2k5LivePlayerSample {
+    Nfl2k5LiveStatOwner owner;
+    int side;                 /* 0 away, 1 home */
+    uint32_t player_record;
+    uint32_t roster_index;
+    uint32_t native_position; /* title's actual position ID, not StatKind */
+    char name[48], full_name[80], position[8];
+    int jersey_number, photo_id; /* -1 unknown */
+    uint64_t valid_fields;
+    double values[NFL2K5_LIVE_FIELD_COUNT];
+} Nfl2k5LivePlayerSample;
+
+typedef struct Nfl2k5LiveTeamSample {
+    Nfl2k5LiveStatOwner owner;
+    int side;                 /* 0 away, 1 home */
+    uint32_t stat_block;
+    Nfl2k5TimeOfPossessionUnit time_of_possession_unit;
+    uint64_t valid_fields;
+    double values[NFL2K5_LIVE_FIELD_COUNT];
+} Nfl2k5LiveTeamSample;
+
+/* Guest collector uses existing input/script service points only. These host
+ * callbacks must copy the immutable stack record before returning; never
+ * retain its pointer, invoke guest code or block on the guest CPU. The
+ * optional-package gate avoids sampling unrelated presentation packages. */
+int nfl2k5_broadcast_live_stats_enabled(void);
+void nfl2k5_broadcast_live_player_sample(const Nfl2k5LivePlayerSample *sample);
+void nfl2k5_broadcast_live_team_sample(const Nfl2k5LiveTeamSample *sample);
+void nfl2k5_broadcast_live_stats_reset(void);
 
 #ifdef __cplusplus
 }

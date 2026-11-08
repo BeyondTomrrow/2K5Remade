@@ -1,0 +1,379 @@
+diff --git a/src/apu/apu_vp.c b/src/apu/apu_vp.c
+index 4982e7b..75b8a48 100644
+--- a/src/apu/apu_vp.c
++++ b/src/apu/apu_vp.c
+@@ -511,6 +586,29 @@ static void fe_method(MCPXAPUState *d, uint32_t method, uint32_t argument)
+             fprintf(stderr, "[VOICE] %03X set ebo %06X cbo %06X (t=%lu)\n", (unsigned)d->regs[NV_PAPU_FECV], argument,
+                     voice_get_mask(d, (uint16_t)d->regs[NV_PAPU_FECV], NV_PAVS_VOICE_PAR_OFFSET, NV_PAVS_VOICE_PAR_OFFSET_CBO),
+                     GetTickCount());
++        if (argument == 0xFFFFFFFFu) {
++            /* A zero-length play region (EBO = start + 0 - 1): the title is
++             * about to play a sound it never loaded, and the voice then reads
++             * RAM from its base address for minutes (xemu never writes this;
++             * docs/AUDIO-USER-REPORTS-20261022.md). Log who does it, with
++             * the guest return addresses on the calling thread's stack. */
++            static int shown;
++            if (shown < 24) {
++                extern __declspec(thread) uint32_t g_esp;
++                extern ptrdiff_t xbox_GetMemoryOffset(void);
++                const uint8_t *gm = (const uint8_t *)xbox_GetMemoryOffset();
++                int n = 0;
++                shown++;
++                fprintf(stderr, "[VOICE] %03X EBO=-1 (zero-length region) ba %06X lbo %06X stack:", (unsigned)d->regs[NV_PAPU_FECV],
++                        voice_get_mask(d, (uint16_t)d->regs[NV_PAPU_FECV], NV_PAVS_VOICE_CUR_PSL_START, NV_PAVS_VOICE_CUR_PSL_START_BA),
++                        voice_get_mask(d, (uint16_t)d->regs[NV_PAPU_FECV], NV_PAVS_VOICE_CUR_PSH_SAMPLE, NV_PAVS_VOICE_CUR_PSH_SAMPLE_LBO));
++                for (uint32_t k = 0; k < 128 && n < 16; k++) {
++                    uint32_t w = *(const uint32_t *)(gm + g_esp + k * 4);
++                    if (w >= 0x00011000u && w < 0x00480000u) { fprintf(stderr, " %08X", w); n++; }
++                }
++                fprintf(stderr, "\n");
++            }
++        }
+         voice_set_mask(d, (uint16_t)d->regs[NV_PAPU_FECV],
+                        NV_PAVS_VOICE_PAR_NEXT,
+                        NV_PAVS_VOICE_PAR_NEXT_EBO, argument);
+@@ -1193,7 +1293,48 @@ typedef struct {
+     float fifo[RS_FIFO][2];
+     int fifo_n, fifo_i;
+     bool ended;
++    /* band-limited (windowed-sinc) history for upsampled voices: the
++     * output point lies between sh[RS_TAPS/2-1] and sh[RS_TAPS/2] */
++    float sh[32][2];
++    int stereo_left;          /* > 0 while L != R was seen within the window */
+ } VoiceResampler;
++
++/* Windowed-sinc interpolation for upsampled voices (source rate < 48 kHz).
++ * xemu's VP resamples each voice with libsamplerate's sinc converter: its
++ * output has nothing above the sources' Nyquist (a cliff at ~10-11 kHz in a
++ * match, where the fastest voices are 22 kHz); the cubic interpolator left
++ * images up to 20 kHz (16 dB more 11-20 kHz energy than xemu after a 4th-order
++ * low-pass, 39 dB before; docs/AUDIO-USER-REPORTS-20261022.md). 32 taps,
++ * Kaiser beta 8 (~80 dB stopband), cutoff 0.42 of the source rate (pass to
++ * ~0.34, stop from 0.50 = the source Nyquist), 512 phases with linear
++ * interpolation between them, each phase normalised to unity gain at DC.
++ * RECOMP_APU_CUBIC=1: the old cubic interpolator without any filter. */
++#define RS_TAPS 32
++#define RS_PHASES 512
++static float s_sinc_tab[RS_PHASES + 1][RS_TAPS];
++static double bessel_i0(double x)
++{
++    double sum = 1.0, term = 1.0;
++    for (int k = 1; k < 40; k++) { term *= (x / (2.0 * k)) * (x / (2.0 * k)); sum += term; }
++    return sum;
++}
++static void sinc_table_init(void)
++{
++    const double fc = 0.42, beta = 8.0, half = RS_TAPS / 2.0;
++    for (int p = 0; p <= RS_PHASES; p++) {
++        double t = (double)p / RS_PHASES, sum = 0.0;
++        for (int k = 0; k < RS_TAPS; k++) {
++            double x = (k - (RS_TAPS / 2 - 1)) - t;        /* distance from the output point */
++            double sx = 2.0 * fc * x;
++            double sinc = fabs(sx) < 1e-9 ? 1.0 : sin(3.14159265358979 * sx) / (3.14159265358979 * sx);
++            double u = x / half;
++            double win = fabs(u) >= 1.0 ? 0.0 : bessel_i0(beta * sqrt(1.0 - u * u)) / bessel_i0(beta);
++            s_sinc_tab[p][k] = (float)(2.0 * fc * sinc * win);
++            sum += s_sinc_tab[p][k];
++        }
++        for (int k = 0; k < RS_TAPS; k++) s_sinc_tab[p][k] = (float)(s_sinc_tab[p][k] / sum);
++    }
++}
+ static VoiceResampler s_rs[MCPX_HW_MAX_VOICES];
+ 
+ static void voice_resampler_reset(uint16_t v)
+@@ -1225,6 +1366,12 @@ static int voice_resample(MCPXAPUState *d, uint16_t v, float samples[][2],
+     double step = (rate > 0.0f) ? 1.0 / (double)rate : 1.0;
+     if (step > 64.0) step = 64.0;
+     if (step < 1.0 / 64.0) step = 1.0 / 64.0;
++    static int cubic = -1;
++    if (cubic < 0) { cubic = getenv("RECOMP_APU_CUBIC") != NULL; if (!cubic) sinc_table_init(); }
++    /* upsampled voices only; 48 kHz (helper voices) and faster sources keep
++     * the cubic path. The sinc history is filled as the voice plays, so a
++     * switch between the paths mid-voice is harmless. */
++    bool use_sinc = !cubic && rate > 1.0001f;
+ 
+     for (int i = 0; i < requested_num; i++) {
+         while (r->pos >= 1.0) {
+@@ -1260,6 +1407,34 @@ static int voice_resample(MCPXAPUState *d, uint16_t v, float samples[][2],
+             memmove(r->hist[0], r->hist[1], sizeof(r->hist[0]) * 3);
+             r->hist[3][0] = in[0];
+             r->hist[3][1] = in[1];
++            if (use_sinc) {
++                memmove(r->sh[0], r->sh[1], sizeof(r->sh[0]) * (RS_TAPS - 1));
++                r->sh[RS_TAPS - 1][0] = in[0];
++                r->sh[RS_TAPS - 1][1] = in[1];
++                if (in[0] != in[1]) r->stereo_left = RS_TAPS;
++                else if (r->stereo_left > 0) r->stereo_left--;
++            }
++        }
++        if (use_sinc) {
++            float fp = (float)r->pos * RS_PHASES;
++            int ph = (int)fp;
++            float fr = fp - (float)ph, a = 0.0f, b = 0.0f;
++            if (ph >= RS_PHASES) { ph = RS_PHASES - 1; fr = 1.0f; }
++            const float *k0 = s_sinc_tab[ph], *k1 = s_sinc_tab[ph + 1];
++            if (r->stereo_left > 0) {
++                for (int k = 0; k < RS_TAPS; k++) {
++                    float h = k0[k] + (k1[k] - k0[k]) * fr;
++                    a += h * r->sh[k][0];
++                    b += h * r->sh[k][1];
++                }
++            } else {
++                for (int k = 0; k < RS_TAPS; k++) a += (k0[k] + (k1[k] - k0[k]) * fr) * r->sh[k][0];
++                b = a;
++            }
++            samples[i][0] = a;
++            samples[i][1] = b;
++            r->pos += step;
++            continue;
+         }
+         float t = (float)r->pos, t2 = t * t, t3 = t2 * t;
+         for (int c = 0; c < 2; c++) {
+@@ -1274,6 +1449,161 @@ static int voice_resample(MCPXAPUState *d, uint16_t v, float samples[][2],
+     return requested_num;
+ }
+ 
++/* RECOMP_APU_PITCH_LOG=1: once a second, every voice that played -- its
++ * pitch register range, envelope pitch scale and filter-envelope range, the
++ * resulting rate range, and how many pitch writes the title made -- plus the
++ * pipeline's frame count and the speaker queue (AUDIO-FIX-20261021). */
++static void pitch_stat_note(uint16_t v, int p, int ps, float ef, float rate)
++{
++    PitchStat *s = &s_pstat[v];
++    if (!s->frames) {
++        s->rmin = s->rmax = rate; s->pmin = s->pmax = p; s->efmin = s->efmax = ef;
++    } else {
++        if (rate < s->rmin) s->rmin = rate;
++        if (rate > s->rmax) s->rmax = rate;
++        if (p < s->pmin) s->pmin = p;
++        if (p > s->pmax) s->pmax = p;
++        if (ef < s->efmin) s->efmin = ef;
++        if (ef > s->efmax) s->efmax = ef;
++    }
++    s->ps = ps;
++    s->frames++;
++}
++/* Once a second (APU thread): one record for the audio report ring. */
++int64_t g_apu_dg_lockwait_us;
++unsigned g_apu_dg_lockwait_n;
++static void diag_report(void)
++{
++    static DWORD last;
++    static unsigned long frames_at;
++    static LONG perf_frames_at;
++    extern unsigned long g_apu_vp_frames;
++    extern int64_t g_apu_dg_stall_us;
++    extern unsigned g_apu_dg_stall_n, g_apu_dg_silent_vp;
++    extern volatile LONG g_xbox_perf_frames;      /* nv2a_gpu_perf.inc.c */
++    extern volatile LONG g_xbox_perf_worst_us;
++    DWORD now = GetTickCount();
++    XA2DiagSec r;
++    unsigned under = 0, drops = 0;
++    int v, n = 0;
++    if (!diag_on()) return;
++    if (!last) { last = now; frames_at = g_apu_vp_frames; perf_frames_at = g_xbox_perf_frames; return; }
++    if (now - last < 1000) return;
++    memset(&r, 0, sizeof r);
++    r.tick = now;
++    r.frames_out = xa2_report_frames();
++    {
++        LONG pf = g_xbox_perf_frames;
++        r.fps = (float)(pf - perf_frames_at) * 1000.0f / (float)(now - last);
++        perf_frames_at = pf;
++        r.worst_ms = (float)InterlockedExchange(&g_xbox_perf_worst_us, 0) / 1000.0f;
++    }
++    r.vpframes = (uint32_t)(g_apu_vp_frames - frames_at);
++    xa2_diag_take(&r.qmin, &r.qmax, &under, &drops);
++    r.underruns = under; r.drops = drops;
++    r.silent_vp = g_apu_dg_silent_vp; g_apu_dg_silent_vp = 0;
++    r.stalls = g_apu_dg_stall_n; g_apu_dg_stall_n = 0;
++    r.stall_ms = (float)(g_apu_dg_stall_us / 1000.0); g_apu_dg_stall_us = 0;
++    r.lockwaits = g_apu_dg_lockwait_n; g_apu_dg_lockwait_n = 0;
++    r.lockwait_ms = (float)(g_apu_dg_lockwait_us / 1000.0); g_apu_dg_lockwait_us = 0;
++    for (v = 0; v < MCPX_HW_MAX_VOICES; v++) {
++        DiagVoice *dv = &s_dvoice[v];
++        if (!dv->frames) continue;
++        r.active++;
++        if (dv->rmax > dv->rmin * 1.0006f) {          /* moved by more than a cent */
++            float g = attenuate(dv->vmin) * dv->emax, ratio = dv->rmax / dv->rmin;
++            int k = n;
++            if (n == XA2_DIAG_VOICES) {                /* full: replace the smallest move */
++                int m = 0;
++                for (k = 1; k < n; k++)
++                    if (r.chg[k].rmax / r.chg[k].rmin < r.chg[m].rmax / r.chg[m].rmin) m = k;
++                if (r.chg[m].rmax / r.chg[m].rmin >= ratio) { memset(dv, 0, sizeof *dv); continue; }
++                k = m;
++            } else n++;
++            /* rate = 2^(-pitch/4096): the voice plays at 48000 / rate Hz */
++            r.chg[k].v = (uint16_t)v;
++            r.chg[k].rmin = 48000.0f / dv->rmax;
++            r.chg[k].rmax = 48000.0f / dv->rmin;
++            r.chg[k].gain = g;
++        }
++        memset(dv, 0, sizeof *dv);
++    }
++    r.nchg = (uint16_t)n;
++    xa2_diag_push(&r);
++    {   /* RECOMP_APU_VP_DUMP=<file>: once a second, the whole VP voice table
++         * (256 x 128 bytes, NV_PAVS_VOICE_*) after an 8-byte header (frames
++         * in the RECOMP_AUDIO_WAV recording, tick) -- the same bytes a
++         * pmemsave of VPVADDR gives in xemu, so tools/audio/vp_decode.py
++         * reads both sides (docs/AUDIO-USER-REPORTS-20261022.md). */
++        static FILE *vpf; static int vp_on = -1;
++        if (vp_on < 0) { const char *p = getenv("RECOMP_APU_VP_DUMP"); vp_on = p != NULL; if (p) vpf = fopen(p, "wb"); }
++        if (vpf && g_state) {
++            extern uint32_t xa2_wav_frames(void);
++            uint32_t h[2] = { xa2_wav_frames(), (uint32_t)now };
++            fwrite(h, 4, 2, vpf);
++            fwrite(apu_phys(g_state->regs[NV_PAPU_VPVADDR]), 1, 256 * NV_PAVS_SIZE, vpf);
++            fflush(vpf);
++        }
++    }
++    last = now;
++    frames_at = g_apu_vp_frames;
++}
++
++static void pitch_stat_report(MCPXAPUState *d)
++{
++    static DWORD last;
++    static unsigned long frames_at;
++    extern unsigned long g_apu_vp_frames;
++    DWORD now = GetTickCount();
++    if (!pitch_log_on()) return;
++    if (!last) { last = now; frames_at = g_apu_vp_frames; return; }
++    if (now - last < 1000) return;
++    {
++        extern volatile float g_apu_bed_gain, g_apu_voice_gain;
++        extern volatile int g_apu_mute_music;
++        extern uint32_t xa2_wav_frames(void);
++        extern int64_t g_apu_lock_wait_us;
++        extern unsigned g_apu_lock_wait_n;
++        extern int64_t g_apu_stall_us;
++        extern unsigned g_apu_stall_n;
++        extern void xa2_take_stats(int *qmin, int *qmax, unsigned *drops, unsigned *under, unsigned *subs);
++        int qmin = 0, qmax = 0;
++        unsigned drops = 0, under = 0, subs = 0;
++        xa2_take_stats(&qmin, &qmax, &drops, &under, &subs);
++        LARGE_INTEGER qf, qc;
++        QueryPerformanceFrequency(&qf); QueryPerformanceCounter(&qc);
++        extern unsigned long g_apu_silent_vp_total;
++        static ULONGLONG cpu_at;          /* this (APU) thread's CPU time, 100 ns */
++        ULONGLONG cpu_now;
++        FILETIME tc, te, tk, tu;
++        GetThreadTimes(GetCurrentThread(), &tc, &te, &tk, &tu);
++        cpu_now = ((ULONGLONG)tk.dwHighDateTime << 32 | tk.dwLowDateTime) + ((ULONGLONG)tu.dwHighDateTime << 32 | tu.dwLowDateTime);
++        fprintf(stderr, "[PITCH] qpc=%.0f t=%lu ms=%lu vpframes=%lu queue=%d..%d submits=%u dropped=%u underruns=%u bed=%.2f comm=%.2f mute_music=%d wav=%u lockwaits=%u lockwait_ms=%.1f stalls=%u stall_ms=%.1f silentvp=%lu apu_cpu_ms=%.1f\n",
++                (double)qc.QuadPart * 1000.0 / (double)qf.QuadPart,
++                (unsigned long)now, (unsigned long)(now - last), g_apu_vp_frames - frames_at,
++                qmin, qmax, subs, drops, under, g_apu_bed_gain, g_apu_voice_gain, g_apu_mute_music, xa2_wav_frames(),
++                g_apu_lock_wait_n, g_apu_lock_wait_us / 1000.0, g_apu_stall_n, g_apu_stall_us / 1000.0, g_apu_silent_vp_total,
++                cpu_at ? (cpu_now - cpu_at) / 10000.0 : 0.0);
++        cpu_at = cpu_now;
++        g_apu_stall_n = 0;
++        g_apu_stall_us = 0;
++        g_apu_lock_wait_n = 0;
++        g_apu_lock_wait_us = 0;
++    }
++    for (int v = 0; v < MCPX_HW_MAX_VOICES; v++) {
++        PitchStat *s = &s_pstat[v];
++        if (!s->frames && !s->sets) continue;
++        if (s->frames)
++            fprintf(stderr, "[PITCH]   %03X n=%u p=%d..%d ps=%d ef=%.3f..%.3f rate=%.4f..%.4f sets=%u gain=%.3f..%.3f%s\n",
++                    v, s->frames, s->pmin, s->pmax, s->ps, s->efmin, s->efmax, s->rmin, s->rmax, s->sets,
++                    s->frames ? s->gsum / s->frames : 0.0f, s->gmax, s->c_bin ? " C" : "");
++        memset(s, 0, sizeof *s);
++    }
++    (void)d;
++    last = now;
++    frames_at = g_apu_vp_frames;
++}
++
+ /* ============================================================
+  * Voice processing (main per-voice function)
+  * ============================================================ */
+@@ -1297,6 +1627,23 @@ static void voice_process(MCPXAPUState *d,
+ 
+     if (paused) return;
+ 
++    /* A voice with a zero-length play region (EBO written as -1, LBO
++     * garbage): the title started a sound it never loaded, and the voice
++     * would read RAM from its base address as ADPCM for minutes at gain
++     * 0.03-0.7 -- broadband garbage over the whole mix. xemu never has such
++     * a voice (0 in 61 voice-table dumps of a demo match); ours had 6 in a
++     * 4-minute demo. Play nothing until the title re-binds the voice.
++     * RECOMP_APU_PLAY_EMPTY=1 plays them as before (for comparison). */
++    if (voice_get_mask(d, v, NV_PAVS_VOICE_PAR_NEXT, NV_PAVS_VOICE_PAR_NEXT_EBO) == 0xFFFFFFu) {
++        static int play = -1;
++        static uint8_t said[MCPX_HW_MAX_VOICES];
++        if (play < 0) play = getenv("RECOMP_APU_PLAY_EMPTY") != NULL;
++        if (!play) {
++            if (!said[v]) { said[v] = 1; fprintf(stderr, "[APU] voice %03X: zero-length region (EBO -1), muted\n", v); }
++            return;
++        }
++    }
++
+     /* Step filter envelope */
+     float ef_value = voice_step_envelope(
+         d, v, NV_PAVS_VOICE_CFG_ENV1, NV_PAVS_VOICE_CFG_ENVF,
+
+diff --git a/src/apu/apu_dsp.c b/src/apu/apu_dsp.c
+index 0b09d93..8c10e6a 100644
+--- a/src/apu/apu_dsp.c
++++ b/src/apu/apu_dsp.c
+@@ -282,6 +333,56 @@ void mcpx_apu_dsp_frame(MCPXAPUState *d,
+             if (right > 1.0f) right = 1.0f;
+             if (right < -1.0f) right = -1.0f;
+ 
++            /* Output low-pass at ~11 kHz. On the console nothing reaches the
++             * speakers above ~10-11 kHz: the voice sources are <=22 kHz
++             * (11 kHz Nyquist) and the VP/GP band-limit at the source rate, so
++             * xemu's output falls off a cliff by 11 kHz (11-15 kHz at -100 dBFS
++             * in a match). Ours sat 25-40 dB higher -- cubic-interpolation
++             * images (now band-limited per voice) and harmonics the soft limiter
++             * adds above the knee. A 4th-order Butterworth here matches the
++             * cliff for every voice at once, after the limiter that creates the
++             * harmonics. RECOMP_APU_NO_OUTLP=1 turns it off.
++             * docs/AUDIO-USER-REPORTS-20261022.md. */
++            {
++                static int off_lp = -1;
++                static float b0[2], b1[2], b2[2], a1[2], a2[2];
++                static float z[2][2][2];   /* [section][channel][2] */
++                if (off_lp < 0) {
++                    off_lp = getenv("RECOMP_APU_NO_OUTLP") != NULL;
++                    float fc = 11000.0f, w0 = 2.0f * 3.14159265f * fc / 48000.0f;
++                    float cw = cosf(w0), sw = sinf(w0);
++                    static const float q[2] = { 0.54119610f, 1.30656296f };   /* 4th-order Butterworth */
++                    for (int sct = 0; sct < 2; sct++) {
++                        float alpha = sw / (2.0f * q[sct]), a0 = 1.0f + alpha;
++                        b0[sct] = (1.0f - cw) * 0.5f / a0; b1[sct] = (1.0f - cw) / a0; b2[sct] = b0[sct];
++                        a1[sct] = -2.0f * cw / a0; a2[sct] = (1.0f - alpha) / a0;
++                    }
++                }
++                if (!off_lp) {
++                    float *ch[2] = { &left, &right };
++                    for (int c = 0; c < 2; c++) {
++                        float x = *ch[c];
++                        for (int sct = 0; sct < 2; sct++) {
++                            float y = b0[sct] * x + z[sct][c][0];
++                            z[sct][c][0] = b1[sct] * x - a1[sct] * y + z[sct][c][1];
++                            z[sct][c][1] = b2[sct] * x - a2[sct] * y;
++                            x = y;
++                        }
++                        *ch[c] = x;
++                    }
++                }
++            }
++            /* Master trim to xemu's level. A moderate demo play measured ~3-4 dB
++             * hotter than xemu in a matched 20 s window (mono -23.6 vs -28.0 dBFS,
++             * 2-8 kHz -32.3 vs -36.8); -2.5 dB brings the loud scenes in line while
++             * leaving the near-equal quiet scenes only slightly under. Env override
++             * RECOMP_APU_OUT_GAIN=<linear> (1.0 = none). docs/AUDIO-USER-REPORTS-20261022.md. */
++            {
++                static float g = -1.0f;
++                if (g < 0.0f) { const char *e = getenv("RECOMP_APU_OUT_GAIN"); g = e ? (float)atof(e) : 0.75f; }
++                left *= g; right *= g;
++            }
++
+             /* Convert to 16-bit and write (not accumulate) into frame buffer.
+              * Each of the 8 sub-frames writes its own 32-sample slice. */
+             d->monitor.frame_buf[off + i][0] = (int16_t)(left * 32767.0f);

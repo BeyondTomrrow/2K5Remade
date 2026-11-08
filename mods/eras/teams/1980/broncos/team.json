@@ -1,0 +1,18 @@
+{
+  "abbreviation": "DEN",
+  "city": "Denver",
+  "name": "Broncos",
+  "season": 1980,
+  "eras_id": "broncos",
+  "colors": {
+    "primary": "#FB4F14",
+    "secondary": "#002244",
+    "text": "#FFFFFF"
+  },
+  "logos": {
+    "scorebug": "logos/scorebug.png",
+    "mini": "logos/mini.png"
+  },
+  "source": "disc logo_08_1",
+  "colors_note": "1980 colours from memory, not yet checked against a source"
+}

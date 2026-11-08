@@ -1,0 +1,18 @@
+{
+  "abbreviation": "NYG",
+  "city": "New York",
+  "name": "Giants",
+  "season": 1980,
+  "eras_id": "giants",
+  "colors": {
+    "primary": "#0B2265",
+    "secondary": "#A71930",
+    "text": "#FFFFFF"
+  },
+  "logos": {
+    "scorebug": "logos/scorebug.png",
+    "mini": "logos/mini.png"
+  },
+  "source": "disc logo_18_3",
+  "colors_note": "1980 colours from memory, not yet checked against a source"
+}

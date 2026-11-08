@@ -3572,6 +3572,8 @@ loc_000892B8: ;
     PUSH32(esp, 0x000892C1u); RECOMP_ABI_CALL(0x000A2D40u, sub_000A2D40); /* call 0x000A2D40 */
 
 loc_000892C1: ;
+    /* NFL2K5-GENPATCH:TIMEOUT_CAMERA_COMMITTED */
+    { extern void nfl2k5_presentation_timeout_committed(void); nfl2k5_presentation_timeout_committed(); }
     _fa = (uint32_t)(esi) & 0xFFFFFFFFu; _fb = (uint32_t)(0xF) & 0xFFFFFFFFu;
     _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp esi, 0xF (32-bit) */
     MEM32(0xB61738) = ebx;
@@ -6045,6 +6047,8 @@ void sub_0008A170(void)
     #define fp_st1() fp_st(1)
 
 loc_0008A170: ;
+    /* NFL2K5-GENPATCH:SNF_POPUP_FRAME */
+    { extern void nfl2k5_presentation_native_popup_frame(uint32_t ctx); nfl2k5_presentation_native_popup_frame(esi); }
     PUSH32(esp, ebp);
     ebp = esp;
     g_ebp = ebp; /* publish frame for frameless callees */
@@ -6155,6 +6159,8 @@ loc_0008A21A: ;
     ecx = esi;
     g_ebp = ebp; /* frame stays current across calls */
     g_seh_ebp = ebp;
+    /* NFL2K5-GENPATCH:SNF_POPUP_TABLE_ALPHA */
+    { extern int nfl2k5_presentation_pregame_draw_replaced(uint32_t ctx); if (nfl2k5_presentation_pregame_draw_replaced(ecx)) MEM32(esp + 16u) = 0; }
     PUSH32(esp, 0x0008A235u); RECOMP_ABI_CALL(0x001BD5A0u, sub_001BD5A0); /* call 0x001BD5A0 */
 
 loc_0008A235: ;
@@ -6186,6 +6192,8 @@ loc_0008A250: ;
     ecx = esi;
     g_ebp = ebp; /* frame stays current across calls */
     g_seh_ebp = ebp;
+    /* NFL2K5-GENPATCH:SNF_POPUP_LAYOUT_ALPHA */
+    { extern int nfl2k5_presentation_pregame_draw_replaced(uint32_t ctx); if (nfl2k5_presentation_pregame_draw_replaced(ecx)) MEM32(esp + 8u) = 0; }
     PUSH32(esp, 0x0008A269u); RECOMP_ABI_CALL(0x001BCE50u, sub_001BCE50); /* call 0x001BCE50 */
 
 loc_0008A269: ;
@@ -20266,6 +20274,8 @@ loc_0008FFA4: ;
     edx = ebx;
     g_ebp = ebp; /* frame stays current across calls */
     g_seh_ebp = ebp;
+    /* NFL2K5-GENPATCH:SANDBOX_POSE_DRAW_BEGIN */
+    { extern uint32_t nfl2k5_sandbox_pose_begin_draw(uint32_t,uint32_t,uint32_t); edx = nfl2k5_sandbox_pose_begin_draw(MEM32(esi + 0x2Cu), ecx, edx); }
     PUSH32(esp, 0x0008FFAEu); RECOMP_ABI_CALL(0x00021900u, sub_00021900); /* call 0x00021900 */
 
 loc_0008FFAE: ;
@@ -20277,6 +20287,8 @@ loc_0008FFB1: ;
     PUSH32(esp, 0x0008FFB6u); RECOMP_ABI_CALL(0x00021860u, sub_00021860); /* call 0x00021860 */
 
 loc_0008FFB6: ;
+    /* NFL2K5-GENPATCH:SANDBOX_POSE_DRAW_END */
+    { extern void nfl2k5_sandbox_pose_end_draw(void); nfl2k5_sandbox_pose_end_draw(); }
     eax = MEM32(esp + 0x18);
     ecx = MEM32(ebp + 0xC);
     eax++;
@@ -55588,6 +55600,8 @@ loc_000A00ED: ;
     PUSH32(esp, 0x000A00FBu); RECOMP_ABI_CALL(0x000B8810u, sub_000B8810); /* call 0x000B8810 */
 
 loc_000A00FB: ;
+    /* NFL2K5-GENPATCH:TIMEOUT_BOARD_ACCEPTED */
+    { extern void nfl2k5_presentation_timeout_accepted(uint32_t team); nfl2k5_presentation_timeout_accepted(esi); }
     PUSH32(esp, 0x000A0100u); RECOMP_ABI_CALL(0x00188F40u, sub_00188F40); /* call 0x00188F40 */
 
 loc_000A0100: ;
@@ -65019,6 +65033,8 @@ void sub_000A2910(void)
     ebp = g_seh_ebp; /* fpo_leaf: inherit caller's frame */
 
 loc_000A2910: ;
+    /* NFL2K5-GENPATCH:HOOK_GAME_FINAL */
+    { extern void nfl2k5_hook_game_final(uint32_t, uint32_t); nfl2k5_hook_game_final(ecx, edx); }
     _fa = (uint32_t)(MEM32(0xE5FF80)) & 0xFFFFFFFFu; _fb = (uint32_t)(4) & 0xFFFFFFFFu;
     _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp MEM32(0xE5FF80), 4 (32-bit) */
     PUSH32(esp, esi);
@@ -82213,6 +82229,8 @@ loc_000A7B00: ;
     g_ebp = ebp; /* frame stays current across calls */
     g_seh_ebp = ebp;
     PUSH32(esp, 0x000A7B0Fu); RECOMP_ABI_CALL(0x000A7A40u, sub_000A7A40); /* call 0x000A7A40 */
+    /* NFL2K5-GENPATCH:PRES_SACK_EVENT_ACCEPTED */
+    { extern void nfl2k5_presentation_sack_event_record(uint32_t, uint32_t); if (eax && MEM32(edi) == 0x15u) nfl2k5_presentation_sack_event_record(edi, 0x000A7B0Au); }
 
 loc_000A7B0F: ;
     _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;

@@ -393666,6 +393666,8 @@ loc_0042641D: ;
     _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* sub result */
 
 loc_00426427: ;
+    /* NFL2K5-GENPATCH:GPU_WAIT_PREEMPT */
+    { extern void xbox_ggl_preempt_point(unsigned int); xbox_ggl_preempt_point(0x00426427u); }
     ecx = MEM32(edx);
     edi = esi;
     _fb = (uint32_t)(ecx) & 0xFFFFFFFFu; _fbs = (int32_t)(int32_t)(_fb); /* sub source, before the write */
@@ -395473,6 +395475,9 @@ void sub_00426D10(void)
     RECOMP_INTERP_GATE(0x00426D10u);
 
 loc_00426D10: ;
+    /* NFL2K5-GENPATCH:D3D_DISABLE_INTR_EN_LOG */
+    { extern void nfl2k5_note_intr_en(const char *, uint32_t, uint32_t);
+      nfl2k5_note_intr_en("disable", MEM32(esp + 4), MEM32(esp)); }
     eax = MEM32(esp + 4);
     MEM32(eax + 0x140) = 0;
     esp += 8; return; /* ret 4 */
@@ -412912,6 +412917,8 @@ loc_0042D4CE: ;
     _fa = (uint32_t)(esi) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* add result */
     PUSH32(esp, esi);
     MEM32(edi + 0x140) = 0;
+    /* NFL2K5-GENPATCH:D3D_ISR_INTR_OFF_COUNT */
+    { extern volatile long nfl2k5_isr_intr_off; nfl2k5_isr_intr_off++; }
     { uint32_t _icall_esp = g_esp;
     { uint32_t _icall_target = MEM32(0x4E3CBC); PUSH32(esp, 0x0042D4E9u); RECOMP_ICALL_SAFE(_icall_target, _icall_esp); } /* indirect call */
     }
@@ -414296,6 +414303,8 @@ loc_0042DE6E: ;
     ecx = MEM32(ebx + 0xB4);
     MEM32(ebx + 0xA4) = ebp;
     MEM32(edi + 0x140) = ecx;
+    /* NFL2K5-GENPATCH:D3D_DPC_INTR_ON_COUNT */
+    { extern volatile long nfl2k5_dpc_intr_on; nfl2k5_dpc_intr_on++; }
     POP32(esp, edi);
     POP32(esp, esi);
     POP32(esp, ebp);
@@ -416674,6 +416683,10 @@ loc_0042EAE9: ;
     eax = MEM32(edi + 0x154);
     MEM32(esi + 0x200) = eax;
     eax = MEM32(edi + 0x158);
+    /* NFL2K5-GENPATCH:D3D_RESTORE_INTR_EN */
+    { extern void nfl2k5_note_intr_en(const char *, uint32_t, uint32_t);
+      nfl2k5_note_intr_en("restore", eax, MEM32(edi + 0xB4));
+      if (eax == 0) eax = MEM32(edi + 0xB4); }
     MEM32(esi + 0x140) = eax;
     { uint32_t _icall_esp = g_esp;
     PUSH32(esp, ebx);

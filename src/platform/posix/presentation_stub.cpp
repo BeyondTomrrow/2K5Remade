@@ -40,6 +40,8 @@ void nfl2k5_scorebug_native_hook(void) {}
 void nfl2k5_scorebug_native_place(uint32_t) {}
 int nfl2k5_scorebug_skip_update(void) { return 0; }
 int nfl2k5_scorebug_native_hidden(void) { return 0; }
+void nfl2k5_presentation_corner_claim(void) {}
+float nfl2k5_presentation_corner_right(void) { return 0.0f; }
 void nfl2k5_presentation_popup(const char *) {}
 int nfl2k5_presentation_pregame_metadata_needed(void) { return 0; }
 void nfl2k5_presentation_popup_text(const char *, const char *) {}
@@ -53,5 +55,41 @@ void nfl2k5_presentation_init(void) {}
 void nfl2k5_presentation_coin_toss(const char *, const char *, float, int, int, uint32_t) {}
 void nfl2k5_presentation_featured_players(uint32_t, const uint32_t[2], const unsigned[2],
                                           const Nfl2k5FeaturedPlayer[2]) {}
+/* added with the broadcast/presentation features merged 2026-10-29 */
+int nfl2k5_broadcast_live_stats_enabled(void) { return 0; }
+void nfl2k5_broadcast_live_player_sample(const Nfl2k5LivePlayerSample *) {}
+void nfl2k5_broadcast_live_team_sample(const Nfl2k5LiveTeamSample *) {}
+void nfl2k5_broadcast_live_stats_reset(void) {}
+int nfl2k5_presentation_lineup_draw_replaced(uint32_t) { return 0; }
+void nfl2k5_presentation_lineup_frame(uint32_t) {}
+void nfl2k5_presentation_native_popup_frame(uint32_t) {}
+uint32_t nfl2k5_presentation_native_text_color(uint32_t argb) { return argb; }
+void nfl2k5_presentation_review_accepted(int, unsigned) {}
+void nfl2k5_presentation_timeout_committed(void) {}
+void nfl2k5_presentation_eras_begin(int, int, const char *, const char *) {}
+void nfl2k5_presentation_eras_end(void) {}
+void nfl2k5_presentation_frontend_begin(const char *, const char *, const char *) {}
+void nfl2k5_presentation_frontend_end(void) {}
+void nfl2k5_presentation_lineup_hide(uint32_t) {}
+void nfl2k5_presentation_match_lifecycle(int) {}
+void nfl2k5_presentation_native_text_begin(uint32_t) {}
+void nfl2k5_presentation_native_text_end(void) {}
+void nfl2k5_presentation_post_json(const char *) {}
+float nfl2k5_presentation_replay_delta(float original_delta) { return original_delta; }
+int nfl2k5_presentation_replay_draw_replaced(void) { return 0; }
+void nfl2k5_presentation_replay_handoff(void) {}
+void nfl2k5_presentation_replay_observe(unsigned, uint32_t) {}
+void nfl2k5_presentation_replay_ready(unsigned, uint32_t) {}
+void nfl2k5_presentation_sack_event_record(uint32_t, uint32_t) {}
+void nfl2k5_presentation_sack_observe(uint32_t, uint32_t, uint32_t) {}
+void nfl2k5_presentation_selected_player(unsigned, uint32_t, uint32_t) {}
+void nfl2k5_presentation_timeout_accepted(uint32_t) {}
+void nfl2k5_presentation_timeout_bug_frame(int) {}
+void nfl2k5_presentation_voice_duck(float) {}
+void nfl2k5_presentation_voice_gain(int, float) {}
+int nfl2k5_presentation_voice_play(int, const char *, float) { return 0; }
+int nfl2k5_presentation_voice_play_ex(int, const char *, float, int) { return 0; }
+int nfl2k5_presentation_voice_state(int, double *elapsed, double *length) { if (elapsed) *elapsed = 0; if (length) *length = 0; return 0; }
+void nfl2k5_presentation_voice_stop(int) {}
 
 }

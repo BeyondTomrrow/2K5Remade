@@ -3,9 +3,9 @@
  * https://portraits.local/<photo id>.png (presentation host mapping).
  *
  * The disc keeps them as one aggregate resource (outer 3105) of 4,937
- * fixed 17,664-byte slots starting in pack vc_53450030/3 at 244,084,736 and
- * running on into pack 4 (Mod Studio's nfl2k5_player_portrait_compatibility
- * report). Each slot: a 32-byte TXTR wrapper, a 128-byte header whose name
+ * fixed 17,664-byte slots. Locate its stable resource ID in the active
+ * directory and read all volumes through the installed disc overlay.
+ * Each slot: a 32-byte TXTR wrapper, a 128-byte header whose name
  * at +0x40 is the photo id as UTF-16 ("0124"), then a 128x128 P8 texture --
  * 16,384 Morton-swizzled palette indices -- and 256 BGRA palette entries.
  * A roster record's photo id is the u16 at +0x06. Pictures come from the
@@ -14,6 +14,8 @@
 #include <windows.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <cstdlib>
+#include <cctype>
 #include <string>
 #include <vector>
 #include <unordered_map>
@@ -22,48 +24,121 @@
 namespace {
 
 constexpr uint64_t kSlotSize = 17664;
-constexpr uint32_t kSlots = 4937;
-constexpr uint64_t kBaseInPack3 = 244084736;
-constexpr uint64_t kPack3Span = 71424000;          /* the aggregate's bytes in pack 3 */
+/* Stable name ID of retail outer entry 3105. The active archive directory
+ * supplies its offset and size; a patch can relocate volumes and entries. */
+constexpr uint32_t kPortraitAggregateId = 902532466;
 constexpr char kCacheDir[] = "cache/portraits";
 extern "C" const char *xbox_user_dir(void);   /* per-user folder (kernel_path.c); "" = portable */
+extern "C" void xbox_overlay_attach(HANDLE h, const WCHAR *path);
+extern "C" void xbox_overlay_detach(HANDLE h);
+extern "C" int xbox_overlay_read(HANDLE h, void *buf, ULONG len, const LARGE_INTEGER *off, ULONG *got);
+/* the data folder packed into one .xbpak (kernel_pack.c) */
+extern "C" int xbox_pack_active(void);
+extern "C" HANDLE xbox_pack_open(const WCHAR *win_path);
+extern "C" void xbox_pack_close(HANDLE h);
+extern "C" int xbox_pack_read(HANDLE h, void *buf, ULONG len, const LARGE_INTEGER *off, ULONG *got);
 
 /* The decoded portraits' folder: the per-user cache, or cache/portraits
  * beside the game in the portable layout. */
 std::string portraits_cache_dir()
 {
     const char *ud = xbox_user_dir();
-    return ud && *ud ? std::string(ud) + "\\cache\\portraits" : std::string(kCacheDir);
+    std::string dir = ud && *ud ? std::string(ud) + "\\cache\\portraits" : std::string(kCacheDir);
+    const char *pack = getenv("NFL2K5_PACK");
+    if (pack && *pack) {
+        std::string name = pack;
+        size_t separator = name.find_last_of("/\\");
+        if (separator != std::string::npos) name = name.substr(separator + 1);
+        for (char &c : name) if (!isalnum((unsigned char)c) && c != '-' && c != '_') c = '_';
+        dir += "/packs/" + name + "/archive-v1";
+    }
+    return dir;
 }
 
 std::mutex g_lock;
 std::unordered_map<int, uint32_t> g_slot;          /* photo id -> slot */
 bool g_indexed;
 std::string g_pack_dir;
+bool g_flat_pack;
+uint64_t g_pack_start[36], g_pack_size[36], g_aggregate_start, g_aggregate_size;
+unsigned g_pack_count;
+struct ArchiveVolume {
+    HANDLE handle = INVALID_HANDLE_VALUE;
+    bool overlay = false;
+    ~ArchiveVolume() {
+        if (handle != INVALID_HANDLE_VALUE) {
+            if (overlay) xbox_overlay_detach(handle);
+            xbox_pack_close(handle);
+            CloseHandle(handle);
+        }
+    }
+};
+ArchiveVolume g_volumes[36];
 
 std::string pack_dir()
 {
+    /* Photo IDs belong to the loaded disc; packs can replace their archive. */
+    const char *pack = getenv("NFL2K5_PACK");
+    if (pack && *pack) {
+        std::string path = std::string(pack) + "/vc_53450030";
+        if (GetFileAttributesA((path + "/3").c_str()) != INVALID_FILE_ATTRIBUTES) {
+            g_flat_pack = true;
+            return path;
+        }
+    }
     const char *dirs[] = { "original/disc/vc_53450030", "original/vc_53450030" };
     for (const char *d : dirs)
         if (GetFileAttributesA((std::string(d) + "/3").c_str()) != INVALID_FILE_ATTRIBUTES)
             return d;
+    if (xbox_pack_active()) return "original/vc_53450030";   /* read from the .xbpak */
     return "";
 }
 
-/* Read bytes at an offset of the aggregate, across the pack 3/4 boundary. */
+bool read_volume(unsigned ordinal, uint64_t offset, void *out, size_t n)
+{
+    if (ordinal >= 36 || n > MAXDWORD) return false;
+    auto &volume = g_volumes[ordinal];
+    if (volume.handle == INVALID_HANDLE_VALUE) {
+        std::string path = g_pack_dir + "/" + "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"[ordinal];
+        for (char &c : path) if (c == '/') c = '\\';
+        volume.handle = CreateFileA(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                   nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (volume.handle == INVALID_HANDLE_VALUE) {
+            WCHAR wide[MAX_PATH];
+            if (MultiByteToWideChar(CP_UTF8, 0, path.c_str(), -1, wide, MAX_PATH))
+                volume.handle = xbox_pack_open(wide);
+        }
+        if (volume.handle == INVALID_HANDLE_VALUE) return false;
+        if (!g_flat_pack) {
+            WCHAR wide[MAX_PATH];
+            if (!MultiByteToWideChar(CP_UTF8, 0, path.c_str(), -1, wide, MAX_PATH)) return false;
+            xbox_overlay_attach(volume.handle, wide);
+            volume.overlay = true;
+        }
+    }
+    LARGE_INTEGER position; position.QuadPart = (LONGLONG)offset;
+    ULONG got = 0;
+    if (volume.overlay && xbox_overlay_read(volume.handle, out, (ULONG)n, &position, &got)) return got == n;
+    if (xbox_pack_read(volume.handle, out, (ULONG)n, &position, &got)) return got == n;
+    DWORD read = 0;
+    return SetFilePointerEx(volume.handle, position, nullptr, FILE_BEGIN) &&
+           ReadFile(volume.handle, out, (DWORD)n, &read, nullptr) && read == n;
+}
+
+/* Read the active aggregate through the same disc overlay as guest textures. */
 bool read_agg(uint64_t off, void *out, size_t n)
 {
+    if (off > g_aggregate_size || n > g_aggregate_size - off) return false;
     uint8_t *o = (uint8_t *)out;
+    uint64_t position = g_aggregate_start + off;
     while (n) {
-        bool in3 = off < kPack3Span;
-        uint64_t pos = in3 ? kBaseInPack3 + off : off - kPack3Span;
-        size_t take = in3 ? (size_t)std::min<uint64_t>(n, kPack3Span - off) : n;
-        FILE *f = fopen((g_pack_dir + (in3 ? "/3" : "/4")).c_str(), "rb");
-        if (!f) return false;
-        bool ok = _fseeki64(f, (long long)pos, SEEK_SET) == 0 && fread(o, 1, take, f) == take;
-        fclose(f);
-        if (!ok) return false;
-        o += take; off += take; n -= take;
+        unsigned ordinal = 0;
+        while (ordinal < g_pack_count && position >= g_pack_start[ordinal] + g_pack_size[ordinal]) ++ordinal;
+        if (ordinal >= g_pack_count || position < g_pack_start[ordinal]) return false;
+        uint64_t local = position - g_pack_start[ordinal];
+        size_t take = (size_t)std::min<uint64_t>(n, g_pack_size[ordinal] - local);
+        if (!read_volume(ordinal, local, o, take)) return false;
+        o += take; position += take; n -= take;
     }
     return true;
 }
@@ -72,15 +147,29 @@ void build_index()
 {
     g_pack_dir = pack_dir();
     if (g_pack_dir.empty()) { fprintf(stderr, "[PORTRAIT] no vc_53450030 pack folder\n"); return; }
-    std::string p3 = g_pack_dir + "/3";
-    FILE *f = fopen(p3.c_str(), "rb");
-    if (!f) return;
-    for (uint32_t i = 0; i < kSlots; i++) {
+    uint32_t header[39];
+    if (!read_volume(0, 0, header, sizeof header) || header[0] > 100000 || !header[0] ||
+        header[1] != 0 || !header[2] || header[2] > 36) return;
+    g_pack_count = header[2];
+    uint64_t total = 0;
+    for (unsigned i = 0; i < g_pack_count; ++i) {
+        if (!header[3 + i]) return;
+        g_pack_start[i] = total; g_pack_size[i] = (uint64_t)header[3 + i] * 2048u;
+        total += g_pack_size[i];
+    }
+    for (uint32_t i = 0; i < header[0]; ++i) {
+        uint32_t entry[3];
+        if (!read_volume(0, sizeof header + i * sizeof entry, entry, sizeof entry)) return;
+        if (entry[0] != kPortraitAggregateId) continue;
+        g_aggregate_start = (uint64_t)entry[2] * 2048u; g_aggregate_size = entry[1];
+        break;
+    }
+    if (!g_aggregate_size || g_aggregate_start > total || g_aggregate_size > total - g_aggregate_start ||
+        g_aggregate_size % kSlotSize || g_aggregate_size / kSlotSize > 16384) return;
+    for (uint32_t i = 0; i < g_aggregate_size / kSlotSize; i++) {
         uint64_t off = i * kSlotSize;
         uint8_t h[80];
-        if (off + 80 <= kPack3Span) {
-            if (_fseeki64(f, (long long)(kBaseInPack3 + off), SEEK_SET) || fread(h, 1, 80, f) != 80) break;
-        } else if (!read_agg(off, h, 80)) break;
+        if (!read_agg(off, h, sizeof h)) break;
         if (memcmp(h, "TXTR", 4) || memcmp(h + 44, "TXTR", 4)) continue;
         int id = 0, digits = 0;
         for (int k = 0; k < 8; k++) {
@@ -91,8 +180,8 @@ void build_index()
         }
         if (digits > 0) g_slot[id] = i;
     }
-    fclose(f);
-    fprintf(stderr, "[PORTRAIT] %zu portraits indexed in %s\n", g_slot.size(), g_pack_dir.c_str());
+    fprintf(stderr, "[PORTRAIT] %zu portraits indexed in %s (%s, aggregate %llu/%llu)\n", g_slot.size(), g_pack_dir.c_str(),
+            g_flat_pack ? "flat pack" : "disc overlay", (unsigned long long)g_aggregate_start, (unsigned long long)g_aggregate_size);
 }
 
 uint32_t crc32(const uint8_t *p, size_t n, uint32_t c = 0)

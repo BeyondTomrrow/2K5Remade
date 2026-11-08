@@ -1,0 +1,2 @@
+# Source-only experimental player rigs; the packaged Windows app includes it.
+numpy>=1.26,<3

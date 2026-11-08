@@ -22437,6 +22437,8 @@ loc_000B9740: ;
     g_ebp = ebp; /* frame stays current across calls */
     g_seh_ebp = ebp;
     PUSH32(esp, 0x000B9759u); RECOMP_ABI_CALL(0x000A1A00u, sub_000A1A00); /* call 0x000A1A00 */
+    /* NFL2K5-GENPATCH:PRES_SACK_OBSERVE_DECISION */
+    { extern void nfl2k5_presentation_sack_observe(uint32_t, uint32_t, uint32_t); nfl2k5_presentation_sack_observe(ebx, esi, 0x000B9754u); }
 
 loc_000B9759: ;
     edi = ebx;
