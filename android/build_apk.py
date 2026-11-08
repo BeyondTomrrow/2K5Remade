@@ -165,12 +165,34 @@ with zipfile.ZipFile(unsigned, "a", zipfile.ZIP_DEFLATED) as z:
 # 4. align and sign
 aligned = os.path.join(work, "aligned.apk")
 run(os.path.join(bt, "zipalign" + exe), "-p", "-f", "4", unsigned, aligned)
-ks = os.path.join(HERE, "debug.keystore")
-if not os.path.exists(ks):
-    run(os.path.join(java_bin, "keytool" + exe), "-genkeypair", "-keystore", ks, "-storepass", "android",
-        "-keypass", "android", "-alias", "nfl2k5", "-keyalg", "RSA", "-keysize", "2048", "-validity", "10000",
-        "-dname", "CN=NFL2K5 local build")
+# The signing key never lives in the repository. Release builds name it in the environment
+# (NFL2K5_APK_KEYSTORE, NFL2K5_APK_KEY_PASS_FILE, optional NFL2K5_APK_KEY_ALIAS) or in an untracked
+# android/signing.ini ("keystore = ...", "password_file = ...", "alias = ..."). Without either, a
+# local debug key (android/debug.keystore, git-ignored) signs test builds only.
+sign = {"keystore": os.environ.get("NFL2K5_APK_KEYSTORE", ""), "password_file": os.environ.get("NFL2K5_APK_KEY_PASS_FILE", ""),
+        "alias": os.environ.get("NFL2K5_APK_KEY_ALIAS", "")}
+ini = os.path.join(HERE, "signing.ini")
+if not sign["keystore"] and os.path.exists(ini):
+    for line in open(ini, encoding="utf8"):
+        if "=" in line and not line.lstrip().startswith((";", "#")):
+            k, v = line.split("=", 1)
+            sign[k.strip()] = v.strip()
+if sign["keystore"]:
+    ks = sign["keystore"]
+    pw = open(sign["password_file"], encoding="utf8").read().strip() if sign.get("password_file") else os.environ.get("NFL2K5_APK_KEY_PASS", "")
+    if not os.path.exists(ks) or not pw:
+        sys.exit("signing key or its password not found: " + ks)
+    print(f"  signing with {os.path.basename(ks)}")
+else:
+    ks, pw = os.path.join(HERE, "debug.keystore"), "android"
+    print("  signing with the local debug key (test build, not for release)")
+    if not os.path.exists(ks):
+        run(os.path.join(java_bin, "keytool" + exe), "-genkeypair", "-keystore", ks, "-storepass", "android",
+            "-keypass", "android", "-alias", "nfl2k5", "-keyalg", "RSA", "-keysize", "2048", "-validity", "10000",
+            "-dname", "CN=NFL2K5 local build")
 os.makedirs(os.path.dirname(a.out), exist_ok=True)
-run(os.path.join(bt, "apksigner" + bat), "sign", "--ks", ks, "--ks-pass", "pass:android",
-    "--key-pass", "pass:android", "--out", a.out, aligned)
+signer = [os.path.join(bt, "apksigner" + bat), "sign", "--ks", ks, "--ks-pass", "pass:" + pw, "--key-pass", "pass:" + pw]
+if sign.get("alias"):
+    signer += ["--ks-key-alias", sign["alias"]]
+subprocess.run(signer + ["--out", a.out, aligned], check=True, env=env)   # not run(): it would print the password
 print(f"\n{a.out}: {os.path.getsize(a.out) / 1e6:.1f} MB")

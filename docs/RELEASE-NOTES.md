@@ -29,7 +29,9 @@ USA retail Xbox disc; nothing from the game is included. Install steps are in
   machine with software graphics so far.
 - Android: custom Adreno GPU drivers (Mesa Turnip and others) under Options >
   GPU Driver, Phone Settings, touch layout editor, Controls screen, Heat
-  Control, Music Player rows. Installs over the earlier test APKs.
+  Control, Music Player rows. Signed with a new release key: uninstall an
+  earlier test APK once first. Your /NFL2K5 folder (saves, settings, mods,
+  songs) stays; re-add a custom GPU driver and allow All files access again.
 
 ### SOFTDRINK 2K28 v0.9
 

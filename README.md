@@ -73,7 +73,16 @@ packages, Sandbox, the Team Builder or the save converter yet.
    6 GB of free space. A controller is optional: touch controls are built in.
 2. Copy `NFL2K5-android-0.8.0.apk` to the phone and tap it to install. If
    Android asks, allow "Install unknown apps" for the app you opened it from.
-   This version installs over earlier test builds.
+   **If you had one of the earlier test APKs installed, uninstall it once
+   first** (0.8.0 is signed with a new release key, so Android will not
+   update over a test build). Your game folder `/NFL2K5` on the phone's main
+   storage, with your saves, settings, mods and songs, is not touched by an
+   uninstall, so you keep everything. Only two things go with the old app: a
+   custom GPU driver you added (add it again under Options > GPU Driver) and
+   the "All files access" permission (turn it on again when asked). If you
+   put the game in the app's own folder (`Android/data/com.nfl2k5.pc`) instead
+   of `/NFL2K5`, copy that folder somewhere safe before uninstalling, because
+   Android deletes it with the app.
 3. Copy your disc image (`.iso`) into the phone's **Download** folder.
 4. Open NFL 2K5 and turn on **All files access** when Android asks. The game
    finds the ISO, unpacks it into `/NFL2K5` (keep the phone plugged in and the

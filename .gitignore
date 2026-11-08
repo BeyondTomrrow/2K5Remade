@@ -99,3 +99,9 @@ mods/eras/draft/audio/
 /eras-tools.ini
 # Draft show: poses and jerseys built from the player's disc (tools/eras/draftshow/build-draftshow-pack.py)
 mods/eras/draft/files/
+
+# Android signing keys never go in the repository (android/build_apk.py reads them from outside)
+android/debug.keystore
+android/signing.ini
+*.keystore
+*.jks
