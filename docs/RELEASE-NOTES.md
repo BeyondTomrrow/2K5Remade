@@ -74,6 +74,9 @@ USA retail Xbox disc; nothing from the game is included. Install steps are in
 - Linux has not been run on real hardware yet.
 - Android, not yet proven on real phones: the choppiness reported on the
   Retroid Pocket 6, heat, an intro blink, Turnip on real Adreno GPUs.
+- MyCareer on Linux/Android: in the Linux test VM (software Vulkan) the 3D room
+  drew black behind the labels; menus, shop and stat bar run. Not yet seen on
+  real Linux GPUs or phones. Windows draws the room on all three renderers.
 - MyCareer: only the apartment is built (house and mansion change the title
   only); the Crib's Team items use the Crib's default colours, not your team's.
 

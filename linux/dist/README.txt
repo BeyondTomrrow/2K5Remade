@@ -112,6 +112,8 @@ front door, mirror, computer (bank, Furniture Shop) and phone. The furniture
 is free CC0 art (mods/mycareer-home/CREDITS.txt). The stat bar and the
 Supersim backdrop work as on Windows. The Crib's own items in the shop are
 made from the disc on Windows only for now; Linux shows the CC0 items.
+Known issue: in our test VM (software Vulkan) the 3D room drew black behind
+the on-screen labels; it has not been tried on a real GPU yet.
 
 
 NOT ON LINUX

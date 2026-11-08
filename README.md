@@ -260,6 +260,11 @@ The setting is not offered on phones without an Adreno GPU.
 - **Android**: some things have not been proven on real phones yet: the
   choppiness reported on the Retroid Pocket 6, phone heat, a blink in the intro
   movie, and Turnip drivers on real Adreno GPUs.
+- **MyCareer on Linux and Android**: the menus, phone, mirror, shop and stat bar
+  run, and the furniture loads, but in the Linux test machine (software
+  graphics) the 3D room itself showed black behind the on-screen labels. It
+  has not been seen on a real Linux graphics card or a phone yet. On Windows the
+  room draws on all three renderers.
 - **MyCareer**: only the apartment exists. Buying the house or the mansion
   changes the title, but the room stays the apartment. The Crib's "Team" items
   (sofa, mug, cap) use the Crib's default colours, not your team's colours.
