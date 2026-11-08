@@ -1,0 +1,101 @@
+ESPN NFL 2K5 (native PC) - version 0.8.0
+=======================================
+
+You need: Windows 10 or 11 (64-bit), a graphics card from the last ~8 years,
+and your own copy of ESPN NFL 2K5 for the original Xbox (USA version).
+No game files are included or downloaded.
+
+Use a CLEAN dump of your own retail disc: an .iso/.xiso you made from the
+disc, or the extracted disc folder (the one with default.xbe and a
+vc_53450030 folder in it). A disc image that already has a mod patched into it
+(for example a SOFTDRINK ISO) is not accepted as the game source. Install the
+game from the clean dump, then add mods with their .2k5patch file (below).
+
+
+INSTALL
+-------
+1. Unzip the NFL2K5-PC-0.8.0 folder anywhere you can write to (Desktop,
+   Documents, D:\Games ... NOT C:\Program Files).
+2. Put the extracted disc inside it so this file exists:
+       NFL2K5-PC-0.8.0\original\disc\default.xbe
+   If you only have an ISO, extract it with the included tool. Open a command
+   prompt inside the game folder and run:
+       tools\extract-xiso.exe -x -d original\disc "C:\path\to\NFL2K5.iso"
+3. Double-click NFL2K5.exe. If Windows SmartScreen says "Windows protected
+   your PC", click "More info" then "Run anyway" (the build is not signed).
+
+
+PLAYING
+-------
+- An Xbox, PlayStation (DualSense / DS4) or other controller is recommended;
+  plug it in before starting. Keyboard works too.
+- Settings: press F1 in game (or Back + Start on a controller), or
+  Options > Video Settings in the game's own menu.
+- Renderer: F1 > Video > Graphics API: Direct3D 11 (default), Direct3D 12 or
+  Vulkan. The change applies the next time you start the game.
+- Render Scale is yours to set. With Dynamic Resolution on Auto the game may
+  lower the resolution while the graphics card falls behind, but it never goes
+  above the Render Scale you chose.
+- Your own music: put songs in the Music folder (sub-folders are playlists),
+  then F1 > Music Player.
+- To play the original game while a mod pack is selected, start it with
+  --retail (for example a shortcut to "NFL2K5.exe --retail").
+
+
+SOFTDRINK 2K28 v0.9 (MOD PACK)
+------------------------------
+SOFTDRINK v0.9 comes as two downloads. Use the regular one,
+SOFTDRINK-2K28-v0.9.2k5patch (the 128 MB build, about 1.2 GB), not the
+"-64MB" one.
+1. Put SOFTDRINK-2K28-v0.9.2k5patch in NFL2K5-PC-0.8.0\mods\patches\
+   (start the game once first if that folder does not exist yet).
+2. Start the game. A few seconds after the menus appear it installs the pack
+   in the background; a message shows the progress. It takes a few minutes
+   and you can keep playing meanwhile.
+3. When it says the pack is installed and selected, quit and start the game
+   again. SOFTDRINK plays from then on.
+Extras > Mods switches between installed packs (or back to the original
+game); the game asks first and restarts itself.
+Do not put a patched ISO in mods\patches: use the .2k5patch.
+
+
+MYCAREER HOME (WITH SOFTDRINK v0.9)
+-----------------------------------
+Game Modes > MyCareer, start a career, and you arrive in your apartment.
+  Left stick / D-pad up-down      walk
+  Right stick / D-pad left-right / LB RB    turn
+  A    use what you are facing        Y    fixed views and back
+  B    the Career Menu list
+Front door: next game or practice. Phone: agent and coach calls. Mirror:
+appearance and attributes. Computer: stats, schedule, bank, homes and the
+Furniture Shop. TV: SOFTDRINK's Career Menu (Settings + Save > Save saves).
+The Crib's own items in the shop are made from YOUR disc the first time you
+need them (a short pause) and kept in cache\mycareer-crib.
+In your MyCareer games a stat bar with a game grade sits top-right; MyCareer
+Settings > Stat bar look picks the 2K5 or the Modern look.
+The furniture models are free CC0 assets: see mods\mycareer-home\CREDITS.txt.
+
+
+SANDBOX (SEPARATE DOWNLOAD)
+---------------------------
+Sandbox is not part of this download; it ships as its own pack
+(NFL2K5-Sandbox-pack-0.8.0). To add it, copy that pack's "mods" folder into
+your game folder so this file exists:
+       NFL2K5-PC-0.8.0\mods\sandbox\pack.json
+Then start the game: Sandbox appears under Game Modes.
+
+
+UPDATING
+--------
+Unzip the new version over your game folder. Your settings stay as they
+are: mods\discord.ini and mods\presentation.ini are only created when they
+are missing, so an update never overwrites the ones you changed. Settings
+and logs are kept in %LOCALAPPDATA%\NFL2K5-PC; saves are in the game
+folder's "saves" folder, so keep that folder when you move the game.
+
+
+IF SOMETHING GOES WRONG
+-----------------------
+Press Win+R, type  %LOCALAPPDATA%\NFL2K5-PC  and press Enter. Send:
+- xbox_kernel.log, and anything recent in the "logs" folder there
+- a screenshot or short video of what happened

@@ -1,48 +1,87 @@
-# ESPN NFL 2K5 Native PC — 0.1.0 Preview
+# ESPN NFL 2K5 Native — 0.8.0
 
-This is a preview build of the native Windows recompilation. It requires game
-files extracted from a legally owned Xbox copy of ESPN NFL 2K5. The installer
-does not contain or download the retail game.
+Windows, Linux (experimental) and Android. You need a clean dump of your own
+USA retail Xbox disc; nothing from the game is included. Install steps are in
+`HOW-TO-INSTALL.txt` (Windows), the archive's `README.txt` (Linux) and
+`README.md`.
 
-## Installation
+## What's new
 
-Run `NFL2K5-PC-Setup.exe`, choose any installation folder, then either:
+### MyCareer home (with SOFTDRINK 2K28 v0.9)
 
-- select an existing extracted game folder containing `default.xbe` and
-  `vc_53450030`; or
-- select your own Xbox ISO/XISO and a destination. Setup creates an
-  `ESPN NFL 2K5` folder there and extracts the disc.
+- Your career starts in a 3D apartment you walk around in, instead of a menu.
+- Front door: next game or practice. Phone: call your agent or your coach
+  (your head coach's own photo). Mirror: Edit Appearance and Edit Attributes.
+  Computer: stats, schedule, bank, homes and the Furniture Shop.
+- Furniture Shop: free CC0 furniture, plus the Crib's own items, made from your
+  own game disc the first time they are needed (Windows). Purchases and your
+  weekly pay are saved with your career.
+- In-game MyPlayer stat bar with a live game grade, top-right, in a 2K5 look
+  or a Modern look (MyCareer Settings > Stat bar look). NBC SNF and CBS move
+  their corner graphic out of its way.
+- A modern backdrop for SOFTDRINK's Supersim screen.
 
-Setup optionally accepts a supported 2K5 Mod Studio `.2k5patch`. It verifies
-the clean source and all rebuilt files, then installs a native executable
-matched to the patched XBE. The mod can be switched from **Features > Mod
-Packs**, while the original game stays available.
+### Platforms
 
-The selected game-data folder is linked into the installation and is not
-deleted when the application is uninstalled.
+- Windows: Direct3D 11, Direct3D 12 and Vulkan renderers (F1 > Video >
+  Graphics API).
+- Linux x86-64: new, experimental, Vulkan only. Tested only in a virtual
+  machine with software graphics so far.
+- Android: custom Adreno GPU drivers (Mesa Turnip and others) under Options >
+  GPU Driver, Phone Settings, touch layout editor, Controls screen, Heat
+  Control, Music Player rows. Installs over the earlier test APKs.
 
-## Included
+### SOFTDRINK 2K28 v0.9
 
-- Native x64 Release executable using the normal accelerated renderer.
-- In-game video settings, editable with F1.
-- Presentation packages and mod documentation.
-- Local music-folder support and instructions.
-- Save library folders for franchise, roster, settings, and VIP saves.
-- Import handling that converts valid Xbox NFL 2K5 save signatures for the PC
-  runtime without changing the save payload.
+- Supported as a drop-in `.2k5patch` (use the 128 MB build, not the "-64MB"
+  one). Patched ISOs are refused with a message: use your clean dump plus the
+  `.2k5patch`. v0.7 still works.
+- The audible L/R slide works for the player controlling the quarterback.
+- Extras > Mods switches packs; the game asks before it restarts.
 
-## Preview limitations
+### Video
 
-This project remains under active development. Rendering, audio, presentation
-graphics, save compatibility, and performance may still have game-specific
-issues. Keep backups of imported saves.
+- Render Scale is your choice. Dynamic Resolution Auto may lower the
+  resolution when the graphics card falls behind, but never goes above the
+  Render Scale you set.
+- Menus no longer get stuck in a narrow 4:3 strip after you skip an attract
+  demo.
+
+### Music Player
+
+- F1 > Music Player on PC (Options > Music Player on Android): pick a folder or
+  a song, skip, see what's playing.
+
+### Sandbox
+
+- Ships as its own pack for Windows (`NFL2K5-Sandbox-pack-0.8.0.zip`). Not on
+  Linux.
+
+## Not in this release
+
+- My NFL Eras and the old-school gear: still in development.
+- The CBS and NBC broadcast packages' own fonts (licence unclear); those
+  packages fall back to other fonts.
+- The save converter is the same October build as in earlier releases,
+  unchanged.
+
+## Known issues
+
+- Menus can hitch briefly now and then.
+- Direct3D 12 can stall for a moment under load; Direct3D 11 and Vulkan were
+  smoother in testing.
+- The boot intro movie flickers a little more than before on PC.
+- Linux has not been run on real hardware yet.
+- Android, not yet proven on real phones: the choppiness reported on the
+  Retroid Pocket 6, heat, an intro blink, Turnip on real Adreno GPUs.
+- MyCareer: only the apartment is built (house and mansion change the title
+  only); the Crib's Team items use the Crib's default colours, not your team's.
 
 ## Third-party software
 
-This product includes `extract-xiso` 2.7.1, developed by in
-<in@fishtank.com>, for extracting a user's own Xbox disc image. Its copyright,
-license conditions, and warranty disclaimer are installed at
-`docs\third-party\extract-xiso-LICENSE.txt`.
-
-Compatibility with the `.2k5patch` format and credits for 2K5 Mod Studio and
-SOFTDRINK 2K28 are installed under `docs\third-party`.
+SOFTDRINK 2K28 and 2K5 Mod Studio / 2k-football-mod-tools by cruuz and
+contributors; Kenney, Poly Haven and ambientCG (CC0) for the MyCareer home;
+cgltf (MIT); SDL3 (zlib); libadrenotools (BSD-2-Clause, Android); extract-xiso
+2.7.1 by in <in@fishtank.com>; Kenney Input Prompts (CC0). Licences and
+notices are in `docs\third-party`; the MyCareer assets are listed file by file
+in `mods\mycareer-home\MANIFEST.md`.
