@@ -106,14 +106,13 @@ the scale and frame limit in F1 yourself.
 
 MYCAREER HOME (SOFTDRINK v0.9)
 ------------------------------
-With SOFTDRINK v0.9 installed, Game Modes > MyCareer starts your career in a
-3D apartment: walk with the left stick, turn with the right stick, A uses the
-front door, mirror, computer (bank, Furniture Shop) and phone. The furniture
-is free CC0 art (mods/mycareer-home/CREDITS.txt). The stat bar and the
-Supersim backdrop work as on Windows. The Crib's own items in the shop are
-made from the disc on Windows only for now; Linux shows the CC0 items.
-Known issue: in our test VM (software Vulkan) the 3D room drew black behind
-the on-screen labels; it has not been tried on a real GPU yet.
+With SOFTDRINK v0.9 installed, Game Modes > MyCareer starts your career at
+home. On Linux the home is the classic Crib room (the new 3D apartment is
+Windows-only for now: it drew black in our software-Vulkan test VM). The
+D-pad moves between the front door, mirror, computer, phone and Career Menu;
+A uses them. The Furniture Shop is Windows-only for now. The stat bar and the
+Supersim backdrop work as on Windows.
+To try the 3D apartment anyway: NFL2K5_MC_HOME_ROOM=host ./nfl2k5.sh
 
 
 NOT ON LINUX

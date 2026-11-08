@@ -169,7 +169,8 @@ controlling the quarterback.
 
 SOFTDRINK 2K28 v0.9 has a MyCareer mode. This release adds our own layer on top
 of it (SOFTDRINK's files are not changed): instead of a menu, your career starts
-in **your apartment**, a 3D room you walk around in.
+in **your apartment**, a 3D room you walk around in (Windows; on Linux and
+Android the home is the classic Crib room for now, see Known issues).
 
 Start it from **Game Modes > MyCareer**: start a career (Undrafted Free Agent is
 the quickest), go through the MyPlayer pages, sign, and you are home.
@@ -271,11 +272,11 @@ The setting is not offered on phones without an Adreno GPU.
 - **Android**: some things have not been proven on real phones yet: the
   choppiness reported on the Retroid Pocket 6, phone heat, a blink in the intro
   movie, and Turnip drivers on real Adreno GPUs.
-- **MyCareer on Linux and Android**: the menus, phone, mirror, shop and stat bar
-  run, and the furniture loads, but in the Linux test machine (software
-  graphics) the 3D room itself showed black behind the on-screen labels. It
-  has not been seen on a real Linux graphics card or a phone yet. On Windows the
-  room draws on all three renderers.
+- **MyCareer on Linux and Android**: the new 3D apartment is Windows-only for
+  now (on Linux it drew black in testing). On Linux and Android your home is
+  the classic Crib room, drawn by the game itself, with the same front door,
+  mirror, computer, phone and Career Menu spots; the Furniture Shop is not
+  offered there yet. The stat bar and Supersim look work on every platform.
 - **MyCareer**: only the apartment exists. Buying the house or the mansion
   changes the title, but the room stays the apartment. The Crib's "Team" items
   (sofa, mug, cap) use the Crib's default colours, not your team's colours.
