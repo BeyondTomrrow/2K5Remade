@@ -80,8 +80,8 @@
     visible=permitted(s);if(!visible||changed)cancel();
     if(window.CBSStats)CBSStats.updateState(s,prev);
     if(window.CBSMotion&&!periodBoard())CBSMotion.updateState(s,prev);
-    var cx=s.context||{},networkVisible=visible||!!(s.valid===true&&s.away&&s.home&&s.gameStatus!=='inactive'&&cx.replayActive===true&&!cx.paused&&!cx.playSelection);
-    bug.classList.toggle('hidden',!visible);bug.classList.toggle('final',s.gameStatus==='final'||!!(window.CBSPeriodBoard&&CBSPeriodBoard.presentation&&CBSPeriodBoard.presentation()&&CBSPeriodBoard.presentation().presentationKind==='final'));bug.setAttribute('aria-hidden',String(!visible));network.classList.toggle('on',networkVisible);network.setAttribute('aria-hidden',String(!networkVisible));
+    var cx=s.context||{},networkVisible=(visible||!!(s.valid===true&&s.away&&s.home&&s.gameStatus!=='inactive'&&cx.replayActive===true&&!cx.paused&&!cx.playSelection))&&!cx.cornerClaimed;
+    bug.classList.toggle('hidden',!visible);bug.classList.toggle('final',s.gameStatus==='final'||!!(window.CBSPeriodBoard&&CBSPeriodBoard.presentation&&CBSPeriodBoard.presentation()&&CBSPeriodBoard.presentation().presentationKind==='final'));bug.setAttribute('aria-hidden',String(!visible));network.classList.toggle('on',networkVisible);network.setAttribute('aria-hidden',String(!networkVisible));{var nr=network.getBoundingClientRect(),nw=window.innerWidth;if(nr.width>0&&nw>0){var nv=(nr.right/nw).toFixed(4);if(nv!==window.__nfl2k5Corner){window.__nfl2k5Corner=nv;api.log('NFL2K5_CORNER_RIGHT:'+nv);}}}
     if(nextKey)key=nextKey;
     if(!s.away||!s.home)return;
     team('away',s.away,!changed&&prev&&prev.away);team('home',s.home,!changed&&prev&&prev.home);center();

@@ -3658,6 +3658,30 @@ static std::string featured_players_json(const GameState &g, int side)
     return "[" + s_featured.player[side] + "]";
 }
 
+/* A game HUD element (the MyCareer stat bar, src/nfl2k5_mycareer_hud.c) is using the top-right
+ * corner: context.cornerClaimed tells packages to clear their corner bug. Claimed by a call each
+ * frame the element draws; it lapses 250 ms after the last one. */
+static std::atomic<unsigned long long> s_corner_claim_ms{ 0 };
+static std::atomic<float> s_corner_right{ 0.0f };
+/* The page itself reports where its corner bug ends ("NFL2K5_CORNER_RIGHT:<share of the page
+ * width>", NBC SNF and CBS): its CSS decides, e.g. a fill_width page keeps it in a 16:9 area. */
+static std::atomic<float> s_corner_page{ 0.0f };
+static void corner_page_message(const std::string &message)
+{
+    static const char k[] = "NFL2K5_CORNER_RIGHT:";
+    if (message.compare(0, sizeof k - 1, k) == 0) {
+        float v = (float)atof(message.c_str() + sizeof k - 1);
+        if (v > 0.3f && v <= 1.0f) s_corner_page.store(v);
+    }
+}
+extern "C" float nfl2k5_presentation_corner_right(void) { return s_corner_right.load(); }
+extern "C" void nfl2k5_presentation_corner_claim(void) { s_corner_claim_ms.store(GetTickCount64()); }
+static bool corner_claimed(void)
+{
+    unsigned long long t = s_corner_claim_ms.load();
+    return t && GetTickCount64() - t < 250u;
+}
+
 static std::string html_state_json(const GameState &g, const HtmlContext &cx)
 {
     std::string j = "{\"apiVersion\":1";
@@ -3705,6 +3729,7 @@ static std::string html_state_json(const GameState &g, const HtmlContext &cx)
     j += ",\"animationsEnabled\":" + std::string(s_sel_anim.load() ? "true" : "false");
     j += ",\"nativeScorebug\":" + std::string(cx.native_scorebug ? "true" : "false");
     j += ",\"periodEnding\":" + std::string(period_ending(g) ? "true" : "false");
+    j += ",\"cornerClaimed\":" + std::string(corner_claimed() ? "true" : "false");
     const char *pregame_stage = native_pregame_stage(g, cx, match);
     j += ",\"pregameStage\":" + (pregame_stage ? json_str(pregame_stage) : std::string("null"));
     j += ",\"flag\":" + std::string(GetTickCount64() < s_flag_until ? "true" : "false") + "}";
@@ -6187,8 +6212,11 @@ static int html_hud(const XboxHudFrame *f, XboxHudImage *img, const GameState &g
                 player_card_page_message(pk, generation, message);
                 period_board_page_message(pk, generation, message);
                 pregame_page_message(pk, generation, message);
+                corner_page_message(message);
             };
         }
+        if (!c.on_page_message) c.on_page_message = [](const std::string &message) { corner_page_message(message); };
+        s_corner_page.store(0.0f);
         s_html.host = nfl2k5::create_webview2_presentation_host();
         s_html.host->start(c);
         s_html.package = pk;
@@ -6301,6 +6329,13 @@ static int html_hud(const XboxHudFrame *f, XboxHudImage *img, const GameState &g
     img->y = (int)lroundf(f->game_y + (gh - dh) / 2);
     img->dw = (int)lroundf(dw); img->dh = (int)lroundf(dh);
     img->changed = surf.serial != shown;
+    /* The corner bug's right edge (64 of the 1920-px page in, NBC SNF and CBS), as a share of the
+     * game picture's width, for HUD elements that take its place (nfl2k5_presentation_corner_right). */
+    if (gw > 0 && cw > 0) {
+        float page = s_corner_page.load();
+        if (page <= 0.0f) page = 1.0f - 64.0f / (float)cw;             /* not reported: 64 px in */
+        s_corner_right.store(((gw - dw) / 2 + dw * page) / gw);
+    }
     img->dirty_y0 = surf.dirty_y0; img->dirty_y1 = surf.dirty_y1;   /* only these rows are uploaded */
     img->dirty_rows = surf.dirty_rows;
     shown = surf.serial;

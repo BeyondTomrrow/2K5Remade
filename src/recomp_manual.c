@@ -2981,6 +2981,11 @@ static recomp_func_t lookup_manual_any(uint32_t address)
         extern recomp_func_t nfl2k5_mc_home_lookup(uint32_t address);
         return nfl2k5_mc_home_lookup(address);
     }
+    /* The MyCareer HUD's Settings row (src/nfl2k5_mycareer_hud.c). */
+    if ((address & 0xFFFF0000u) == 0xFED20000u) {
+        extern recomp_func_t nfl2k5_mc_hud_lookup(uint32_t address);
+        return nfl2k5_mc_hud_lookup(address);
+    }
     /* Rows of the Video Settings screen (src/nfl2k5_video_menu.c). */
     if ((address & 0xFFFF0000u) == 0xFEC00000u)
         return nfl2k5_video_menu_lookup(address);
