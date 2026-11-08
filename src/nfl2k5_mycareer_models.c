@@ -99,7 +99,27 @@ static int material_hint(const cgltf_material *m)
  * WoodFloor051) mapped by world position, its brightness kept and its colour replaced by the
  * material's. mc_model_textures() names the folder holding <name>/<name>_1K-JPG_Color.jpg. */
 static char s_detail_dir[512];
-void mc_model_textures(const char *dir) { snprintf(s_detail_dir, sizeof s_detail_dir, "%s", dir ? dir : ""); }
+
+/* The room builds paths with backslashes; cgltf and stb_image use plain stdio, which on Linux
+ * and Android needs '/'. */
+static const char *host_path(const char *in, char *out, size_t n)
+{
+#ifdef _WIN32
+    (void)out; (void)n;
+    return in;
+#else
+    size_t i;
+    snprintf(out, n, "%s", in ? in : "");
+    for (i = 0; out[i]; i++) if (out[i] == '\\') out[i] = '/';
+    return out;
+#endif
+}
+
+void mc_model_textures(const char *dir)
+{
+    char fixed[512];
+    snprintf(s_detail_dir, sizeof s_detail_dir, "%s", dir ? host_path(dir, fixed, sizeof fixed) : "");
+}
 
 static int detail_texture(int hint, const unsigned char tint[4], uint32_t **out, int *w, int *h)
 {
@@ -145,8 +165,10 @@ static int detail_texture(int hint, const unsigned char tint[4], uint32_t **out,
 /* The view out of the windows: an equirectangular .hdr (a Poly Haven CC0 HDRI the player puts
  * beside the game), tone-mapped to 8 bits, on a quad over the window wall (x = wx, z0..z1,
  * y0..y1), turned by turn (0..1 of a full circle). Returns the mesh id or -1. */
-int mc_window_view(const char *hdr_path, float wx, float z0, float z1, float y0, float y1, float turn, float exposure)
+int mc_window_view(const char *hdr_path_in, float wx, float z0, float z1, float y0, float y1, float turn, float exposure)
 {
+    char hdr_fixed[1024];
+    const char *hdr_path = host_path(hdr_path_in, hdr_fixed, sizeof hdr_fixed);
     int w, h, n, id;
     size_t i, count;
     float *px = stbi_loadf(hdr_path, &w, &h, &n, 3);
@@ -180,8 +202,10 @@ int mc_window_view(const char *hdr_path, float wx, float z0, float z1, float y0,
 
 /* Registers the model's primitives as host meshes; returns how many ids it wrote. The model's
  * footprint (x/z extent, lowest y) in room axes goes to bounds[6] when it is not NULL. */
-int mc_model_load(const char *gltf_path, int *ids, int max, float bounds[6])
+int mc_model_load(const char *gltf_path_in, int *ids, int max, float bounds[6])
 {
+    char gltf_fixed[1024];
+    const char *gltf_path = host_path(gltf_path_in, gltf_fixed, sizeof gltf_fixed);
     cgltf_options opt;
     cgltf_data *d = NULL;
     char dir[1024];
