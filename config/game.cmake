@@ -108,9 +108,15 @@ option(NFL2K5_FORCE_UNBLOCK_TASK42200 "EXPERIMENTAL: force the async task submit
 option(NFL2K5_FORCE_UNBLOCK_STATE9_READY "EXPERIMENTAL: force the frontend state-9 archive/font readiness bit to appear set once its tick-based wait times out (see PROJECT_STATUS.md, 2026-09-21) -- the actual disc-read submission (sub_000439B8) is never reached by anything, root cause not found this session; this only lets the state machine proceed, the underlying data still never loads" ${_nfl2k5_unblock_default})
 option(NFL2K5_FORCE_UNBLOCK_33660_DRAIN "EXPERIMENTAL: force sub_00033660's MEM32(esi+8) drain-wait (called from inside the GPU wait, sub_00028DE0) to succeed after 200 retries (see PROJECT_STATUS.md, 2026-09-22) -- live cdb attaches show this field frozen at 1 across tens of thousands of retries; the real clearing site was not found this session" ${_nfl2k5_unblock_default})
 option(NFL2K5_FORCE_UNBLOCK_NETPOLL "EXPERIMENTAL: force sub_00045E60's network hardware/socket readiness poll (sub_00484EAB/B6, called from XNetStartup) to a nonzero status after 50 retries (see PROJECT_STATUS.md, 2026-09-22) -- there is no real network hardware behind this poll in this recompiler, so it never resolves on its own; a new, consistently-reproducing stall discovered after updating the xboxrecomp toolchain" ${_nfl2k5_unblock_default})
+option(NFL2K5_EMBED_SOURCE_ROOT "Compile the source tree's path in as the fallback game folder (developer builds); OFF for releases" ON)
+if(NFL2K5_EMBED_SOURCE_ROOT)
+  set(_nfl2k5_root_define "${PROJECT_SOURCE_DIR}")
+else()
+  set(_nfl2k5_root_define ".")
+endif()
 target_compile_definitions(NFL2K5 PRIVATE
   $<$<BOOL:${WIN32}>:WIN32_LEAN_AND_MEAN> $<$<BOOL:${WIN32}>:NOMINMAX> $<$<BOOL:${WIN32}>:_CRT_SECURE_NO_WARNINGS>
-  NFL2K5_PROJECT_ROOT="${PROJECT_SOURCE_DIR}"
+  NFL2K5_PROJECT_ROOT="${_nfl2k5_root_define}"
   RECOMP_ICALL_FEEDBACK
   $<$<BOOL:${NFL2K5_ABI_CHECK}>:RECOMP_ABI_CHECK>
   $<$<BOOL:${NFL2K5_COVERAGE}>:RECOMP_COVERAGE>
@@ -131,7 +137,7 @@ target_compile_options(NFL2K5 PRIVATE /bigobj /Zi /FS)
 if(NOT NFL2K5_OPTIMIZE)
   target_compile_options(NFL2K5 PRIVATE /Od)
 endif()
-target_link_options(NFL2K5 PRIVATE /DEBUG /LARGEADDRESSAWARE /STACK:16777216)
+target_link_options(NFL2K5 PRIVATE /DEBUG /LARGEADDRESSAWARE /STACK:16777216 /PDBALTPATH:%_PDB%)   # PDBALTPATH: only the .pdb file name in the exe, not the build path
 else()
   target_link_libraries(NFL2K5 PRIVATE xboxrecomp OpenSSL::Crypto)
   if(ANDROID)

@@ -835,7 +835,7 @@ static void player_card_replacement_reset();
 static void period_board_replacement_reset();
 static std::atomic<int> s_sel_commentary{ 0 };
 #ifdef _WIN32
-static std::string s_commentary_dir = "E:\\cfbsound";
+static std::string s_commentary_dir;                 /* none until presentation.ini names one (commentary_dir) */
 #else
 static std::string s_commentary_dir = "cfbsound";      /* under the game root (NFL2K5_ROOT) */
 #endif
@@ -1461,7 +1461,7 @@ static DWORD WINAPI commentary_index_thread(void *)
 #else
     std::wstring dir = widen(s_commentary_dir), mask = dir + L"\\*.wav";
     WIN32_FIND_DATAW fd;
-    HANDLE h = FindFirstFileW(mask.c_str(), &fd);
+    HANDLE h = dir.empty() ? INVALID_HANDLE_VALUE : FindFirstFileW(mask.c_str(), &fd);
     std::vector<CommentaryClip> found;
     if (h != INVALID_HANDLE_VALUE) {
         do {
