@@ -324,7 +324,7 @@ static void ini_path(void)
     DWORD n = GetEnvironmentVariableA("NFL2K5_ROOT", root, sizeof root);
     if (!n || n >= sizeof root) {
         GetModuleFileNameA(NULL, root, sizeof root);
-        { char *b = strrchr(root, '\\'); if (b) *b = 0; }
+        { char *b = strrchr(root, '\\'); if (!b) b = strrchr(root, '/'); if (b) *b = 0; }
     }
     snprintf(s_ini, sizeof s_ini, "%s\\saves\\mycareer-home", root);
     CreateDirectoryA(s_ini, NULL);
@@ -821,7 +821,7 @@ static void camera_init(void)
 }
 
 /* ---- the host-drawn home (stage 1: test geometry, boxes only) ------------------------
- * NFL2K5_MC_HOME_ROOM=host: the room is drawn by the renderer itself (xbox_hostscene.h) at a
+ * The room is drawn by the renderer itself (the default; NFL2K5_MC_HOME_ROOM=crib: the Crib corner) (xbox_hostscene.h) at a
  * marker this screen writes into the guest pushbuffer, under the game's own prompts. The
  * apartment below is TEST GEOMETRY: coloured boxes with procedural wood, tile and fabric, no
  * downloaded assets. Metres, y up; the room spans x 0..7, z 0..9. */
@@ -898,7 +898,7 @@ static void models_load(void)
     if (e) snprintf(dir, sizeof dir, "%s", e);
     else {
         DWORD n = GetEnvironmentVariableA("NFL2K5_ROOT", dir, sizeof dir);
-        if (!n || n >= sizeof dir) { GetModuleFileNameA(NULL, dir, sizeof dir); { char *b = strrchr(dir, '\\'); if (b) *b = 0; } }
+        if (!n || n >= sizeof dir) { GetModuleFileNameA(NULL, dir, sizeof dir); { char *b = strrchr(dir, '\\'); if (!b) b = strrchr(dir, '/'); if (b) *b = 0; } }
         snprintf(dir + strlen(dir), sizeof dir - strlen(dir), "\\mods\\mycareer-home\\models");
     }
     snprintf(list, sizeof list, "%s%s", getenv("NFL2K5_MC_HOME_PLACE") ? getenv("NFL2K5_MC_HOME_PLACE") : k_models_default, s_shop_models);
@@ -1357,7 +1357,7 @@ static void shop_load(void)
     if (getenv("NFL2K5_MC_HOME_ITEMS_INI")) snprintf(path, sizeof path, "%s", getenv("NFL2K5_MC_HOME_ITEMS_INI"));
     else {
         DWORD n = GetEnvironmentVariableA("NFL2K5_ROOT", path, sizeof path);
-        if (!n || n >= sizeof path) { GetModuleFileNameA(NULL, path, sizeof path); { char *b = strrchr(path, '\\'); if (b) *b = 0; } }
+        if (!n || n >= sizeof path) { GetModuleFileNameA(NULL, path, sizeof path); { char *b = strrchr(path, '\\'); if (!b) b = strrchr(path, '/'); if (b) *b = 0; } }
         snprintf(path + strlen(path), sizeof path - strlen(path), "\\data\\mycareer-home\\items.ini");
     }
     if (fopen_s(&f, path, "r") || !f) { fprintf(stderr, "[MCHOME] shop: no %s\n", path); return; }
@@ -2645,7 +2645,7 @@ void nfl2k5_mc_home_install(void)
     { const char *m = getenv("NFL2K5_MC_HOME_MARKER"); s_h.marker3d = m && !strcmp(m, "3d"); }
     s_h.proj_scale = 320.0f; s_h.proj_xsign = 1.0f;
     { const char *p = getenv("NFL2K5_MC_HOME_PROJ"); if (p) sscanf(p, "%f %f", &s_h.proj_scale, &s_h.proj_xsign); }
-    { const char *h = getenv("NFL2K5_MC_HOME_ROOM"); s_h.host = h && !_stricmp(h, "host"); }
+    { const char *h = getenv("NFL2K5_MC_HOME_ROOM"); s_h.host = !(h && !_stricmp(h, "crib")); }   /* default: the host-drawn apartment */
     s_h.host_ar = 16.0f / 9.0f * (720.0f / 640.0f) * (448.0f / 480.0f);
     if (s_h.host) room_build_apartment();
     s_h.phone_at[0] = 2560.0f; s_h.phone_at[1] = 8.0f; s_h.phone_at[2] = -1150.0f;
