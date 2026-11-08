@@ -122,7 +122,7 @@ with zipfile.ZipFile(unsigned, "a", zipfile.ZIP_DEFLATED) as z:
     # everything on disk, as test builds did
     tracked = set(subprocess.run(["git", "-C", ROOT, "ls-files", "mods/presentations"], capture_output=True,
                                  text=True, encoding="utf8").stdout.splitlines())
-    no_fonts = ("CBS_2026/fonts/", "NBC_SNF/fonts/")
+    no_fonts = ("CBS_2026/fonts/", "NBC_SNF/fonts/", "NFL on FOX/fonts/")   # licences unclear: not shipped
     for dirpath, _, names in os.walk(pres):
         for n in sorted(names):
             if n.lower().endswith(keep):

@@ -2648,7 +2648,16 @@ void nfl2k5_mc_home_install(void)
     { const char *m = getenv("NFL2K5_MC_HOME_MARKER"); s_h.marker3d = m && !strcmp(m, "3d"); }
     s_h.proj_scale = 320.0f; s_h.proj_xsign = 1.0f;
     { const char *p = getenv("NFL2K5_MC_HOME_PROJ"); if (p) sscanf(p, "%f %f", &s_h.proj_scale, &s_h.proj_xsign); }
-    { const char *h = getenv("NFL2K5_MC_HOME_ROOM"); s_h.host = !(h && !_stricmp(h, "crib")); }   /* default: the host-drawn apartment */
+    {   /* the host-drawn apartment on Windows; on Linux and Android its pass (gx through glslang) shows
+     * black in testing (2026-11-07), so there the home is the Crib corner, which the game draws
+     * itself. NFL2K5_MC_HOME_ROOM=host / =crib chooses either anywhere. */
+    const char *h = getenv("NFL2K5_MC_HOME_ROOM");
+#ifdef _WIN32
+    s_h.host = !(h && !_stricmp(h, "crib"));
+#else
+    s_h.host = h && !_stricmp(h, "host");
+#endif
+}
     s_h.host_ar = 16.0f / 9.0f * (720.0f / 640.0f) * (448.0f / 480.0f);
     if (s_h.host) room_build_apartment();
     s_h.phone_at[0] = 2560.0f; s_h.phone_at[1] = 8.0f; s_h.phone_at[2] = -1150.0f;
@@ -2696,6 +2705,7 @@ void nfl2k5_mc_home_install(void)
         int n = 0, k;
         uint32_t rows;
         while (n < 5 && k_rows[i][n].label) n++;
+        if (i == SCR_PC && !s_h.host && n > 4) n = 4;        /* no Furniture Shop without the host-drawn room */
         rows = h_alloc(MH_ROW * (uint32_t)(n + 1), 4);
         for (r = 0; r < 0x2Cu; r += 4) MEM32(s_h.header[i] + r) = MEM32(FEATURES + r);
         MEM32(s_h.header[i] + 0x00) = h_wstr(k_hot_name[title_of[i]]);

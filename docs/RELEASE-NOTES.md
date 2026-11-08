@@ -62,8 +62,10 @@ USA retail Xbox disc; nothing from the game is included. Install steps are in
 ## Not in this release
 
 - My NFL Eras and the old-school gear: still in development.
-- The CBS and NBC broadcast packages' own fonts (licence unclear); those
-  packages fall back to other fonts.
+- The CBS, NBC and FOX broadcast packages' own fonts (licences unclear); those
+  packages draw with a system font instead.
+- The Alabama Crimson Tide team's player photos. The team itself ships and
+  plays; its players show the game's "no photo" portrait.
 - The save converter is the same October build as in earlier releases,
   unchanged.
 

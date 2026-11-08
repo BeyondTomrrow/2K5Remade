@@ -245,11 +245,13 @@ The setting is not offered on phones without an Adreno GPU.
 - **Broadcast presentations** (Windows and Android): before a Quick Game,
   Coach Match Up > Presentation picks the original ESPN look or an installed
   package (FOX, CBS, NBC Sunday Night Football or your own). **F2** cycles
-  them on PC.
+  them on PC. The packages' own fonts are not included in this release
+  (licences unclear), so they draw with a system font.
 - **Every team in Team Select**: past the last current team come the disc's 75
   historic teams, then any new teams in `mods\teams`.
 - **New teams** sit beside the 32 clubs (Windows; the Team Creator and
-  `tools\NFL2K5-TeamBuilder.exe` build them from your own disc).
+  `tools\NFL2K5-TeamBuilder.exe` build them from your own disc). The included
+  Alabama Crimson Tide team comes without player photos in this release.
 - **Texture packs**: replace any texture with an image of any size, in
   `mods\textures` (see `mods\textures\README.txt`).
 - **Organised saves** with automatic backups, under `saves`.
