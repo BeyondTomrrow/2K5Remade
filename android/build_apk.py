@@ -32,6 +32,8 @@ ap.add_argument("--platform", default="android-36")
 ap.add_argument("--build-tools", default="35.0.0")
 ap.add_argument("--version-name", help="versionName shown by Android (default: the manifest's)")
 ap.add_argument("--version-code", type=int, help="versionCode (default: the manifest's)")
+ap.add_argument("--local-presentations", action="store_true", help="pack every presentation file on disk (test builds), not only tracked ones")
+ap.add_argument("--mycareer", help="MyCareer home asset tree (game-folder paths: mods/mycareer-home, data/mycareer-home), unpacked on first start")
 a = ap.parse_args()
 
 bt = os.path.join(a.sdk, "build-tools", a.build_tools)
@@ -115,10 +117,18 @@ with zipfile.ZipFile(unsigned, "a", zipfile.ZIP_DEFLATED) as z:
     pres = os.path.join(ROOT, "mods", "presentations")
     keep = (".html", ".css", ".js", ".json", ".png", ".ttf", ".otf", ".woff", ".woff2", ".md", ".txt", ".mp3", ".jpg", ".svg", ".webp")
     files = []
+    # tracked files only, as the PC release (git-ignored local art and music stay out), and
+    # not the CBS / NBC packages' own fonts (licences unclear); --local-presentations packs
+    # everything on disk, as test builds did
+    tracked = set(subprocess.run(["git", "-C", ROOT, "ls-files", "mods/presentations"], capture_output=True,
+                                 text=True, encoding="utf8").stdout.splitlines())
+    no_fonts = ("CBS_2026/fonts/", "NBC_SNF/fonts/")
     for dirpath, _, names in os.walk(pres):
         for n in sorted(names):
             if n.lower().endswith(keep):
                 rel = os.path.relpath(os.path.join(dirpath, n), pres).replace(os.sep, "/")
+                if not a.local_presentations and ("mods/presentations/" + rel not in tracked or rel.startswith(no_fonts)):
+                    continue
                 files.append(rel)
                 src = os.path.join(dirpath, n)
                 if n.lower().endswith(".png") and os.path.getsize(src) > 200_000:
@@ -137,6 +147,20 @@ with zipfile.ZipFile(unsigned, "a", zipfile.ZIP_DEFLATED) as z:
     stamp = str(int(max(os.path.getmtime(os.path.join(pres, f)) for f in files))) if files else "0"
     z.writestr("assets/presentations/manifest.txt", stamp + "\n" + "\n".join(files) + "\n")
     print(f"  assets/presentations: {len(files)} files")
+    # MyCareer home: CC0 models, licences, credits and the shop list, at their game-folder paths
+    if a.mycareer:
+        mfiles = []
+        for dirpath, _, names in os.walk(a.mycareer):
+            for n in sorted(names):
+                src = os.path.join(dirpath, n)
+                rel = os.path.relpath(src, a.mycareer).replace(os.sep, "/")
+                if not (rel.startswith("mods/mycareer-home/") or rel.startswith("data/mycareer-home/") or rel.startswith("docs/third-party/")):
+                    sys.exit("--mycareer: unexpected path " + rel)
+                mfiles.append(rel)
+                z.write(src, "assets/mycareer/" + rel)
+        mstamp = str(int(max(os.path.getmtime(os.path.join(a.mycareer, f)) for f in mfiles))) if mfiles else "0"
+        z.writestr("assets/mycareer/manifest.txt", mstamp + "\n" + "\n".join(mfiles) + "\n")
+        print(f"  assets/mycareer: {len(mfiles)} files")
 
 # 4. align and sign
 aligned = os.path.join(work, "aligned.apk")

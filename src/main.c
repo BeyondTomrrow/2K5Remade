@@ -822,15 +822,20 @@ static void android_mkdirs(const char *path)
     mkdir(tmp, 0775);
 }
 
-static void android_unpack_presentations(const char *root)
+/* One asset tree of the APK (assets/<asset>/..., listed in assets/<asset>/manifest.txt, whose
+ * first line is a version stamp) copied into <root>/<dest> when the stamp changes. */
+static void android_unpack_tree(const char *root, const char *asset, const char *dest, const char *what)
 {
     size_t len = 0;
-    char *manifest = (char *)SDL_LoadFile("presentations/manifest.txt", &len);
+    char mpath[256];
+    char *manifest;
     char dir[1024], stamp_path[1024], old[64] = "";
     FILE *f;
+    snprintf(mpath, sizeof mpath, "%s/manifest.txt", asset);
+    manifest = (char *)SDL_LoadFile(mpath, &len);
     if (!manifest) return;
-    snprintf(dir, sizeof dir, "%s/mods/presentations", root);
-    snprintf(stamp_path, sizeof stamp_path, "%s/.apk-version", dir);
+    snprintf(dir, sizeof dir, "%s/%s", root, dest);
+    snprintf(stamp_path, sizeof stamp_path, "%s/.apk-version-%s", dir, asset);
     if ((f = fopen(stamp_path, "r"))) { if (!fgets(old, sizeof old, f)) old[0] = 0; fclose(f); }
     char *line = strtok(manifest, "\n");
     if (line && strcmp(line, old) && strncmp(line, old, strlen(line))) {
@@ -842,7 +847,7 @@ static void android_unpack_presentations(const char *root)
             char src[1024], dst[1024];
             size_t sz = 0;
             void *data;
-            snprintf(src, sizeof src, "presentations/%s", line);
+            snprintf(src, sizeof src, "%s/%s", asset, line);
             snprintf(dst, sizeof dst, "%s/%s", dir, line);
             if (strrchr(dst, '/')) { *strrchr(dst, '/') = 0; android_mkdirs(dst); dst[strlen(dst)] = '/'; }
             data = SDL_LoadFile(src, &sz);
@@ -851,9 +856,25 @@ static void android_unpack_presentations(const char *root)
             SDL_free(data);
         }
         if ((f = fopen(stamp_path, "w"))) { fprintf(f, "%s\n", stamp); fclose(f); }
-        fprintf(stderr, "[ANDROID] broadcast packages unpacked: %u files%s\n", n, bad ? " (some failed)" : "");
+        fprintf(stderr, "[ANDROID] %s unpacked: %u files%s\n", what, n, bad ? " (some failed)" : "");
     }
     SDL_free(manifest);
+}
+
+/* The broadcast packages (assets/presentations -> <root>/mods/presentations, the stamp file
+ * keeps its old name), the MyCareer home's CC0 models and shop list (assets/mycareer, paths
+ * relative to <root>), and a first mods/presentation.ini that picks NBC SNF. */
+static void android_unpack_presentations(const char *root)
+{
+    FILE *f;
+    {   /* the presentations' stamp was <dir>/.apk-version before the tree helper: keep reading it */
+        char a[1024], b[1024];
+        snprintf(a, sizeof a, "%s/mods/presentations/.apk-version", root);
+        snprintf(b, sizeof b, "%s/mods/presentations/.apk-version-presentations", root);
+        if (access(b, F_OK) != 0 && access(a, F_OK) == 0) rename(a, b);
+    }
+    android_unpack_tree(root, "presentations", "mods/presentations", "broadcast packages");
+    android_unpack_tree(root, "mycareer", ".", "MyCareer home models");
     {
         char ini[1024];
         snprintf(ini, sizeof ini, "%s/mods/presentation.ini", root);
