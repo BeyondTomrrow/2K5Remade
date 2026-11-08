@@ -46,6 +46,7 @@ def main():
     ap.add_argument("--binary", required=True)
     ap.add_argument("--sdl3", required=True)
     ap.add_argument("--license", action="append", default=[], help="SRC=NAME under docs/third-party")
+    ap.add_argument("--mycareer", help="MyCareer home tree in game-folder paths (mods/mycareer-home, data/mycareer-home, docs/third-party)")
     ap.add_argument("--version", required=True)
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
@@ -76,6 +77,17 @@ def main():
                 if n.lower().endswith(exts):
                     p = os.path.join(d, n)
                     files.append((os.path.relpath(p, ROOT).replace("\\", "/"), rd(p), 0o644))
+    if a.mycareer:   # CC0 models, licences, credits, manifest, the shop list: nothing from a disc
+        for d, _, names in os.walk(a.mycareer):
+            for n in sorted(names):
+                p = os.path.join(d, n)
+                rel = os.path.relpath(p, a.mycareer).replace("\\", "/")
+                if not rel.startswith(("mods/mycareer-home/", "data/mycareer-home/", "docs/third-party/")):
+                    sys.exit("--mycareer: unexpected path " + rel)
+                data = rd(p)
+                if rel.endswith((".txt", ".md", ".ini")):
+                    data = data.replace(bytes([13, 10]), bytes([10]))
+                files.append((rel, data, 0o644))
     miniz = os.path.join(ROOT, "external/xemu-src/util/miniz/miniz.c")
     if os.path.exists(miniz):
         text = rd(miniz)

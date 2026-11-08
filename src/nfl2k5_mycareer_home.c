@@ -1394,6 +1394,9 @@ static void shop_load(void)
             s_nshop++;
             continue;
         }
+#ifndef _WIN32
+        continue;      /* the Crib cache is built on Windows only (nfl2k5_mycareer_crib.cpp): never sell what cannot show */
+#endif
         {   /* a Crib piece, drawn from the Crib cache: "crib:<id>" in the room's model list */
             char *c1;
             snprintf(it->src, sizeof it->src, "%s", fld[4]);

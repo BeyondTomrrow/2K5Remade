@@ -104,6 +104,16 @@ and Steam Input's virtual pad are what the game expects, but expect to tune
 the scale and frame limit in F1 yourself.
 
 
+MYCAREER HOME (SOFTDRINK v0.9)
+------------------------------
+With SOFTDRINK v0.9 installed, Game Modes > MyCareer starts your career in a
+3D apartment: walk with the left stick, turn with the right stick, A uses the
+front door, mirror, computer (bank, Furniture Shop) and phone. The furniture
+is free CC0 art (mods/mycareer-home/CREDITS.txt). The stat bar and the
+Supersim backdrop work as on Windows. The Crib's own items in the shop are
+made from the disc on Windows only for now; Linux shows the CC0 items.
+
+
 NOT ON LINUX
 ------------
 - Broadcast presentation packages (FOX, CBS, NBC scorebugs, player cards,
