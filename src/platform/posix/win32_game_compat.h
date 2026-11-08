@@ -124,6 +124,12 @@ static inline unsigned char _BitScanReverse(unsigned long *idx, unsigned long v)
 { if (!(uint32_t)v) return 0; *idx = 31ul - (unsigned long)__builtin_clz((uint32_t)v); return 1; }
 DWORD GetCurrentDirectoryA(DWORD cap, char *out);
 
+/* ---- Environment, INI files, 64-bit strtol (MyCareer home) -------------- */
+DWORD GetEnvironmentVariableA(const char *name, char *out, DWORD cap);
+DWORD GetPrivateProfileStringA(const char *section, const char *key, const char *def, char *out, DWORD cap, const char *file);
+BOOL  WritePrivateProfileStringA(const char *section, const char *key, const char *value, const char *file);
+#define _strtoi64 strtoll
+
 #ifdef __cplusplus
 }
 #endif
