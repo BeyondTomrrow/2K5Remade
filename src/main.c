@@ -1967,6 +1967,7 @@ int main(int argc, char **argv)
 
     nfl2k5_video_menu_install();
     nfl2k5_exit_menu_install();    /* "Exit" in the Main Menu (src/nfl2k5_exit_menu.c, M16) */
+    { extern void nfl2k5_mc_home_install(void); if (g_interp_pack) nfl2k5_mc_home_install(); }   /* src/nfl2k5_mycareer_home.c */
     nfl2k5_hook_menus_ready();     /* feature modules' menus ("My NFL Eras", src/nfl2k5_eras_menu.c) */
 
     guest_function entry = recomp_lookup(0x00016BD1);
