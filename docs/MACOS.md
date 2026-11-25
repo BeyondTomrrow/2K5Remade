@@ -72,7 +72,16 @@ Performance notes (Apple silicon):
   build always does): `python3 tools/gen-reg-locals.py` before configuring.
   macOS thread-locals are slow; keeping guest registers in locals avoids them.
 - `RECOMP_SDLGPU_FPS=1` prints flips/s, GPU downloads and uploads, passes,
-  draws, and time spent waiting on the GPU, once a second.
+  draws, `rtt` copies, and time spent waiting on the GPU, once a second.
+- Render-to-texture stays on the GPU: when the title samples a surface it
+  just drew (screen effects, replays), the renderer blits the surface into a
+  1x R8G8B8A8 texture (format convert + downscale in one `SDL_BlitGPUTexture`)
+  and binds that, instead of downloading to guest RAM and re-uploading -- a
+  full GPU sync every frame. A version counter refreshes the copy only when
+  the surface changed. `RECOMP_SDLGPU_NO_GPURTT=1` forces the old
+  download path (also used automatically for sub-rectangle or cube samples).
+  On the attract-mode game this took downloads from ~30 to 0 a second and
+  about 10 -> 56 flips/s.
 
 Rendering fixes in this renderer (not macOS-specific, apply on Linux too):
 player/field lighting uses the dot-product texture modes and real cube maps
