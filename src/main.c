@@ -12,7 +12,14 @@
 #endif
 #include "platform/xbox_winnt.h"
 #include <signal.h>
+#if defined(__linux__)
 #include <ucontext.h>
+#elif defined(__APPLE__)
+#include <sys/ucontext.h>
+#endif
+#if defined(__APPLE__)
+#include <mach-o/dyld.h>   /* _NSGetExecutablePath */
+#endif
 #include <unistd.h>
 #include <sys/stat.h>
 #include <openssl/sha.h>
@@ -176,7 +183,19 @@ static const char *nfl2k5_project_root(void)
         }
     }
 #else
+#if defined(__APPLE__)
+    ssize_t rlen = -1;
+    {
+        uint32_t cap = (uint32_t)sizeof(root);
+        char raw[MAX_PATH];
+        uint32_t rawcap = (uint32_t)sizeof(raw);
+        if (_NSGetExecutablePath(raw, &rawcap) == 0 && realpath(raw, root))
+            rlen = (ssize_t)strlen(root);
+        (void)cap;
+    }
+#else
     ssize_t rlen = readlink("/proc/self/exe", root, sizeof(root) - 1);
+#endif
     if (rlen > 0) {
         root[rlen] = '\0';
         char *slash = strrchr(root, '/');
@@ -234,6 +253,7 @@ static LONG CALLBACK crash_report(EXCEPTION_POINTERS *ep)
 #else
 static struct sigaction g_prev_segv_sa;
 static struct sigaction g_prev_trap_sa;
+static struct sigaction g_prev_bus_sa;
 static bool g_posix_mmio_installed;
 
 static void posix_audio_mmio_sigaction(int sig, siginfo_t *si, void *ucontext)
@@ -241,6 +261,9 @@ static void posix_audio_mmio_sigaction(int sig, siginfo_t *si, void *ucontext)
     if (xbox_ac97_handle_posix_signal(sig, si ? si->si_code : 0,
                                     si ? (uintptr_t)si->si_addr : 0, ucontext))
         return;
+#if defined(__linux__) && defined(__x86_64__)
+    /* The APU register decoder steps over x86-64 host instructions: only
+     * meaningful where the host is x86-64 (see apu_mmio_hook.c). */
     if (sig == SIGSEGV && g_apu_state && si && si->si_addr) {
         uintptr_t host = (uintptr_t)si->si_addr;
         uintptr_t offset = (uintptr_t)xbox_GetMemoryOffset();
@@ -251,7 +274,22 @@ static void posix_audio_mmio_sigaction(int sig, siginfo_t *si, void *ucontext)
                 return;
         }
     }
-    const struct sigaction *previous = sig == SIGTRAP ? &g_prev_trap_sa : &g_prev_segv_sa;
+#elif defined(__APPLE__) && defined(__aarch64__)
+    /* AArch64 load/store emulation (apu_mmio_hook.c). Darwin raises SIGBUS
+     * for most protection faults; ESR_EL1.WnR (bit 6) says write. */
+    if ((sig == SIGSEGV || sig == SIGBUS) && g_apu_state && si && si->si_addr) {
+        uintptr_t host = (uintptr_t)si->si_addr;
+        uintptr_t offset = (uintptr_t)xbox_GetMemoryOffset();
+        if (host >= offset && host - offset >= 0xFE800000ULL && host - offset < 0xFE880000ULL) {
+            ucontext_t *uc = (ucontext_t *)ucontext;
+            int is_write = (uc->uc_mcontext->__es.__esr & (1u << 6)) != 0;
+            if (apu_hook_handle_mmio((PCONTEXT)uc, host, (uint32_t)(host - offset), is_write))
+                return;
+        }
+    }
+#endif
+    const struct sigaction *previous = sig == SIGTRAP ? &g_prev_trap_sa
+                                     : sig == SIGBUS  ? &g_prev_bus_sa : &g_prev_segv_sa;
     if (previous->sa_handler == SIG_IGN) return;
     if (previous->sa_handler != SIG_DFL && (previous->sa_flags & SA_SIGINFO)) {
         previous->sa_sigaction(sig, si, ucontext);
@@ -273,6 +311,11 @@ static bool install_audio_mmio_handler(void)
     sa.sa_flags = SA_SIGINFO | SA_NODEFER;
     if (sigaction(SIGSEGV, &sa, &g_prev_segv_sa) != 0) return false;
     if (sigaction(SIGTRAP, &sa, &g_prev_trap_sa) != 0) {
+        sigaction(SIGSEGV, &g_prev_segv_sa, NULL);
+        return false;
+    }
+    if (sigaction(SIGBUS, &sa, &g_prev_bus_sa) != 0) {
+        sigaction(SIGTRAP, &g_prev_trap_sa, NULL);
         sigaction(SIGSEGV, &g_prev_segv_sa, NULL);
         return false;
     }
@@ -550,7 +593,45 @@ void nfl2k5_diag_slot(const char *where, uint32_t a, uint32_t b, uint32_t c, uin
  * Main Application Entry Point
  * ============================================================================ */
 
+#if defined(__APPLE__)
+/* macOS: the main thread belongs to the window (fb_present.c), so the game
+ * runs here instead, with the 16 MB stack the Windows build links with. */
+#include <pthread.h>
+extern void xbox_FramebufferMainThreadRun(void);
+static int nfl2k5_main(int argc, char **argv);
+typedef struct { int argc; char **argv; } nfl2k5_args;
+static void *nfl2k5_game_thread(void *p)
+{
+    nfl2k5_args *a = (nfl2k5_args *)p;
+    int rc = nfl2k5_main(a->argc, a->argv);
+    fflush(stdout);
+    fflush(stderr);
+    exit(rc);
+    return NULL;
+}
+
 int main(int argc, char **argv)
+{
+    static nfl2k5_args args;
+    pthread_attr_t attr;
+    pthread_t game;
+    args.argc = argc;
+    args.argv = argv;
+    pthread_attr_init(&attr);
+    pthread_attr_setstacksize(&attr, 16u * 1024u * 1024u);
+    if (pthread_create(&game, &attr, nfl2k5_game_thread, &args) != 0) {
+        fprintf(stderr, "[BOOT] could not start the game thread\n");
+        return 1;
+    }
+    pthread_attr_destroy(&attr);
+    xbox_FramebufferMainThreadRun();   /* never returns; the game thread exits */
+    return 0;
+}
+
+static int nfl2k5_main(int argc, char **argv)
+#else
+int main(int argc, char **argv)
+#endif
 {
 #if defined(_WIN32)
     SetThreadExecutionState(ES_CONTINUOUS | ES_DISPLAY_REQUIRED | ES_SYSTEM_REQUIRED);

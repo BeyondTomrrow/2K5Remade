@@ -118,4 +118,10 @@ else()
   target_compile_options(NFL2K5 PRIVATE -g1 -fno-strict-aliasing -fwrapv)
   # MSVC calling-convention keyword used by tools/apply-gen-patches.py output.
   target_compile_definitions(NFL2K5 PRIVATE __cdecl=)
+  if(APPLE)
+    # The recompiled game runs on the main thread and wants the 16 MB stack
+    # the Windows build links with (/STACK:16777216). macOS sizes the main
+    # thread from the binary, so set it here instead of relying on ulimit.
+    target_link_options(NFL2K5 PRIVATE "LINKER:-stack_size,0x1000000")
+  endif()
 endif()

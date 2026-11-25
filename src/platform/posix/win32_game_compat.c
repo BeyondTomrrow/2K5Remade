@@ -7,6 +7,13 @@
  * folders users create rarely agree on case.
  */
 #define _GNU_SOURCE
+#if defined(__APPLE__)
+#include <mach-o/dyld.h>
+/* Darwin spells the POSIX.1-2008 stat timespecs st_<x>timespec. */
+#define st_ctim st_ctimespec
+#define st_atim st_atimespec
+#define st_mtim st_mtimespec
+#endif
 #include <windows.h>
 
 #include <dirent.h>
@@ -266,8 +273,22 @@ DWORD GetModuleFileNameA(void *module, char *out, DWORD cap)
     ssize_t n;
     (void)module;
     if (!out || !cap) return 0;
+#if defined(__APPLE__)
+    {
+        char raw[PATH_MAX], resolved[PATH_MAX];
+        uint32_t rawcap = (uint32_t)sizeof(raw);
+        if (_NSGetExecutablePath(raw, &rawcap) != 0 || !realpath(raw, resolved)) {
+            out[0] = 0;
+            return 0;
+        }
+        n = (ssize_t)strlen(resolved);
+        if ((size_t)n >= cap) n = (ssize_t)cap - 1;
+        memcpy(out, resolved, (size_t)n);
+    }
+#else
     n = readlink("/proc/self/exe", out, cap - 1);
     if (n < 0) { out[0] = 0; return 0; }
+#endif
     out[n] = 0;
     return (DWORD)n;
 }
