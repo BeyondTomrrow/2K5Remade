@@ -16,12 +16,15 @@ Verified fixed 2026-11-24 (GPU path, 2x, screenshots via `tools/mac-debug`):
   field slices / missing backgrounds" is gone -- was the 2D path binding a
   null sampler and an uninitialized white fallback texture, both fixed.
 
-- **Render-to-texture costs a GPU sync per frame.** Several screens (the
-  attract-mode game, parts of live play) draw into a surface and then sample
-  it, which downloads that surface to guest RAM every frame and waits for the
-  GPU to finish. Heavy scenes run ~30-45 fps at the default 3x internal
-  resolution on Apple silicon; light scenes hold 60. A GPU-side copy for
-  render-to-texture (no round trip through guest RAM) is the fix.
+- **Render-to-texture** no longer costs a GPU sync per frame: the surface is
+  blitted into a 1x R8G8B8A8 texture (`sg_surface_rtt`) and sampled directly.
+  Attract-mode game: ~30 downloads/s -> 0, ~10 -> 56 flips/s. Rechecked
+  2026-11-24 on live play: 0 downloads, ~60 rtt copies/s, 58-60 flips/s
+  at ~46k draws/frame (was ~31 fps with downloads). Remaining downloads come
+  only from the cases still routed through
+  guest RAM: cube-map samples, and sub-rectangle samples of a surface
+  (anything not exactly the whole surface). A region copy would cover the
+  latter. `RECOMP_SDLGPU_NO_GPURTT=1` restores the old path for A/B.
 - **Window clips: inclusive only.** NV2A window-clip rectangles are applied by
   replaying a draw once per rectangle with its own scissor. Exclusive clips
   (`SET_WINDOW_CLIP_TYPE` = 1) fall back to the surface clip, as the D3D11
@@ -97,10 +100,11 @@ Verified fixed 2026-11-24 (GPU path, 2x, screenshots via `tools/mac-debug`):
 |---|---|
 | `RECOMP_SDLGPU=1` | Use the GPU renderer (Metal on macOS, Vulkan on Linux) |
 | `RECOMP_SDLGPU_SCALE=<n>` | Internal resolution multiplier (default: F1 > Video setting) |
-| `RECOMP_SDLGPU_FPS=1` | Once a second: flips/s, downloads, uploads, passes, draws, time waiting on the GPU |
+| `RECOMP_SDLGPU_FPS=1` | Once a second: flips/s, downloads, uploads, passes, draws, rtt copies, time waiting on the GPU |
 | `RECOMP_SDLGPU_DUMP=<file.bmp>` + `RECOMP_SDLGPU_DUMP_AT=<flip>` | Write the GPU's frame, read back from the texture, at a flip; touching `<file.bmp>.req` dumps the next flip on demand |
 | `RECOMP_FB_DUMP=<file.bmp>` | Guest-RAM frame at window frame 60, or on demand via `<file.bmp>.req` |
 | `RECOMP_SDLGPU_TOGGLE_DIR=<dir>` | Live A/B switches: create `novp`, `nospec`, `no3d`, `nomip`, `nofloor` in `<dir>`; write `x y` to `<dir>/watch` for a one-frame pixel trace |
+| `RECOMP_SDLGPU_NO_GPURTT=1` | Render-to-texture by downloading through guest RAM (old path) |
 | `RECOMP_SDLGPU_NOSPEC=1` | Generic (uber) fragment shader instead of per-combiner variants |
 | `RECOMP_SDLGPU_NOVP=1` | Vertex programs on the CPU |
 | `RECOMP_SDLGPU_NO3D=1` | 3D batches on the software rasterizer |
