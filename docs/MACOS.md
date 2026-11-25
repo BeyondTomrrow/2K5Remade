@@ -74,6 +74,17 @@ Performance notes (Apple silicon):
 - `RECOMP_SDLGPU_FPS=1` prints flips/s, GPU downloads and uploads, passes,
   draws, and time spent waiting on the GPU, once a second.
 
+Rendering fixes in this renderer (not macOS-specific, apply on Linux too):
+player/field lighting uses the dot-product texture modes and real cube maps
+(as the D3D11 path); NV2A window clips are honoured (the play-call cards);
+unindexed batches no longer fall back to software by mistake.
+
+A/B while the game runs: set `RECOMP_SDLGPU_TOGGLE_DIR=<dir>` and create files
+there named `novp`, `nospec`, `no3d`, `nomip` or `nofloor` to switch those
+paths off live; write `x y` to `<dir>/watch` to log every batch that touches
+that pixel in the next frame (GPU and software). `NFL2K5_PRESS_FILE` also
+accepts `lsl`/`lsr`/`lsu`/`lsd` (left stick).
+
 Diagnostics: `RECOMP_SDLGPU_MSLDUMP=1` prints every generated MSL shader;
 `RECOMP_SDLGPU_DUMP=frame.bmp` (with `RECOMP_SDLGPU_DUMP_AT=<flip>`, default
 600) writes the GPU's frame read straight back from the texture.
