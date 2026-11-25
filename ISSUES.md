@@ -7,6 +7,15 @@ SDL3 GPU renderer work. See `docs/MACOS.md` for building and running on macOS.
 
 ### Rendering (SDL3 GPU renderer, `RECOMP_SDLGPU=1`)
 
+Verified fixed 2026-11-24 (GPU path, 2x, screenshots via `tools/mac-debug`):
+- **Flat / unlit players** (coin toss, pregame crowd, live play) now render
+  with full shading and texture detail -- was the missing cube-map /
+  dot-product texture stages, now implemented.
+- **Play-call screen cards** (the three-card formation view and the
+  kick-return / formation screens) draw correctly; the earlier "repeated
+  field slices / missing backgrounds" is gone -- was the 2D path binding a
+  null sampler and an uninitialized white fallback texture, both fixed.
+
 - **Render-to-texture costs a GPU sync per frame.** Several screens (the
   attract-mode game, parts of live play) draw into a surface and then sample
   it, which downloads that surface to guest RAM every frame and waits for the
@@ -22,11 +31,25 @@ SDL3 GPU renderer work. See `docs/MACOS.md` for building and running on macOS.
   xemu). Not observed in NFL 2K5 so far.
 - **Cube maps:** one mip level only, and the texture-cache key hashes face 0's
   bytes -- a title rewriting only faces 1-5 in place would not be re-uploaded.
-- **Small visual glitches still seen, cause unknown:** a white streak at the
-  left edge of the main-menu background; white/black octagonal rings at the
-  studio anchor's wrists in the pregame show (seen before the cube-map /
-  dot-product fix, not rechecked since); occasional dark block with light
-  streaks in the top-left corner of a gameplay frame.
+- **Small visual glitches still seen, cause unknown:**
+  - White streak at the left edge of the main-menu background. Localized to
+    the GPU 3D path: it vanishes with `RECOMP_SDLGPU_NO3D=1` (streak-region
+    average brightness 417 -> 80), so a GPU 3D batch shades a small
+    light-grey patch where the software rasterizer draws dark. Guest pixel
+    around (39..89, 215..235) at 1x; the covering batch is a vertex-program
+    draw with a 512x512 texture. Also present at 1x internal resolution
+    (streak-region avg 413 vs 417 at 2x), so it is not the scaling blit --
+    it is in the base 1x render. Likely another combiner/texture-stage
+    mismatch of the same family as the cube-map / dot-product lighting fix,
+    or a window-clip / overdraw issue on the composited menu surface. It is
+    a discrete light rectangle over the dark shelf background, so trace that
+    one shape's stage modes (RECOMP_SDLGPU_MODELOG) and blending next.
+  - White/black octagonal rings at the studio anchor's wrists in the pregame
+    show: NOT seen since the cube-map / dot-product fix (rechecked
+    2026-11-24 on the coin-toss and pregame scenes, which now render fully
+    shaded). Treat as resolved pending a specific repro.
+  - Occasional dark block with light streaks in the top-left corner of a
+    gameplay frame: not reproduced in the 2026-11-24 sessions.
 - **Points and lines** in 3D batches stay on the CPU path.
 - **Metal fast math:** SDL compiles MSL with Metal's default fast-math, so
   `isnan` checks in the generated vertex-program epilogue may be folded away.
