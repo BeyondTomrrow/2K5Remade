@@ -96,7 +96,23 @@ accepts `lsl`/`lsr`/`lsu`/`lsd` (left stick).
 
 Diagnostics: `RECOMP_SDLGPU_MSLDUMP=1` prints every generated MSL shader;
 `RECOMP_SDLGPU_DUMP=frame.bmp` (with `RECOMP_SDLGPU_DUMP_AT=<flip>`, default
-600) writes the GPU's frame read straight back from the texture.
+600) writes the GPU's frame read straight back from the texture;
+`RECOMP_SDLGPU_DUMP_SEQ=<n>` writes `n` consecutive flips from there
+(`frame.bmp.<flip>.bmp`), for frame-by-frame evidence.
+
+## Intro movies
+
+The boot intro movies are decoded by the title's own Sofdec MPEG decoder,
+running on the recompiled CPU. That decoder cannot keep up: the movie player
+steps through its frame buffers faster than the decoder fills them, so most
+presented frames are still-black buffers and the intro flashes. Windows does
+not have this problem (playback goes through Media Foundation), so there the
+skip stays opt-in.
+
+On macOS and Linux the boot intro is skipped by default (the movie player
+`sub_00178150` returns "player skipped" and the intro loop ends), which takes
+boot from the splash screens to the title screen in about ten seconds.
+`NFL2K5_SKIP_INTRO=0` plays the movies anyway.
 
 ## Not on macOS yet
 - Everything in docs/LINUX.md's "Not on Linux yet" list.

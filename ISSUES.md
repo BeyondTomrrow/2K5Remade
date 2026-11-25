@@ -53,6 +53,17 @@ Verified fixed 2026-11-24 (GPU path, 2x, screenshots via `tools/mac-debug`):
     shaded). Treat as resolved pending a specific repro.
   - Occasional dark block with light streaks in the top-left corner of a
     gameplay frame: not reproduced in the 2026-11-24 sessions.
+- **Intro movies flash** (boot intro: espn_videogames, vc, espn_game_sound,
+  intro). The title decodes them with its own Sofdec MPEG decoder on the
+  recompiled CPU, which runs far below real time; the movie player steps
+  through its frame buffers faster than they fill, so most presented frames
+  are buffers the decoder has not written yet. Observed 2026-11-25 with
+  consecutive-frame dumps: the player cycles five 640x480 (YUY2) buffers at
+  0x21B0800, 0x22DC800, 0x2408800, 0x2534800, 0x2660800, one draw per flip,
+  and only the first two ever hold decoded pixels. **Skipped by default** off
+  Windows (`NFL2K5_SKIP_INTRO=0` plays them; Windows uses Media Foundation and
+  is unaffected). A real fix means the guest decoder keeping up, or pacing the
+  movie player to decoded frames.
 - **Points and lines** in 3D batches stay on the CPU path.
 - **Metal fast math:** SDL compiles MSL with Metal's default fast-math, so
   `isnan` checks in the generated vertex-program epilogue may be folded away.
@@ -104,6 +115,8 @@ Verified fixed 2026-11-24 (GPU path, 2x, screenshots via `tools/mac-debug`):
 | `RECOMP_SDLGPU_DUMP=<file.bmp>` + `RECOMP_SDLGPU_DUMP_AT=<flip>` | Write the GPU's frame, read back from the texture, at a flip; touching `<file.bmp>.req` dumps the next flip on demand |
 | `RECOMP_FB_DUMP=<file.bmp>` | Guest-RAM frame at window frame 60, or on demand via `<file.bmp>.req` |
 | `RECOMP_SDLGPU_TOGGLE_DIR=<dir>` | Live A/B switches: create `novp`, `nospec`, `no3d`, `nomip`, `nofloor` in `<dir>`; write `x y` to `<dir>/watch` for a one-frame pixel trace |
+| `RECOMP_SDLGPU_DUMP_SEQ=<n>` | With `DUMP`, write `n` consecutive flips (`<file>.<flip>.bmp`) |
+| `NFL2K5_SKIP_INTRO=0` | Play the boot intro movies (skipped by default off Windows) |
 | `RECOMP_SDLGPU_NO_GPURTT=1` | Render-to-texture by downloading through guest RAM (old path) |
 | `RECOMP_SDLGPU_NOSPEC=1` | Generic (uber) fragment shader instead of per-combiner variants |
 | `RECOMP_SDLGPU_NOVP=1` | Vertex programs on the CPU |

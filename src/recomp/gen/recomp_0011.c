@@ -85482,18 +85482,20 @@ loc_00178150: ;
      * 0x4E9730) and returns 2 when the player skips it, which ends the intro
      * loop at 0x74BC0. There is no input yet, and with the guest on one core
      * the movies run far below real time, so this does what pressing a button
-     * would. */
+     * would. nfl2k5_skip_boot_intro() (src/nfl2k5_intro.c) decides: skipped by
+     * default off Windows, where the guest decoder cannot keep up and the
+     * intro flashes empty frame buffers. */
     {
         /* Only the boot intro: returning 2 ends that loop after its first
          * movie. Later calls (anything played after the front end, 2026-09-24)
          * run normally and are logged with their caller. */
-        extern char *__cdecl getenv(const char *);
         extern int __cdecl fprintf(void *, const char *, ...);
         extern void *__cdecl __acrt_iob_func(unsigned);
+        extern int nfl2k5_skip_boot_intro(void);
         static int skip = -1, calls;
-        if (skip < 0) { const char *v = getenv("NFL2K5_SKIP_INTRO"); skip = v && *v && *v != '0'; }
+        if (skip < 0) skip = nfl2k5_skip_boot_intro();
         fprintf(__acrt_iob_func(2), "  [MOVIE] sub_00178150 call %d from %08X arg %08X%s\n", calls,
-                MEM32(esp), MEM32(esp + 4), skip && calls == 0 ? " (skipped: NFL2K5_SKIP_INTRO)" : "");
+                MEM32(esp), MEM32(esp + 4), skip && calls == 0 ? " (skipped)" : "");
         if (skip && calls++ == 0) { eax = 2; esp += 8; return; /* ret 4 */ }
         calls++;
     }
