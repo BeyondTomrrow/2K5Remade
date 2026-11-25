@@ -77,6 +77,8 @@ static WORD auto_press(BYTE analog[8])
 }
 
 static Uint64 g_last_script_press;
+/* Left-stick direction of the scripted press being held (lsl/lsr/lsu/lsd). */
+static SHORT s_script_lx, s_script_ly;
 
 static WORD file_press(BYTE analog[8])
 {
@@ -138,7 +140,12 @@ static WORD file_press(BYTE analog[8])
         else if (!strcmp(name, "rt")) analog[7] = 255;
         else if (!strcmp(name, "l3")) buttons |= 0x40;
         else if (!strcmp(name, "r3")) buttons |= 0x80;
+        else if (!strcmp(name, "lsl")) s_script_lx = -32767;
+        else if (!strcmp(name, "lsr")) s_script_lx = 32767;
+        else if (!strcmp(name, "lsu")) s_script_ly = 32767;
+        else if (!strcmp(name, "lsd")) s_script_ly = -32767;
         if (now - step_start >= 200) {
+            s_script_lx = s_script_ly = 0;
             pressing = 0;
             step_start = now;
             head = (head + 1) % 64;
@@ -241,6 +248,8 @@ static void host_gamepad_port(int port, XBOX_GAMEPAD *g)
         host_mouse_gamepad(g);
         g->wButtons |= auto_press(g->bAnalogButtons);
         g->wButtons |= file_press(g->bAnalogButtons);
+        if (s_script_lx) g->sThumbLX = s_script_lx;
+        if (s_script_ly) g->sThumbLY = s_script_ly;
     }
     {
         extern void nfl2k5_cs_input(int port, XBOX_GAMEPAD *g);
@@ -275,6 +284,8 @@ static void host_gamepad(XBOX_GAMEPAD *g)
     host_mouse_gamepad(g);
     g->wButtons |= auto_press(g->bAnalogButtons);
     g->wButtons |= file_press(g->bAnalogButtons);
+    if (s_script_lx) g->sThumbLX = s_script_lx;
+    if (s_script_ly) g->sThumbLY = s_script_ly;
     {
         extern void nfl2k5_local_music_buttons(int l3, int r3);
         nfl2k5_local_music_buttons((g->wButtons & 0x40) != 0, (g->wButtons & 0x80) != 0);

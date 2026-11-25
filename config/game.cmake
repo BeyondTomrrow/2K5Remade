@@ -16,7 +16,7 @@ if(NOT NFL2K5_GENERATED)
   message(FATAL_ERROR "Run tools/analyze.ps1 -Recompile before building the game.")
 endif()
 if(WIN32)
-add_executable(NFL2K5 WIN32 src/main.c src/recomp_manual.c src/nfl2k5_input_hle.c src/nfl2k5_controls.c src/nfl2k5_controller_setup.c src/nfl2k5_controller_art.cpp src/nfl2k5_texture_packs.cpp src/nfl2k5_teams.c src/nfl2k5_team_files.c src/nfl2k5_video_menu.c src/nfl2k5_mod_packs.c src/nfl2k5_presentation.cpp src/nfl2k5_local_music.cpp src/nfl2k5_save_library.cpp src/nfl2k5_discord.cpp src/interp/x86_interp.c src/interp/interp_setup.c "${CMAKE_BINARY_DIR}/generated/nfl2k5_func_ranges.c" external/xemu-src/util/miniz/miniz.c src/nfl2k5_wma_encode.cpp src/presentation/webview2_host.cpp src/presentation/portraits.cpp src/nfl2k5.rc src/nfl2k5.manifest ${NFL2K5_GENERATED})
+add_executable(NFL2K5 WIN32 src/main.c src/recomp_manual.c src/nfl2k5_input_hle.c src/nfl2k5_controls.c src/nfl2k5_controller_setup.c src/nfl2k5_controller_art.cpp src/nfl2k5_texture_packs.cpp src/nfl2k5_teams.c src/nfl2k5_team_files.c src/nfl2k5_video_menu.c src/nfl2k5_mod_packs.c src/nfl2k5_intro.c src/nfl2k5_presentation.cpp src/nfl2k5_local_music.cpp src/nfl2k5_save_library.cpp src/nfl2k5_discord.cpp src/interp/x86_interp.c src/interp/interp_setup.c "${CMAKE_BINARY_DIR}/generated/nfl2k5_func_ranges.c" external/xemu-src/util/miniz/miniz.c src/nfl2k5_wma_encode.cpp src/presentation/webview2_host.cpp src/presentation/portraits.cpp src/nfl2k5.rc src/nfl2k5.manifest ${NFL2K5_GENERATED})
 target_include_directories(NFL2K5 PRIVATE "${NFL2K5_GEN_DIR}" src external/xemu-src/util/miniz)
 # HTML presentation host (src/presentation): WebView2 SDK headers and static
 # loader. The engine itself is the WebView2 runtime that ships with Windows.
@@ -50,7 +50,7 @@ else()
   find_package(OpenSSL REQUIRED)
   add_executable(NFL2K5 src/main.c src/recomp_manual.c src/nfl2k5_input_hle.c src/nfl2k5_controls.c
     src/nfl2k5_controller_setup.c src/nfl2k5_controller_art.cpp src/nfl2k5_texture_packs.cpp src/nfl2k5_teams.c
-    src/nfl2k5_team_files.c src/nfl2k5_video_menu.c src/nfl2k5_mod_packs.c src/nfl2k5_local_music.cpp
+    src/nfl2k5_team_files.c src/nfl2k5_video_menu.c src/nfl2k5_mod_packs.c src/nfl2k5_intro.c src/nfl2k5_local_music.cpp
     src/nfl2k5_save_library.cpp src/nfl2k5_discord.cpp src/interp/x86_interp.c src/interp/interp_setup.c
     "${NFL2K5_FUNC_RANGES}" external/xemu-src/util/miniz/miniz.c src/nfl2k5_wma_encode.cpp
     src/presentation/webview2_host.cpp src/presentation/portraits.cpp
@@ -118,4 +118,10 @@ else()
   target_compile_options(NFL2K5 PRIVATE -g1 -fno-strict-aliasing -fwrapv)
   # MSVC calling-convention keyword used by tools/apply-gen-patches.py output.
   target_compile_definitions(NFL2K5 PRIVATE __cdecl=)
+  if(APPLE)
+    # The recompiled game runs on the main thread and wants the 16 MB stack
+    # the Windows build links with (/STACK:16777216). macOS sizes the main
+    # thread from the binary, so set it here instead of relying on ulimit.
+    target_link_options(NFL2K5 PRIVATE "LINKER:-stack_size,0x1000000")
+  endif()
 endif()

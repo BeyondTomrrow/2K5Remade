@@ -6,6 +6,7 @@
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
 #include <sys/random.h>
+#include <unistd.h>  /* getentropy */
 #include <signal.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -547,7 +548,7 @@ static std::string new_container_id(const std::string &udata)
 #ifdef _WIN32
         if (BCryptGenRandom(NULL, random, sizeof random, BCRYPT_USE_SYSTEM_PREFERRED_RNG) < 0) {
 #else
-        if (getrandom(random, sizeof random, 0) != (ssize_t)sizeof random) {
+        if (getentropy(random, sizeof random) != 0) {
 #endif
             unsigned long long n = GetTickCount64() ^ (unsigned long long)GetCurrentProcessId() << 32;
             memcpy(random, &n, sizeof random);

@@ -71,3 +71,6 @@ icall_targets.dump
 controls.ini
 nfl2k5_game.ini
 perf.data
+/build-mac-game/
+/build-linux-game/
+xbox_kernel.log
